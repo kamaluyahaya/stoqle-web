@@ -1,9 +1,8 @@
 // src/components/product/ProductMedia.tsx
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
-
 
 type Props = {
   productImages: File[];
@@ -15,21 +14,22 @@ type Props = {
 export default function ProductMedia({ productImages, setProductImages, productVideo, setProductVideo }: Props) {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const previews = productImages.map((f) => URL.createObjectURL(f));
-  const videoPreview = productVideo ? URL.createObjectURL(productVideo) : null;
+
+  // Memoize preview URLs to avoid creating them on every render
+  const previews = useMemo(() => productImages.map((f) => URL.createObjectURL(f)), [productImages]);
+  const videoPreview = useMemo(() => (productVideo ? URL.createObjectURL(productVideo) : null), [productVideo]);
+
   const [lightboxOpen, setLightboxOpen] = useState(false);
-const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
-const slides = previews.map((src) => ({ src }));
-
+  const slides = useMemo(() => previews.map((src) => ({ src })), [previews]);
 
   useEffect(() => {
     return () => {
       previews.forEach((u) => URL.revokeObjectURL(u));
       if (videoPreview) URL.revokeObjectURL(videoPreview);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productImages, productVideo]);
+  }, [previews, videoPreview]);
 
   const handleProductImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = e.target.files ? Array.from(e.target.files) : [];
@@ -68,26 +68,24 @@ const slides = previews.map((src) => ({ src }));
           <div
             key={i}
             className="relative rounded-sm overflow-hidden bg-slate-50 aspect-[4/3]"
-            >
+          >
             <img
-            src={src}
-            alt={`img-${i}`}
-            onClick={() => {
+              src={src}
+              alt={`img-${i}`}
+              onClick={() => {
                 setLightboxIndex(i);
                 setLightboxOpen(true);
-            }}
-            className="w-full h-full object-contain object-top cursor-zoom-in transition hover:scale-[1.02]"
+              }}
+              className="w-full h-full object-contain object-top cursor-zoom-in transition hover:scale-[1.02]"
             />
 
-
-  <button
-    onClick={() => removeProductImageAt(i)}
-    className="absolute top-1 right-1 text-red-500 bg-white rounded-full shadow px-1 text-xs"
-  >
-    ✕
-  </button>
-</div>
-
+            <button
+              onClick={() => removeProductImageAt(i)}
+              className="absolute top-1 right-1 text-red-500 bg-white rounded-full shadow px-1 text-xs"
+            >
+              ✕
+            </button>
+          </div>
         ))}
         {previews.length < 5 && (
           <label className="flex items-center justify-center rounded-lg border-dashed border p-2 text-center cursor-pointer aspect-[4/3]">
@@ -100,21 +98,20 @@ const slides = previews.map((src) => ({ src }));
       <label className="block text-sm font-medium">Video (max 1)</label>
       <div className="space-y-2">
         {videoPreview ? (
-         <div className="relative bg-slate-50 rounded-lg overflow-hidden max-w-full">
+          <div className="relative bg-slate-50 rounded-lg overflow-hidden max-w-full">
             <video
-                src={videoPreview}
-                controls
-                className="w-full h-auto max-h-[220px] object-contain"
+              src={videoPreview}
+              controls
+              className="w-full h-auto max-h-[220px] object-contain"
             />
 
-        <button
-            onClick={() => setProductVideo(null)}
-            className="absolute top-2 right-2 bg-white rounded-full p-1 shadow hover:bg-red-50 text-red-500"
-        >
-            ✕
-        </button>
-        </div>
-
+            <button
+              onClick={() => setProductVideo(null)}
+              className="absolute top-2 right-2 bg-white rounded-full p-1 shadow hover:bg-red-50 text-red-500"
+            >
+              ✕
+            </button>
+          </div>
         ) : (
           <label className="flex items-center justify-center rounded-lg border-dashed border p-4 cursor-pointer">
             <input ref={videoInputRef} onChange={handleProductVideoChange} type="file" accept="video/*" className="hidden" />
@@ -131,15 +128,14 @@ const slides = previews.map((src) => ({ src }));
       </div>
 
       <Lightbox
-  open={lightboxOpen}
-  close={() => setLightboxOpen(false)}
-  index={lightboxIndex}
-  slides={slides}
-  styles={{
-    container: { backgroundColor: "rgba(0,0,0,0.95)" },
-  }}
-/>
-
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        index={lightboxIndex}
+        slides={slides}
+        styles={{
+          container: { backgroundColor: "rgba(0,0,0,0.95)" },
+        }}
+      />
     </div>
   );
 }

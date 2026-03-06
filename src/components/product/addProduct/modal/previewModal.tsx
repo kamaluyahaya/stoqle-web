@@ -1,30 +1,32 @@
 "use client";
 
-import { BusinessPolicyResponse, PreviewPayload } from "@/src/types/product";
-import React, { useEffect, useRef, useState } from "react";
-import {
-  LifebuoyIcon,
-  BuildingStorefrontIcon,
-  ShoppingCartIcon,
-  ClockIcon,
-  TruckIcon,
-  ArrowRightIcon,
-  ArrowUturnLeftIcon,
-  ChevronRightIcon,
-  ArrowPathIcon,
-} from "@heroicons/react/24/outline";
-import { API_BASE_URL } from "@/src/lib/config";
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { PreviewPayload } from "@/src/types/product";
+import { ChevronRightIcon } from "@heroicons/react/24/outline";
+import { FaChevronRight } from "react-icons/fa";
+import useBusinessPolicy from "@/src/hooks/useBusinessPolicy";
+import { computeDiscountedPrice, parseNumberLike, parsePercent } from "@/src/lib/utils/product/price";
+import MediaViewer from "../preview/modal/mediaViewer";
+import ThumbnailList from "../preview/thumbnailList";
+import PolicyList from "../preview/policyList";
+import ActionBar from "../preview/actionBar";
 import PolicyModal from "./policyModalPreview";
+import { ProductFeedItem } from "@/src/types/product";
+import { API_BASE_URL } from "@/src/lib/config";
+import { fetchBusinessProducts, fetchMarketFeed } from "@/src/lib/api/productApi";
+import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 export default function ProductPreviewModal({
   open,
   payload,
   onClose,
   onConfirm,
-  cartCount = 3,
+  cartCount = 0,
   onAddToCart,
   onBuyNow,
   onOpenChat,
+  onProductClick,
 }: {
   open: boolean;
   payload: PreviewPayload | null;
@@ -34,157 +36,193 @@ export default function ProductPreviewModal({
   onAddToCart?: (payload?: PreviewPayload) => void;
   onBuyNow?: (payload?: PreviewPayload) => void;
   onOpenChat?: () => void;
+  onProductClick?: (productId: number, businessName?: string) => void;
 }) {
-  // ------------------------
-  // Hooks (ALL hooks must be here, before any early return)
-  // ------------------------
-  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  //
+  // --- Hooks (always declared in the same order, unconditionally) ---
+  //
+  const router = useRouter();
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const modalRef = useRef<HTMLDivElement | null>(null);
-  const lastScrollY = useRef<number>(0);
+  const lastScrollY = useRef(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  const [policyModalData, setPolicyModalData] = useState<{ title: string; body: string } | null>(null);
 
-  const [businessData, setBusinessData] = useState<BusinessPolicyResponse["data"] | null>(null);
-  const [loadingBusiness, setLoadingBusiness] = useState(false);
-  const [businessError, setBusinessError] = useState<string | null>(null);
-
+  // promo countdown state (declare before effects)
   const [promoRemaining, setPromoRemaining] = useState<string | null>(null);
 
-  const [policyModalOpen, setPolicyModalOpen] = useState(false);
-  const [policyModalData, setPolicyModalData] = useState<{
-    title: string;
-    body: string;
-  } | null>(null);
+  // Variant selection state
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
-  // ------------------------
-  // Derived values (no hooks)
-  // ------------------------
-  const shopLogo = businessData?.business?.logo ?? businessData?.business?.profile_pic ?? false;
-  const shopName = businessData?.business?.business_name ?? businessData?.business?.full_name ?? false;
-  // const partner_status = businessData?.policy?.market_affiliation?.trusted_partner ?? false;
-  const partner_status = !!businessData?.policy?.market_affiliation?.trusted_partner;
+  // business data hook (unconditional hook call using payload ID if provided)
+  const { businessData, loading: loadingBusiness, error: businessError } = useBusinessPolicy(open, payload?.businessId);
 
+  const [recommendedProducts, setRecommendedProducts] = useState<ProductFeedItem[]>([]);
+  const [loadingRecommended, setLoadingRecommended] = useState(false);
 
-   // safe parsing of promotion + price (handles strings like "10" or "10%")
+  // Global Recommendations State
+  const [globalRecommendations, setGlobalRecommendations] = useState<ProductFeedItem[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalPage, setGlobalPage] = useState(0);
+  const [globalHasMore, setGlobalHasMore] = useState(true);
+  const loaderRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open || !payload?.businessId) return;
+
+    const loadRecommended = async () => {
+      setLoadingRecommended(true);
+      try {
+        const res = await fetchBusinessProducts(payload.businessId as number, 6, undefined, payload.productId);
+        setRecommendedProducts(res?.data?.products || []);
+      } catch (err) {
+        console.error("Failed to load recommended products:", err);
+      } finally {
+        setLoadingRecommended(false);
+      }
+    };
+    loadRecommended();
+  }, [open, payload?.businessId, payload?.productId]);
+
+  const fetchGlobalRecs = useCallback(async (page: number) => {
+    if (globalLoading || !globalHasMore || !payload) return;
+    setGlobalLoading(true);
+    try {
+      const res = await fetchMarketFeed(12, page * 12, payload.productId, payload.businessId);
+      const newItems = res?.data?.products || [];
+      if (newItems.length < 12) setGlobalHasMore(false);
+      setGlobalRecommendations(prev => {
+        // filter out potential duplicates
+        const existingIds = new Set(prev.map(p => p.product_id));
+        const filtered = newItems.filter((p: any) => !existingIds.has(p.product_id));
+        return [...prev, ...filtered];
+      });
+      setGlobalPage(page + 1);
+    } catch (err) {
+      console.error("Failed to load global recommendations:", err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  }, [globalLoading, globalHasMore, payload]);
+
+  useEffect(() => {
+    if (!open) return;
+    // reset when modal opens or product changes
+    setGlobalRecommendations([]);
+    setGlobalPage(0);
+    setGlobalHasMore(true);
+  }, [open, payload?.productId]);
+
+  useEffect(() => {
+    if (!open || !globalHasMore) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !globalLoading) {
+        fetchGlobalRecs(globalPage);
+      }
+    }, { threshold: 0.1 });
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) observer.observe(currentLoader);
+
+    return () => {
+      if (currentLoader) observer.unobserve(currentLoader);
+    };
+  }, [open, globalHasMore, globalLoading, globalPage, fetchGlobalRecs]);
+
+  // Initialize selected options when payload changes or modal opens
+  useEffect(() => {
+    if (open && payload?.variantGroups) {
+      const initial: Record<string, string> = {};
+      payload.variantGroups.forEach(group => {
+        if (group.entries.length > 0) {
+          // Find the first entry that is actually in stock
+          const firstInStock = group.entries.find(e => {
+            if (payload.useCombinations && payload.skus) {
+              // In combinations, check if ANY enabled SKU with this option has stock
+              return payload.skus.some(s =>
+                s.enabled &&
+                s.variantOptionIds.includes(e.id) &&
+                Number(s.quantity || 0) > 0
+              );
+            }
+            // Simple variant quantity check
+            return Number(e.quantity ?? 0) > 0;
+          });
+
+          // Default to first in-stock, fallback to the very first one if all sold out
+          initial[group.id] = firstInStock?.id || group.entries[0].id;
+        }
+      });
+      setSelectedOptions(initial);
+    }
+  }, [open, payload?.variantGroups, payload?.useCombinations, payload?.skus]);
+
+  //
+  // --- Derived values (safe if payload is null) ---
+  //
+  const images = payload?.productImages ?? [];
+  // If selectedIndex is -1, it means the video is selected, so main should be null to let MediaViewer show video
+  const main = selectedIndex === -1 ? null : (images[selectedIndex] ?? (images.length > 0 ? images[0] : null));
+
+  // SKU Logic
+  const currentSku = useMemo(() => {
+    if (!payload?.useCombinations || !payload?.skus) return null;
+    const selectedIds = Object.values(selectedOptions);
+    if (selectedIds.length === 0) return null;
+
+    // Find SKU where all its variantOptionIds are in the current selection
+    return payload.skus.find(s =>
+      s.variantOptionIds.every(id => selectedIds.includes(id))
+    );
+  }, [payload?.useCombinations, payload?.skus, selectedOptions]);
+
   const promotion = businessData?.policy?.promotions?.[0] ?? null;
-  const promotionTitle = promotion?.title ?? null;
-  const promotionStartDate = promotion?.start_date ?? null;
-  const promotionEndDate = promotion?.end_date ?? null;
+  const promotionDiscount = parsePercent(promotion?.discount_percent ?? null);
+  const salesDiscount = parsePercent(businessData?.policy?.sales_discounts?.[0]?.discount_percent ?? null);
 
-  const promotionDiscountRaw = promotion?.discount_percent ?? null;
-  const promotionDiscount =
-    promotionDiscountRaw == null
-      ? null
-      : (() => {
-          // remove any % sign and coerce to number
-          const cleaned = String(promotionDiscountRaw).replace("%", "").trim();
-          const n = Number(cleaned);
-          return Number.isFinite(n) ? n : null;
-        })();
+  // Determine base price: (If samePriceForAll, use sharedPrice) > SKU price > Payload Shared Price > Payload Base Price
+  const basePriceValue = useMemo(() => {
+    if (payload?.samePriceForAll && payload?.sharedPrice !== null && payload?.sharedPrice !== undefined) {
+      return Number(payload.sharedPrice);
+    }
+    if (payload?.useCombinations && currentSku) {
+      return currentSku.price !== "" ? Number(currentSku.price) : parseNumberLike(payload?.sharedPrice ?? payload?.price ?? null);
+    }
+    if (!payload?.useCombinations && !payload?.samePriceForAll && payload?.variantGroups) {
+      for (const group of payload.variantGroups) {
+        const selectedId = selectedOptions[group.id];
+        if (selectedId) {
+          const entry = group.entries.find(e => e.id === selectedId);
+          if (entry && entry.price !== undefined && entry.price !== null && String(entry.price) !== "") {
+            return Number(entry.price);
+          }
+        }
+      }
+    }
+    return parseNumberLike(payload?.price ?? null);
+  }, [payload, currentSku, selectedOptions]);
 
-  // SALES DISCOUNT: used if no active promotion
-  const salesDiscountItem = businessData?.policy?.sales_discounts?.[0] ?? null;
-  const salesDiscountRaw = salesDiscountItem?.discount_percent ?? null;
-  const salesDiscount =
-    salesDiscountRaw == null
-      ? null
-      : (() => {
-          const cleaned = String(salesDiscountRaw).replace("%", "").trim();
-          const n = Number(cleaned);
-          return Number.isFinite(n) ? n : null;
-        })();
+  const basePrice = basePriceValue;
 
-  // basePrice: try number, then numeric string, else null
-  const basePrice =
-    payload?.price == null
-      ? null
-      : typeof payload.price === "number"
-      ? payload.price
-      : ((): number | null => {
-          const p = String(payload.price).trim();
-          if (p === "") return null;
-          const n = Number(p.replace(/,/g, ""));
-          return Number.isFinite(n) ? n : null;
-        })();
-
-  // determine promotion active
   const isPromotionActive =
     basePrice !== null &&
     promotionDiscount !== null &&
     promotionDiscount > 0 &&
-    (!promotionStartDate || new Date(promotionStartDate) <= new Date()) &&
-    (!promotionEndDate || new Date(promotionEndDate) >= new Date());
+    (!promotion?.start_date || new Date(promotion.start_date) <= new Date()) &&
+    (!promotion?.end_date || new Date(promotion.end_date) >= new Date());
 
-  // determine sales discount active (only apply if no promotion active)
-  const isSalesActive =
-    !isPromotionActive &&
-    basePrice !== null &&
-    salesDiscount !== null &&
-    salesDiscount > 0;
+  const isSalesActive = !isPromotionActive && basePrice !== null && salesDiscount !== null && salesDiscount > 0;
 
-  // effective discount to show/apply (promo takes priority)
-  const effectiveDiscount = isPromotionActive
-    ? promotionDiscount
-    : isSalesActive
-    ? salesDiscount
-    : null;
+  const effectiveDiscount = isPromotionActive ? promotionDiscount : isSalesActive ? salesDiscount : null;
+  const discountedPrice = computeDiscountedPrice(basePrice, effectiveDiscount);
 
-  const discountedPrice =
-    effectiveDiscount !== null && basePrice !== null
-      ? Math.round(basePrice * (1 - effectiveDiscount / 100))
-      : basePrice;
+  //
+  // --- Effects (still before any early return) ---
+  //
 
-
-  // ------------------------
-  // Effects (still before any return)
-  // ------------------------
-
-  // fetch business details when modal opens
-  useEffect(() => {
-    if (!open) return;
-
-    const controller = new AbortController();
-    const fetchBusiness = async () => {
-      setLoadingBusiness(true);
-      setBusinessError(null);
-
-      try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        if (!token) {
-          setBusinessError("No auth token found.");
-          setLoadingBusiness(false);
-          return;
-        }
-
-        const res = await fetch(`${API_BASE_URL}/api/business/me`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`HTTP ${res.status} — ${text}`);
-        }
-
-        const json: BusinessPolicyResponse = await res.json();
-        if (!json.ok) throw new Error("API returned ok: false");
-        setBusinessData(json.data);
-      } catch (err: any) {
-        if (err.name === "AbortError") return;
-        setBusinessError(err.message ?? "Failed to fetch business details");
-      } finally {
-        setLoadingBusiness(false);
-      }
-    };
-
-    fetchBusiness();
-
-    return () => controller.abort();
-  }, [open]);
-
-  // reset selected index when opened / payload changes
+  // reset selected index when modal opens or payload changes
   useEffect(() => {
     if (open) setSelectedIndex(0);
   }, [open, payload]);
@@ -210,92 +248,71 @@ export default function ProductPreviewModal({
     };
   }, [open]);
 
-  // countdown for promo
- useEffect(() => {
-  if (!isPromotionActive || !promotionEndDate) {
-    setPromoRemaining(null);
-    return;
-  }
-
-  const pad = (num: number) => String(num).padStart(2, "0");
-
-  const updateCountdown = () => {
-    const now = Date.now();
-    const end = new Date(promotionEndDate).getTime();
-    const diff = end - now;
-
-    if (diff <= 0) {
-      setPromoRemaining("Ended");
+  // countdown for promo (runs only when promotion is active)
+  useEffect(() => {
+    const promotionEndDate = promotion?.end_date ?? null;
+    if (!isPromotionActive || !promotionEndDate) {
+      setPromoRemaining(null);
       return;
     }
 
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((diff / (1000 * 60)) % 60);
-    const seconds = Math.floor((diff / 1000) % 60);
+    const pad = (num: number) => String(num).padStart(2, "0");
 
-    setPromoRemaining(
-      `${days}ds ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s left`
-    );
-  };
+    const updateCountdown = () => {
+      const now = Date.now();
+      const end = new Date(promotionEndDate).getTime();
+      const diff = end - now;
 
-  updateCountdown(); // run immediately
-  const interval = setInterval(updateCountdown, 1000);
-  return () => clearInterval(interval);
-}, [isPromotionActive, promotionEndDate]);
+      if (diff <= 0) {
+        setPromoRemaining("Ended");
+        return;
+      }
 
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const minutes = Math.floor((diff / (1000 * 60)) % 60);
+      const seconds = Math.floor((diff / 1000) % 60);
 
-  // ------------------------
-  // Now it's safe to early-return (no hooks below this)
-  // ------------------------
+      setPromoRemaining(`${days}ds ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s left`);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [isPromotionActive, promotion?.end_date]);
+
+  //
+  // Now it's safe to early-return the UI if not open or missing payload.
+  // (All hooks have already been declared and will execute in the same order.)
+  //
   if (!open || !payload) return null;
 
-  // ------------------------
-  // Local helpers / derived UI values
-  // ------------------------
-  const images = payload.productImages ?? [];
-  const main = images[selectedIndex] ?? images[0] ?? null;
+  //
+  // --- helper functions ---
+  //
+  const stop = (e: React.MouseEvent | React.TouchEvent) => e.stopPropagation();
 
-  const stop = (e: React.MouseEvent | React.TouchEvent) => {
-    e.stopPropagation();
-  };
-
-  // small helpers to extract the three policy items
-  const deliveryNotice = businessData?.policy?.core?.delivery_notice ?? null;
-  const shippingPromise = businessData?.policy?.shipping?.find((s) => s.kind === "promise");
-  const returnShippingSubsidy = businessData?.policy?.returns?.return_shipping_subsidy;
-  const city = businessData?.policy?.address?.city;
-  const state = businessData?.policy?.address?.state;
-  const address = businessData?.policy?.address?.line1;
-  const market_affiliation = businessData?.policy?.market_affiliation?.market_name;
-  const business_address = businessData?.business.business_address;
-  const returnRapidRefund = businessData?.policy?.returns?.rapid_refund;
-  const supportsReturnShippingSubsidy = returnShippingSubsidy === 1;
-  const supportsRapidRefund = returnRapidRefund === 1;
-
-  // modal policy openers
   const openPolicyModal = (title: string, body: string) => {
     setPolicyModalData({ title, body });
     setPolicyModalOpen(true);
   };
-
   const closePolicyModal = () => {
     setPolicyModalOpen(false);
     setPolicyModalData(null);
   };
 
-  // ------------------------
-  // JSX
-  // ------------------------
+  const formatUrl = (url: string) => {
+    if (!url) return "";
+    if (url.startsWith("http")) return url;
+    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  };
+
+  //
+  // --- render ---
+  //
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="fixed inset-0 z-75 flex items-start justify-center px-0 py-0"
-        onMouseDown={onClose}
-        onTouchStart={onClose}
-      >
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-75 flex items-start justify-center px-0 py-0" onMouseDown={onClose} onTouchStart={onClose}>
         <div className="absolute inset-0 bg-black/55" aria-hidden />
 
         <button
@@ -314,11 +331,11 @@ export default function ProductPreviewModal({
           onTouchStart={stop}
           role="dialog"
           aria-modal="true"
-          className={
-            "relative z-10 w-full h-full bg-slate-100 flex flex-col overflow-y-auto pb-24 lg:flex lg:flex-row lg:overflow-hidden lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] lg:rounded-2xl lg:pb-0 shadow-2xl"
-          }
+          className="relative z-10 w-full h-full bg-slate-100 flex flex-col overflow-y-auto pb-24 lg:flex lg:flex-row lg:overflow-hidden lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] lg:rounded-2xl lg:pb-0 shadow-2xl"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
+
+
           {/* MOBILE HEADER (sticky) */}
           <header className="lg:hidden sticky top-0 z-30 h-16 flex items-center justify-between px-6 p-5 ">
             <div className="lg:hidden absolute top-4 left-4 z-40">
@@ -335,132 +352,53 @@ export default function ProductPreviewModal({
               </button>
             </div>
           </header>
+          {/* LEFT: media */}
+          <MediaViewer main={main} payload={payload} />
 
-          {/* Left: media */}
-          <div className="flex-1 min-h-[400px] bg-slate-50 flex items-start justify-center relative">
-            {main && main.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={main.url} alt={main.name ?? payload.title} className="w-full h-full object-contain" />
-            ) : payload.productVideo?.url ? (
-              <video src={payload.productVideo.url} controls className="w-full h-full object-contain" />
-            ) : (
-              <div className="text-sm text-slate-400 mt-20">No preview available</div>
-            )}
-          </div>
-
-          {/* Right: details + thumbnails */}
+          {/* RIGHT: details */}
           <aside className="w-full lg:w-[380px]  border-l border-slate-100 flex flex-col">
             <div className="px-4 bg-white">
               <div className="flex gap-1 lg:flex-row overflow-auto p-1">
-                
-                {images.length > 1 && (
-  <div className="flex gap-2">
-    {images.map((p, i) => (
-      <button
-        key={i}
-        onClick={() => setSelectedIndex(i)}
-        onMouseDown={(e) => e.stopPropagation()}
-        className={`flex-shrink-0 rounded-sm border p-2 ${
-          i === selectedIndex
-            ? "ring-1 ring-red-500 bg-red-50 border-transparent"
-            : "border-slate-100"
-        } overflow-hidden focus:outline-none`}
-        style={{ width: 60, height: 60 }}
-        title={p.name ?? `Image ${i + 1}`}
-        aria-pressed={i === selectedIndex}
-      >
-        {p.url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={p.url}
-            alt={p.name ?? `img-${i + 1}`}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 p-2">
-            {p.name ?? "file"}
-          </div>
-        )}
-      </button>
-    ))}
-  </div>
-)}
-
-
-                {payload.productVideo && (
-                  <button
-                    onClick={() => { setSelectedIndex(-1); }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className={`flex-shrink-0 rounded-lg border ${selectedIndex === -1 ? "ring-2 ring-red-500 border-transparent" : "border-slate-100"} overflow-hidden focus:outline-none flex items-center justify-center`}
-                    style={{ width: 84, height: 84 }}
-                    title={payload.productVideo.name ?? "Video preview"}
-                    aria-pressed={selectedIndex === -1}
-                  >
-                    <div className="w-full h-full flex items-center justify-center bg-black/5">
-                      <svg viewBox="0 0 24 24" className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M5 3v18l15-9-15-9z" />
-                      </svg>
-                    </div>
-                  </button>
-                )}
+                <ThumbnailList images={images} video={payload.productVideo} selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
               </div>
             </div>
 
-            <div className=" flex-1 overflow-auto pb-24 lg:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
+            <div className="flex-1 overflow-auto pb-24 lg:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
               <div className="bg-white p-5">
-                               {/* Promotion / Sales badge */}
+                {/* Pricing / promotion */}
                 {isPromotionActive ? (
                   <div className="flex flex-col gap-1 mb-2">
                     <div className="inline-flex items-center rounded-sm bg-red-50 px-2 py-1 text-xs font-semibold text-red-600 w-fit">
-                      {promotionTitle ?? "Promotion"} · {promotionDiscount}% OFF
-                      {promoRemaining && (
-                        <div className="text-[11px] border border-red-500 p-2 text-red-500 font-medium ml-2">
-                          Ends in {promoRemaining}
-                        </div>
-                      )}
+                      {promotion?.title ?? "Promotion"} · {promotionDiscount}% OFF
+                      {promoRemaining && <div className="text-[11px] border border-red-500 p-2 text-red-500 font-medium ml-2">Ends in {promoRemaining}</div>}
                     </div>
                   </div>
                 ) : isSalesActive ? (
                   <div className="flex flex-col gap-1 mb-2">
-                    <div className="inline-flex items-center rounded-sm border-red-500 border px-2 py-1 text-xs font-semibold text-red-500 w-fit">
-                      {salesDiscountItem?.discount_type ?? "Sale"} · {salesDiscount}% OFF
-                    </div>
+                    <div className="inline-flex items-center rounded-sm border-red-500 border px-2 py-1 text-xs font-semibold text-red-500 w-fit">{businessData?.policy?.sales_discounts?.[0]?.discount_type ?? "Sale"} · {salesDiscount}% OFF</div>
                   </div>
                 ) : null}
-
-
 
                 <div className="flex items-start justify-between gap-3 ">
                   <div className="flex items-center gap-3">
                     <div>
-                      {/* Price block: strike original when promo active, show discounted */}
                       <div className="flex items-baseline gap-2">
-                       {(isPromotionActive || isSalesActive) && basePrice !== null && (
-                          <span className="text-sm text-slate-400 line-through">
-                            ₦ {basePrice!.toLocaleString()}
-                          </span>
-                        )}
-
-
-                        <span className="text-2xl font-bold text-red-600">
-                          {discountedPrice !== null ? `₦ ${discountedPrice.toLocaleString()}` : "—"}
-                        </span>
+                        {(isPromotionActive || isSalesActive) && basePrice !== null && <span className="text-sm text-slate-400 line-through">₦ {basePrice!.toLocaleString()}</span>}
+                        <span className="text-2xl font-bold text-red-600">{discountedPrice !== null ? `₦ ${discountedPrice.toLocaleString()}` : "—"}</span>
                       </div>
 
-                    <div className="text-lg font-semibold text-slate-900">
-                      {partner_status && (
-                        <span className="bg-emerald-700 text-white text-xs px-2 py-1 rounded-sm align-center">
-                          Verified Partner
-                        </span>
-                      )}
-                      {payload.title || "Untitled product"}
+                      <div className="text-lg font-semibold text-slate-900">
+                        {businessData?.policy?.market_affiliation?.trusted_partner === 1 && (
+                          <span className="bg-emerald-700 text-white text-xs px-2 py-1 rounded-sm align-center mr-2">
+                            Verified Partner
+                          </span>
+                        )}
+                        {payload.title || "Untitled product"}
+                      </div>
+
+
+                      <div className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{payload.description || <span className="text-slate-400">No description</span>}</div>
                     </div>
-                      
-                      {/* business name (if available) */}
-                      {/* {businessData?.business?.business_name && (
-                        <div className="text-xs text-slate-500 mt-1">Sold by <span className="font-medium text-slate-800">{businessData.business.business_name}</span></div>
-                      )} */}
-                     </div>
                   </div>
 
                   <div className="text-right">
@@ -468,291 +406,389 @@ export default function ProductPreviewModal({
                   </div>
                 </div>
 
-                <div className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">
-                    {payload.description || <span className="text-slate-400">No description</span>}
+                <div className={`inline-block font-bold rounded-sm text-sm p-2 ${businessData?.policy?.returns?.return_shipping_subsidy === 1 ? "text-emerald-700 bg-emerald-50" : "text-yellow-600 bg-red-50"}`}>
+                  {businessData?.policy?.returns?.return_shipping_subsidy === 1 ? "Return shipping subsidy" : "No return shipping subsidy"}
                 </div>
 
-                <div
-                  className={`inline-block font-bold rounded-sm text-sm p-2 ${
-                    supportsReturnShippingSubsidy ? "text-emerald-700 bg-emerald-50" : "text-yellow-600 bg-red-50"
-                  }`}
-                >
-                  {supportsReturnShippingSubsidy ? "Return shipping subsidy" : "No return shipping subsidy"}
-                </div>
-
-                {/* Policy details modal (render once, reused) */}
-                <div className="rounded-lg mt-2 bg-white">
-                  <div className="flex items-center justify-between ">
-                    <div className="text-sm font-medium text-slate-800">Business policies</div>
-                    {loadingBusiness && <div className="text-xs text-slate-400">loading…</div>}
-                  </div>
-
-                  {businessError && <div className="mt-2 text-xs text-rose-600">{businessError}</div>}
-
-                  {!loadingBusiness && !businessError && !businessData && (
-                    <div className="mt-2 text-xs text-slate-400">No business details available</div>
-                  )}
-
-                  {!loadingBusiness && businessData && (
-                    <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                      {/* 1. Promise to ship */}
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openPolicyModal(
-                              "Shipping Information",
-                              deliveryNotice ?? "No delivery notice provided."
-                            )
-                          }
-                          className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
-                          aria-haspopup="dialog"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-2 min-w-0">
-                              <TruckIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <div className="font-medium text-slate-700 truncate">
-                                  Promise to ship within{" "}
-                                  {shippingPromise ? `${shippingPromise.value} ${shippingPromise.unit}` : "—"} | Delayed compensation guaranteed
-                                </div>
-                                <div className={`text-xs mt-1 truncate ${supportsReturnShippingSubsidy ? "text-emerald-600" : "text-slate-500"}`}>
-                                  From {[
-                                    market_affiliation || address || business_address,
-                                    city,
-                                    state,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(", ")}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
-                        </button>
-                      </li>
-
-                      {/* 2. Delay compensation / shipping promise */}
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openPolicyModal(
-                              "Delay compensation (shipping promise)",
-                              shippingPromise ? `Promised: ${shippingPromise.value} ${shippingPromise.unit} (${shippingPromise.kind})` : "No shipping promise configured."
-                            )
-                          }
-                          className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
-                          aria-haspopup="dialog"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-2 min-w-0">
-                              <ClockIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <div className="font-medium text-slate-700 truncate">Delay compensation (shipping promise)</div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
-                        </button>
-                      </li>
-
-                      {/* 3. Return shipping subsidy */}
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openPolicyModal(
-                              "Return shipping subsidy",
-                              supportsReturnShippingSubsidy ? `Return shipping subsidy is supported.${supportsRapidRefund ? " Rapid refund is enabled." : ""}` : "This product does not support return shipping subsidy."
-                            )
-                          }
-                          className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
-                          aria-haspopup="dialog"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-2 min-w-0">
-                              <ArrowPathIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <div className={`font-medium truncate ${supportsReturnShippingSubsidy ? "text-slate-700" : "text-slate-700"}`}>
-                                  {supportsReturnShippingSubsidy ? "Return shipping subsidy · Rapid refund" : "No return shipping subsidy"}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
-                        </button>
-                      </li>
-
-                      {/* optional extra info */}
-                      {businessData.policy?.returns?.additional_info && (
-                        <li>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openPolicyModal(
-                                "Returns — notes",
-                                businessData.policy!.returns!.additional_info!
-                              )
-                            }
-                            className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start gap-2 min-w-0">
-                                <LifebuoyIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
-                                <div className="min-w-0">
-                                  <div className="font-medium text-slate-800 truncate">Returns — notes</div>
-                                  <div className="text-xs text-slate-500 mt-1 truncate">{businessData.policy.returns.additional_info}</div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
-                          </button>
-                        </li>
-                      )}
-                    </ul>
-                  )}
-                </div>
+                <PolicyList businessData={businessData} loading={loadingBusiness} error={businessError} openPolicyModal={openPolicyModal} />
               </div>
 
-              {/* variants preview condensed */}
+              {/* VARIANTS + params block */}
               <div className="bg-white p-4 mt-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center">
-                      {shopLogo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={String(shopLogo)} alt="Shop logo" className="w-full h-full object-cover" />
-                      ) : (
-                        <BuildingStorefrontIcon className="w-5 h-5 text-slate-600" />
-                      )}
+                      <img
+                        src={businessData?.business?.logo || businessData?.business?.profile_pic || "/assets/images/favio.png"}
+                        alt="Shop Logo"
+                        className="h-full w-full object-cover"
+                      />
+                      {/* {businessData?.business?.logo ? <img src={String(businessData.business.logo)} alt="Shop logo" className="w-full h-full object-cover" /> : <div className="text-slate-500">🏬</div>} */}
                     </div>
 
                     <div className="leading-tight">
-                      <div className="font-semibold text-slate-900 text-sm">
-                        {shopName}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        105 Followers · 234 Sold
-                      </div>
+                      <div className="font-semibold text-slate-900 text-sm">{businessData?.business?.business_name ?? businessData?.business?.full_name ?? ""}</div>
+                      <div className="text-xs text-slate-500">{businessData?.business?.stats?.followers?.toLocaleString() ?? "0"}+ Followers · 0 Sold</div>
                     </div>
                   </div>
 
-                  <button className="bg-red-500 px-4 py-1.5 rounded-full text-sm font-medium text-white hover:bg-red-600 transition">
-                    Visit shop
-                  </button>
+                  <button className="bg-red-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-red-600 transition">Visit shop</button>
                 </div>
-              </div>
 
-              <div className="bg-white p-4 mt-2">
                 <div className="mt-6">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-slate-500">Variants</div>
-                    <div className="text-xs text-slate-400">{payload.variantGroups.length} groups</div>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {payload.variantGroups.length === 0 && <div className="text-sm text-slate-400">No variant groups</div>}
+                  <div className="mt-4 space-y-6">
+                    {payload.variantGroups.length === 0 && <div className="text-sm text-slate-400 italic">No variants defined</div>}
                     {payload.variantGroups.map((g) => (
-                      <div key={g.id} className="p-2 border border-slate-100 rounded-lg bg-slate-50">
-                        <div className="text-sm font-medium text-slate-800">{g.title}</div>
-                        <div className="text-xs text-slate-500 mt-1">{g.entries.length} options</div>
+                      <div key={g.id} className="space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">{g.title || "Variant Group"}</div>
+                          <div className="text-[10px] text-slate-400 font-medium">{g.entries.length} Options</div>
+                        </div>
+
+                        <div className={g.entries.some(e => e.images && e.images.length > 0) ? "grid grid-cols-2 gap-3" : "flex flex-wrap gap-2"}>
+                          {g.entries.map((e) => {
+                            const hasImage = e.images && e.images.length > 0 && (e.images[0].url || (e.images[0] as any).imagePreviews?.[0]);
+                            const groupHasImages = g.entries.some(ent => ent.images && ent.images.length > 0);
+                            const productFallbackUrl = payload.productImages?.[0]?.url;
+
+                            const isSelected = selectedOptions[g.id] === e.id;
+
+                            // Check stock based on current combinations
+                            let stock = Number(e.quantity ?? 0);
+                            if (payload.useCombinations) {
+                              // Context-aware stock: find the specific SKU for (this choice + other selections)
+                              const otherSelectedIds = Object.entries(selectedOptions)
+                                .filter(([gid]) => gid !== g.id)
+                                .map(([, id]) => id);
+
+                              const matchingSku = payload.skus.find(sku =>
+                                sku.variantOptionIds.includes(e.id) &&
+                                otherSelectedIds.every(oid => sku.variantOptionIds.includes(oid))
+                              );
+
+                              if (matchingSku) {
+                                stock = matchingSku.enabled ? Number(matchingSku.quantity || 0) : 0;
+                              } else {
+                                const relatedSkus = payload.skus.filter(s => s.variantOptionIds.includes(e.id) && s.enabled);
+                                stock = relatedSkus.reduce((acc, s) => acc + Number(s.quantity || 0), 0);
+                              }
+                            }
+
+                            const isOutOfStock = stock <= 0;
+                            const isLowStock = stock > 0 && stock <= 3;
+
+                            if (groupHasImages) {
+                              const displayUrl = hasImage ? (e.images?.[0].url || (e.images?.[0] as any).imagePreviews?.[0]) : productFallbackUrl;
+
+                              return (
+                                <button
+                                  key={e.id}
+                                  disabled={isOutOfStock}
+                                  onClick={() => setSelectedOptions(prev => ({ ...prev, [g.id]: e.id }))}
+                                  className={`relative flex flex-col p-2.5 rounded-2xl border transition-all shadow-sm text-left ${isSelected ? "border-red-500 ring-1 ring-red-500 bg-red-50/10" : "border-slate-100 bg-white hover:border-red-200"
+                                    } ${isOutOfStock ? "opacity-40 cursor-not-allowed grayscale" : "cursor-pointer"}`}
+                                >
+                                  {isLowStock && (
+                                    <div className="absolute top-1 right-1 z-20 bg-orange-500 text-[8px] text-white px-1.5 py-0.5 rounded-full font-bold uppercase animate-pulse">
+                                      {stock} LEFT
+                                    </div>
+                                  )}
+                                  {isOutOfStock && (
+                                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 rounded-2xl">
+                                      <span className="text-[10px] font-bold text-slate-500 uppercase">Sold Out</span>
+                                    </div>
+                                  )}
+
+                                  {displayUrl ? (
+                                    <div className="w-full aspect-square rounded-xl overflow-hidden mb-2 bg-slate-50 border border-slate-50">
+                                      <img src={displayUrl} alt={e.name} className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-full aspect-square rounded-xl overflow-hidden mb-2 bg-slate-50 flex items-center justify-center text-slate-300">
+                                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  <div className="text-xs font-semibold text-slate-800 line-clamp-1 px-1">{e.name}</div>
+                                  {e.price && !payload.useCombinations && !payload.samePriceForAll ? (
+                                    <div className="text-[10px] text-red-600 font-bold mt-1 px-1">₦ {Number(e.price).toLocaleString()}</div>
+                                  ) : null}
+                                </button>
+                              );
+                            } else {
+                              // Simple text chip if no images in the whole group
+                              return (
+                                <button
+                                  key={e.id}
+                                  disabled={isOutOfStock}
+                                  onClick={() => setSelectedOptions(prev => ({ ...prev, [g.id]: e.id }))}
+                                  className={`relative px-4 py-2 rounded-full border text-xs font-semibold transition-all shadow-sm flex items-center gap-2 ${isSelected ? "border-red-500 bg-red-50 text-red-600 ring-1 ring-red-500" : "border-slate-200 bg-white text-slate-800 hover:border-red-400"
+                                    } ${isOutOfStock ? "opacity-30 cursor-not-allowed line-through" : "cursor-pointer"}`}
+                                >
+                                  {isLowStock && (
+                                    <span className="flex items-center justify-center bg-orange-500 text-[8px] text-white w-4 h-4 rounded-full font-bold">
+                                      {stock}
+                                    </span>
+                                  )}
+                                  <span>{e.name}</span>
+                                  {e.price && !payload.useCombinations && !payload.samePriceForAll ? <span className="text-red-600">· ₦{Number(e.price).toLocaleString()}</span> : null}
+                                </button>
+                              );
+                            }
+                          })}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="mt-4 text-sm text-slate-700 whitespace-pre-wrap">
-                  {payload.description || <span className="text-slate-400">No description</span>}
-                </div>
+              </div>
 
-                {/* params */}
-                <div className="mt-6">
-                  <div className="text-xs text-slate-500">Params</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    {payload.params.length === 0 && <div className="text-sm text-slate-400">No params</div>}
-                    {payload.params.map((p, i) => (
-                      <div key={i} className="text-xs px-2 py-1 bg-slate-100 rounded-full">{p.key}: {p.value}</div>
-                    ))}
+
+
+
+
+              {/* Shop Recommendation section */}
+              {recommendedProducts.length > 0 && (
+                <div className="mt-2 bg-white p-5">
+                  <div className="flex items-center justify-center mb-4 border-b border-slate-50 pb-2">
+                    <h4 className="text-[11px] font-bold text-slate-600 text-center ">-Shop Recommendation-</h4>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    {recommendedProducts.map((p) => {
+                      const price = p.price || 0;
+                      return (
+                        <div
+                          key={p.product_id}
+                          className="group cursor-pointer"
+                          onClick={() => {
+                            if (p.product_video) {
+                              router.push(`/shopping-reels?product_id=${p.product_id}`);
+                              onClose();
+                            } else if (onProductClick) {
+                              onProductClick(p.product_id, businessData?.business?.business_name);
+                            }
+                          }}
+                        >
+                          <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
+                            {p.first_image ? (
+                              <img
+                                src={formatUrl(p.first_image)}
+                                alt={p.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>
+                            )}
+
+                            {p.product_video && (
+                              <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-1.5 z-10 shadow-lg border border-white/20">
+                                <svg className="w-3 h-3 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M8 5.14v14l11-7-11-7z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-red-600 transition-colors">
+                            {p.title}
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-900">
+                            ₦{Number(price).toLocaleString()}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* sticky bottom action bar (mobile & desktop) */}
-            <div
-              onMouseDown={stop}
-              className="fixed lg:sticky left-0 bottom-0 z-40 w-full border-t border-slate-100 bg-white/95 backdrop-blur px-1 py-1"
-            >
-              <div className="flex items-center gap-1">
-                {/* Customer Service */}
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  className="flex flex-col items-center justify-center w-14"
-                >
-                  <div className="rounded-xl bg-white flex items-center justify-center overflow-hidden hover:shadow-sm">
-                    {shopLogo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={String(shopLogo)} alt="Shop logo" className="h-5 w-5 object-cover mb-3 mt-3 border border-slate-300 rounded-full p-1" />
+              {payload.params.length > 0 && (
+                <div className="mt-2 bg-white p-4">
+                  <div className="flex items-center justify-center mb-4 border-b border-slate-50 pb-2">
+                    <h4 className="text-[11px] font-bold text-slate-600 text-center ">- Product Parameters -</h4>
+                  </div>
+
+                  <div className="space-y-1">
+                    {payload.params.length === 0 ? (
+                      <div className="text-sm text-slate-400">No details provided</div>
                     ) : (
-                      <BuildingStorefrontIcon className="w-5 h-5 text-slate-600" />
+                      payload.params.map((p, i) => (
+                        <div key={i} className="flex items-center gap-4 py-3 border-b border-slate-50 last:border-0">
+                          <div className="w-24 text-[10px] uppercase tracking-wide text-slate-500 flex-shrink-0">
+                            {p.key}
+                          </div>
+                          <div className="text-xs font-medium text-slate-900">
+                            {p.value}
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
-                  <span className="text-[11px] text-slate-800 font-bold">Shop</span>
-                </button>
+                </div>
+              )}
 
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => onOpenChat && onOpenChat()}
-                  className="flex flex-col items-center justify-center w-14"
-                >
-                  <div className="h-11 w-11 rounded-xl bg-white flex items-center justify-center hover:shadow-sm">
-                    <LifebuoyIcon className="w-5 h-5 text-slate-600" />
+              {/* BUSINESS INFO CARD (Followers, etc) */}
+              <div className="mt-2 bg-white p-5 border-t border-slate-50">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0 border border-slate-200">
+                    <img
+                      src={businessData?.business?.logo || businessData?.business?.profile_pic || "/assets/images/favio.png"}
+                      alt="Shop Logo"
+                      className="h-full w-full object-cover"
+                    />
                   </div>
-                  <span className="font-bold text-[11px] text-slate-800">Service</span>
-                </button>
-
-                {/* Cart */}
-                <div className="relative flex flex-col items-center ">
-                  <button
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className="h-11 w-11 rounded-xl bg-white flex items-center justify-center hover:shadow-sm"
-                  >
-                    <ShoppingCartIcon className="w-5 h-5 text-slate-600" />
-                  </button>
-
-                  {cartCount > 0 && (
-                    <div className="absolute top-2 right-2 w-1 h-1 p-2 rounded-full bg-rose-500 text-white text-[11px] font-semibold flex items-center justify-center">
-                      {cartCount}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-slate-900 truncate">
+                      {businessData?.business?.business_name || "Official Store"}
                     </div>
-                  )}
-
-                  <span className="text-[11px] text-slate-800 font-bold ">Cart</span>
-                </div>
-
-                {/* Action buttons — fills remaining space */}
-                <div className="ml-auto flex flex-1 overflow-hidden rounded-full bg-white">
-                  <button
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => onAddToCart && onAddToCart(payload)}
-                    className="flex-1 py-2 text-sm font-bold text-red-500 bg-red-50 hover:bg-red-100 transition"
-                  >
-                    Add to cart
-                  </button>
-
-                  <button
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => onBuyNow && onBuyNow(payload)}
-                    className="flex-1 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-500 transition"
-                  >
-                    Buy now
+                    <div className="text-xs text-slate-500 truncate">
+                      {businessData?.business?.business_category || "Verified Business"}
+                    </div>
+                  </div>
+                  <button className="bg-red-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm hover:bg-red-600 transition">
+                    Follow
                   </button>
                 </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-50 pt-4">
+                  <div className="text-center">
+                    <div className="text-sm font-bold text-slate-900">
+                      {businessData?.business?.stats?.followers?.toLocaleString() || "0"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Followers</div>
+                  </div>
+                  <div className="text-center border-x border-slate-50">
+                    <div className="text-sm font-bold text-slate-900">
+                      {businessData?.business?.stats?.following?.toLocaleString() || "0"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Following</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-bold text-slate-900">
+                      {businessData?.business?.stats?.posts?.toLocaleString() || "0"}
+                    </div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Posts</div>
+                  </div>
+                </div>
+
+
               </div>
+
+              {/* ALL PRODUCT IMAGES (full, no crop) */}
+              {/* ALL PRODUCT IMAGES (no resize, real aspect ratio) */}
+              {payload.productImages?.length > 0 && (
+                <div className="mt-2 bg-white p-4">
+
+                  <div className="text-xs text-slate-800 mb-3">Product Images</div>
+
+                  <div className="space-y-4">
+                    {payload.productImages.map((img, index) => {
+                      if (!img?.url) return null;
+
+                      return (
+                        <div
+                          key={index}
+                          className="w-full flex justify-center bg-slate-50 rounded-lg overflow-hidden"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={img.url}
+                            alt={img.name ?? `${payload.title} image ${index + 1}`}
+                            className="w-full h-auto object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+
+              <div className="mt-2 bg-white p-5">
+                <div className="flex items-center justify-center mb-4 border-b border-slate-50 pb-2">
+                  <h4 className="text-[11px] font-bold text-slate-600 text-center ">- You Might Also Like this -</h4>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
+                  {globalRecommendations.map((p) => {
+                    const price = p.price || 0;
+                    return (
+                      <div
+                        key={p.product_id}
+                        className="group cursor-pointer"
+                        onClick={() => {
+                          if (p.product_video) {
+                            router.push(`/shopping-reels?product_id=${p.product_id}`);
+                            onClose();
+                          } else if (onProductClick) {
+                            onProductClick(p.product_id, p.business_name);
+                          }
+                        }}
+                      >
+                        <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
+                          {p.first_image ? (
+                            <img
+                              src={formatUrl(p.first_image)}
+                              alt={p.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>
+                          )}
+
+                          {p.product_video && (
+                            <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-1.5 z-10 shadow-lg border border-white/20">
+                              <svg className="w-3 h-3 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5.14v14l11-7-11-7z" />
+                              </svg>
+                            </div>
+                          )}
+
+                          <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-white/80 backdrop-blur rounded text-[8px] font-bold text-slate-900 border border-slate-200 truncate max-w-[80%] uppercase tracking-tighter shadow-sm">
+                            {p.business_name}
+                          </div>
+                        </div>
+                        <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-red-600 transition-colors">
+                          {p.title}
+                        </div>
+                        <div className="text-[11px] font-bold text-slate-900">
+                          ₦{Number(price).toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {globalHasMore && (
+                  <div ref={loaderRef} className="py-8 flex justify-center">
+                    <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+
+                {!globalHasMore && globalRecommendations.length > 0 && (
+                  <div className="py-8 text-center text-[10px] text-slate-400 font-medium tracking-widest ">
+                    - The End -
+                  </div>
+                )}
+
+                {globalRecommendations.length === 0 && !globalLoading && !globalHasMore && (
+                  <div className="py-8 text-center text-xs text-slate-400 italic">No more recommendations</div>
+                )}
+              </div>
+
+
             </div>
+
+            <ActionBar
+              onAddToCart={() => onAddToCart && onAddToCart(payload)}
+              onBuyNow={() => onBuyNow && onBuyNow(payload)}
+              onOpenChat={() => onOpenChat && onOpenChat()}
+              cartCount={cartCount}
+              shopLogo={businessData?.business?.logo}
+            />
           </aside>
         </div>
       </div>

@@ -6,7 +6,7 @@ export type VariantEntry = {
   price?: number | null;
   images: File[]; // per-variant images (limit 0..1 in UI)
   imagePreviews: string[];
-    options?: VariantOption[];
+  options?: VariantOption[];
 };
 
 export type VariantOption = {
@@ -35,31 +35,62 @@ export type VariantGroupProps = {
 
 export type VariantEntryCardProps = {
   entry: VariantEntry;
-  samePriceForAll: boolean;
-  sharedPrice?: number | null;
   onRemove: () => void;
   onEdit: () => void;
   allowImages?: boolean;
-  showQuantity?: boolean; // ✅ NEW
+  useCombinations: boolean; // ✅ Added
+  samePriceForAll?: boolean;
+  sharedPrice?: number | null;
 };
 
 export type ParamKV = { id: string; key: string; value: string };
+
+export type ProductDraft = {
+  id: string;
+  lastSaved: number;
+  title: string;
+  description: string;
+  category: string;
+  price: number | "";
+  quantity: number | "";
+  hasVariants: boolean;
+  variantGroups: VariantGroup[];
+  params: ParamKV[];
+  samePriceForAll: boolean;
+  sharedPrice: number | null;
+  productImages: File[];
+  productVideo: File | null;
+  skus: ProductSku[];
+  useCombinations: boolean;
+};
+
+export type ProductSku = {
+  id: string; // unique ID for state management
+  name: string; // e.g., "12GB / Black"
+  variantOptionIds: string[]; // IDs of the constituent options (VariantEntry.id)
+  price: number | "";
+  quantity: number | "";
+  image?: File | null;
+  imagePreview?: string | null;
+  enabled: boolean;
+};
 
 export type VariantEntryModal = {
   open: boolean;
   initialData?: VariantEntry | null;
   onClose: () => void;
   onSubmit: (entry: Omit<VariantEntry, "id">) => void;
-  samePriceForAll: boolean;
-  sharedPrice?: number | null;
   allowImages?: boolean;
-  showQuantity?: boolean;
-  existingNames?: string[]; // NEW: names already in the group, normalized to lowercase
+  useCombinations: boolean; // ✅ Added
+  samePriceForAll?: boolean;
+  sharedPrice?: number | null;
+  existingNames?: string[]; // names already in the group, normalized to lowercase
 };
 
 
 
 export type PreviewPayload = {
+  productId?: number;
   title: string;
   description: string;
   category: string;
@@ -68,8 +99,11 @@ export type PreviewPayload = {
   quantity?: number | "";
   samePriceForAll: boolean;
   sharedPrice: number | null;
+  businessId?: number;
   productImages: { file?: File; name?: string; url?: string }[]; // urls for previews
   productVideo?: { file?: File; name?: string; url?: string } | null;
+  useCombinations: boolean;
+  skus: ProductSku[];
   variantGroups: {
     id: string;
     title: string;
@@ -79,7 +113,7 @@ export type PreviewPayload = {
       name: string;
       quantity?: number | "";
       price?: number | null;
-      images?: { file?: File; name?: string; url?: string }[];
+      images?: { file?: File; name?: string; url?: string; imagePreviews?: string[] }[];
     }>;
   }[];
   params: { key: string; value: string }[];
@@ -110,6 +144,7 @@ export type BusinessPolicyResponse = {
 
 export type Business = {
   business_id: number;
+  user_id?: number;
   business_name: string;
   business_email?: string;
   business_slug?: string;
@@ -122,6 +157,13 @@ export type Business = {
   full_name?: string;
   profile_pic?: string | null;
   bg_photo_url?: string | null;
+  stats?: BusinessStats;
+};
+
+export type BusinessStats = {
+  followers?: number;
+  following?: number;
+  posts?: number;
 };
 
 /* =========================
@@ -304,4 +346,29 @@ export type SalesDiscount = {
   discount_type: string;
   discount_percent: string;
   created_at?: string;
+};
+
+export type ProductFeedItem = {
+  product_id: number;
+  title: string;
+  price: number;
+  category?: string;
+  has_variants?: number;
+  created_at?: string;
+  business_id: number;
+  business_name: string;
+  logo?: string;
+  first_image?: string;
+  product_video?: string;
+  min_variant_price?: number;
+  min_sku_price?: number;
+  trusted_partner?: number;
+  market_name?: string;
+  return_shipping_subsidy?: number;
+  total_quantity?: number;
+  promo_title?: string;
+  promo_discount?: number;
+  promo_end?: string;
+  sale_type?: string;
+  sale_discount?: number;
 };

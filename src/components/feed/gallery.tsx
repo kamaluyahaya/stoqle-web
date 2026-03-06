@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import PostModal from "../modal/postModal"; // adjust path if needed
 
-type User = { name: string; avatar: string; };
+type User = { name: string; avatar: string; id?: number | string; };
 
 type Post = {
   id: number;
@@ -44,6 +44,7 @@ const mapApiPost = (p: any): Post => {
     isVideo,
     caption,
     user: {
+      id: p.user_id ?? p.user?.user_id ?? p.user?.id,
       name: p.author_name ?? "Unknown",
       avatar: p.author_pic ?? `https://i.pravatar.cc/100?u=${p.user_id ?? apiId}`,
     },
@@ -272,9 +273,8 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
             <button
               key={item}
               onClick={() => setActiveCategory(item)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm transition-all ${
-                activeCategory === item ? "bg-slate-100 text-gray-700 font-bold" : "text-slate-600 hover:bg-slate-100"
-              }`}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm transition-all ${activeCategory === item ? "bg-slate-100 text-gray-700 font-bold" : "text-slate-600 hover:bg-slate-100"
+                }`}
             >
               {item}
             </button>

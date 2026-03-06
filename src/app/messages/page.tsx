@@ -3,14 +3,25 @@
 import { API_BASE_URL } from "@/src/lib/config";
 import React, { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { useAuth } from "@/src/context/authContext";
+import { useSearchParams } from "next/navigation";
+import { RoomItem, ChatBubble, MessageInput, MessageWelcome } from "@/src/components/feed/message";
 
 type ChatRoom = {
   chat_room_id: string | number;
-  user1_id: string | number;
-  user2_id: string | number;
+  user1_id?: string | number;
+  user2_id?: string | number;
+  other_user_id?: string | number;
+  full_name?: string;
+  profile_pic?: string;
+  business_name?: string | null;
+  business_logo?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  message_content?: string | null;
+  sent_at?: string | null;
   last_message?: { message_content?: string } | null;
+  last_message_time?: string | null;
   preview?: string;
 };
 
@@ -24,19 +35,24 @@ type Message = {
   message_type?: "text" | "file" | string;
   is_read?: number | boolean;
   sent_at?: string | null;
-  file?: { file_id?: string | number; file_url?: string } | null;
+  file?: { file_id?: string | number; file_url?: string } | any;
+  file_url?: string | null;
+  file_type?: string | null;
 };
 
-export default function MessagesPage({
+function MessagesPageContent({
   userIdProp = null,
 }: {
   userIdProp?: string | null;
 }) {
-  // FRONTEND current user (keeps using localStorage for convenience/testing).
-  // Server-side auth middleware should set req.user.user_id; frontend omits sender_id when sending.
+  const auth = useAuth();
+  const ctxUserId = auth?.user?.user_id || auth?.user?.id;
   const savedUserId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
-  const userId = String(userIdProp ?? savedUserId ?? "150"); // change/remove fallback in prod
+  const userId = String(userIdProp ?? ctxUserId ?? savedUserId ?? "150");
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const searchParams = useSearchParams();
+  const roomParam = searchParams.get("room");
+  const userParam = searchParams.get("user");
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
@@ -45,145 +61,160 @@ export default function MessagesPage({
   const [unreadMap, setUnreadMap] = useState<Record<string | number, number>>({});
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const prevRoomIdRef = useRef<string | number | null>(null);
   const [query, setQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
 
-  // debugging (optional)
-  const [lastNetwork, setLastNetwork] = useState<any>(null);
   const headers = token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
 
-  // ---------- API calls that match your backend ----------
+  function scrollToBottom(behavior: ScrollBehavior = "smooth") {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }
 
-  // GET /api/chat/room  (authenticated) -> expected: array of rooms or { rooms: [...] }
+  // ---------- API calls ----------
+
   async function fetchRooms() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat/room`, { headers });
-      const text = await res.text();
-      let data: any;
-      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-      setLastNetwork({ path: "/api/chat/room", status: res.status, body: data });
-
-      if (!res.ok) {
-        setRooms([]);
-        return;
-      }
-      // normalize
+      const data = await res.json();
       const list = data?.rooms || data?.chatRooms || data?.data || data || [];
-      setRooms(Array.isArray(list) ? list : []);
+      const roomsList = Array.isArray(list) ? list : [];
+
+      // Initialize unreadMap from the API data
+      const initialUnread: Record<string | number, number> = {};
+      roomsList.forEach((r: any) => {
+        // Assume API provides unread_count or is_read on latest message
+        if (r.unread_count !== undefined) {
+          initialUnread[r.chat_room_id] = Number(r.unread_count);
+        } else if (r.is_read === 0 && String(r.sender_id) !== String(userId)) {
+          initialUnread[r.chat_room_id] = 1;
+        }
+      });
+      setUnreadMap(initialUnread);
+      setRooms(roomsList);
     } catch (err) {
       console.warn("fetchRooms", err);
       setRooms([]);
     }
   }
 
-  // POST /api/chat/create  body { user1_id, user2_id }  -> { message, chatRoom }
-  async function createRoomWith(otherUserId: string | number) {
-    try {
-      const payload = { user1_id: Number(userId), user2_id: Number(otherUserId) };
-      const res = await fetch(`${API_BASE_URL}/api/chat/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      setLastNetwork({ path: "/api/chat/create", status: res.status, body: data });
-
-      if (!res.ok) throw new Error(`Create room failed: ${res.status}`);
-      // normalize chatRoom
-      const room = data.chatRoom || data.data || data;
-      if (room) {
-        setRooms((p) => {
-          // dedupe
-          if (p.find((r) => String(r.chat_room_id) === String(room.chat_room_id))) return p;
-          return [room, ...p];
-        });
-        return room as ChatRoom;
-      }
-      return null;
-    } catch (err) {
-      console.warn("createRoomWith", err);
-      return null;
-    }
-  }
-
-  // GET /api/chat/messages/:chat_room_id -> { messages: [...] }
   async function fetchMessages(chat_room_id: string | number) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat/messages/${chat_room_id}`, { headers });
       const data = await res.json();
-      setLastNetwork({ path: `/api/chat/messages/${chat_room_id}`, status: res.status, body: data });
-
-      if (!res.ok) {
-        setMessages([]);
-        return;
-      }
-
-      const list: Message[] = data?.messages || data?.data || data || [];
+      const list = data?.messages || data?.chatMessages || data?.data || data || [];
       setMessages(Array.isArray(list) ? list : []);
-
-      // mark unread messages from others as read (use server endpoint)
-      const unreadIds = (Array.isArray(list) ? list : [])
-        .filter((m) => (m.is_read === 0 || m.is_read === false) && String(m.sender_id) !== String(userId))
-        .map((m) => m.message_id)
-        .filter(Boolean);
-
-      if (unreadIds.length) {
-        // mark all concurrently
-        await Promise.all(unreadIds.map((id) => markMessageAsRead(id)));
-      }
-
-      // clear UI unread counter
       setUnreadMap((p) => ({ ...p, [chat_room_id]: 0 }));
-      setTimeout(() => scrollToBottom(), 50);
+
+      // Jump instantly to bottom when first opening room
+      setTimeout(() => scrollToBottom("auto"), 30);
     } catch (err) {
       console.warn("fetchMessages", err);
       setMessages([]);
     }
   }
 
-  // POST /api/chat/message  body: { chat_room_id, message_content, message_type } (server uses req.user)
   async function handleSend() {
-    if (!newMessage.trim() || !selectedRoom) return;
+    if ((!newMessage.trim() && !selectedFile) || !selectedRoom || isSending) return;
     setIsSending(true);
+
+    // 1. Optimistic Update (Immediate Feedback)
+    const tempId = Date.now();
+    const optimisticMsg: Message = {
+      message_id: tempId,
+      chat_room_id: selectedRoom.chat_room_id,
+      sender_id: userId,
+      message_content: newMessage.trim(),
+      message_type: selectedFile ? "file" : "text",
+      sent_at: new Date().toISOString(),
+      file_url: filePreview, // Show local DataURL/Blob instantly 
+      file_type: selectedFile?.type
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+
+    // Cache inputs before clearing for API call
+    const savedContent = newMessage.trim();
+    const savedFile = selectedFile;
+    setNewMessage("");
+    setSelectedFile(null);
+    setFilePreview(null);
+    scrollToBottom("smooth");
+
     try {
-      const payload = {
-        chat_room_id: selectedRoom.chat_room_id,
-        message_content: newMessage.trim(),
-        message_type: "text",
-      };
+      let finalMessage: Message;
 
-      const res = await fetch(`${API_BASE_URL}/api/chat/message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify(payload),
+      if (savedFile) {
+        const formData = new FormData();
+        formData.append("file", savedFile);
+        formData.append("chat_room_id", String(selectedRoom.chat_room_id));
+        if (savedContent) formData.append("message_content", savedContent);
+
+        const res = await fetch(`${API_BASE_URL}/api/chat/upload`, {
+          method: "POST",
+          headers,
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error("Upload failed");
+
+        const msgObj = data.data || (typeof data.message === 'object' ? data.message : data);
+        finalMessage = {
+          ...msgObj,
+          sender_id: msgObj.sender_id || Number(userId),
+          sent_at: msgObj.sent_at || new Date().toISOString(),
+          message_content: msgObj.message_content || savedContent,
+          // Check common API fields for file URL
+          file_url: msgObj.file_url || msgObj.file?.file_url || data.file_url || msgObj.url,
+          file_type: msgObj.file_type || msgObj.file?.file_type || data.file_type || msgObj.type
+        };
+      } else {
+        const payload = {
+          chat_room_id: selectedRoom.chat_room_id,
+          message_content: savedContent,
+          message_type: "text",
+        };
+        const res = await fetch(`${API_BASE_URL}/api/chat/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        const msgObj = data.data || (typeof data.message === 'object' ? data.message : data);
+        finalMessage = {
+          ...msgObj,
+          sender_id: msgObj.sender_id || Number(userId),
+          sent_at: msgObj.sent_at || new Date().toISOString(),
+          message_content: msgObj.message_content || payload.message_content
+        };
+      }
+
+      // 2. Synchronize with real server data
+      setMessages(p => p.map(m => m.message_id === tempId ? finalMessage : m));
+
+      // 3. Update room position in sidebar
+      setRooms((p) => {
+        const otherRooms = p.filter((r) => String(r.chat_room_id) !== String(selectedRoom.chat_room_id));
+        const updatedRoom = {
+          ...selectedRoom,
+          message_content: finalMessage.message_content || (savedFile ? "Shared a file" : ""),
+          sent_at: finalMessage.sent_at,
+          updated_at: finalMessage.sent_at
+        };
+        return [updatedRoom, ...otherRooms];
       });
-      const data = await res.json();
-      setLastNetwork({ path: "/api/chat/message", status: res.status, body: data });
-
-      if (!res.ok) throw new Error(`Send failed: ${res.status}`);
-
-      // server sample: { message: "Message sent", data: { message_id, ... } }
-      const saved = data.data || data.message || data;
-      const m: Message = {
-        message_id: saved?.message_id || saved?.id,
-        chat_room_id: saved?.chat_room_id || selectedRoom.chat_room_id,
-        sender_id: saved?.sender_id || Number(userId),
-        message_content: saved?.message_content || payload.message_content,
-        message_type: saved?.message_type || "text",
-        is_read: saved?.is_read ?? 0,
-        sent_at: saved?.sent_at || new Date().toISOString(),
-      };
-      setMessages((p) => [...p, m]);
-      setNewMessage("");
-      scrollToBottom();
     } catch (err) {
       console.warn("handleSend", err);
+      // Rollback on error
+      setMessages(prev => prev.filter(m => m.message_id !== tempId));
     } finally {
       setIsSending(false);
     }
   }
 
-  // PUT /api/chat/mark-as-read/:messageId
   async function markMessageAsRead(message_id?: string | number) {
     if (!message_id) return;
     try {
@@ -191,101 +222,86 @@ export default function MessagesPage({
         method: "PUT",
         headers: { "Content-Type": "application/json", ...headers },
       });
-      // optimistic update
       setMessages((prev) => prev.map((m) => (String(m.message_id) === String(message_id) ? { ...m, is_read: 1 } : m)));
     } catch (err) {
       console.warn("markMessageAsRead", err);
     }
   }
 
-  // POST /api/chat/upload (formData: message_id + file)
-  async function handleFile(file?: File | null) {
-    if (!file || !selectedRoom) return;
-    try {
-      // create placeholder message on server first (server sample creates message via POST /api/chat/message)
-      const createRes = await fetch(`${API_BASE_URL}/api/chat/message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({
-          chat_room_id: selectedRoom.chat_room_id,
-          message_content: "",
-          message_type: "file",
-        }),
-      });
-      const createData = await createRes.json();
-      const created = createData.data || createData.message || createData;
-      const message_id = created?.message_id || created?.id;
-      if (!message_id) throw new Error("No message_id returned for file placeholder");
-
-      const form = new FormData();
-      form.append("message_id", String(message_id));
-      form.append("file", file);
-
-      const upRes = await fetch(`${API_BASE_URL}/api/chat/upload`, {
-        method: "POST",
-        headers, // do NOT set Content-Type, let browser set boundary
-        body: form,
-      });
-      const upData = await upRes.json();
-      setLastNetwork({ path: "/api/chat/upload", status: upRes.status, body: upData });
-
-      if (!upRes.ok) throw new Error("Upload failed");
-
-      const uploadedFile = upData.uploadedFile || upData.data || upData.file || upData;
-      // append file message to UI
-      const fileMessage: Message = {
-        message_id,
-        chat_room_id: selectedRoom.chat_room_id,
-        sender_id: Number(userId),
-        message_type: "file",
-        is_read: 0,
-        sent_at: new Date().toISOString(),
-        file: uploadedFile,
-      };
-      setMessages((p) => [...p, fileMessage]);
-      scrollToBottom();
-    } catch (err) {
-      console.warn("handleFile", err);
+  function handleFile(file: File | null) {
+    if (!file) return;
+    setSelectedFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => setFilePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
     }
   }
 
-  // ---------- sockets (unchanged event names) ----------
+  // ---------- Sockets ----------
   useEffect(() => {
     if (!userId) return;
     const socket = io(API_BASE_URL, { query: { userId } });
     socketRef.current = socket;
 
-    socket.on("connect", () => console.log("socket connected", socket.id));
-
-    socket.on("chat:room:created", (room: ChatRoom) => {
-      setRooms((p) => {
-        if (p.find((r) => String(r.chat_room_id) === String(room.chat_room_id))) return p;
-        return [room, ...p];
-      });
-    });
-
     socket.on("chat:message", (msg: Message) => {
+      // Update sidebar
+      setRooms((p) => {
+        const targetRoom = p.find((r) => String(r.chat_room_id) === String(msg.chat_room_id));
+        const otherRooms = p.filter((r) => String(r.chat_room_id) !== String(msg.chat_room_id));
+        const updatedRoom = targetRoom
+          ? { ...targetRoom, message_content: msg.message_content, sent_at: msg.sent_at, updated_at: msg.sent_at }
+          : {
+            chat_room_id: msg.chat_room_id,
+            other_user_id: msg.sender_id,
+            full_name: msg.sender_name || `User ${msg.sender_id}`,
+            business_name: (msg as any).business_name,
+            business_logo: (msg as any).business_logo,
+            message_content: msg.message_content,
+            sent_at: msg.sent_at,
+            updated_at: msg.sent_at
+          };
+        return [updatedRoom as ChatRoom, ...otherRooms];
+      });
+
       if (selectedRoom && String(msg.chat_room_id) === String(selectedRoom.chat_room_id)) {
-        setMessages((p) => [...p, msg]);
-        // mark read on server if from other user
+        setMessages((p) => {
+          if (p.find(m => String(m.message_id) === String(msg.message_id))) return p;
+          return [...p, msg];
+        });
         if (String(msg.sender_id) !== String(userId)) markMessageAsRead(msg.message_id);
-        scrollToBottom();
       } else {
         setUnreadMap((p) => ({ ...p, [msg.chat_room_id]: (p[msg.chat_room_id] || 0) + 1 }));
-        setRooms((p) => {
-          const without = p.filter((r) => String(r.chat_room_id) !== String(msg.chat_room_id));
-          const found = p.find((r) => String(r.chat_room_id) === String(msg.chat_room_id));
-          if (found) return [found, ...without];
-          return [{ chat_room_id: msg.chat_room_id, user1_id: msg.sender_id, user2_id: userId }, ...without];
-        });
       }
     });
 
     socket.on("chat:file", (payload: any) => {
+      setRooms((p) => {
+        const targetRoom = p.find((r) => String(r.chat_room_id) === String(payload.chat_room_id));
+        const otherRooms = p.filter((r) => String(r.chat_room_id) !== String(payload.chat_room_id));
+        const updatedRoom = targetRoom
+          ? { ...targetRoom, message_content: "Shared a file", sent_at: payload.sent_at, updated_at: payload.sent_at }
+          : {
+            chat_room_id: payload.chat_room_id,
+            other_user_id: payload.sender_id,
+            full_name: payload.sender_name,
+            business_name: payload.business_name,
+            business_logo: payload.business_logo,
+            message_content: "Shared a file",
+            sent_at: payload.sent_at,
+            updated_at: payload.sent_at
+          };
+        return [updatedRoom as ChatRoom, ...otherRooms];
+      });
+
       if (selectedRoom && String(payload.chat_room_id) === String(selectedRoom.chat_room_id)) {
-        setMessages((p) => [...p, payload]);
+        setMessages((p) => {
+          if (p.find(m => String(m.message_id) === String(payload.message_id))) return p;
+          return [...p, payload];
+        });
         if (String(payload.sender_id) !== String(userId)) markMessageAsRead(payload.message_id);
-        scrollToBottom();
       } else {
         setUnreadMap((p) => ({ ...p, [payload.chat_room_id]: (p[payload.chat_room_id] || 0) + 1 }));
       }
@@ -295,176 +311,188 @@ export default function MessagesPage({
       setMessages((p) => p.map((m) => (String(m.message_id) === String(data.message_id) ? { ...m, is_read: 1 } : m)));
     });
 
-    return () => {
-      socket.disconnect();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { socket.disconnect(); };
   }, [userId, selectedRoom]);
 
-  // initial
-  useEffect(() => {
-    fetchRooms();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Initial load
+  useEffect(() => { fetchRooms(); }, []);
 
-  // when selecting a room, fetch messages
+  // Handle URL parameters (room or user)
+  useEffect(() => {
+    if (rooms.length === 0) return;
+
+    if (roomParam) {
+      const room = rooms.find(r => String(r.chat_room_id) === String(roomParam));
+      if (room) setSelectedRoom(room);
+    } else if (userParam) {
+      const room = rooms.find(r => String(r.other_user_id) === String(userParam));
+      if (room) {
+        setSelectedRoom(room);
+      } else {
+        // Try creating/fetching room for this user
+        (async () => {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/chat/create`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...headers },
+              body: JSON.stringify({ other_user_id: userParam })
+            });
+            const data = await res.json();
+            const newRoom = data.data || data;
+            if (newRoom && newRoom.chat_room_id) {
+              setRooms(prev => [newRoom, ...prev]);
+              setSelectedRoom(newRoom);
+            }
+          } catch (e) { console.warn("Auto-init room failed", e); }
+        })();
+      }
+    }
+  }, [rooms.length, roomParam, userParam]);
+
+  // Fetch messages on room selection
   useEffect(() => {
     if (selectedRoom) fetchMessages(selectedRoom.chat_room_id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRoom]);
 
+  // Scroll to bottom on messages change
+  useEffect(() => {
+    // If we just switched rooms, jump instantly
+    if (selectedRoom?.chat_room_id !== prevRoomIdRef.current) {
+      scrollToBottom("auto");
+      prevRoomIdRef.current = selectedRoom?.chat_room_id || null;
+    } else {
+      // If adding a message to the SAME room, smooth scroll
+      scrollToBottom("smooth");
+    }
+  }, [messages, selectedRoom?.chat_room_id]);
+
   const filtered = rooms.filter((r) => {
-    const otherId = String(r.user1_id) === String(userId) ? String(r.user2_id) : String(r.user1_id);
-    return `${otherId}`.includes(query) || (r.preview || r.last_message?.message_content || "").toLowerCase().includes(query.toLowerCase());
+    const searchStr = query.toLowerCase();
+    const nameMatch = r.full_name?.toLowerCase().includes(searchStr) ||
+      r.business_name?.toLowerCase().includes(searchStr);
+    const messageMatch = (r.preview || r.last_message?.message_content || r.message_content || "").toLowerCase().includes(searchStr);
+    const idMatch = String(r.other_user_id || "").includes(searchStr);
+    return nameMatch || messageMatch || idMatch;
   });
 
-  function scrollToBottom() {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }
+  const formatDateLabel = (dateStr: string | null) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return "Today";
+    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
 
   return (
-    <div className="h-screen flex bg-gray-50 text-gray-900">
-      {/* Left column */}
-      <aside className="w-full max-w-[420px] p-4 border-r bg-white shadow-sm flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-xl font-semibold">Messages</h1>
-            <p className="text-sm text-gray-500">Signed in as <span className="font-medium">{userId}</span></p>
+    <div className="fixed inset-0 bg-slate-100 lg:pl-[310px] overflow-hidden">
+      <div className="flex h-[calc(100vh-64px)] mt-[64px] overflow-hidden">
+        <aside className={`${selectedRoom ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] flex-col bg-slate-100 border-r border-gray-100`}>
+          <div className="p-6 pb-2 shrink-0">
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
+              <button onClick={fetchRooms} className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search conversations..." className="w-full bg-white pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-red-100 focus:border-red-500 outline-none shadow-sm" />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => fetchRooms()} className="rounded-lg bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200">Refresh</button>
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
+            {filtered.map((room) => (
+              <RoomItem key={String(room.chat_room_id)} room={room as any} unread={unreadMap[room.chat_room_id] || 0} active={!!(selectedRoom && String(selectedRoom.chat_room_id) === String(room.chat_room_id))} onClick={() => setSelectedRoom(room)} />
+            ))}
           </div>
-        </div>
+        </aside>
 
-        <div className="mb-3">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search chats or user" className="w-full px-3 py-2 rounded-lg border focus:ring focus:ring-indigo-200" />
-        </div>
-
-        <div className="overflow-auto flex-1">
-          <ul className="space-y-2">
-            {filtered.length === 0 && <li className="text-sm text-gray-400 p-4">No conversations</li>}
-            {filtered.map((room) => {
-              const otherId = String(room.user1_id) === String(userId) ? room.user2_id : room.user1_id;
-              const unread = unreadMap[room.chat_room_id] || 0;
-              const active = selectedRoom && String(selectedRoom.chat_room_id) === String(room.chat_room_id);
-              return (
-                <li key={String(room.chat_room_id)} onClick={() => setSelectedRoom(room)} className={`flex items-center p-3 rounded-lg cursor-pointer hover:bg-gray-50 ${active ? 'bg-indigo-50 ring-1 ring-indigo-200' : ''}`}>
-                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 text-white flex items-center justify-center font-semibold mr-3">{String(otherId).slice(-2)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium truncate">User {otherId}</div>
-                      <div className="text-xs text-gray-400">{room.updated_at ? new Date(String(room.updated_at)).toLocaleTimeString() : ''}</div>
+        <main className={`${selectedRoom ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white border-l border-slate-200`}>
+          {!selectedRoom ? <MessageWelcome /> : (
+            <div className="flex-1 flex flex-col relative overflow-hidden">
+              <header className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-10 shrink-0">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setSelectedRoom(null)} className="md:hidden p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-red-500">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  {/* Logic: business_logo || profile_pic */}
+                  {selectedRoom.business_logo || selectedRoom.profile_pic ? (
+                    <img src={selectedRoom.business_logo || selectedRoom.profile_pic} className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white font-bold">
+                      {(selectedRoom.business_name || selectedRoom.full_name || "U").charAt(0).toUpperCase()}
                     </div>
-                    <div className="text-sm text-gray-500 truncate mt-1">{room.preview || room.last_message?.message_content || 'No messages yet'}</div>
+                  )}
+                  <div>
+                    <h3 className="font-bold text-gray-900">{selectedRoom.business_name || selectedRoom.full_name || "User"}</h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                      <span className="text-xs text-gray-400 font-medium">Online</span>
+                    </div>
                   </div>
-                  {unread > 0 && <div className="ml-3 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">{unread}</div>}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        {/* quick create chat for testing */}
-        <div className="pt-3 border-t mt-3">
-          <CreateChatBox onCreate={async (otherId) => {
-            const room = await createRoomWith(otherId);
-            if (room) setSelectedRoom(room);
-          }} />
-        </div>
-      </aside>
-
-      {/* Right column */}
-      <main className="flex-1 p-2 flex flex-col">
-        {!selectedRoom ? (
-          <div className="m-auto text-center text-gray-400">
-            <h2 className="text-lg font-medium">Select a conversation</h2>
-            <p className="mt-2">Start chatting with customers or vendors in real-time.</p>
-
-            {lastNetwork && (
-              <details className="mt-3 text-left text-xs text-gray-600">
-                <summary className="cursor-pointer">Last network debug</summary>
-                <pre className="whitespace-pre-wrap break-words max-h-60 overflow-auto p-2 bg-slate-50 rounded mt-2">{JSON.stringify(lastNetwork, null, 2)}</pre>
-              </details>
-            )}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col bg-white">
-            <header className="flex items-center justify-between pb-3 border-b">
-              <div className="flex items-center">
-                <div className="w-12 h-12 rounded-full bg-indigo-100 mr-3 flex items-center justify-center font-semibold text-indigo-700">{String(selectedRoom.chat_room_id).slice(-2)}</div>
-                <div>
-                  <div className="font-semibold">Conversation</div>
-                  <div className="text-sm text-gray-500">Chat ID {selectedRoom.chat_room_id}</div>
                 </div>
+              </header>
+
+              <div className="flex-1 overflow-y-auto px-6 py-8 space-y-2 custom-scrollbar">
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full opacity-40 py-20">
+                    <p className="text-sm font-medium">No messages yet. Say hello!</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    {messages.map((m, idx) => {
+                      const prevMsg = messages[idx - 1];
+                      const currDateString = m.sent_at ? new Date(m.sent_at).toDateString() : "";
+                      const prevDateString = prevMsg?.sent_at ? new Date(prevMsg.sent_at).toDateString() : "";
+                      const showDateHeader = currDateString !== prevDateString;
+                      return (
+                        <React.Fragment key={m.message_id || m.sent_at || idx}>
+                          {showDateHeader && (
+                            <div className="flex justify-center my-6 sticky top-1 z-10">
+                              <span className="px-4 py-1.5 bg-gray-100/80 backdrop-blur-sm text-[11px] font-bold text-gray-500 rounded-full shadow-sm border border-gray-200/50 uppercase tracking-widest">
+                                {formatDateLabel(m.sent_at || null)}
+                              </span>
+                            </div>
+                          )}
+                          <ChatBubble mine={String(m.sender_id) === String(userId)} content={m.message_content} sentAt={m.sent_at} senderName={m.sender_name} isRead={m.is_read} messageType={m.message_type} file={m.file} fileUrl={m.file_url} fileType={m.file_type} />
+                        </React.Fragment>
+                      );
+                    })}
+                    <div ref={messagesEndRef} className="h-1" />
+                  </div>
+                )}
               </div>
-              <div className="text-sm text-gray-400">{selectedRoom.created_at ? new Date(String(selectedRoom.created_at)).toLocaleDateString() : ''}</div>
-            </header>
 
-            <div className="flex-1 overflow-auto mt-4 px-2" style={{ minHeight: 0 }}>
-              {messages.length === 0 && <div className="text-center text-gray-400 mt-8">No messages yet — send the first one.</div>}
-
-              <div className="space-y-4">
-                {messages.map((m) => {
-                  const mine = String(m.sender_id) === String(userId);
-                  return (
-                    <div key={m.message_id || Math.random()} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`${mine ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'} p-3 rounded-2xl max-w-[70%] break-words`}>
-                        {!mine && m.sender_name && <div className="text-xs font-medium mb-1">{m.sender_name}</div>}
-
-                        {m.message_type === 'file' ? (
-                          <div className="flex flex-col">
-                            <div className="text-sm font-medium">File</div>
-                            <a href={m.file?.file_url || (m as any).file_url} target="_blank" rel="noreferrer" className="mt-2 underline text-sm">Open file</a>
-                          </div>
-                        ) : (
-                          <div className="whitespace-pre-wrap">{m.message_content}</div>
-                        )}
-
-                        <div className={`text-xs mt-2 ${mine ? 'text-indigo-200' : 'text-gray-400'}`}>
-                          {m.sent_at ? new Date(String(m.sent_at)).toLocaleTimeString() : ''} {m.is_read ? '• Read' : ''}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            <div className="pt-3 mt-4 border-t">
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border cursor-pointer">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h4l3 8 4-16 3 8h4" />
-                  </svg>
-                  <input type="file" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
-                  <span className="text-sm text-gray-500">Attach</span>
-                </label>
-
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Write a message..." className="flex-1 px-4 py-3 rounded-lg border focus:ring focus:ring-indigo-200" onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }} />
-
-                <button onClick={handleSend} disabled={isSending || !newMessage.trim()} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">
-                  Send
-                </button>
+              <div className="p-4 bg-white/50 backdrop-blur-sm border-t border-gray-100 shrink-0">
+                <MessageInput value={newMessage} onChange={setNewMessage} onSend={handleSend} onFileSelect={handleFile} isSending={isSending} selectedFile={selectedFile} filePreview={filePreview} onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }} />
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+      `}</style>
     </div>
   );
 }
 
-/* CreateChatBox helper */
-function CreateChatBox({ onCreate }: { onCreate: (otherId: string | number) => Promise<void> }) {
-  const [otherId, setOtherId] = useState("");
+export default function MessagesPage(props: any) {
   return (
-    <div className="pt-3">
-      <div className="text-xs text-gray-600 mb-2">Start chat (for testing)</div>
-      <div className="flex gap-2">
-        <input value={otherId} onChange={(e) => setOtherId(e.target.value)} placeholder="other user id (e.g. 152)" className="flex-1 px-3 py-2 rounded-lg border" />
-        <button onClick={() => { if (otherId.trim()) onCreate(otherId.trim()); }} className="px-3 py-2 rounded-lg bg-indigo-600 text-white">Start</button>
-      </div>
-    </div>
+    <React.Suspense fallback={null}>
+      <MessagesPageContent {...props} />
+    </React.Suspense>
   );
 }

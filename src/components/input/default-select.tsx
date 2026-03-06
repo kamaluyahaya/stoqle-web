@@ -63,7 +63,7 @@ export default function CategorySelectionModal({
 
       {/* Modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-75 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <button
             aria-label="Close"
@@ -117,7 +117,7 @@ export default function CategorySelectionModal({
             </div>
 
             {/* Footer: Actions */}
-            <div className="sticky lg:bottom-5 md:bottom-5 bottom-15 z-20 bg-white px-4 py-4
+            <div className="sticky lg:bottom-5 md:bottom-5 bottom-15 z-75 bg-white px-4 py-4
                             pb-[env(safe-area-inset-bottom)]">
               <div className="flex gap-3">
                 <button

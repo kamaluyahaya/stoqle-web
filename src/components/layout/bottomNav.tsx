@@ -20,8 +20,11 @@ type NavItem = {
   icon: React.ReactNode;
 };
 
+import { useChat } from "@/src/context/chatContext";
+
 export default function BottomNav() {
   const auth = useAuth();
+  const { unreadCount } = useChat();
   const pathname = usePathname();
 
   // best-effort "logged in" check (adjust if your auth exposes a specific flag)
@@ -30,7 +33,7 @@ export default function BottomNav() {
 
   if (!isLoggedIn) return null;
 
-  const items: NavItem[] = [
+  const items = [
     {
       id: "discover",
       title: "Discover",
@@ -54,6 +57,7 @@ export default function BottomNav() {
       title: "Message",
       href: "/messages",
       icon: <ChatBubbleLeftRightIcon className="w-5 h-5" aria-hidden />,
+      badge: unreadCount,
     },
     {
       id: "profile",
@@ -87,11 +91,15 @@ export default function BottomNav() {
                 aria-label={it.title}
               >
                 <div
-                  className={`flex items-center justify-center rounded-md w-9 h-6 ${
-                    active ? "bg-rose-100" : "bg-transparent"
-                  }`}
+                  className={`relative flex items-center justify-center rounded-md w-9 h-6 ${active ? "bg-rose-100" : "bg-transparent"
+                    }`}
                 >
                   {it.icon}
+                  {it.badge ? (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white ring-1 ring-white">
+                      {it.badge > 99 ? "99+" : it.badge}
+                    </span>
+                  ) : null}
                 </div>
 
                 {/* label placed inline to the right of the icon on md+, hidden on small screens */}

@@ -58,12 +58,12 @@ export function useEditBusinessProfile({
   }
 
   /** small helper — only set if changed (avoids unnecessary renders) */
-function safeSet(
-  setter: Dispatch<SetStateAction<string>>,
-  value: string
-) {
-  setter((prev) => (prev === value ? prev : value));
-}
+  function safeSet(
+    setter: Dispatch<SetStateAction<string>>,
+    value: string
+  ) {
+    setter((prev) => (prev === value ? prev : value));
+  }
 
   async function loadLocalPrefs() {
     const n = (await loadField(KEYS.name)) ?? "";
@@ -272,7 +272,7 @@ function safeSet(
     const addressParsed = safeParse(addressVal);
     const marketParsed = safeParse(marketVal);
     const promoParsed = safeParse(promoVal);
-    
+
 
     let promotions: any[] = [];
     if (Array.isArray(promoParsed)) promotions = promoParsed;
@@ -280,40 +280,32 @@ function safeSet(
       promotions = promoParsed.promotions ?? promoParsed.promotion_list ?? promoParsed.list ?? [];
     }
 
-  // Only include promotion if user staged/edited it
-const promotionObj =
-  dirtyKeys.includes(KEYS.promo) && promoParsed
-    ? (() => {
-        // Normalize to a single object
-        if (Array.isArray(promoParsed)) return promoParsed[0] ?? null;
-        if (promoParsed.promotions && Array.isArray(promoParsed.promotions))
-          return promoParsed.promotions[0] ?? null;
-        if (promoParsed.promotion_list && Array.isArray(promoParsed.promotion_list))
-          return promoParsed.promotion_list[0] ?? null;
-        if (promoParsed.type || promoParsed.name) return promoParsed;
-        return null;
-      })()
-    : null;
+    // Only include promotion if user staged/edited it
+    const promotionObj =
+      dirtyKeys.includes(KEYS.promo) && promoParsed
+        ? (() => {
+          // Normalize to a single object
+          if (Array.isArray(promoParsed)) return promoParsed[0] ?? null;
+          if (promoParsed.promotions && Array.isArray(promoParsed.promotions))
+            return promoParsed.promotions[0] ?? null;
+          if (promoParsed.promotion_list && Array.isArray(promoParsed.promotion_list))
+            return promoParsed.promotion_list[0] ?? null;
+          if (promoParsed.type || promoParsed.name) return promoParsed;
+          return null;
+        })()
+        : null;
 
-// Only include promotions if user staged/edited them
-const promotionsPayload =
-  dirtyKeys.includes(KEYS.promo) && promoParsed
-    ? (() => {
-        // Normalize to array
+    // Only include promotions if user staged/edited them
+    const promotionsPayload = dirtyKeys.includes(KEYS.promo)
+      ? (() => {
+        if (!promoParsed) return [];
         if (Array.isArray(promoParsed)) return promoParsed;
-        if (promoParsed.promotions && Array.isArray(promoParsed.promotions))
-          return promoParsed.promotions;
-        if (promoParsed.promotion_list && Array.isArray(promoParsed.promotion_list))
-          return promoParsed.promotion_list;
-        // Single object case
+        if (promoParsed.promotions && Array.isArray(promoParsed.promotions)) return promoParsed.promotions;
+        if (promoParsed.promotion_list && Array.isArray(promoParsed.promotion_list)) return promoParsed.promotion_list;
         if (promoParsed.type || promoParsed.name) return [promoParsed];
         return [];
       })()
-    : undefined;
-
-
-
-   
+      : undefined;
 
     const shippingObj = typeof shippingParsed === "string" ? { delivery_notice: shippingParsed } : (shippingParsed || {});
     const refundsObj = typeof refundsParsed === "string" ? {} : (refundsParsed || {});
@@ -327,98 +319,95 @@ const promotionsPayload =
     })();
 
     if (!bizId) {
-      toast("No business id available. Please open the business page and try again.");
+      toast("No business id available.");
       setIsSyncing(false);
       return;
     }
 
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) {
-      toast("No auth token found. Please sign in.");
+      toast("No auth token found.");
       setIsSyncing(false);
       return;
     }
-// normalize single discount object (support a few possible shapes)
-const discountParsed = safeParse(discountVal);
-// Only include discount if user staged/edited it
-const discountObj =
-  dirtyKeys.includes(KEYS.discount) && discountParsed
-    ? (() => {
-        if (Array.isArray(discountParsed.discounts) && discountParsed.discounts.length > 0)
-          return discountParsed.discounts[0];
-        if (Array.isArray(discountParsed) && discountParsed.length > 0)
-          return discountParsed[0];
-        if (discountParsed.type || discountParsed.discount !== undefined)
-          return discountParsed;
-        if (Array.isArray(discountParsed.discount_list) && discountParsed.discount_list.length > 0)
-          return discountParsed.discount_list[0];
+
+    // normalize single discount object (support a few possible shapes)
+    const discountParsed = safeParse(discountVal);
+
+    // Only include discount if user staged/edited it
+    const discountObj = dirtyKeys.includes(KEYS.discount) && discountParsed
+      ? (() => {
+        if (Array.isArray(discountParsed.discounts) && discountParsed.discounts.length > 0) return discountParsed.discounts[0];
+        if (Array.isArray(discountParsed) && discountParsed.length > 0) return discountParsed[0];
+        if (discountParsed.type || discountParsed.discount !== undefined) return discountParsed;
+        if (Array.isArray(discountParsed.discount_list) && discountParsed.discount_list.length > 0) return discountParsed.discount_list[0];
         return null;
       })()
-    : null;
+      : null;
 
-const discountsPayload = discountObj
-  ? [
-      {
-        type: discountObj.type ?? discountObj.name ?? "Vendor Discount",
-        discount: Number(discountObj.discount ?? discountObj.discount_percent ?? 0),
-      },
-    ]
-  : undefined; // <--- use undefined to **not overwrite** if unchanged
+    const discountsPayload = dirtyKeys.includes(KEYS.discount)
+      ? (discountObj
+        ? [{
+          type: discountObj.type ?? discountObj.name ?? "Vendor Discount",
+          discount: Number(discountObj.discount ?? discountObj.discount_percent ?? 0),
+        }]
+        : []) // explicitly send [] to clear discounts!
+      : undefined;
 
 
-  // Only include shipping if it was staged/edited
-const shippingPayload = dirtyKeys.includes(KEYS.shipping)
-  ? {
+    // Only include shipping if it was staged/edited
+    const shippingPayload = dirtyKeys.includes(KEYS.shipping)
+      ? {
+        delivery_notice: shippingObj.delivery_notice ?? shippingObj.deliveryNotice ?? (typeof shippingParsed === "string" ? shippingParsed : undefined),
+        shipping_duration: shippingDuration,
+        additional_info: shippingObj.additional_info ?? shippingObj.additionalInfo ?? shippingObj.note ?? undefined,
+      }
+      : undefined;
+
+    const payload: any = {
       delivery_notice: shippingObj.delivery_notice ?? shippingObj.deliveryNotice ?? (typeof shippingParsed === "string" ? shippingParsed : undefined),
-      shipping_duration: shippingDuration,
+      // shipping_duration: shippingDuration,
+      ...(shippingPayload ? shippingPayload : {}),
+      promotions: promotionsPayload,
+      discounts: discountsPayload,
+
+      // refunds
+      return_shipping_subsidy: refundsObj.return_shipping_subsidy ?? refundsObj.returnShippingSubsidy ?? undefined,
+      seven_day_no_reason_return: refundsObj.seven_day_no_reason_return ?? refundsObj.sevenDayNoReasonReturn ?? undefined,
+      rapid_refund: refundsObj.rapid_refund ?? refundsObj.rapidRefund ?? undefined,
       additional_info: shippingObj.additional_info ?? shippingObj.additionalInfo ?? shippingObj.note ?? undefined,
-    }
-  : undefined;
 
-const payload: any = {
-  delivery_notice: shippingObj.delivery_notice ?? shippingObj.deliveryNotice ?? (typeof shippingParsed === "string" ? shippingParsed : undefined),
-  // shipping_duration: shippingDuration,
-  ...(shippingPayload ? shippingPayload : {}),
-  promotions:promotionsPayload,
-  discounts: discountsPayload,
+      // payment
+      acct_no: paymentObj.acct_no ?? paymentObj.account_no ?? undefined,
+      acct_name: paymentObj.acct_name ?? paymentObj.account_name ?? undefined,
+      bank_name: paymentObj.bank_name ?? paymentObj.bankName ?? undefined,
+      bank_code: paymentObj.bank_code ?? paymentObj.bankCode ?? undefined,
+      cod: paymentObj.cod ?? undefined,
+      pod: paymentObj.pod ?? undefined,
 
-  // refunds
-  return_shipping_subsidy: refundsObj.return_shipping_subsidy ?? refundsObj.returnShippingSubsidy ?? undefined,
-  seven_day_no_reason_return: refundsObj.seven_day_no_reason_return ?? refundsObj.sevenDayNoReasonReturn ?? undefined,
-  rapid_refund: refundsObj.rapid_refund ?? refundsObj.rapidRefund ?? undefined,
-  additional_info: shippingObj.additional_info ?? shippingObj.additionalInfo ?? shippingObj.note ?? undefined,
+      // customer service
+      supportAvailable: csObj.supportAvailable ?? undefined,
+      cs_reply_time: csObj.cs_reply_time ?? csObj.reply_time ?? undefined,
+      cs_good_reviews_summary:
+        csObj.cs_good_reviews_summary !== undefined ? Number(csObj.cs_good_reviews_summary) : undefined,
+      default_welcome_message: csObj.default_welcome_message ?? undefined,
 
-  // payment
-  acct_no: paymentObj.acct_no ?? paymentObj.account_no ?? undefined,
-  acct_name: paymentObj.acct_name ?? paymentObj.account_name ?? undefined,
-  bank_name: paymentObj.bank_name ?? paymentObj.bankName ?? undefined,
-  bank_code: paymentObj.bank_code ?? paymentObj.bankCode ?? undefined,
-  cod: paymentObj.cod ?? undefined,
-  pod: paymentObj.pod ?? undefined,
+      // address
+      address_line_1: addressObj.address_line_1 ?? addressObj.line1 ?? undefined,
+      address_line_2: addressObj.address_line_2 ?? addressObj.line2 ?? undefined,
+      city: addressObj.city ?? undefined,
+      state: addressObj.state ?? addressObj.region ?? undefined,
+      postal_code: addressObj.postal_code ?? undefined,
+      country: addressObj.country ?? undefined,
 
-  // customer service
-  supportAvailable: csObj.supportAvailable ?? undefined,
-  cs_reply_time: csObj.cs_reply_time ?? csObj.reply_time ?? undefined,
-  cs_good_reviews_summary:
-    csObj.cs_good_reviews_summary !== undefined ? Number(csObj.cs_good_reviews_summary) : undefined,
-  default_welcome_message: csObj.default_welcome_message ?? undefined,
-
-  // address
-  address_line_1: addressObj.address_line_1 ?? addressObj.line1 ?? undefined,
-  address_line_2: addressObj.address_line_2 ?? addressObj.line2 ?? undefined,
-  city: addressObj.city ?? undefined,
-  state: addressObj.state ?? addressObj.region ?? undefined,
-  postal_code: addressObj.postal_code ?? undefined,
-  country: addressObj.country ?? undefined,
-
-  // market
-  from_market: marketObj.from_market ?? undefined,
-  note: marketObj.note ?? undefined,
-  trusted_partner: marketObj.trusted_partner ?? undefined,
-};
+      // market
+      from_market: marketObj.from_market ?? undefined,
+      note: marketObj.note ?? undefined,
+      trusted_partner: marketObj.trusted_partner ?? undefined,
+    };
 
 
-    const cleaned = pruneNulls(payload);
+    const cleaned = pruneNulls(payload) ?? {};
 
     try {
       if (!apiBase) {
@@ -434,19 +423,19 @@ const payload: any = {
           body: JSON.stringify(cleaned),
         });
 
-      if (!res.ok) {
-  let payload: any = null;
-  try {
-    payload = await res.json();
-  } catch {}
-  
-  throw new ApiError(
-    payload?.message || `Server returned ${res.status}`,
-    payload?.code,
-    res.status,
-    payload
-  );
-}
+        if (!res.ok) {
+          let payload: any = null;
+          try {
+            payload = await res.json();
+          } catch { }
+
+          throw new ApiError(
+            payload?.message || `Server returned ${res.status}`,
+            payload?.code,
+            res.status,
+            payload
+          );
+        }
 
       }
 
@@ -485,19 +474,19 @@ const payload: any = {
 
       toast("Business policy synced successfully");
     } catch (e: any) {
-  if (e instanceof ApiError && e.code === "ACCOUNT_ALREADY_EXISTS") {
-    // Friendly toast, no scary console.error
-    toast.info(e.message); 
-    setIsSyncing(false);
-    return;
-  }
+      if (e instanceof ApiError && e.code === "ACCOUNT_ALREADY_EXISTS") {
+        // Friendly toast, no scary console.error
+        toast.info(e.message);
+        setIsSyncing(false);
+        return;
+      }
 
-  // Fallback for other errors
-  toast.error(e?.message ?? "Failed to sync business profile");
-  console.error("saveProfile error:", e);
-} finally {
-  setIsSyncing(false);
-}
+      // Fallback for other errors
+      toast.error(e?.message ?? "Failed to sync business profile");
+      console.error("saveProfile error:", e);
+    } finally {
+      setIsSyncing(false);
+    }
 
   }
 

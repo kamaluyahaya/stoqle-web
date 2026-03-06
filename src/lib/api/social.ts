@@ -36,7 +36,7 @@ export const mapApiPost = (p: any): Post => {
     caption,
     note_caption,
     user: {
-      id: p.user_id ?? 0,
+      id: p.user_id ?? p.user?.user_id ?? p.user?.id ?? 0,
       name: p.author_name ?? "Unknown",
       avatar: p.author_pic ?? `https://i.pravatar.cc/100?u=${p.user_id ?? apiId}`,
     },
@@ -122,9 +122,9 @@ export async function prefetchMediaConservative(urls: Array<string | undefined>,
             try {
               const res = await fetch(u, { cache: "no-store" });
               if (!res.ok) return;
-              cache.put(req, res.clone()).catch(() => {});
+              cache.put(req, res.clone()).catch(() => { });
               usedMb += 0.5; // best-effort estimate
-            } catch (e) {}
+            } catch (e) { }
           });
           if (usedMb > maxMb) break;
         } catch (e) {

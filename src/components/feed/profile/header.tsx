@@ -115,30 +115,30 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
     };
   }, [profileUserId, token, API_BASE_URL]); // eslint-disable-line
 
-useEffect(() => {
-  if (!open) return;
+  useEffect(() => {
+    if (!open) return;
 
-  const handleOutside = (e: Event) => {
-    const target = e.target as Node;
+    const handleOutside = (e: Event) => {
+      const target = e.target as Node;
 
-    if (
-      menuRef.current &&
-      !menuRef.current.contains(target) &&
-      buttonRef.current &&
-      !buttonRef.current.contains(target)
-    ) {
-      setOpen(false);
-    }
-  };
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
 
-  document.addEventListener("mousedown", handleOutside);
-  document.addEventListener("touchstart", handleOutside);
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
 
-  return () => {
-    document.removeEventListener("mousedown", handleOutside);
-    document.removeEventListener("touchstart", handleOutside);
-  };
-}, [open]);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [open]);
 
 
   const handleNavigate = (href: string) => {
@@ -146,7 +146,7 @@ useEffect(() => {
     router.push(href);
   };
   // e.stopPropagation();
-  
+
   const handleLogout = async () => {
     setOpen(false);
 
@@ -156,7 +156,7 @@ useEffect(() => {
         localStorage.clear();
       }
     } catch (err) {
-      
+
       console.error("Logout error:", err);
     } finally {
       localStorage.clear();
@@ -166,7 +166,7 @@ useEffect(() => {
 
   const handleBalance = async () => {
     setOpen(false);
-  setShowBalanceModal(true);
+    setShowBalanceModal(true);
 
   };
 
@@ -269,10 +269,8 @@ useEffect(() => {
     try {
       let convId: string | number | null = null;
       const tryEndpoints = [
-        { url: `${API_BASE_URL}/api/conversations`, body: { recipient_id: profileUserId } },
-        { url: `${API_BASE_URL}/api/conversations`, body: { participant_id: profileUserId } },
+        { url: `${API_BASE_URL}/api/chat/create`, body: { other_user_id: profileUserId } },
         { url: `${API_BASE_URL}/api/conversations/init`, body: { user_id: profileUserId } },
-        { url: `${API_BASE_URL}/api/messages/start`, body: { user_id: profileUserId } }, // additional fallback
       ];
 
       for (const ep of tryEndpoints) {
@@ -283,36 +281,28 @@ useEffect(() => {
             body: JSON.stringify(ep.body),
           });
 
-          // if unauthorized, open login modal
           if (resp.status === 401 || resp.status === 403) {
             setShowLoginModal(true);
             throw new Error("Unauthorized");
           }
 
-          // proceed if we got something
           const json = await resp.json().catch(() => null);
           if (resp.ok && json) {
-            // try common places for id
-            convId = json?.data?.conversation_id ?? json?.data?.id ?? json?.conversation_id ?? json?.id ?? null;
-            if (!convId && json?.data && typeof json.data === "object") {
-              // maybe { data: { conversation: { id } } }
-              convId = json.data.conversation?.id ?? null;
-            }
+            // Mapping for the new and old API response formats
+            convId = json?.chat_room_id ?? json?.data?.chat_room_id ?? json?.id ?? json?.data?.id ?? null;
             if (convId) break;
           }
         } catch (err) {
-          // ignore and try next endpoint
           console.warn("conversation init attempt failed:", ep.url, err);
         }
       }
 
       if (convId) {
-        // got a conversation id — go to the specific chat
-        router.push(`/messages/${convId}`);
+        router.push(`/messages?room=${convId}`);
         return;
       }
 
-      // fallback: if no convId, navigate to messages page with query so client can init there
+      // fallback: if no convId, navigate to messages page with user query
       router.push(`/messages?user=${profileUserId}`);
     } catch (err) {
       console.error("Failed to init conversation:", err);
@@ -365,11 +355,11 @@ useEffect(() => {
                 {profileApi?.is_business_owner ? (
                   <button
                     onPointerDown={(e) => {
-  e.stopPropagation();
-  handleBalance()
-}}
+                      e.stopPropagation();
+                      handleBalance()
+                    }}
 
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
                   >
                     <span>Total Balance</span>
                     <span className="text-sm text-gray-500">₦11,120,500</span>
@@ -377,9 +367,9 @@ useEffect(() => {
                 ) : (
                   <button
                     onPointerDown={(e) => {
-  e.stopPropagation();
-  handleBalance()
-}}
+                      e.stopPropagation();
+                      handleBalance()
+                    }}
                     className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
                   >
 
@@ -420,21 +410,21 @@ useEffect(() => {
                 <div className="my-2 border-t border-gray-100" />
 
                 <button
-  onPointerDown={(e) => {
-    e.stopPropagation(); // prevents menu auto-close
-    handleLogout();
-  }}
-  className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-rose-600"
->
-  Logout
-</button>
+                  onPointerDown={(e) => {
+                    e.stopPropagation(); // prevents menu auto-close
+                    handleLogout();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-rose-600"
+                >
+                  Logout
+                </button>
 
               </>
             ) : (
               <>
                 <button
-                  onClick={() => {
-                    // initialize chat then go to messages
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
                     handleMessageClick();
                   }}
                   className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
@@ -443,8 +433,8 @@ useEffect(() => {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setOpen(false);
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
                     reportUser();
                   }}
                   className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
@@ -462,7 +452,7 @@ useEffect(() => {
 
   return (
     <>
-      
+
 
       <div className="rounded-2xl overflow-visible bg-white mb-6">
         <div className="max-w-4xl mx-auto mt-12 px-4">
@@ -530,39 +520,30 @@ useEffect(() => {
                             setShowLoginModal(true);
                             return;
                           }
-                          if (profileApi?.is_business_owner) {
-                            router.push("/profile/business/business-status");
-                          } else {
-                            router.push("/profile/business/business-status");
-                          }
+                          router.push("/profile/business/business-status");
                         }}
                         aria-label="Open my store"
                       >
                         {profileApi?.is_business_owner ? "My Shop" : "Open Store"}
                       </button>
                     ) : (
-                      <button
-                        className={`rounded-full px-4 py-2 text-sm font-medium shadow whitespace-nowrap ${
-                          isFollowing ? "bg-white text-slate-800 border border-slate-200" : "bg-rose-500 text-white"
-                        }`}
-                        onClick={() => {
-                          if (!currentUser) {
-                            setShowLoginModal(true);
-                            return;
-                          }
-                          if (isFollowing) {
-                            unfollowUser();
-                          } else {
-                            followUser();
-                          }
-                        }}
-                        disabled={actionLoading}
-                        aria-pressed={isFollowing}
-                      >
-                        {actionLoading ? "Saving..." : isFollowing ? "Following" : "Follow"}
-                      </button>
-                    )}
+                      <>
+                        <button
+                          className={`rounded-full px-4 py-2 text-sm font-medium shadow whitespace-nowrap ${isFollowing ? "bg-white text-slate-800 border border-slate-200" : "bg-rose-500 text-white"}`}
+                          onClick={(e) => {
+                            if (!currentUser) {
+                              setShowLoginModal(true);
+                              return;
+                            }
+                            isFollowing ? unfollowUser() : followUser();
+                          }}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? "..." : isFollowing ? "Unfollow" : "Follow"}
+                        </button>
 
+                      </>
+                    )}
                     <MoreMenu />
                   </div>
                 </div>
@@ -570,16 +551,11 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Desktop */}
+          {/* Desktop Layout */}
           <div className="hidden md:flex md:items-start md:gap-6">
             <div className="flex-none">
               <img
-                src={
-                  profileApi?.business?.logo ??
-                  profileApi?.user?.profile_pic ??
-                  profileApi?.user?.avatar ??
-                  DEFAULT_AVATAR
-                }
+                src={profileApi?.business?.logo ?? profileApi?.user?.profile_pic ?? profileApi?.user?.avatar ?? DEFAULT_AVATAR}
                 alt={displayName ?? "Profile"}
                 className="h-44 w-44 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200"
               />
@@ -589,15 +565,12 @@ useEffect(() => {
               <h2 className="font-semibold text-slate-900 truncate leading-tight" style={{ fontSize: "clamp(1rem, 1.80vw, 1.10rem)" }}>
                 {displayName}
               </h2>
-
               <p className="text-sm text-slate-500 mt-2 max-w-xl leading-snug">Nigeria Kaduna</p>
-
               <div className="flex items-start gap-2 mt-2 max-w-xl">
                 <svg className="w-4 h-4 mt-0.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
                 </svg>
-
                 <p className="text-sm text-slate-500 leading-snug">
                   {profileApi?.user?.bio ?? profileApi?.business?.business_category ?? "No bio yet"}
                 </p>
@@ -608,14 +581,12 @@ useEffect(() => {
                   <div className="text-lg font-bold text-slate-800">{followersCount}</div>
                   <div className="text-sm text-slate-500">Followers</div>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <div className="text-lg font-bold text-slate-800">
                     {profileApi?.stats?.following ?? profileApi?.stats?.following_count ?? 0}
                   </div>
                   <div className="text-sm text-slate-500">Following</div>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <div className="text-lg font-bold text-slate-800">{profileApi?.stats?.posts ?? 0}</div>
                   <div className="text-sm text-slate-500">Posts</div>
@@ -623,54 +594,43 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="flex-none self-center flex items-center gap-2">
+            <div className="flex-none self-center flex items-center gap-3">
               {isOwner ? (
                 <button
-                  className="bg-red-500 text-white rounded-full px-4 py-2 text-sm font-medium shadow"
-                  onClick={() => {
-                    if (!token) {
-                      setShowLoginModal(true);
-                      return;
-                    }
-                    if (profileApi?.is_business_owner) {
-                      router.push("/profile/business/business-status");
-                    } else {
-                      router.push("/profile/business/business-status");
-                    }
-                  }}
-                  aria-label="Open my store"
+                  className="bg-red-500 text-white rounded-full px-4 py-2 text-sm font-medium shadow active:scale-95 transition-transform"
+                  onClick={() => router.push("/profile/business/business-status")}
                 >
                   {profileApi?.is_business_owner ? "My Shop" : "Open Store"}
                 </button>
               ) : (
-                <button
-                  className={`rounded-full px-4 py-2 text-sm font-medium shadow ${
-                    isFollowing ? "bg-white text-slate-800 border border-slate-200" : "bg-rose-500 text-white"
-                  }`}
-                  onClick={() => {
-                    if (!currentUser) {
-                      setShowLoginModal(true);
-                      return;
-                    }
-                    if (isFollowing) unfollowUser();
-                    else followUser();
-                  }}
-                  disabled={actionLoading}
-                  aria-pressed={isFollowing}
-                >
-                  {actionLoading ? "Saving..." : isFollowing ? "Following" : "Follow"}
-                </button>
+                <>
+                  <button
+                    className={`rounded-full px-5 py-2 text-sm font-medium shadow transition-all ${isFollowing ? "bg-white text-slate-800 border border-slate-200" : "bg-rose-500 text-white"}`}
+                    onClick={isFollowing ? unfollowUser : followUser}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? "..." : isFollowing ? "Unfollow" : "Follow"}
+                  </button>
+                  <button
+                    className="rounded-full px-6 py-2 text-sm font-medium bg-white text-slate-800 border border-slate-200 shadow-sm active:scale-95 transition-transform"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMessageClick();
+                    }}
+                    disabled={messageLoading}
+                  >
+                    {messageLoading ? "Opening..." : "Message"}
+                  </button>
+                </>
               )}
-
               <MoreMenu />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Controlled Login Modal */}
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
-        <BalanceModal
+      <BalanceModal
         open={showBalanceModal}
         onClose={() => setShowBalanceModal(false)}
         balances={{

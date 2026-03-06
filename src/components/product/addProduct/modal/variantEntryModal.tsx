@@ -12,10 +12,10 @@ export default function VariantEntryModal({
   initialData = null,
   onClose,
   onSubmit,
+  allowImages = false,
+  useCombinations, // ✅ NEW
   samePriceForAll,
   sharedPrice,
-  allowImages = false,
-  showQuantity = true,
   existingNames = [], // default to empty
 }: VariantEntryModal) {
   const [name, setName] = useState("");
@@ -23,6 +23,9 @@ export default function VariantEntryModal({
   const [price, setPrice] = useState<number | "">("");
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+
+  // Only show these fields if NOT using combination manager
+  const showFields = !useCombinations;
 
   useEffect(() => {
     if (!initialData) {
@@ -35,7 +38,6 @@ export default function VariantEntryModal({
     }
 
     setName(initialData.name ?? "");
-    // keep previous quantity if editing; otherwise empty
     setQuantity(initialData.quantity ?? "");
     setPrice(initialData.price ?? "");
     setImages(initialData.images ?? []);
@@ -56,7 +58,7 @@ export default function VariantEntryModal({
     setImagePreviews([]);
   };
 
-   const handleSubmit = () => {
+  const handleSubmit = () => {
     const trimmed = name.trim();
     const normalized = trimmed.toLowerCase();
 
@@ -75,20 +77,20 @@ export default function VariantEntryModal({
       return;
     }
 
-    if (showQuantity && (quantity === "" || quantity <= 0)) {
-      toast("Quantity is required and must be greater than 0");
+    if (showFields && (quantity === "" || quantity < 0)) {
+      toast("Quantity is required and must be 0 or more");
       return;
     }
 
-    if (!samePriceForAll && (price === "" || Number(price) < 0)) {
-      toast("Price is required and must be greater than or equal to 0");
+    if (showFields && !samePriceForAll && (price === "" || Number(price) < 0)) {
+      toast("Price is required and must be 0 or more");
       return;
     }
 
     onSubmit({
       name: trimmed,
-      quantity: showQuantity ? Number(quantity || 0) : Number(initialData?.quantity ?? 0),
-      price: samePriceForAll ? sharedPrice ?? null : Number(price || 0),
+      quantity: showFields ? Number(quantity || 0) : Number(initialData?.quantity ?? 0),
+      price: showFields ? (samePriceForAll ? sharedPrice ?? null : Number(price || 0)) : (initialData?.price ?? null),
       images: allowImages ? images : [],
       imagePreviews: allowImages ? imagePreviews : [],
     });
@@ -108,7 +110,7 @@ export default function VariantEntryModal({
 
       <div className="relative w-full max-w-2xl bg-white lg:rounded-2xl md:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10 h-[75vh] sm:h-auto flex flex-col">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold mb-4">{initialData ? "Edit Variant" : "Add Variant"}</h3>
+          <h3 className="text-lg font-semibold mb-4">{initialData ? "Edit Variant Option" : "Add Variant Option"}</h3>
           <button onClick={() => onClose()} className="text-sm px-3 py-1 rounded-md hover:bg-slate-100">
             <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
               <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
@@ -116,20 +118,26 @@ export default function VariantEntryModal({
           </button>
         </div>
 
-        <div className="space-y-3 overflow-y-auto flex-1 mt-5">
-          <DefaultInput label="Variant name" value={name} onChange={setName} placeholder="Variant" required />
+        <div className="space-y-4 overflow-y-auto flex-1 mt-5">
+          <DefaultInput label="Variant option name" value={name} onChange={setName} placeholder="e.g. Red, XL, 128GB" required />
 
-          {/* Only show quantity input when showQuantity is true */}
-          {showQuantity ? (
-            <NumberInput label="Quantity" value={quantity} onChange={setQuantity} placeholder="Quantity" required />
+          {showFields ? (
+            <div className="grid grid-cols-2 gap-4">
+              <NumberInput label="Status/Quantity" value={quantity} onChange={setQuantity} placeholder="Units in stock" />
+              {!samePriceForAll && (
+                <NumberInput label="Option Price (₦)" value={price} onChange={setPrice} placeholder="Price for this option" />
+              )}
+            </div>
           ) : (
-            <div className="text-xs text-slate-500">Quantity is managed per combination for this group.</div>
+            <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-dotted border-slate-200">
+              Note: Individual price and stock are hidden because you are managing variants globally via <strong>Combinations</strong>.
+            </p>
           )}
 
-          {!samePriceForAll ? (
-            <NumberInput label="Variant price" value={price} onChange={setPrice} placeholder="Variant price" required />
-          ) : (
-            <div className="p-2 rounded-lg text-sm text-slate-500">Using shared price ({sharedPrice ?? "-"})</div>
+          {showFields && samePriceForAll && (
+            <div className="text-xs text-slate-500 p-2 bg-emerald-50 rounded-lg">
+              Using shared price ({sharedPrice ? `₦${sharedPrice.toLocaleString()}` : "Not set"})
+            </div>
           )}
 
           {allowImages && (

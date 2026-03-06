@@ -15,6 +15,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { UserCircleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext"; // adjust path if needed
+import { useChat } from "@/src/context/chatContext";
 
 type Props = {
   navHeight: number;
@@ -24,13 +25,14 @@ type Props = {
 export default function Sidebar({ navHeight, width }: Props) {
   const router = useRouter();
   const auth = useAuth();
+  const { unreadCount } = useChat();
 
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
-    // Directly check auth.user
+  // Directly check auth.user
   const isLoggedIn = !!auth?.user;
 
   const firstName = auth?.user?.author_name?.split(" ")[0] || auth?.user?.full_name?.split(" ")[0] || "Profile";
@@ -113,19 +115,28 @@ export default function Sidebar({ navHeight, width }: Props) {
     Outline,
     href,
     requireLogin = false,
+    badgeCount = 0,
   }: {
     label: string;
     Outline: any;
     href: string;
     requireLogin?: boolean;
+    badgeCount?: number;
   }) => (
     <li>
       <button
         onClick={() => navWithAuth(href, requireLogin)}
-        className="w-full flex items-center gap-3 rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+        className="w-full flex items-center justify-between rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer group"
       >
-        <Outline className="h-5 w-5 text-gray-500" />
-        <span>{label}</span>
+        <div className="flex items-center gap-3">
+          <Outline className="h-5 w-5 text-gray-500" />
+          <span>{label}</span>
+        </div>
+        {badgeCount > 0 && (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
+        )}
       </button>
     </li>
   );
@@ -183,42 +194,42 @@ export default function Sidebar({ navHeight, width }: Props) {
             requireLogin={true}
           />
 
-          <MenuItem label="Cart" Outline={ShoppingCartIcon} href="/cart" requireLogin={true}/>
+          <MenuItem label="Cart" Outline={ShoppingCartIcon} href="/cart" requireLogin={true} />
 
-          <MenuItem label="Messages" Outline={ChatOutline} href="/messages" requireLogin={true} />
+          <MenuItem label="Messages" Outline={ChatOutline} href="/messages" requireLogin={true} badgeCount={unreadCount} />
           <MenuItem
-  label={isLoggedIn ? firstName : "Profile"}
-  Outline={ProfileIcon}
-  href="/profile"
-  requireLogin={true}
-/>
+            label={isLoggedIn ? firstName : "Profile"}
+            Outline={ProfileIcon}
+            href="/profile"
+            requireLogin={true}
+          />
 
 
         </ul>
 
         {/* Login Section */}
         {/* Login Section (hidden when logged in) */}
-{!isLoggedIn && (
-  <div className="w-full">
-    <button
-      onClick={() => {
-        auth.openLogin();
-      }}
-      className="w-full rounded-full bg-red-500 text-white py-3 text-sm font-medium shadow-sm hover:bg-red-600 transition"
-    >
-      Log in now
-    </button>
+        {!isLoggedIn && (
+          <div className="w-full">
+            <button
+              onClick={() => {
+                auth.openLogin();
+              }}
+              className="w-full rounded-full bg-red-500 text-white py-3 text-sm font-medium shadow-sm hover:bg-red-600 transition"
+            >
+              Log in now
+            </button>
 
-    <div className="mt-3 space-y-2 text-gray-500 text-xs leading-snug border border-gray-200 rounded-xl p-3">
-      {loginTips.map(({ icon: Icon, text }, idx) => (
-        <p key={idx} className="flex items-start gap-2">
-          <Icon className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
-          {text}
-        </p>
-      ))}
-    </div>
-  </div>
-)}
+            <div className="mt-3 space-y-2 text-gray-500 text-xs leading-snug border border-gray-200 rounded-xl p-3">
+              {loginTips.map(({ icon: Icon, text }, idx) => (
+                <p key={idx} className="flex items-start gap-2">
+                  <Icon className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  {text}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
 
@@ -264,143 +275,143 @@ export default function Sidebar({ navHeight, width }: Props) {
                 </div>
               )}
 
-             {!activeSubmenu && (
+              {!activeSubmenu && (
 
-                  <ul className="flex flex-col gap-1">
-                     <li>
-                      <button
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                        onClick={() => setActiveSubmenu("About Stoqle")}
+                <ul className="flex flex-col gap-1">
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("About Stoqle")}
+                    >
+                      About Stoqle
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
                       >
-                        About Stoqle
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                        onClick={() => setActiveSubmenu("Privacy, Agreement")}
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("Privacy, Agreement")}
+                    >
+                      Privacy, Agreement
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
                       >
-                        Privacy, Agreement
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </li>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
 
-                   
 
-                    <li>
-                      <button
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                        onClick={() => setActiveSubmenu("Help and Customer Service")}
+
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("Help and Customer Service")}
+                    >
+                      Help and Customer Service
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
                       >
-                        Help and Customer Service
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </li>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
 
 
-                    <div className="my-2 border-t border-gray-100" />
+                  <div className="my-2 border-t border-gray-100" />
 
-                    <li>
-                      <button
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                        onClick={() => setActiveSubmenu("Creative Center")}
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("Creative Center")}
+                    >
+                      Creative Center
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
                       >
-                        Creative Center
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                        onClick={() => setActiveSubmenu("Business Cooperation")}
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("Business Cooperation")}
+                    >
+                      Business Cooperation
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
                       >
-                        Business Cooperation
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 text-gray-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </li>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
                 </ul>
               )}
 
-               {/* Submenus */}
-                {activeSubmenu === "Creative Center" && (
-                  
-                  <ul className="flex flex-col gap-1">
-                       
-                    <SubmenuRow label="Portfolio" href="/creative/portfolio" />
-                    <SubmenuRow label="Contact creatives" href="/creative/contact" />
-                  </ul>
-                )}
-                
-                {activeSubmenu === "Business Cooperation" && (
-                  <ul className="flex flex-col gap-1">
-                    <SubmenuRow label="Business account" href="/business/account" />
-                    <SubmenuRow label="Merchant onboarding" href="/business/onboarding" />
-                  </ul>
-                )}
-                {activeSubmenu === "Help and Customer Service" && (
-                  <ul className="flex flex-col gap-1">
-                    <SubmenuRow label="FAQ" href="/help/faq" />
-                    <SubmenuRow label="Contact support" href="/help/contact" />
-                  </ul>
-                )}
-                {activeSubmenu === "Privacy, Agreement" && (
-                  <ul className="flex flex-col gap-1">
-                    <SubmenuRow label="Terms of Service" href="/legal/terms" />
-                    <SubmenuRow label="Privacy Policy" href="/legal/privacy" />
-                  </ul>
-                )}
-                {activeSubmenu === "About Stoqle" && (
-                  <ul className="flex flex-col gap-1">
-                    <SubmenuRow label="Our team" href="/about/team" />
-                    <SubmenuRow label="Careers" href="/about/careers" />
-                  </ul>
-                )}
+              {/* Submenus */}
+              {activeSubmenu === "Creative Center" && (
+
+                <ul className="flex flex-col gap-1">
+
+                  <SubmenuRow label="Portfolio" href="/creative/portfolio" />
+                  <SubmenuRow label="Contact creatives" href="/creative/contact" />
+                </ul>
+              )}
+
+              {activeSubmenu === "Business Cooperation" && (
+                <ul className="flex flex-col gap-1">
+                  <SubmenuRow label="Business account" href="/business/account" />
+                  <SubmenuRow label="Merchant onboarding" href="/business/onboarding" />
+                </ul>
+              )}
+              {activeSubmenu === "Help and Customer Service" && (
+                <ul className="flex flex-col gap-1">
+                  <SubmenuRow label="FAQ" href="/help/faq" />
+                  <SubmenuRow label="Contact support" href="/help/contact" />
+                </ul>
+              )}
+              {activeSubmenu === "Privacy, Agreement" && (
+                <ul className="flex flex-col gap-1">
+                  <SubmenuRow label="Terms of Service" href="/legal/terms" />
+                  <SubmenuRow label="Privacy Policy" href="/legal/privacy" />
+                </ul>
+              )}
+              {activeSubmenu === "About Stoqle" && (
+                <ul className="flex flex-col gap-1">
+                  <SubmenuRow label="Our team" href="/about/team" />
+                  <SubmenuRow label="Careers" href="/about/careers" />
+                </ul>
+              )}
 
             </div>
           </div>

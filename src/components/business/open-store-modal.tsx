@@ -23,29 +23,63 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
   const [address, setAddress] = useState("");
   const [ninFile, setNinFile] = useState<File | null>(null);
   const [cacFile, setCacFile] = useState<File | null>(null);
-  const [previewNin, setPreviewNin] = useState<string | null>(null);
-  const [previewCac, setPreviewCac] = useState("/assets/images/cac.png");
+
+  // preview URLs and whether the preview is a PDF
+  const [previewNinUrl, setPreviewNinUrl] = useState<string | null>(null);
+  const [previewNinIsPdf, setPreviewNinIsPdf] = useState(false);
+  const [previewCacUrl, setPreviewCacUrl] = useState<string | null>("/assets/images/cac.png");
+  const [previewCacIsPdf, setPreviewCacIsPdf] = useState(false);
 
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // const [category, setCategory] = useState<string | null>(null);
 
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => firstFocusRef.current?.focus(), []);
 
+  // create + cleanup object URL when ninFile changes
   useEffect(() => {
-    if (ninFile) setPreviewNin(URL.createObjectURL(ninFile));
+    if (!ninFile) {
+      // clear preview
+      if (previewNinUrl) {
+        URL.revokeObjectURL(previewNinUrl);
+        setPreviewNinUrl(null);
+      }
+      setPreviewNinIsPdf(false);
+      return;
+    }
+
+    const url = URL.createObjectURL(ninFile);
+    // revoke previous if any
+    if (previewNinUrl) URL.revokeObjectURL(previewNinUrl);
+    setPreviewNinUrl(url);
+    setPreviewNinIsPdf(ninFile.type === "application/pdf");
+
     return () => {
-      if (previewNin) URL.revokeObjectURL(previewNin);
+      // revoke when effect cleans up (component unmount or file changes)
+      URL.revokeObjectURL(url);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ninFile]);
 
+  // create + cleanup object URL when cacFile changes
   useEffect(() => {
-    if (cacFile) setPreviewCac(URL.createObjectURL(cacFile));
+    if (!cacFile) {
+      if (previewCacUrl && previewCacUrl !== "/assets/images/cac.png") {
+        URL.revokeObjectURL(previewCacUrl);
+        setPreviewCacUrl("/assets/images/cac.png");
+      }
+      setPreviewCacIsPdf(false);
+      return;
+    }
+
+    const url = URL.createObjectURL(cacFile);
+    if (previewCacUrl && previewCacUrl !== "/assets/images/cac.png") URL.revokeObjectURL(previewCacUrl);
+    setPreviewCacUrl(url);
+    setPreviewCacIsPdf(cacFile.type === "application/pdf");
+
     return () => {
-      if (previewCac) URL.revokeObjectURL(previewCac);
+      URL.revokeObjectURL(url);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cacFile]);
@@ -56,8 +90,19 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
     setBusinessName("");
     setCategory("");
     setAddress("");
+    // revoke and clear files + previews
+    if (previewNinUrl) {
+      try { URL.revokeObjectURL(previewNinUrl); } catch {}
+    }
+    if (previewCacUrl && previewCacUrl !== "/assets/images/cac.png") {
+      try { URL.revokeObjectURL(previewCacUrl); } catch {}
+    }
     setNinFile(null);
     setCacFile(null);
+    setPreviewNinUrl(null);
+    setPreviewNinIsPdf(false);
+    setPreviewCacUrl("/assets/images/cac.png");
+    setPreviewCacIsPdf(false);
     setAgreed(false);
   }
 
@@ -90,7 +135,6 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
     if (!category.trim()) return toast.warning("Please select a category");
     if (!address.trim()) return toast.warning("Please enter address");
 
-
     if (!agreed) return toast.warning("Please agree to terms");
 
     setSubmitting(true);
@@ -104,8 +148,6 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
       form.append("business_address", address.trim());
 
       if (cacFile) form.append("cac_image", cacFile as File);
-      // optional: referral, logo etc. Add as needed:
-      // form.append("referral", referralValue);
 
       const token = getAuthToken();
 
@@ -115,10 +157,9 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
         headers: token
           ? {
               Authorization: `Bearer ${token}`,
-              // DO NOT set Content-Type — browser will set correct multipart boundary
             }
           : undefined,
-        credentials: "include", // include cookies if your auth is cookie-based
+        credentials: "include",
       });
 
       if (res.status === 401) {
@@ -136,18 +177,11 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
         return;
       }
 
-      // success: show toast, close modal, reset and redirect
       toast.success(payload.message || "Request submitted — awaiting review");
-      // optional: call onClose so modal unmounts quickly
       try {
         onClose();
         reset();
-      } catch (e) {
-        // ignore
-      }
-
-      // navigate to open-store route
-      // using assignment to ensure full page navigation
+      } catch (e) {}
       window.location.href = "/profile/business/business-status";
     } catch (err: any) {
       console.error("submit error", err);
@@ -157,7 +191,6 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  // dynamic header text
   const headerTitle =
     step === "choose"
       ? "Open a store"
@@ -165,7 +198,6 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
       ? "Open Store — Individual"
       : "Open Store — Enterprise";
 
-  // small subtitle for form
   const headerSubtitle =
     step === "choose"
       ? "Choose how you want to open a store on Stoqle"
@@ -173,27 +205,42 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
       ? "Open your individual merchant account"
       : "Open a verified business account";
 
-  const [preview, setPreview] = useState("/assets/images/nin.png");
+  // validation helper: only allow image or pdf
+  function validateFileIsImageOrPdf(file: File) {
+    if (file.type.startsWith("image/")) return true;
+    if (file.type === "application/pdf") return true;
+    // some browsers may give empty type for .pdf — check extension as fallback
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".pdf")) return true;
+    return false;
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      if (!validateFileIsImageOrPdf(file)) {
+        toast.error("Only images (jpg/png) or PDFs are allowed.");
+        e.currentTarget.value = ""; // clear input
+        return;
+      }
       setNinFile(file);
-      setPreview(URL.createObjectURL(file)); // show preview
     }
   };
 
   const handleCacChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      if (!validateFileIsImageOrPdf(file)) {
+        toast.error("Only images (jpg/png) or PDFs are allowed.");
+        e.currentTarget.value = ""; // clear input
+        return;
+      }
       setCacFile(file);
-      setPreviewCac(URL.createObjectURL(file)); // show preview
     }
   };
 
   return (
     <div className="fixed inset-0 z-70 flex items-center justify-center px-0 py-0">
-
       {/* backdrop */}
       <div
         className="absolute inset-0 bg-black/40"
@@ -203,7 +250,7 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
         }}
       />
 
-      {/* modal (flex column so header/content/footer layout is simple) */}
+      {/* modal */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -212,7 +259,7 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         className="relative z-10 w-full h-full lg:h-[90vh] lg:max-h-[90vh] sm:w-full lg:max-w-3xl rounded-none lg:rounded-2xl bg-slate-100 shadow-2xl overflow-hidden flex flex-col"
       >
-        {/* Header (sticky) */}
+        {/* Header */}
         <header className="sticky top-0 z-30 bg-slate-100 px-4 py-3 flex items-center justify-between">
           {step === "form" && (
             <button
@@ -230,8 +277,6 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* optional small indicator */}
-            {/* close button */}
             <button
               ref={firstFocusRef}
               onClick={() => {
@@ -248,15 +293,12 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
           </div>
         </header>
 
-        {/* Content area (scrollable) */}
-        {/* We give padding-bottom to account for the fixed footer height (96px) so last content isn't hidden under footer */}
+        {/* Content */}
         <div
           className="overflow-y-auto px-4 sm:px-6 py-4 flex-1 no-scrollbar"
           style={{ paddingBottom: 112 }}
         >
-          {/* Put the form here and give it an id so the footer submit button can target it */}
           <form id="openStoreForm" onSubmit={handleSubmit} className="space-y-4 mt-0">
-            {/* choose step */}
             {step === "choose" && (
               <div className="flex flex-col gap-4 rounded-2xl p-6 bg-white">
                 <OptionCard
@@ -282,7 +324,6 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
 
-            {/* form step */}
             {step === "form" && (
               <>
                 {/* NIN Upload */}
@@ -293,11 +334,19 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="text-center bg-gray-200 rounded-xl">
                     <div className="relative w-40 h-40 justify-center mt-2 mx-auto">
-                      <img
-                        src={preview}
-                        alt="NIN Placeholder"
-                        className="w-50 h-40 object-contain rounded-xl border-gray-300"
-                      />
+                      {/* Render image or PDF preview */}
+                      <div className="w-50 h-40 flex items-center justify-center rounded-xl border-gray-300 overflow-hidden bg-white">
+                        {previewNinUrl ? (
+                          previewNinIsPdf ? (
+                            <embed src={previewNinUrl} type="application/pdf" className="w-full h-full" />
+                          ) : (
+                            <img src={previewNinUrl} alt="NIN Preview" className="w-full h-full object-contain" />
+                          )
+                        ) : (
+                          <img src="/assets/images/nin.png" alt="NIN Placeholder" className="w-full h-full object-contain" />
+                        )}
+                      </div>
+
                       <div
                         role="button"
                         aria-label="Upload NIN"
@@ -307,11 +356,11 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
                         <FaPlus />
                       </div>
                     </div>
-                    <span className="text-xs text-slate-600">Upload NIN ID Card</span>
+                    <span className="text-xs text-slate-600">Upload NIN ID Card (image or PDF)</span>
 
                     <input
                       type="file"
-                      accept="image/*,.pdf"
+                      accept="image/*,application/pdf"
                       id="ninInput"
                       className="hidden"
                       onChange={handleFileChange}
@@ -323,14 +372,21 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
                 {storeType === "enterprise" && (
                   <div className="rounded-xl bg-white p-4 border-slate-100 mt-4">
                     <div className="font-bold mb-2">Business License</div>
-                    <span className="text-xs text-slate-600">Upload CAC (business certificate)</span>
+                    <span className="text-xs text-slate-600">Upload CAC (business certificate) — image or PDF</span>
                     <div className="text-center bg-gray-200 rounded-xl">
                       <div className="relative w-40 h-40 justify-center mt-2 mx-auto">
-                        <img
-                          src={previewCac}
-                          alt="CAC Placeholder"
-                          className="w-50 h-40 object-contain rounded-xl border-gray-300"
-                        />
+                        <div className="w-50 h-40 flex items-center justify-center rounded-xl border-gray-300 overflow-hidden bg-white">
+                          {previewCacUrl ? (
+                            previewCacIsPdf ? (
+                              <embed src={previewCacUrl} type="application/pdf" className="w-full h-full" />
+                            ) : (
+                              <img src={previewCacUrl} alt="CAC Preview" className="w-full h-full object-contain" />
+                            )
+                          ) : (
+                            <img src="/assets/images/cac.png" alt="CAC Placeholder" className="w-full h-full object-contain" />
+                          )}
+                        </div>
+
                         <div
                           role="button"
                           aria-label="Upload CAC"
@@ -344,7 +400,7 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
 
                       <input
                         type="file"
-                        accept="image/*,.pdf"
+                        accept="image/*,application/pdf"
                         id="cacInput"
                         className="hidden"
                         onChange={handleCacChange}
@@ -375,16 +431,13 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
                     />
 
                     <AddressSelectionModal
-                        title="Address"
-                        hintText="Select country, state, LGA"
-                        isRequired
-                        hierarchy={countries}
-                        value={address}
-                        
-                        onSelected={(v) => setAddress(v)}
-                      />
-
-                    
+                      title="Address"
+                      hintText="Select country, state, LGA"
+                      isRequired
+                      hierarchy={countries}
+                      value={address}
+                      onSelected={(v) => setAddress(v)}
+                    />
                   </div>
                 )}
 
@@ -408,7 +461,8 @@ export default function OpenStoreModal({ onClose }: { onClose: () => void }) {
             )}
           </form>
         </div>
-        {/* Footer (fixed) */}
+
+        {/* Footer */}
         {step === "form" && (
           <div className="absolute left-0 right-0 bottom-10 lg:bottom-0 z-40 bg-slate-100 p-4 flex items-center gap-3 justify-end">
             <button
@@ -440,17 +494,13 @@ function OptionCard({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-start gap-4 flex-1">
-        {/* Icon on the left */}
         <div className="flex-shrink-0 flex items-center justify-center text-3xl">{icon}</div>
-
-        {/* Title and subtitle */}
         <div className="flex-1">
           <h3 className="text-lg font-bold text-slate-900">{title}</h3>
           <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
         </div>
       </div>
 
-      {/* Action button */}
       <button onClick={onSelect} className="ml-4 flex-shrink-0 rounded-full px-3 py-2 text-rose-600 border border-rose-100 whitespace-nowrap">
         Open Store
       </button>

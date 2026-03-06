@@ -1,7 +1,7 @@
 // ProfileHeader.tsx
 "use client";
 
-import React, { useEffect, useMemo,useLayoutEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useLayoutEffect, useState, useRef } from "react";
 import PostModal from "../../components/modal/postModal"; // adjust path if needed
 import { useAuth } from "@/src/context/authContext";
 import { useRouter } from "next/navigation";
@@ -12,7 +12,7 @@ import ShimmerGrid from "@/src/components/shimmer";
 
 type ApiPost = any;
 
-type User = { name: string; avatar: string; };
+type User = { name: string; avatar: string; id?: number | string; };
 
 type Post = {
   id: number;
@@ -63,8 +63,8 @@ const mapApiPost = (p: any): Post => {
 
   const isVideo = isVideoUrl(src);
   const isImage = isImageUrl(src);
-  const caption =    p.text ?? p.subtitle ??"";
-    const note_caption = p.subtitle ?? "";
+  const caption = p.text ?? p.subtitle ?? "";
+  const note_caption = p.subtitle ?? "";
 
   return {
     id: apiId,
@@ -75,6 +75,7 @@ const mapApiPost = (p: any): Post => {
     caption,
     note_caption,
     user: {
+      id: p.user_id ?? p.user?.user_id ?? p.user?.id,
       name: p.author_name ?? "---",
       avatar: p.author_pic ?? DEFAULT_AVATAR, // use local fallback
     },
@@ -101,7 +102,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
 
-    const auth = useAuth();
+  const auth = useAuth();
   const router = useRouter();
 
   // Tabs state & animation
@@ -207,7 +208,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
         // ordering (keep your existing logic: Recommend = backend order, else newest first)
         const ordered =
-          mapped; 
+          mapped;
         const media: Post[] = [];
         const notes: Post[] = [];
 
@@ -436,98 +437,98 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     document.querySelector("header, [role='banner'], .main-navbar") as HTMLElement | null;
 
   const updateStickyState = () => {
-  const el = tabsWrapperRef.current;
-  const initialTop = tabsInitialTopRef.current;
-  if (!el || initialTop === null) return;
+    const el = tabsWrapperRef.current;
+    const initialTop = tabsInitialTopRef.current;
+    if (!el || initialTop === null) return;
 
-  const navbar = findNavbar();
-  const navbarHeight = navbar ? navbar.offsetHeight : 0;
+    const navbar = findNavbar();
+    const navbarHeight = navbar ? navbar.offsetHeight : 0;
 
-  const shouldStick =
-    window.scrollY + navbarHeight >= initialTop + STICKY_BUFFER;
+    const shouldStick =
+      window.scrollY + navbarHeight >= initialTop + STICKY_BUFFER;
 
-  if (shouldStick) {
-    const rect = el.getBoundingClientRect();
+    if (shouldStick) {
+      const rect = el.getBoundingClientRect();
 
-    setStickyStyle({
-      position: "fixed",
-      top: `${navbarHeight}px`,
-      left: `${rect.left}px`,
-      width: `${rect.width}px`,
-      zIndex: 60,
-    });
+      setStickyStyle({
+        position: "fixed",
+        top: `${navbarHeight}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        zIndex: 60,
+      });
 
-    if (tabsPlaceholderRef.current) {
-      tabsPlaceholderRef.current.style.height = `${rect.height}px`;
+      if (tabsPlaceholderRef.current) {
+        tabsPlaceholderRef.current.style.height = `${rect.height}px`;
+      }
+    } else {
+      setStickyStyle(undefined);
+
+      if (tabsPlaceholderRef.current) {
+        tabsPlaceholderRef.current.style.height = "0px";
+      }
     }
-  } else {
-    setStickyStyle(undefined);
 
-    if (tabsPlaceholderRef.current) {
-      tabsPlaceholderRef.current.style.height = "0px";
-    }
-  }
-
-  setIsSticky(shouldStick);
-};
-const getNoteStyles = (config: any) => {
-  if (!config) return { background: "#f1f5f9" }; // Fallback
-
-  // Ensure config is an object (parse if it's a string from API)
-  let cfg = config;
-  if (typeof config === "string") {
-    try { cfg = JSON.parse(config); } catch (e) { return { background: "#f1f5f9" }; }
-  }
-
-  const { template, startColor, endColor, lineSpacing = 25 } = cfg;
-  const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
-  
-  let patternCSS = "";
-  let bgSize = "auto";
-
-  if (template === "grid") {
-    patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
-    bgSize = `${lineSpacing}px ${lineSpacing}px`;
-  } else if (template === "diagonal") {
-    patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
-  } else if (template === "stripes") {
-    patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
-  } else if (template === "dots") {
-    patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
-    bgSize = `${lineSpacing}px ${lineSpacing}px`;
-  }
-
-  return {
-    backgroundColor: startColor,
-    backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
-    backgroundSize: bgSize,
-    color: cfg.textStyle?.color ?? "#111827",
-    fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`, // Scale down for grid thumbnails
-    fontWeight: cfg.textStyle?.fontWeight ?? "800",
+    setIsSticky(shouldStick);
   };
-};
+  const getNoteStyles = (config: any) => {
+    if (!config) return { background: "#f1f5f9" }; // Fallback
+
+    // Ensure config is an object (parse if it's a string from API)
+    let cfg = config;
+    if (typeof config === "string") {
+      try { cfg = JSON.parse(config); } catch (e) { return { background: "#f1f5f9" }; }
+    }
+
+    const { template, startColor, endColor, lineSpacing = 25 } = cfg;
+    const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
+
+    let patternCSS = "";
+    let bgSize = "auto";
+
+    if (template === "grid") {
+      patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    } else if (template === "diagonal") {
+      patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
+    } else if (template === "stripes") {
+      patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
+    } else if (template === "dots") {
+      patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    }
+
+    return {
+      backgroundColor: startColor,
+      backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
+      backgroundSize: bgSize,
+      color: cfg.textStyle?.color ?? "#111827",
+      fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`, // Scale down for grid thumbnails
+      fontWeight: cfg.textStyle?.fontWeight ?? "800",
+    };
+  };
 
 
 
   // measure on layout and add listeners
-useLayoutEffect(() => {
-  const el = tabsWrapperRef.current;
-  if (!el) return;
+  useLayoutEffect(() => {
+    const el = tabsWrapperRef.current;
+    if (!el) return;
 
-  const rect = el.getBoundingClientRect();
-  tabsInitialTopRef.current = rect.top + window.scrollY;
+    const rect = el.getBoundingClientRect();
+    tabsInitialTopRef.current = rect.top + window.scrollY;
 
-  const onScroll = () => updateStickyState();
-  const onResize = () => updateStickyState();
+    const onScroll = () => updateStickyState();
+    const onResize = () => updateStickyState();
 
-  window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
 
-  return () => {
-    window.removeEventListener("scroll", onScroll);
-    window.removeEventListener("resize", onResize);
-  };
-}, []);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
 
 
   // Tab panes content
@@ -537,10 +538,10 @@ useLayoutEffect(() => {
       <div ref={tabsPlaceholderRef} style={{ height: 0, transition: "height 160ms ease" }} />
 
       <div
-  ref={tabsWrapperRef}
-  className="bg-white p-3 flex justify-center"
-  style={stickyStyle}
->
+        ref={tabsWrapperRef}
+        className="bg-white p-3 flex justify-center"
+        style={stickyStyle}
+      >
 
         {/* inner container to allow horizontal scroll preserving natural layout */}
         <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto">
@@ -548,9 +549,8 @@ useLayoutEffect(() => {
             <button
               key={t}
               onClick={() => setActiveTabIndex(i)}
-              className={`px-3 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap ${
-                i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"
-              }`}
+              className={`px-3 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"
+                }`}
             >
               {t}
             </button>
@@ -578,126 +578,126 @@ useLayoutEffect(() => {
         {/* Notes pane */}
         <div style={{ width: `${100 / tabs.length}%` }} className="">
           {postsLoading ? (
-           <ShimmerGrid count={10} />
+            <ShimmerGrid count={10} />
           ) : notePosts.length === 0 ? (
-                <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-            <img
+            <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
+              <img
                 src="/assets/images/post.png"
                 alt="No posts"
                 className="w-40 h-40 object-contain mb-4 opacity-80"
-            />
-            <button
-  onClick={() => setCreateNoteOpen(true)}
-  className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white"
->
+              />
+              <button
+                onClick={() => setCreateNoteOpen(true)}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white"
+              >
 
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Create
-                  </button>
-            <p className="text-sm font-medium">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Create
+              </button>
+              <p className="text-sm font-medium">
                 Create your first note
-            </p>
+              </p>
             </div>
 
           ) : (
-             <div className="post-grid mb-20">
-                   {notePosts.map((post) => (
-            <article
-              key={post.id}
-              onClick={() => openPostWithUrl(post)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") openPostWithUrl(post);
-              }}
-              className="group flex flex-col rounded-3xl bg-white cursor-pointer transition"
-            >
-              <div className="relative overflow-hidden rounded-2xl bg-slate-200">
-                {post.isVideo && (
-                  <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className="w-4 h-4 text-white ml-0.5"
-                    >
-                      <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-                    </svg>
+            <div className="post-grid mb-20">
+              {notePosts.map((post) => (
+                <article
+                  key={post.id}
+                  onClick={() => openPostWithUrl(post)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") openPostWithUrl(post);
+                  }}
+                  className="group flex flex-col rounded-3xl bg-white cursor-pointer transition"
+                >
+                  <div className="relative overflow-hidden rounded-2xl bg-slate-200">
+                    {post.isVideo && (
+                      <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-4 h-4 text-white ml-0.5"
+                        >
+                          <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+                        </svg>
+                      </div>
+
+                    )}
+
+                    {post.coverType === "note" && !post.src ? (
+                      <div
+                        className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200 relative overflow-hidden"
+                        style={getNoteStyles(post.noteConfig)}
+                      >
+                        {/* Emoji Layer (Parsed from config) */}
+                        {(() => {
+                          const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
+                          if (cfg?.emojis?.length > 0) {
+                            return (
+                              <div
+                                className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none"
+                                style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}
+                              >
+                                {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
+                                  <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>
+                                ))}
+                              </div>
+                            );
+                          }
+                        })()}
+
+                        <div className="text-center relative z-10">
+                          <p
+                            className="line-clamp-4 px-2"
+                            style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}
+                          >
+                            {post.noteConfig?.text ?? post.caption ?? "Note"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : post.isVideo ? (
+                      <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border border-slate-200" muted loop playsInline />
+                    ) : (
+                      <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border border-slate-200 rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
+                    )}
                   </div>
 
-                )}
-
-              {post.coverType === "note" && !post.src ? (
-  <div
-    className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200 relative overflow-hidden"
-    style={getNoteStyles(post.noteConfig)}
-  >
-    {/* Emoji Layer (Parsed from config) */}
-    {(() => {
-      const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
-      if (cfg?.emojis?.length > 0) {
-        return (
-          <div 
-            className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none"
-            style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}
-          >
-            {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
-              <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>
-            ))}
-          </div>
-        );
-      }
-    })()}
-
-    <div className="text-center relative z-10">
-      <p 
-        className="line-clamp-4 px-2"
-        style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}
-      >
-        {post.noteConfig?.text ?? post.caption ?? "Note"}
-      </p>
-    </div>
-  </div>
-                ) : post.isVideo ? (
-                  <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border border-slate-200" muted loop playsInline />
-                ) : (
-                  <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border border-slate-200 rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
-                )}
-              </div>
-
-              <div className="flex flex-col p-4">
-                {post.coverType === "note" && !post.src ? (
-                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                     ):(
+                  <div className="flex flex-col p-4">
+                    {post.coverType === "note" && !post.src ? (
+                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
+                    ) : (
                       <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                     )}
+                    )}
 
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <img src={post.user.avatar} className="h-5 w-5 rounded-full object-cover ring-2 ring-white" alt={post.user.name} />
-                    <span className="max-w-[150px] truncate text-xs font-medium text-slate-400 capitalize">{post.user.name}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <img src={post.user.avatar} className="h-5 w-5 rounded-full object-cover ring-2 ring-white" alt={post.user.name} />
+                        <span className="max-w-[150px] truncate text-xs font-medium text-slate-400 capitalize">{post.user.name}</span>
+                      </div>
+
+                      <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90" aria-label="Like post">
+                        <svg viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill={post.liked ? "currentColor" : "none"} className={`w-6 h-6 transition-colors duration-300 ${post.liked ? "text-rose-500" : "text-slate-300 hover:text-slate-400"}`}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                        </svg>
+                        <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
+                      </button>
+                    </div>
                   </div>
+                </article>
+              ))}
+            </div>
 
-                  <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90" aria-label="Like post">
-                    <svg viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill={post.liked ? "currentColor" : "none"} className={`w-6 h-6 transition-colors duration-300 ${post.liked ? "text-rose-500" : "text-slate-300 hover:text-slate-400"}`}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                    <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-           
           )}<br />
           <br />
           <br />
@@ -707,53 +707,53 @@ useLayoutEffect(() => {
         </div>
         {/* Posts pane - shows only mediaPosts */}
         <div style={{ width: `${100 / tabs.length}%` }} className="p-2">
-        
+
           {postsLoading ? (
-             <ShimmerGrid count={10} />
+            <ShimmerGrid count={10} />
           ) : postsError ? (
-             <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
-    <img
+            <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
+              <img
                 src="/assets/images/message-icon.png"
                 alt="No posts"
                 className="w-40 h-40 object-contain mb-4 opacity-80"
-            />
-    <p className="mb-3 justiffy-center font-bold">{"Check your internet connection try again."}</p>
-    <button
-      onClick={() => window.location.reload()}
-      className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition"
-    >
-      Retry
-    </button>
-  </div>
+              />
+              <p className="mb-3 justiffy-center font-bold">{"Check your internet connection try again."}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition"
+              >
+                Retry
+              </button>
+            </div>
           ) : mediaPosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                <img
-                    src="/assets/images/post.png"
-                    alt="No posts"
-                    className="w-40 h-40 object-contain mb-4 opacity-80"
-                />
-                {/* Action */}
-                  <button
-                    onClick={() => router.push("/products/new")}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-600 active:scale-95 transition"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Post
-                  </button>
-                <p className="text-sm font-medium">
-                    Make your first post.
-                </p>
+              <img
+                src="/assets/images/post.png"
+                alt="No posts"
+                className="w-40 h-40 object-contain mb-4 opacity-80"
+              />
+              {/* Action */}
+              <button
+                onClick={() => router.push("/products/new")}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-600 active:scale-95 transition"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Post
+              </button>
+              <p className="text-sm font-medium">
+                Make your first post.
+              </p>
 
-                </div>
+            </div>
 
           ) : (
             <div className="post-grid mb-20">
@@ -804,11 +804,11 @@ useLayoutEffect(() => {
                   </div>
 
                   <div className="flex flex-col p-4">
-                     {post.coverType === "note" && !post.src ? (
-                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                     ):(
+                    {post.coverType === "note" && !post.src ? (
+                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
+                    ) : (
                       <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                     )}
+                    )}
 
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -836,7 +836,7 @@ useLayoutEffect(() => {
           <br />
         </div>
 
-        
+
 
         {/* Products pane (only present if business) */}
         {profileApi?.is_business_owner && (
@@ -879,21 +879,21 @@ useLayoutEffect(() => {
     </div>
   );
 
- return (
+  return (
     <div className="">
-     <Header
-  profileApi={profileApi}
-  displayName={displayName}
- onLogout={async () => {
-  try {
-    await auth.logout();
-  } finally {
-    window.location.replace("/discover");
-  }
-  }}
-/>
+      <Header
+        profileApi={profileApi}
+        displayName={displayName}
+        onLogout={async () => {
+          try {
+            await auth.logout();
+          } finally {
+            window.location.replace("/discover");
+          }
+        }}
+      />
 
-      
+
       {/* Tabs: use TabsBar (sticky-capable) */}
       {TabsBar}
 

@@ -10,7 +10,7 @@ import ShimmerGrid from "../../shimmer";
 
 type ApiPost = any;
 
-type User = { name: string; avatar: string; };
+type User = { name: string; avatar: string; id?: number | string; };
 
 type Post = {
   id: number;
@@ -68,6 +68,7 @@ const mapApiPost = (p: any): Post => {
     caption,
     note_caption,
     user: {
+      id: p.user_id ?? p.user?.user_id ?? p.user?.id,
       name: p.author_name ?? p.user?.full_name ?? "---",
       avatar: p.author_pic ?? p.user?.profile_pic ?? DEFAULT_AVATAR,
     },
@@ -200,12 +201,12 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
           json?.data?.posts && Array.isArray(json.data.posts)
             ? json.data.posts
             : Array.isArray(json?.data)
-            ? json.data
-            : Array.isArray(json?.posts)
-            ? json.posts
-            : Array.isArray(json?.data?.posts)
-            ? json.data.posts
-            : [];
+              ? json.data
+              : Array.isArray(json?.posts)
+                ? json.posts
+                : Array.isArray(json?.data?.posts)
+                  ? json.data.posts
+                  : [];
 
         if (cancelled) return;
 
@@ -485,41 +486,41 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
   };
 
   const getNoteStyles = (config: any) => {
-  if (!config) return { background: "#f1f5f9" }; // Fallback
+    if (!config) return { background: "#f1f5f9" }; // Fallback
 
-  // Ensure config is an object (parse if it's a string from API)
-  let cfg = config;
-  if (typeof config === "string") {
-    try { cfg = JSON.parse(config); } catch (e) { return { background: "#f1f5f9" }; }
-  }
+    // Ensure config is an object (parse if it's a string from API)
+    let cfg = config;
+    if (typeof config === "string") {
+      try { cfg = JSON.parse(config); } catch (e) { return { background: "#f1f5f9" }; }
+    }
 
-  const { template, startColor, endColor, lineSpacing = 25 } = cfg;
-  const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
-  
-  let patternCSS = "";
-  let bgSize = "auto";
+    const { template, startColor, endColor, lineSpacing = 25 } = cfg;
+    const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
 
-  if (template === "grid") {
-    patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
-    bgSize = `${lineSpacing}px ${lineSpacing}px`;
-  } else if (template === "diagonal") {
-    patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
-  } else if (template === "stripes") {
-    patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
-  } else if (template === "dots") {
-    patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
-    bgSize = `${lineSpacing}px ${lineSpacing}px`;
-  }
+    let patternCSS = "";
+    let bgSize = "auto";
 
-  return {
-    backgroundColor: startColor,
-    backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
-    backgroundSize: bgSize,
-    color: cfg.textStyle?.color ?? "#111827",
-    fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`, // Scale down for grid thumbnails
-    fontWeight: cfg.textStyle?.fontWeight ?? "800",
+    if (template === "grid") {
+      patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    } else if (template === "diagonal") {
+      patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
+    } else if (template === "stripes") {
+      patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
+    } else if (template === "dots") {
+      patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    }
+
+    return {
+      backgroundColor: startColor,
+      backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
+      backgroundSize: bgSize,
+      color: cfg.textStyle?.color ?? "#111827",
+      fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`, // Scale down for grid thumbnails
+      fontWeight: cfg.textStyle?.fontWeight ?? "800",
+    };
   };
-};
 
 
   const TabsBar = (
@@ -532,9 +533,8 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
             <button
               key={t}
               onClick={() => setActiveTabIndex(i)}
-              className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap ${
-                i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"
-              }`}
+              className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"
+                }`}
             >
               {t}
             </button>
@@ -551,20 +551,20 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : postsError ? (
-             <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
-    <img
+            <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
+              <img
                 src="/assets/images/message-icon.png"
                 alt="No posts"
                 className="w-40 h-40 object-contain mb-4 opacity-80"
-            />
-    <p className="mb-3 justiffy-center font-bold">{"Check your internet connection try again."}</p>
-    <button
-      onClick={() => window.location.reload()}
-      className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition"
-    >
-      Retry
-    </button>
-  </div>
+              />
+              <p className="mb-3 justiffy-center font-bold">{"Check your internet connection try again."}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition"
+              >
+                Retry
+              </button>
+            </div>
           ) : mediaPosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
               <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
@@ -576,49 +576,49 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
                 <article key={post.id} onClick={() => openPostWithUrl(post)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") openPostWithUrl(post); }} className="group flex flex-col rounded-3xl bg-white cursor-pointer transition">
                   <div className="relative overflow-hidden rounded-2xl bg-slate-200">
                     {post.isVideo && (
-                     <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-  <svg
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className="w-4 h-4 text-white ml-0.5"
-  >
-    <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-  </svg>
-</div>
+                      <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-4 h-4 text-white ml-0.5"
+                        >
+                          <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+                        </svg>
+                      </div>
 
                     )}
 
-                     {post.coverType === "note" && !post.src ? (
-  <div
-    className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200 relative overflow-hidden"
-    style={getNoteStyles(post.noteConfig)}
-  >
-    {/* Emoji Layer (Parsed from config) */}
-    {(() => {
-      const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
-      if (cfg?.emojis?.length > 0) {
-        return (
-          <div 
-            className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none"
-            style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}
-          >
-            {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
-              <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>
-            ))}
-          </div>
-        );
-      }
-    })()}
+                    {post.coverType === "note" && !post.src ? (
+                      <div
+                        className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200 relative overflow-hidden"
+                        style={getNoteStyles(post.noteConfig)}
+                      >
+                        {/* Emoji Layer (Parsed from config) */}
+                        {(() => {
+                          const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
+                          if (cfg?.emojis?.length > 0) {
+                            return (
+                              <div
+                                className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none"
+                                style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}
+                              >
+                                {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
+                                  <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>
+                                ))}
+                              </div>
+                            );
+                          }
+                        })()}
 
-    <div className="text-center relative z-10">
-      <p 
-        className="line-clamp-4 px-2"
-        style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}
-      >
-        {post.noteConfig?.text ?? post.caption ?? "Note"}
-      </p>
-    </div>
-  </div>
+                        <div className="text-center relative z-10">
+                          <p
+                            className="line-clamp-4 px-2"
+                            style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}
+                          >
+                            {post.noteConfig?.text ?? post.caption ?? "Note"}
+                          </p>
+                        </div>
+                      </div>
                     ) : post.isVideo ? (
                       <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border border-slate-200" muted loop playsInline />
                     ) : (
@@ -627,11 +627,11 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
                   </div>
 
                   <div className="flex flex-col p-4">
-                     {post.coverType === "note" && !post.src ? (
-                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                     ):(
+                    {post.coverType === "note" && !post.src ? (
+                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
+                    ) : (
                       <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                     )}
+                    )}
 
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -669,14 +669,14 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
                   <div className="relative overflow-hidden rounded-2xl bg-slate-200">
                     {post.isVideo && (
                       <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-  <svg
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    className="w-4 h-4 text-white ml-0.5"
-  >
-    <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-  </svg>
-</div>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-4 h-4 text-white ml-0.5"
+                        >
+                          <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+                        </svg>
+                      </div>
 
                     )}
 
@@ -694,11 +694,11 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
                   </div>
 
                   <div className="flex flex-col p-4">
-                     {post.coverType === "note" && !post.src ? (
-                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                     ):(
+                    {post.coverType === "note" && !post.src ? (
+                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
+                    ) : (
                       <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                     )}
+                    )}
 
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -747,7 +747,7 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
 
       {TabsBar}
       {TabPanes}
-      
+
 
       {selectedPost && <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} />}
     </div>

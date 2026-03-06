@@ -30,7 +30,7 @@ export default function Header({ profileApi, displayName, onLogout, isOwner, isF
         }}
         disabled={followLoading}
       >
-        {followLoading ? "..." : isFollowing ? "Following" : "Follow"}
+        {followLoading ? "..." : isFollowing ? "Unfollow" : "Follow"}
       </button>
 
       <button

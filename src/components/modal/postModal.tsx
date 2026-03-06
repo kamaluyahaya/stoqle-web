@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/src/context/authContext";
 import VideoPlayer from "@/src/components/posts/videoPlayer";
 
-type User = { name: string; avatar?: string; id?: number; };
+type User = { name: string; avatar?: string; id?: number | string; };
 type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; };
 type APIComment = { comment_id: number; post_id: number; user_id: number; comment_content: string; comment_at: string; is_author: number; is_first_comment: number; author_name: string; author_pic?: string; likes_count: number; author_liked?: boolean; followers_count?: number; posts_count?: number; liked_by_user?: boolean; };
 
@@ -62,6 +62,10 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentPosting, setCommentPosting] = useState(false);
+
+  const currentUserId = auth?.user?.user_id || auth?.user?.id;
+  const postAuthorId = post.user?.id;
+  const isPostOwner = Boolean(currentUserId && postAuthorId && String(currentUserId) === String(postAuthorId));
 
   const getToken = () => userToken ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
 
@@ -368,7 +372,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
       const likes_count = Number(json?.data?.likes_count ?? json?.data?.likesCount ?? null);
       if (typeof liked === "boolean") setPostLiked(liked);
       if (!Number.isNaN(likes_count)) setPostLikeCount(likes_count);
-      try { onToggleLike(String(post.id)); } catch {}
+      try { onToggleLike(String(post.id)); } catch { }
     } catch (err) {
       setPostLiked((s) => !s);
       setPostLikeCount((c) => (postLiked ? c + 1 : Math.max(0, c - 1)));
@@ -379,7 +383,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   const toggleFollowAuthor = async () => {
     const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
     if (!ensure) return;
-    const userId = Number(post.user?.id ?? 0);
+    const userId = Number(post.user?.id);
     if (!userId) return;
     if (followLoading) return;
     setFollowLoading(true);
@@ -468,9 +472,11 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
             </div>
           </div>
 
-          <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-shadow ${isFollowing ? "bg-gray-200 text-slate-800" : "bg-red-500 text-white"}`} aria-pressed={isFollowing}>
-            {isFollowing ? "Following" : "Follow"}
-          </button>
+          {!isPostOwner && (
+            <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-shadow ${isFollowing ? "bg-gray-200 text-slate-800" : "bg-red-500 text-white"}`} aria-pressed={isFollowing}>
+              {isFollowing ? "Unfollow" : "Follow"}
+            </button>
+          )}
         </header>
 
         {/* LEFT: media */}
@@ -506,7 +512,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
           )}
         </div>
 
-         {/* RIGHT: details + comments */}
+        {/* RIGHT: details + comments */}
         <div className="flex flex-col min-h-0 lg:w-[400px] w-full relative">
           {/* HEADER for lg */}
           <div className="flex items-center justify-between gap-4 p-4 lg:p-5 flex-shrink-0 border-b lg:border-b-0 border-slate-200 hidden lg:flex">
@@ -517,17 +523,19 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
               </div>
             </div>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFollowAuthor();
-              }}
-              disabled={followLoading}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${isFollowing ? "bg-gray-200 text-slate-800" : "bg-red-500 text-white hover:bg-red-600"}`}
-              aria-pressed={isFollowing}
-            >
-              {isFollowing ? "Following" : "Follow"}
-            </button>
+            {!isPostOwner && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFollowAuthor();
+                }}
+                disabled={followLoading}
+                className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${isFollowing ? "bg-gray-200 text-slate-800" : "bg-red-500 text-white hover:bg-red-600"}`}
+                aria-pressed={isFollowing}
+              >
+                {isFollowing ? "Unfollow" : "Follow"}
+              </button>
+            )}
           </div>
 
           <div className=" lg:overflow-auto">

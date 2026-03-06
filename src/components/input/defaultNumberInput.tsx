@@ -7,6 +7,7 @@ type NumberInputProps = {
   placeholder?: string;
   required?: boolean;
   min?: number; // default = 1
+  variant?: "default" | "compact"; // ✅ NEW
 };
 
 export default function NumberInput({
@@ -16,7 +17,9 @@ export default function NumberInput({
   placeholder,
   required = false,
   min = 1,
+  variant = "default", // ✅ Default
 }: NumberInputProps) {
+  const isCompact = variant === "compact";
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
 
@@ -38,11 +41,13 @@ export default function NumberInput({
   };
 
   return (
-    <div className="flex items-center gap-3 bg-white p-2 border-b border-slate-200">
-      {/* Label */}
-      <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
-        {label} {required && <span className="text-red-500">*</span>}
-      </span>
+    <div className={`flex items-center gap-2 ${isCompact ? "p-1 border-none" : "p-2 border-b border-slate-200"} bg-transparent`}>
+      {/* Label - hide if compact to save space, or make tiny */}
+      {!isCompact && (
+        <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
+          {label} {required && <span className="text-red-500">*</span>}
+        </span>
+      )}
 
       {/* Input */}
       <input
@@ -51,8 +56,8 @@ export default function NumberInput({
         pattern="[0-9]*"
         value={value}
         onChange={handleChange}
-        placeholder={placeholder}
-        className="flex-1 rounded-full px-4 py-2 text-sm text-black caret-red-500 outline-none transition focus:ring-gray-300"
+        placeholder={placeholder || (isCompact ? label : "")}
+        className={`${isCompact ? "px-3 py-1.5 text-xs bg-slate-50 border border-slate-200" : "px-4 py-2 text-sm bg-white"} flex-1 rounded-full text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-red-400`}
       />
     </div>
   );

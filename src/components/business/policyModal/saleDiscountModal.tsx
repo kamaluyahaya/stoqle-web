@@ -41,7 +41,7 @@ export function SaleDiscountModal({
   const [discountPercent, setDiscountPercent] = useState<number>(0);
 
   useEffect(() => setMounted(true), []);
-  
+
   /* ---------------- Load ---------------- */
   useEffect(() => {
     if (!mounted || !open) return;
@@ -63,17 +63,17 @@ export function SaleDiscountModal({
       const parsed = JSON.parse(raw);
 
 
-// ✅ normalize array → object
-const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+      // ✅ normalize array → object
+      const obj = Array.isArray(parsed) ? parsed[0] : parsed;
 
-if (obj && typeof obj === "object") {
-  setDiscountType(String(obj.type ?? ""));
-  setDiscountPercent(
-    typeof obj.discount === "number"
-      ? obj.discount
-      : Number(obj.discount ?? 0)
-  );
-}
+      if (obj && typeof obj === "object") {
+        setDiscountType(String(obj.type ?? ""));
+        setDiscountPercent(
+          typeof obj.discount === "number"
+            ? obj.discount
+            : Number(obj.discount ?? 0)
+        );
+      }
 
     } catch {
       setDiscountType("");
@@ -104,6 +104,18 @@ if (obj && typeof obj === "object") {
       toast.success("Discount saved");
 
       if (onSave) await onSave(json);
+    } finally {
+      setSaving(false);
+      onClose();
+    }
+  }
+
+  async function handleRemove() {
+    setSaving(true);
+    try {
+      localStorage.removeItem(prefKey);
+      toast.success("Discount removed");
+      if (onSave) await onSave("[]");
     } finally {
       setSaving(false);
       onClose();
@@ -191,21 +203,31 @@ if (obj && typeof obj === "object") {
         </div>
 
         {/* Actions */}
-        <div className="mt-4 flex justify-end gap-3">
+        <div className="mt-4 flex items-center justify-between">
           <button
-            onClick={() => (!saving ? onClose() : null)}
-            className="px-4 py-2 rounded-lg bg-white border"
-            disabled={saving}
+            onClick={handleRemove}
+            className="px-4 py-2 text-rose-500 font-semibold text-sm hover:bg-rose-50 rounded-lg transition"
+            disabled={saving || (!discountType && discountPercent <= 0)}
           >
-            Cancel
+            Remove
           </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold"
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => (!saving ? onClose() : null)}
+              className="px-4 py-2 rounded-lg bg-white border"
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold"
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
