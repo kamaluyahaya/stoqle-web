@@ -100,3 +100,17 @@ export async function fetchBusinessProducts(businessId: number | string, limit =
   if (!res.ok) throw { status: res.status, body: json };
   return json;
 }
+
+export async function toggleProductLike(productId: number | string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/api/products/${productId}/like`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
