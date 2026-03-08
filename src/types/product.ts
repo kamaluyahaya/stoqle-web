@@ -151,6 +151,7 @@ export type Business = {
   phone?: string;
   business_category?: string;
   logo?: string | null;
+  business_logo?: string | null;
   business_status?: string;
   business_address?: string;
   created_at?: string;

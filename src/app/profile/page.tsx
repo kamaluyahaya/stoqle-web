@@ -8,6 +8,11 @@ import { useRouter } from "next/navigation";
 import Header from "../../components/feed/profile/header";
 import CreateNoteModal from "../../components/notes/createNoteModal";
 import ShimmerGrid from "@/src/components/shimmer";
+import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
+import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
+import type { PreviewPayload, ProductSku } from "@/src/types/product";
+import { API_BASE_URL } from "@/src/lib/config";
+import { FaHeart, FaRegHeart } from "react-icons/fa";
 
 
 type ApiPost = any;
@@ -102,6 +107,20 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
 
+  // Products state
+  const [vendorProducts, setVendorProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [fetchingProduct, setFetchingProduct] = useState(false);
+  const [productLikeData, setProductLikeData] = useState<Record<number, { liked: boolean, count: number }>>({});
+
+  const formatUrl = (url: string) => {
+    if (!url) return NO_IMAGE_PLACEHOLDER;
+    if (url.startsWith("http")) return url;
+    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  };
+
   const auth = useAuth();
   const router = useRouter();
 
@@ -172,6 +191,142 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       controller.abort();
     };
   }, []);
+
+  // fetch vendor products if owner
+  useEffect(() => {
+    // Extensive debug logging to see what profileApi contains
+    console.log("Profile state updated:", {
+      isOwner: profileApi?.is_business_owner,
+      business: profileApi?.business,
+      all: profileApi
+    });
+
+    const businessId = profileApi?.business?.business_id || profileApi?.business?.id;
+    const isOwner = profileApi?.is_business_owner;
+
+    if (!businessId || !isOwner) {
+      console.log("Conditions not met for product load. businessId:", businessId, "isOwner:", isOwner);
+      return;
+    }
+
+    const loadVendorProducts = async () => {
+      console.log("Loading products for business ID:", businessId);
+      setProductsLoading(true);
+      try {
+        const res = await fetchBusinessProducts(businessId, 100);
+        console.log("Raw business products API response:", res);
+
+        // Handle variations in API response structure
+        let foundProducts = [];
+        if (res?.data?.products && Array.isArray(res.data.products)) {
+          foundProducts = res.data.products;
+        } else if (res?.data && Array.isArray(res.data)) {
+          foundProducts = res.data;
+        } else if (Array.isArray(res)) {
+          foundProducts = res;
+        }
+
+        console.log("Successfully extracted products:", foundProducts.length);
+        setVendorProducts(foundProducts);
+      } catch (err) {
+        console.error("Critical: Failed to load vendor products:", err);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+
+    loadVendorProducts();
+  }, [profileApi]);
+
+  const handleProductLike = async (e: React.MouseEvent, productId: number, baseCount: number) => {
+    e.stopPropagation();
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+
+    const current = productLikeData[productId] || { liked: false, count: baseCount };
+    const newLiked = !current.liked;
+    const newCount = newLiked ? current.count + 1 : Math.max(0, current.count - 1);
+
+    setProductLikeData(prev => ({
+      ...prev,
+      [productId]: { liked: newLiked, count: newCount }
+    }));
+
+    try {
+      const res = await toggleProductLike(productId, token);
+      setProductLikeData(prev => ({
+        ...prev,
+        [productId]: { liked: res.data.liked, count: res.data.likes_count }
+      }));
+    } catch (err) {
+      console.error("Product like error", err);
+      setProductLikeData(prev => ({ ...prev, [productId]: current }));
+    }
+  };
+
+  const handleProductClick = async (productId: number) => {
+    if (fetchingProduct) return;
+    try {
+      setFetchingProduct(true);
+      const res = await fetchProductById(productId);
+      if (res?.data?.product) {
+        const dbProduct = res.data.product;
+        const mappedPayload: PreviewPayload = {
+          productId: dbProduct.product_id,
+          title: dbProduct.title,
+          description: dbProduct.description,
+          category: dbProduct.category,
+          hasVariants: dbProduct.has_variants === 1,
+          price: dbProduct.price ?? "",
+          quantity: dbProduct.quantity ?? "",
+          samePriceForAll: false,
+          sharedPrice: null,
+          businessId: Number(dbProduct.business_id),
+          productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
+          productVideo: (dbProduct.media || []).find((m: any) => m.type === "video")
+            ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) }
+            : null,
+          useCombinations: dbProduct.use_combinations === 1,
+          params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
+          variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
+            id: String(g.group_id),
+            title: g.title,
+            allowImages: g.allow_images === 1,
+            entries: (g.options || []).map((o: any) => ({
+              id: String(o.option_id),
+              name: o.name,
+              price: o.price,
+              quantity: o.initial_quantity || 0,
+              images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
+            }))
+          })),
+          skus: (dbProduct.skus || []).map((s: any) => {
+            let vIds: string[] = [];
+            try { vIds = typeof s.variant_option_ids === 'string' ? JSON.parse(s.variant_option_ids) : s.variant_option_ids; } catch (e) { }
+            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
+            return {
+              id: String(s.sku_id),
+              sku: s.sku_code || "",
+              name: "Combination",
+              price: s.price,
+              quantity: inventoryMatch ? inventoryMatch.quantity : 0,
+              enabled: s.status === 'active',
+              variantOptionIds: vIds.map(String)
+            } as ProductSku;
+          })
+        };
+        const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
+        if (baseInv) mappedPayload.quantity = baseInv.quantity;
+
+        setSelectedProductPayload(mappedPayload);
+        setProductModalOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFetchingProduct(false);
+    }
+  };
 
   // fetch posts separately and partition into media vs notes
   useEffect(() => {
@@ -576,65 +731,39 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         }}
       >
         {/* Notes pane */}
-        <div style={{ width: `${100 / tabs.length}%` }} className="">
+        <div style={{ width: `${100 / tabs.length}%`, flexShrink: 0 }}>
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : notePosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img
-                src="/assets/images/post.png"
-                alt="No posts"
-                className="w-40 h-40 object-contain mb-4 opacity-80"
-              />
+              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
               <button
                 onClick={() => setCreateNoteOpen(true)}
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white"
               >
-
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
                 Create
               </button>
-              <p className="text-sm font-medium">
-                Create your first note
-              </p>
+              <p className="text-sm font-medium">Create your first note</p>
             </div>
-
           ) : (
             <div className="post-grid mb-20">
               {notePosts.map((post) => (
                 <article
                   key={post.id}
                   onClick={() => openPostWithUrl(post)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") openPostWithUrl(post);
-                  }}
                   className="group flex flex-col rounded-3xl bg-white cursor-pointer transition"
                 >
                   <div className="relative overflow-hidden rounded-2xl bg-slate-200">
                     {post.isVideo && (
                       <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="w-4 h-4 text-white ml-0.5"
-                        >
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
                           <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
                         </svg>
                       </div>
-
                     )}
-
                     {post.coverType === "note" && !post.src ? (
                       <div
                         className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200 relative overflow-hidden"
@@ -658,10 +787,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                         })()}
 
                         <div className="text-center relative z-10">
-                          <p
-                            className="line-clamp-4 px-2"
-                            style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}
-                          >
+                          <p className="line-clamp-4 px-2" style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}>
                             {post.noteConfig?.text ?? post.caption ?? "Note"}
                           </p>
                         </div>
@@ -672,21 +798,16 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                       <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border border-slate-200 rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
                     )}
                   </div>
-
                   <div className="flex flex-col p-4">
-                    {post.coverType === "note" && !post.src ? (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                    ) : (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                    )}
-
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">
+                      {post.coverType === "note" ? post.note_caption : post.caption}
+                    </p>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <img src={post.user.avatar} className="h-5 w-5 rounded-full object-cover ring-2 ring-white" alt={post.user.name} />
                         <span className="max-w-[150px] truncate text-xs font-medium text-slate-400 capitalize">{post.user.name}</span>
                       </div>
-
-                      <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90" aria-label="Like post">
+                      <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90">
                         <svg viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill={post.liked ? "currentColor" : "none"} className={`w-6 h-6 transition-colors duration-300 ${post.liked ? "text-rose-500" : "text-slate-300 hover:text-slate-400"}`}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                         </svg>
@@ -697,125 +818,56 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                 </article>
               ))}
             </div>
-
-          )}<br />
-          <br />
-          <br />
-          <br />
-          <br />
-          <br />
+          )}
         </div>
-        {/* Posts pane - shows only mediaPosts */}
-        <div style={{ width: `${100 / tabs.length}%` }} className="p-2">
 
+        {/* Posts pane */}
+        <div style={{ width: `${100 / tabs.length}%`, flexShrink: 0 }} className="p-2">
           {postsLoading ? (
             <ShimmerGrid count={10} />
-          ) : postsError ? (
-            <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
-              <img
-                src="/assets/images/message-icon.png"
-                alt="No posts"
-                className="w-40 h-40 object-contain mb-4 opacity-80"
-              />
-              <p className="mb-3 justiffy-center font-bold">{"Check your internet connection try again."}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition"
-              >
-                Retry
-              </button>
-            </div>
           ) : mediaPosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img
-                src="/assets/images/post.png"
-                alt="No posts"
-                className="w-40 h-40 object-contain mb-4 opacity-80"
-              />
-              {/* Action */}
+              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
               <button
                 onClick={() => router.push("/products/new")}
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-600 active:scale-95 transition"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
                 Post
               </button>
-              <p className="text-sm font-medium">
-                Make your first post.
-              </p>
-
+              <p className="text-sm font-medium">Make your first post.</p>
             </div>
-
           ) : (
             <div className="post-grid mb-20">
               {mediaPosts.map((post) => (
                 <article
                   key={post.id}
                   onClick={() => openPostWithUrl(post)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") openPostWithUrl(post);
-                  }}
                   className="group flex flex-col rounded-3xl bg-white cursor-pointer transition"
                 >
                   <div className="relative overflow-hidden rounded-2xl bg-slate-200">
                     {post.isVideo && (
                       <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="w-4 h-4 text-white ml-0.5"
-                        >
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
                           <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
                         </svg>
                       </div>
-
                     )}
-
-                    {post.coverType === "note" && !post.src ? (
-                      <div
-                        className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border"
-                        style={{
-                          background:
-                            post.noteConfig && post.noteConfig.startColor && post.noteConfig.endColor
-                              ? `linear-gradient(135deg, ${post.noteConfig.startColor}, ${post.noteConfig.endColor})`
-                              : undefined,
-                        }}
-                      >
-                        <div className="text-center ">
-                          <p className="text-slate-900 text-lg font-semibold">{post.noteConfig?.text ?? post.caption ?? "Note"}</p>
-                        </div>
-                      </div>
-                    ) : post.isVideo ? (
+                    {post.isVideo ? (
                       <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border border-slate-200" muted loop playsInline />
                     ) : (
                       <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border border-slate-200 rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
                     )}
                   </div>
-
                   <div className="flex flex-col p-4">
-                    {post.coverType === "note" && !post.src ? (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                    ) : (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                    )}
-
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <img src={post.user.avatar} className="h-5 w-5 rounded-full object-cover ring-2 ring-white" alt={post.user.name} />
                         <span className="max-w-[150px] truncate text-xs font-medium text-slate-400 capitalize">{post.user.name}</span>
                       </div>
-
                       <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90" aria-label="Like post">
                         <svg viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill={post.liked ? "currentColor" : "none"} className={`w-6 h-6 transition-colors duration-300 ${post.liked ? "text-rose-500" : "text-slate-300 hover:text-slate-400"}`}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
@@ -828,51 +880,103 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
               ))}
             </div>
           )}
-          <br />
-          <br />
-          <br />
-          <br />
-          <br />
-          <br />
         </div>
 
-
-
-        {/* Products pane (only present if business) */}
+        {/* Products pane */}
         {profileApi?.is_business_owner && (
-          <div style={{ width: `${100 / tabs.length}%` }} className="p-4">
-            <div className="rounded-2xl bg-white min-h-[220px] flex items-center justify-center text-slate-500">
-              <div className="text-center">
-                <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                  <img
-                    src="/assets/images/post.png"
-                    alt="No products"
-                    className="w-40 h-40 object-contain mb-4 opacity-80"
-                  />
-
-                  <div className="text-xs mt-2">No Products.</div>
-
-                  {/* Action */}
-                  <button
-                    onClick={() => router.push("/products/new")}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-600 active:scale-95 transition"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Post Product
-                  </button>
-                </div>
-
+          <div style={{ width: `${100 / tabs.length}%`, flexShrink: 0 }} className="p-2 sm:p-4">
+            {productsLoading ? (
+              <ShimmerGrid count={6} />
+            ) : vendorProducts.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
+                <img src="/assets/images/post.png" alt="No products" className="w-40 h-40 object-contain mb-4 opacity-80" />
+                <p className="text-sm font-medium mb-4">No products available in your store yet.</p>
+                <button
+                  onClick={() => router.push("/products/new")}
+                  className="inline-flex items-center gap-2 rounded-full bg-rose-500 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-600 active:scale-95 transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Product
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="post-grid mb-20">
+                {vendorProducts.map((p: any) => {
+                  const isPromoActive = p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date());
+                  return (
+                    <article
+                      key={p.product_id}
+                      onClick={() => {
+                        if (p.product_video) {
+                          router.push(`/shopping-reels?product_id=${p.product_id}`);
+                        } else {
+                          handleProductClick(p.product_id);
+                        }
+                      }}
+                      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+                    >
+                      <div className="relative w-full aspect-[4/5] bg-slate-100 overflow-hidden">
+                        {p.product_video ? (
+                          <video
+                            src={formatUrl(p.product_video)}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            muted
+                            loop
+                            onMouseOver={(e) => (e.currentTarget as HTMLVideoElement).play()}
+                            onMouseOut={(e) => {
+                              (e.currentTarget as HTMLVideoElement).pause();
+                              (e.currentTarget as HTMLVideoElement).currentTime = 0;
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={formatUrl(p.first_image)}
+                            alt={p.title}
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                          />
+                        )}
+                        {p.product_video && (
+                          <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-2 z-10">
+                            <svg className="w-3" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z" /></svg>
+                          </div>
+                        )}
+                        {fetchingProduct && selectedProductPayload?.productId === p.product_id && (
+                          <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
+                            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <div className="flex items-center justify-between pt-1 mb-1">
+                          <span className="text-slate-900 text-sm font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
+                          <div className="flex items-center gap-1 cursor-pointer" onClick={(e) => handleProductLike(e, p.product_id, p.likes_count || 0)}>
+                            {(productLikeData[p.product_id]?.liked) ? <FaHeart className="text-red-500 text-xs" /> : <FaRegHeart className="text-slate-400 text-xs" />}
+                            <span className="text-[10px] font-semibold text-slate-600">{productLikeData[p.product_id]?.count ?? (p.likes_count || 0)}</span>
+                          </div>
+                        </div>
+                        <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>
+                          {p.title}
+                        </h3>
+                        <div className="mt-2 min-h-[14px]">
+                          {isPromoActive ? (
+                            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
+                              {p.promo_discount}% OFF
+                            </span>
+                          ) : p.sale_type ? (
+                            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
+                              {p.sale_discount}% Off
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -899,8 +1003,22 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
       {TabPanes}
 
-      {/* Modal */}
+      {/* Media Modal */}
       {selectedPost && <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} />}
+
+      {/* Product Modal */}
+      {productModalOpen && selectedProductPayload && (
+        <ProductPreviewModal
+          open={productModalOpen}
+          payload={selectedProductPayload}
+          onClose={() => {
+            setProductModalOpen(false);
+            setSelectedProductPayload(null);
+          }}
+          onProductClick={handleProductClick}
+        />
+      )}
+
       <CreateNoteModal
         open={createNoteOpen}
         onClose={() => setCreateNoteOpen(false)}

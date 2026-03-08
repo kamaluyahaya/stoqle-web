@@ -158,7 +158,13 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
         const comboKey = combo.ids.join("-");
         const existing = prev.find(s => s.variantOptionIds.join("-") === comboKey);
 
-        if (existing) return existing;
+        if (existing) {
+          // If same price is enabled, ensure the existing SKU uses the shared price
+          if (samePriceForAll) {
+            return { ...existing, price: (sharedPrice ?? "") as number | "" };
+          }
+          return existing;
+        }
 
         return {
           id: cryptoRandomId(),
@@ -503,6 +509,45 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
     if (!token) {
       toast("Authentication required. Please login again.");
       return;
+    }
+
+    // --- Price & Stock Validation ---
+    if (!hasVariants) {
+      if (!price && price !== 0) return toast("Please set a product price.");
+      if (!quantity && quantity !== 0) return toast("Please set the product stock quantity.");
+    } else {
+      if (samePriceForAll) {
+        if (!sharedPrice && sharedPrice !== 0) {
+          return toast("Please set the shared price for your variants.");
+        }
+      }
+
+      // If combinations are used, check SKU stock
+      if (useCombinations) {
+        const enabledSkus = skus.filter(s => s.enabled);
+        if (enabledSkus.length === 0) return toast("Please enable at least one variant combination.");
+
+        for (const s of enabledSkus) {
+          if (!s.quantity && s.quantity !== 0) {
+            return toast(`Please set stock for: ${s.name}`);
+          }
+          if (!samePriceForAll && (!s.price && s.price !== 0)) {
+            return toast(`Please set a price for: ${s.name}`);
+          }
+        }
+      } else {
+        // Simple variant validation
+        for (const g of variantGroups) {
+          for (const e of g.entries) {
+            if (!e.quantity && e.quantity !== 0) {
+              return toast(`Please set stock for: ${e.name}`);
+            }
+            if (!samePriceForAll && (!e.price && e.price !== 0)) {
+              return toast(`Please set a price for: ${e.name}`);
+            }
+          }
+        }
+      }
     }
 
     if (submitting) return; // guard

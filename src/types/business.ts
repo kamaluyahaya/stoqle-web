@@ -118,6 +118,7 @@ export type Business = {
   business_category?: string | null;
   referral?: number | null;
   logo?: string | null;
+  business_logo?: string | null;
   profile_pic?: string | null;
   business_status: "pending" | "active" | "rejected" | string;
   business_address?: string | null;

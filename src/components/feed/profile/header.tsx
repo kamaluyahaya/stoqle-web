@@ -461,6 +461,7 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
             <div className="flex items-center gap-3">
               <img
                 src={
+                  profileApi?.business?.business_logo ??
                   profileApi?.business?.logo ??
                   profileApi?.user?.profile_pic ??
                   profileApi?.user?.avatar ??
@@ -555,7 +556,13 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
           <div className="hidden md:flex md:items-start md:gap-6">
             <div className="flex-none">
               <img
-                src={profileApi?.business?.logo ?? profileApi?.user?.profile_pic ?? profileApi?.user?.avatar ?? DEFAULT_AVATAR}
+                src={
+                  profileApi?.business?.business_logo ??
+                  profileApi?.business?.logo ??
+                  profileApi?.user?.profile_pic ??
+                  profileApi?.user?.avatar ??
+                  DEFAULT_AVATAR
+                }
                 alt={displayName ?? "Profile"}
                 className="h-44 w-44 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200"
               />

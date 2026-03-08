@@ -75,7 +75,7 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
 
   return (
     <div
-      className="fixed inset-0 z-75 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center"
       role="dialog"
       aria-modal="true"
     >
