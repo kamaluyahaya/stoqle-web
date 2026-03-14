@@ -762,7 +762,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                 <button onClick={() => handleSaveDraft()} className="px-3 py-2 rounded-full bg-slate-50 w-full sm:w-auto text-sm font-medium">Save Draft</button>
 
                 <button onClick={handleSubmit} disabled={submitting} className="px-4 py-2 rounded-full bg-red-500 text-white w-full sm:w-auto text-sm font-medium">
-                  {submitting ? "Saving..." : "Save product"}
+                  {submitting ? "Saving..." : "Publish"}
                 </button>
                 {/* <button onClick={handleSubmit} className="px-4 py-2 rounded-full bg-red-500 text-white w-full sm:w-auto">Save product</button> */}
               </div>
@@ -977,7 +977,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
 
                 {/* <button onClick={() => console.info("Preview payload in console")} className="px-3 py-2 rounded-lg bg-slate-50 w-full sm:w-auto">Preview</button> */}
                 <button onClick={handleSubmit} disabled={submitting} className="px-4 py-2 rounded-full bg-red-500 text-white w-full sm:w-auto">
-                  {submitting ? "Saving..." : "Save product"}
+                  {submitting ? "Saving..." : "Publish"}
                 </button>
                 {/* <button onClick={handleSubmit} className="px-4 py-2 rounded-full bg-red-500 text-white w-full sm:w-auto">Save product</button> */}
               </div>

@@ -1,5 +1,7 @@
 // src/components/EditBusinessProfile.tsx
 "use client";
+import React, { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FaCat, FaChevronRight, FaStore, FaBox, FaShoppingCart, FaWallet, FaArrowDown } from "react-icons/fa";
 import { KEYS } from "@/src/lib/utils/business/profilePrefs";
 import RefundsModal from "./policyModal/refundsModal";
@@ -11,16 +13,51 @@ import CustomerServiceModal from "./policyModal/customerServiceModal";
 import BusinessAddressModal from "./policyModal/businessAddressModal";
 import { SaleDiscountModal } from "./policyModal/saleDiscountModal";
 import { useEditBusinessProfile } from "@/src/hooks/userEditBusinessProfile";
+import WithdrawModal from "./withdrawModal";
+import TransferModal from "./transferModal";
+import PinSetupModal from "./pinSetupModal";
+import ShopProfileModal from "./policyModal/shopProfileModal";
+import { API_BASE_URL } from "@/src/lib/config";
+import { useWallet } from "@/src/context/walletContext";
+import { toast } from "sonner";
 
 export default function EditBusinessProfile({
   apiBase = "",
   business = null,
   businessPolicy = null,
+  wallet = null,
+  pendingOrdersCount = 0,
 }: {
   apiBase?: string;
   business?: any | null;
   businessPolicy?: any | null;
+  wallet?: any | null;
+  pendingOrdersCount?: number;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { wallet: localWallet, updateBalance: setLocalWallet, refreshWallet } = useWallet();
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isPinSetupModalOpen, setIsPinSetupModalOpen] = useState(false);
+
+  useEffect(() => {
+    setIsWithdrawModalOpen(searchParams.get('withdraw') === 'true');
+  }, [searchParams]);
+
+
+
+  const handleOpenWithdraw = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('withdraw', 'true');
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
+
+  const handleCloseWithdraw = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('withdraw');
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
   const {
     // state
     name,
@@ -32,6 +69,7 @@ export default function EditBusinessProfile({
     market,
     promo,
     discount,
+    shopProfile,
     isLoading,
     isSyncing,
     modalOpen,
@@ -61,72 +99,72 @@ export default function EditBusinessProfile({
     );
   }
   type ShippingDurationItem = {
-  type: string;
-  value: number;
-  unit: string;
-};
+    type: string;
+    value: number;
+    unit: string;
+  };
 
-function normalizeShippingForModal(shippingJson: string) {
-  try {
-    const parsed = JSON.parse(shippingJson);
+  function normalizeShippingForModal(shippingJson: string) {
+    try {
+      const parsed = JSON.parse(shippingJson);
 
-    // Handle object-based payload (correct format)
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const durations = Array.isArray(parsed.shipping_duration)
-        ? parsed.shipping_duration
-        : [];
+      // Handle object-based payload (correct format)
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const durations = Array.isArray(parsed.shipping_duration)
+          ? parsed.shipping_duration
+          : [];
 
-      const normalized = durations.map((item: ShippingDurationItem) => {
-        let val = item.value;
-        let unit = item.unit;
+        const normalized = durations.map((item: ShippingDurationItem) => {
+          let val = item.value;
+          let unit = item.unit;
 
-        if (unit === "hours" && val >= 24 && val < 24 * 7) {
-          unit = "days";
-          val = Math.ceil(val / 24);
-        } else if (unit === "hours" && val >= 24 * 7) {
-          unit = "weeks";
-          val = Math.ceil(val / (24 * 7));
-        }
+          if (unit === "hours" && val >= 24 && val < 24 * 7) {
+            unit = "days";
+            val = Math.ceil(val / 24);
+          } else if (unit === "hours" && val >= 24 * 7) {
+            unit = "weeks";
+            val = Math.ceil(val / (24 * 7));
+          }
 
-        return { ...item, value: val, unit };
-      });
+          return { ...item, value: val, unit };
+        });
 
-      return JSON.stringify({
-        delivery_notice: typeof parsed.delivery_notice === "string" ? parsed.delivery_notice : "",
-        shipping_duration: normalized,
-        additional_info: parsed.additional_info ?? "",
-      });
+        return JSON.stringify({
+          delivery_notice: typeof parsed.delivery_notice === "string" ? parsed.delivery_notice : "",
+          shipping_duration: normalized,
+          additional_info: parsed.additional_info ?? "",
+        });
+      }
+
+      // Legacy array-only format
+      if (Array.isArray(parsed)) {
+        return JSON.stringify({
+          delivery_notice: "",
+          shipping_duration: parsed,
+          additional_info: "",
+        });
+      }
+    } catch {
+      // fall through
     }
 
-    // Legacy array-only format
-    if (Array.isArray(parsed)) {
-      return JSON.stringify({
-        delivery_notice: "",
-        shipping_duration: parsed,
-        additional_info: "",
-      });
-    }
-  } catch {
-    // fall through
+    return shippingJson ?? "";
   }
 
-  return shippingJson ?? "";
-}
-
   // helper to decide whether to show the "Updated" badge for a given key
-// helper to decide whether to show the "Updated" badge for a given key
-const showUpdated = (key: string) => {
-  return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
-};
+  // helper to decide whether to show the "Updated" badge for a given key
+  const showUpdated = (key: string) => {
+    return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
+  };
 
 
-const renderStatus = (key: string) => {
-  return showUpdated(key) ? (
-    <span className="text-emerald-600 font-medium">Updated</span>
-  ) : (
-    <span className="text-slate-400">Edit</span>
-  );
-};
+  const renderStatus = (key: string) => {
+    return showUpdated(key) ? (
+      <span className="text-emerald-600 font-medium">Updated</span>
+    ) : (
+      <span className="text-slate-400">Edit</span>
+    );
+  };
 
 
   return (
@@ -157,19 +195,69 @@ const renderStatus = (key: string) => {
             <div className="inline-block mt-2 text-sm font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full capitalize">
               {business?.business_status}
             </div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">NGN 2,002,830.00</div>
+
+            <div className="mt-4 flex flex-col items-center">
+              <div className="text-2xl font-bold text-slate-900">
+                {localWallet?.currency || 'NGN'} {Number(localWallet?.available_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">Available Balance</div>
+
+              {Number(localWallet?.pending_balance || 0) > 0 && (
+                <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-full border border-amber-100">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="text-[10px] font-bold text-amber-700 uppercase">
+                    Pending: {localWallet?.currency || 'NGN'} {Number(localWallet?.pending_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Pending Orders Marquee */}
+        {pendingOrdersCount > 0 && (
+          <div className="w-full bg-orange-50 border-y border-orange-100 py-2.5 overflow-hidden group cursor-pointer" onClick={() => (window.location.href = "/profile/business/customer-order")}>
+            <div className="flex animate-marquee whitespace-nowrap">
+              <div className="flex items-center gap-4 px-4">
+                <span className="text-sm font-bold text-orange-700">
+                  ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+                </span>
+                <span className="text-sm font-bold text-orange-700">
+                  ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+                </span>
+                <span className="text-sm font-bold text-orange-700">
+                  ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+                </span>
+              </div>
+            </div>
+
+            <style jsx>{`
+              @keyframes marquee {
+                0% { transform: translateX(0); }
+                100% { transform: translateX(-33.33%); }
+              }
+              .animate-marquee {
+                display: flex;
+                animation: marquee 25s linear infinite;
+              }
+              .group:hover .animate-marquee {
+                animation-play-state: paused;
+              }
+            `}</style>
+          </div>
+        )}
 
         {/* Action grid */}
         <div className="mt-6 w-full">
           <div className="grid grid-cols-4 gap-2 lg:gap-5">
-            <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <FaShoppingCart className="text-slate-700" size={18} />
+            <a href="/profile/business/customer-order" className="block">
+              <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <FaShoppingCart className="text-slate-700" size={18} />
+                </div>
+                <span className="text-xs font-medium text-slate-700">Orders</span>
               </div>
-              <span className="text-xs font-medium text-slate-700">Orders</span>
-            </div>
+            </a>
 
             <a href="/products/new" className="block">
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
@@ -180,14 +268,32 @@ const renderStatus = (key: string) => {
               </div>
             </a>
 
-            <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
+            <div
+              className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition cursor-pointer"
+              onClick={() => {
+                if (!localWallet?.has_pin) {
+                  setIsPinSetupModalOpen(true);
+                } else {
+                  setIsTransferModalOpen(true);
+                }
+              }}
+            >
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
                 <FaWallet className="text-slate-700" size={18} />
               </div>
               <span className="text-xs font-medium text-slate-700">Transfer</span>
             </div>
 
-            <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
+            <div
+              className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition cursor-pointer"
+              onClick={() => {
+                if (!localWallet?.has_pin) {
+                  setIsPinSetupModalOpen(true);
+                } else {
+                  handleOpenWithdraw();
+                }
+              }}
+            >
               <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
                 <FaArrowDown className="text-slate-700" size={18} />
               </div>
@@ -198,6 +304,16 @@ const renderStatus = (key: string) => {
 
         {/* Editable cards */}
         <div className="mt-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm">
+            <div onClick={() => openEditor("Shop Profile", KEYS.shopProfile, shopProfile)} className="px-4 py-3 cursor-pointer flex items-center">
+              <div className="flex-1">
+                <div className="text-sm text-slate-800 font-medium">Shop Profile</div>
+                <div className="text-sm mt-1">{renderStatus(KEYS.shopProfile)}</div>
+              </div>
+              <FaChevronRight className="text-slate-300" />
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl shadow-sm">
             <div onClick={() => openEditor("Shipping Info", KEYS.shipping, normalizeShippingForModal(shipping))} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
@@ -282,15 +398,17 @@ const renderStatus = (key: string) => {
         </div>
       </div>
 
-      {(isLoading || isSyncing) && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" />
-          <div className="relative bg-white rounded-xl p-6 shadow">
-            <div className="animate-spin h-8 w-8 border-4 border-rose-400 border-t-transparent rounded-full" />
-            <div className="mt-3 text-sm text-slate-700">{isSyncing ? "Syncing…" : "Loading…"}</div>
+      {
+        (isLoading || isSyncing) && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/30" />
+            <div className="relative bg-white rounded-xl p-6 shadow">
+              <div className="animate-spin h-8 w-8 border-4 border-rose-400 border-t-transparent rounded-full" />
+              <div className="mt-3 text-sm text-slate-700">{isSyncing ? "Syncing…" : "Loading…"}</div>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Per-section modals (wired into hook's modal state) */}
       <ShippingInfoModal
@@ -325,7 +443,7 @@ const renderStatus = (key: string) => {
         open={modalOpen && modalProps?.key === KEYS.promo}
         prefKey={KEYS.promo}
         // initialValue={modalProps?.value ?? ""}
-         initialValue={modalProps?.value ?? localStorage.getItem(KEYS.promo) ?? null}
+        initialValue={modalProps?.value ?? localStorage.getItem(KEYS.promo) ?? null}
         onClose={() => { setModalOpen(false); }}
         onSave={async (payloadJson) => { await saveEditorValue(KEYS.promo, payloadJson); }}
       />
@@ -333,7 +451,7 @@ const renderStatus = (key: string) => {
         open={modalOpen && modalProps?.key === KEYS.customerService}
         prefKey={KEYS.customerService}
         initialValue={modalProps?.value ?? ""}
-         businessName={displayName} 
+        businessName={displayName}
         onClose={() => { setModalOpen(false); }}
         onSave={async (payloadJson) => { await saveEditorValue(KEYS.customerService, payloadJson); }}
       />
@@ -349,11 +467,87 @@ const renderStatus = (key: string) => {
         prefKey={KEYS.discount}
         // initialValue={modalProps?.value ?? null}
         // initialValue={discount || null}
-          initialValue={modalProps?.value ?? localStorage.getItem(KEYS.discount) ?? null}
+        initialValue={modalProps?.value ?? localStorage.getItem(KEYS.discount) ?? null}
 
         onClose={() => { setModalOpen(false); }}
         onSave={async (discountJson: string) => { await saveEditorValue(KEYS.discount, discountJson); }}
       />
-    </div>
+
+      <WithdrawModal
+        isOpen={isWithdrawModalOpen}
+        onClose={handleCloseWithdraw}
+        activePaymentJson={payment}
+        isPaymentDirty={dirtyKeys.includes(KEYS.payment)}
+        onEditAccount={() => {
+          handleCloseWithdraw();
+          openEditor("Payment Info", KEYS.payment, payment);
+        }}
+        availableBalance={Number(localWallet?.available_balance || 0)}
+        onBalanceUpdate={(newBal) => setLocalWallet(newBal)}
+        role="vendor"
+      />
+
+      <TransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        availableBalance={Number(localWallet?.available_balance || 0)}
+        onBalanceUpdate={(newBal) => setLocalWallet(newBal)}
+      />
+
+      <PinSetupModal
+        isOpen={isPinSetupModalOpen}
+        onClose={() => setIsPinSetupModalOpen(false)}
+        onSuccess={() => {
+          refreshWallet();
+          setIsTransferModalOpen(true);
+        }}
+      />
+
+      <ShopProfileModal
+        open={modalOpen && modalProps?.key === KEYS.shopProfile}
+        initialValue={modalProps?.value ?? shopProfile}
+        onClose={() => setModalOpen(false)}
+        onSave={async (formData) => {
+          // If it's a FormData (has files), hit the API immediately
+          // because we can't stage files in localStorage easily.
+          const token = localStorage.getItem("token");
+          const bizId = business?.business_id;
+
+          if (!bizId || !token) {
+            console.error("Missing business_id or token");
+            return;
+          }
+
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/business/${bizId}`, {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              body: formData,
+            });
+
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.message || "Failed to update profile");
+            }
+
+            // After success, clear staged text for fields we just committed
+            const textData: Record<string, any> = {};
+            formData.forEach((value, key) => {
+              if (!(value instanceof File)) {
+                textData[key] = value;
+              }
+            });
+
+            await saveEditorValue(KEYS.shopProfile, JSON.stringify(textData));
+            window.location.reload(); // Refresh to show new images/name
+          } catch (e: any) {
+            console.error("Upload failed", e);
+            toast.error(e.message || "Failed to upload profile");
+          }
+        }}
+      />
+    </div >
   );
 }

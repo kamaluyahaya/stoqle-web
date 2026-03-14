@@ -2,18 +2,24 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { fetchMarketFeed, fetchProductById } from "@/src/lib/api/productApi";
+import { fetchMarketFeed, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
 import { ProductFeedItem, PreviewPayload, ProductSku } from "@/src/types/product";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import { API_BASE_URL } from "@/src/lib/config";
-import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaArrowLeft, FaStore, FaHeart, FaShare } from "react-icons/fa";
-
+import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaArrowLeft, FaStore, FaHeart, FaRegHeart, FaShare } from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
+import { useAuth } from "@/src/context/authContext";
+import { toast } from "sonner";
 import { Suspense } from "react";
 
 const formatUrl = (url: string) => {
     if (!url) return "";
-    if (url.startsWith("http")) return url;
-    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+    let formatted = url;
+    if (!url.startsWith("http")) {
+        formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+    }
+    return encodeURI(formatted);
 };
 
 function ShoppingReelsContent() {
@@ -77,6 +83,72 @@ function ShoppingReelsContent() {
     const observerTarget = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    const { token } = useAuth();
+
+    const handleLikeClick = async (productId: number) => {
+        // Optimistic update
+        setProducts(prev => prev.map(p => {
+            if (p.product_id === productId) {
+                const wasLiked = p.isLiked;
+                return {
+                    ...p,
+                    isLiked: !wasLiked,
+                    likes_count: wasLiked ? Math.max(0, (p.likes_count || 0) - 1) : (p.likes_count || 0) + 1
+                };
+            }
+            return p;
+        }));
+
+        if (!token) {
+            toast.error("Please login to like products");
+            // Revert optimistic update
+            setProducts(prev => prev.map(p => {
+                if (p.product_id === productId) {
+                    const currentlyLiked = p.isLiked;
+                    return {
+                        ...p,
+                        isLiked: !currentlyLiked,
+                        likes_count: currentlyLiked ? (p.likes_count || 0) + 1 : Math.max(0, (p.likes_count || 0) - 1)
+                    };
+                }
+                return p;
+            }));
+            return;
+        }
+
+        try {
+            const res = await toggleProductLike(productId, token);
+            if (res.ok) {
+                setProducts(prev => prev.map(p => {
+                    if (p.product_id === productId) {
+                        return {
+                            ...p,
+                            likes_count: res.data.count || res.data.likes_count,
+                            isLiked: res.data.liked
+                        };
+                    }
+                    return p;
+                }));
+            }
+        } catch (err) {
+            console.error("Like failed", err);
+        }
+    };
+
+    const handleShareClick = (product: ProductFeedItem) => {
+        const shareUrl = `${window.location.origin}/shopping-reels?product_id=${product.product_id}`;
+        if (navigator.share) {
+            navigator.share({
+                title: product.title,
+                text: `Check out this product from ${product.business_name} on Stoqle!`,
+                url: shareUrl,
+            }).catch(() => { });
+        } else {
+            navigator.clipboard.writeText(shareUrl);
+            toast.info("Link copied to clipboard!");
+        }
+    };
+
     const handleProductBuyClick = async (productId: number, businessName?: string) => {
         if (fetchingProduct) return;
         try {
@@ -96,22 +168,25 @@ function ShoppingReelsContent() {
                     samePriceForAll: false,
                     sharedPrice: null,
                     businessId: Number(dbProduct.business_id),
-                    productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
-                    productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) } : null,
+                    productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url || "") })),
+                    productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url || "") } : null,
                     useCombinations: dbProduct.use_combinations === 1,
                     params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-
+                    soldCount: dbProduct.sold_count,
                     variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
                         id: String(g.group_id),
                         title: g.title,
                         allowImages: g.allow_images === 1,
-                        entries: (g.options || []).map((o: any) => ({
-                            id: String(o.option_id),
-                            name: o.name,
-                            price: o.price,
-                            quantity: o.initial_quantity || 0,
-                            images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-                        }))
+                        entries: (g.options || []).map((o: any) => {
+                            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
+                            return {
+                                id: String(o.option_id),
+                                name: o.name,
+                                price: o.price,
+                                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
+                                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url || "") }))
+                            };
+                        })
                     })),
 
                     skus: (dbProduct.skus || []).map((s: any) => {
@@ -149,7 +224,44 @@ function ShoppingReelsContent() {
         }
     };
 
-    const loadInitialSequence = async () => {
+    const mapToFeedItem = useCallback((p: any): ProductFeedItem => {
+        let bestPrice = p.price || p.min_sku_price || p.min_variant_price;
+        if (!bestPrice || Number(bestPrice) <= 0) {
+            const allSkus = p.skus?.map((s: any) => s.price).filter((pr: number) => pr > 0) || [];
+            if (allSkus.length > 0) {
+                bestPrice = Math.min(...allSkus);
+            } else {
+                const allOpts = p.variant_groups?.flatMap((g: any) => g.options)?.map((o: any) => o.price).filter((pr: number) => pr > 0) || [];
+                if (allOpts.length > 0) bestPrice = Math.min(...allOpts);
+            }
+        }
+
+        const mediaImages = (p.media || [])
+            .filter((m: any) => m.type === "image")
+            .map((m: any) => m.url);
+
+        return {
+            product_id: p.product_id,
+            title: p.title,
+            price: bestPrice || 0,
+            category: p.category,
+            business_id: p.business_id,
+            business_name: p.business_name || p.business?.business_name || "Store",
+            logo: p.logo || p.business?.logo || null,
+            first_image: mediaImages[0] || p.first_image || p.media?.[0]?.url || "",
+            product_video: p.product_video || p.media?.find((m: any) => m.type === 'video')?.url || "",
+            likes_count: p.likes_count || 0,
+            isLiked: p.liked || p.isLiked || false,
+            trusted_partner: p.trusted_partner || p.business?.trusted_partner || 0,
+            images: mediaImages.length > 0 ? mediaImages : (p.first_image ? [p.first_image] : []),
+            params: (p.params || []).map((ext: any) => ({
+                key: ext.param_key || ext.key,
+                value: ext.param_value || ext.value
+            }))
+        };
+    }, []);
+
+    const loadInitialSequence = useCallback(async () => {
         setLoading(true);
         try {
             let initialProduct: ProductFeedItem | null = null;
@@ -158,40 +270,12 @@ function ShoppingReelsContent() {
                 const res = await fetchProductById(Number(initialProductId));
                 if (res?.data) {
                     const p = res.data.product || res.data;
-                    let bestPrice = p.price;
-                    if (!bestPrice || bestPrice <= 0) {
-                        const allSkus = p.skus?.map((s: any) => s.price).filter((pr: number) => pr > 0) || [];
-                        if (allSkus.length > 0) {
-                            bestPrice = Math.min(...allSkus);
-                        } else {
-                            const allOpts = p.variant_groups?.flatMap((g: any) => g.options)?.map((o: any) => o.price).filter((pr: number) => pr > 0) || [];
-                            if (allOpts.length > 0) bestPrice = Math.min(...allOpts);
-                        }
-                    }
-
-                    // Format it to match ProductFeedItem enough for reels
-                    initialProduct = {
-                        product_id: p.product_id,
-                        title: p.title,
-                        price: bestPrice || 0,
-                        category: p.category,
-                        business_id: p.business_id,
-                        business_name: p.business_name || "Store",
-                        logo: p.logo || null,
-                        first_image: p.media?.[0]?.url || "",
-                        product_video: "", // Set below if possible
-                    };
-
-                    // If product doesn't have a video explicitly as product_video, maybe it's in images type video 
-                    if (p.media) {
-                        const vid = p.media.find((m: any) => m.type === 'video');
-                        if (vid) initialProduct.product_video = vid.url;
-                    }
+                    initialProduct = mapToFeedItem(p);
                 }
             }
 
             const feedRes = await fetchMarketFeed(10, 0, undefined, undefined, true);
-            const feedProducts = feedRes?.data?.products || [];
+            const feedProducts = (feedRes?.data?.products || []).map((p: any) => mapToFeedItem(p));
 
             setProducts(prev => {
                 const newArr = initialProduct ? [initialProduct] : [];
@@ -210,17 +294,43 @@ function ShoppingReelsContent() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [initialProductId, mapToFeedItem]);
+
+    const updateUrl = useCallback((productId: number | null) => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (productId) {
+            urlParams.set("product_id", String(productId));
+        } else {
+            urlParams.delete("product_id");
+        }
+        const search = urlParams.toString();
+        const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+        if (newUrl !== window.location.pathname + window.location.search) {
+            window.history.replaceState(window.history.state, "", newUrl);
+        }
+    }, []);
 
     useEffect(() => {
         loadInitialSequence();
     }, [initialProductId]);
 
+    // Scroll to active index when products load or index changes via URL
+    useEffect(() => {
+        if (products.length > 0 && containerRef.current) {
+            const index = products.findIndex(p => p.product_id === Number(initialProductId));
+            if (index !== -1 && index !== activeVideoIndex) {
+                const viewHeight = containerRef.current.clientHeight;
+                containerRef.current.scrollTop = index * viewHeight;
+                setActiveVideoIndex(index);
+            }
+        }
+    }, [products.length]); // Only run once when products are first loaded
+
     const loadMore = useCallback(async () => {
         if (!hasMore || loading) return;
         try {
             const feedRes = await fetchMarketFeed(10, page * 10, undefined, undefined, true);
-            const newProducts = feedRes?.data?.products || [];
+            const newProducts = (feedRes?.data?.products || []).map((p: any) => mapToFeedItem(p));
             if (newProducts.length < 10) setHasMore(false);
             if (newProducts.length > 0) {
                 setProducts(prev => {
@@ -252,10 +362,11 @@ function ShoppingReelsContent() {
         if (!containerRef.current) return;
         const scrollPosition = containerRef.current.scrollTop;
         const viewHeight = containerRef.current.clientHeight;
-        // Calculate which video is most prominent
         const index = Math.round(scrollPosition / viewHeight);
+
         if (index !== activeVideoIndex && index >= 0 && index < products.length) {
             setActiveVideoIndex(index);
+            updateUrl(products[index].product_id);
         }
     };
 
@@ -302,6 +413,9 @@ function ShoppingReelsContent() {
                                 product={p}
                                 isActive={i === activeVideoIndex}
                                 onBuyClick={() => handleProductBuyClick(p.product_id, p.business_name)}
+                                onVendorClick={(bid) => router.push(`/shop/${bid}`)}
+                                onLikeClick={() => handleLikeClick(p.product_id)}
+                                onShareClick={() => handleShareClick(p)}
                                 isGlobalMuted={isGlobalMuted}
                                 setIsGlobalMuted={setIsGlobalMuted}
                             />
@@ -341,22 +455,118 @@ export default function ShoppingReelsPage() {
     );
 }
 
+function LikeBurst() {
+    const particles = Array.from({ length: 12 });
+    const colors = ["#EF4444", "#3B82F6", "#10B981", "#F59E0B"];
+    return (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            {particles.map((_, i) => (
+                <motion.div
+                    key={i}
+                    initial={{ x: 0, y: 0, scale: 0, opacity: 1, rotate: 0 }}
+                    animate={{
+                        x: Math.cos((i * 30) * Math.PI / 180) * 70,
+                        y: Math.sin((i * 30) * Math.PI / 180) * 70,
+                        scale: [0.2, 1.2, 1.8, 0],
+                        opacity: [1, 1, 1, 0],
+                        rotate: [0, 45, 90]
+                    }}
+                    transition={{ duration: 0.7, ease: "easeOut" }}
+                    className="absolute"
+                >
+                    <FaHeart size={14} style={{ color: colors[i % colors.length] }} className="drop-shadow-sm" />
+                </motion.div>
+            ))}
+        </div>
+    );
+}
+
+function ProductTicker({ product, params }: { product: any, params?: { key: string; value: string }[] }) {
+    const info = (params || []).filter(p => p.value && p.value !== "Untitled" && p.value !== "0.00");
+    if (info.length === 0) return null;
+
+    // Split info into 3 lanes for better flow
+    const lane1 = info.filter((_, i) => i % 3 === 0);
+    const lane2 = info.filter((_, i) => i % 3 === 1);
+    const lane3 = info.filter((_, i) => i % 3 === 2);
+
+    return (
+        <div className="absolute top-12 left-0 right-0 h-40 z-40 overflow-hidden pointer-events-none flex flex-col gap-3">
+            <MarqueeLane items={lane1} speed={12} reverse />
+            <MarqueeLane items={lane2} speed={15} />
+            <MarqueeLane items={lane3} speed={13} reverse />
+        </div>
+    );
+}
+
+function MarqueeLane({ items, speed, reverse = false }: { items: any[], speed: number, reverse?: boolean }) {
+    if (items.length === 0) return null;
+
+    // Triple the items to ensure seamless loop
+    const displayItems = [...items, ...items, ...items];
+
+    return (
+        <div className="flex whitespace-nowrap overflow-hidden">
+            <motion.div
+                className="flex gap-8 px-4"
+                animate={{ x: reverse ? [0, -1000] : [-1000, 0] }}
+                transition={{
+                    repeat: Infinity,
+                    duration: speed,
+                    ease: "linear",
+                }}
+            >
+                {displayItems.map((p, i) => (
+                    <div key={i} className="bg-black/50 backdrop-blur-xl px-4 py-1.5 rounded-full border border-white/20 shadow-2xl flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
+                        <span className="text-orange-400 text-[9px] font-black uppercase tracking-tighter">{p.key}</span>
+                        <span className="text-white text-[12px] font-bold uppercase tracking-widest">{p.value}</span>
+                    </div>
+                ))}
+            </motion.div>
+        </div>
+    );
+}
+
 function ReelItem({
     product,
     isActive,
     onBuyClick,
+    onVendorClick,
+    onLikeClick,
+    onShareClick,
     isGlobalMuted,
     setIsGlobalMuted
 }: {
     product: ProductFeedItem;
     isActive: boolean;
     onBuyClick: () => void;
+    onVendorClick: (businessId: number) => void;
+    onLikeClick: () => void;
+    onShareClick: () => void;
     isGlobalMuted: boolean;
     setIsGlobalMuted: (muted: boolean) => void;
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isPlaying, setIsPlaying] = useState(true);
+    const [showBurst, setShowBurst] = useState(false);
+    const [params, setParams] = useState<{ key: string; value: string }[]>(product.params || []);
     const router = useRouter();
+
+    useEffect(() => {
+        if (isActive && params.length === 0) {
+            // Fetch full product details for params if missing
+            fetchProductById(product.product_id).then(res => {
+                if (res?.data?.product?.params) {
+                    const mappedParams = (res.data.product.params || []).map((p: any) => ({
+                        key: p.param_key,
+                        value: p.param_value
+                    }));
+                    setParams(mappedParams);
+                }
+            }).catch(() => { });
+        }
+    }, [isActive, product.product_id, params.length]);
 
     useEffect(() => {
         if (!videoRef.current) return;
@@ -402,6 +612,7 @@ function ReelItem({
 
     return (
         <div className="w-full h-full sm:max-w-[450px] sm:border-x sm:border-white/10 relative" onClick={togglePlay}>
+            <ProductTicker product={product} params={params} />
             {videoUrl ? (
                 <video
                     ref={videoRef}
@@ -436,18 +647,59 @@ function ReelItem({
             </button>
 
             {/* Right side interactions */}
-            <div className="absolute right-4 bottom-32 z-20 flex flex-col items-center gap-6">
+            <div
+                className="absolute right-4 bottom-32 z-20 flex flex-col items-center gap-6"
+                onClick={(e) => e.stopPropagation()}
+            >
                 <div className="flex flex-col items-center gap-1 group">
-                    <button className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-red-500 transition">
-                        <FaHeart size={20} />
-                    </button>
-                    <span className="text-white text-[10px] font-bold drop-shadow-md">Like</span>
+                    <motion.button
+                        whileTap={{ scale: 0.8 }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (!product.isLiked) {
+                                setShowBurst(true);
+                                setTimeout(() => setShowBurst(false), 800);
+                            }
+                            onLikeClick();
+                        }}
+                        className={`w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center transition-colors relative`}
+                    >
+                        {showBurst && <LikeBurst />}
+
+                        <AnimatePresence>
+                            <motion.div
+                                key={product.isLiked ? "liked" : "unliked"}
+                                initial={{ scale: 0.5, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.5, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                                className={`absolute inset-0 flex items-center justify-center ${product.isLiked ? 'text-red-500' : 'text-white'}`}
+                            >
+                                {product.isLiked ? <FaHeart size={20} /> : <FaRegHeart size={20} />}
+                            </motion.div>
+                        </AnimatePresence>
+
+                        {/* Pulse effect */}
+                        {product.isLiked && (
+                            <motion.div
+                                initial={{ scale: 1, opacity: 1 }}
+                                animate={{ scale: [1, 1.6, 1], opacity: [1, 0.4, 0] }}
+                                transition={{ duration: 0.6 }}
+                                className="absolute text-red-500 pointer-events-none"
+                            >
+                                <FaHeart size={20} />
+                            </motion.div>
+                        )}
+                    </motion.button>
+                    <span className="text-white text-[10px] font-bold drop-shadow-md">{product.likes_count || 0}</span>
                 </div>
 
                 <div className="flex flex-col items-center gap-1 group">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
+                            e.preventDefault();
                             router.push(`/market?product_id=${product.product_id}`);
                         }}
                         className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/60 transition"
@@ -458,7 +710,14 @@ function ReelItem({
                 </div>
 
                 <div className="flex flex-col items-center gap-1 group">
-                    <button className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/60 transition">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onShareClick();
+                        }}
+                        className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/60 transition"
+                    >
                         <FaShare size={18} />
                     </button>
                     <span className="text-white text-[10px] font-bold drop-shadow-md">Share</span>
@@ -470,10 +729,16 @@ function ReelItem({
 
             {/* Bottom Info Content */}
             <div className="absolute bottom-0 left-0 right-16 p-5 z-20 flex flex-col pointer-events-auto shadow-2xl">
-                <div className="flex items-center gap-2 mb-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0">
+                <div
+                    className="flex items-center gap-2 mb-3 cursor-pointer hover:opacity-90 transition-opacity w-fit"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onVendorClick(product.business_id);
+                    }}
+                >
+                    <div className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0 relative">
                         {product.logo ? (
-                            <img src={formatUrl(product.logo)} alt="Store" className="w-full h-full object-cover" />
+                            <Image src={formatUrl(product.logo)} alt="Store" fill sizes="40px" className="object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-white font-bold text-xs">{product.business_name?.charAt(0) || 'V'}</div>
                         )}
@@ -487,7 +752,9 @@ function ReelItem({
                                 </svg>
                             )}
                         </span>
-                        <span className="text-white/70 text-[10px] font-medium tracking-wide">Sponsored</span>
+                        {product.category && (
+                            <span className="text-white/70 text-[10px] font-bold uppercase tracking-wider">{product.category}</span>
+                        )}
                     </div>
                 </div>
 
@@ -495,20 +762,47 @@ function ReelItem({
                     {product.title}
                 </h3>
 
-                <div className="flex items-center justify-between mt-1">
-                    <div className="text-white font-extrabold text-xl tracking-tight drop-shadow-lg">
-                        ₦{Number(product.price).toLocaleString()}
+                {((product.images && product.images.length > 0) || product.price) && (
+                    <div className="flex items-center justify-between gap-3 mt-1">
+                        <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-xl pr-3">
+                            {product.images && product.images.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                    {product.images.slice(0, 2).map((img: string, idx: number) => (
+                                        <div
+                                            key={idx}
+                                            className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 shrink-0 shadow-lg relative"
+                                        >
+                                            <Image src={formatUrl(img)} alt="" fill sizes="40px" className="object-cover" />
+                                        </div>
+                                    ))}
+                                    {product.images.length > 2 && (
+                                        <div
+                                            className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer relative overflow-hidden group shadow-lg"
+                                            onClick={(e) => { e.stopPropagation(); onBuyClick(); }}
+                                        >
+                                            {/* Show the 3rd image behind the counter overlay */}
+                                            <Image src={formatUrl(product.images[2])} alt="" fill sizes="40px" className="object-cover opacity-90 contrast-75" />
+                                            <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                                                <span className="text-[10px] text-white font-black drop-shadow-md">{product.images.length}+</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <span className="text-white font-black text-base drop-shadow-lg ml-1">₦{Number(product.price).toLocaleString()}</span>
+                        </div>
+
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onBuyClick();
+                            }}
+                            className="bg-red-600 font-bold text-white text-[10px] px-4 py-2.5 rounded-full shadow-lg hover:bg-red-700 active:scale-95 transition-all whitespace-nowrap"
+                        >
+                            Buy Now
+                        </button>
                     </div>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onBuyClick();
-                        }}
-                        className="bg-red-600 font-bold text-white text-sm px-5 py-2 rounded-full shadow-lg hover:bg-red-700 hover:scale-105 active:scale-95 transition-all"
-                    >
-                        Buy Now
-                    </button>
-                </div>
+                )}
             </div>
         </div>
     );

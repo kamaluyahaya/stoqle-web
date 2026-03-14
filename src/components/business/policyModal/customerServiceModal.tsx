@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState } from "react";
 import DescriptionTextarea from "../../input/defaultDescTextarea";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Props = {
   open: boolean;
@@ -52,7 +53,7 @@ export default function CustomerServiceModal({
 
   // custom structured: number + unit
   const [customNumber, setCustomNumber] = useState<number | "">("");
-  const [customUnit, setCustomUnit] = useState<"seconds"| "minutes" | "hours" | "days">("hours");
+  const [customUnit, setCustomUnit] = useState<"seconds" | "minutes" | "hours" | "days">("hours");
   // free text fallback
   const [customText, setCustomText] = useState<string>("");
 
@@ -166,8 +167,6 @@ export default function CustomerServiceModal({
     };
   }, [open]);
 
-  if (!open) return null;
-
   function renderPresetList() {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -178,11 +177,10 @@ export default function CustomerServiceModal({
               setUseCustom(false);
               setReplyPreset(opt);
             }}
-            className={`text-left p-3 rounded-lg border ${
-              !useCustom && replyPreset === opt
+            className={`text-left p-3 rounded-lg border ${!useCustom && replyPreset === opt
                 ? "border-rose-400 bg-rose-50"
                 : "border-slate-100 bg-white hover:bg-slate-50"
-            }`}
+              }`}
           >
             <div className="text-sm font-medium">{opt}</div>
             <div className="text-xs text-slate-400">Shown to customers as: “{opt}”</div>
@@ -293,89 +291,107 @@ export default function CustomerServiceModal({
   }
 
   return (
-    <div className="fixed inset-0 z-75 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/40" onClick={() => (saving ? null : onClose())} />
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => (saving ? null : onClose())}
+          />
 
-      <div className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Customer Service</h3>
-          <button onClick={() => (saving ? null : onClose())} className="text-sm px-3 py-1 rounded-md hover:bg-slate-100">
-            <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="mt-4 max-h-[60vh] overflow-auto">
-          {loading ? (
-            <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-sm font-semibold text-slate-900">Reply time</label>
-                    <p className="text-xs text-slate-500 mt-1">Choose how quickly you reply to customers. You can use a preset or set a custom time.</p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <label className="text-xs text-slate-500">Use custom</label>
-                    <input
-                      type="checkbox"
-                      checked={useCustom}
-                      onChange={(e) => setUseCustom(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  {!useCustom ? renderPresetList() : renderCustomEditor()}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <label className="text-sm font-semibold text-slate-900">Good reviews rating</label>
-                <p className="text-xs text-slate-500 mt-1 mb-2">Select the rating you aim for (used in summaries).</p>
-                <select
-                  value={goodReviewRating.toFixed(1)}
-                  onChange={(e) => setGoodReviewRating(Number(e.target.value))}
-                  className="w-full border border-slate-200 rounded-lg p-3 text-sm"
-                >
-                  {RATING_OPTIONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <label className="text-sm font-semibold text-slate-900">Welcome DM</label>
-                <p className="text-xs text-slate-500 mt-1 mb-2">Default message sent to new customers who DM you.</p>
-                <DescriptionTextarea
-                  value={welcomeDm}
-                  onChange={setWelcomeDm}
-                  placeholder={FALLBACK_WELCOME}
-                  maxLength={500}
-                />
-                <div className="text-xs text-slate-400 mt-2">If left empty a friendly default will be used.</div>
-              </div>
-
-              <div className="text-xs text-slate-500">Tip: A short and clear reply time (e.g. “Within 2 hours”) sets the right expectation and reduces follow-up messages.</div>
+          {/* Panel */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10 flex flex-col"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Customer Service</h3>
+              <button onClick={() => (saving ? null : onClose())} className="text-sm px-3 py-1 rounded-md hover:bg-slate-100">
+                <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </div>
-          )}
-        </div>
 
-        <div className="mt-4 flex justify-end gap-3">
-          <button onClick={() => (saving ? null : onClose())} className="px-4 py-2 rounded-lg bg-white border" disabled={saving}>
-            Cancel
-          </button>
-          <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold" disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </button>
+            <div className="mt-4 max-h-[60vh] overflow-auto">
+              {loading ? (
+                <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-semibold text-slate-900">Reply time</label>
+                        <p className="text-xs text-slate-500 mt-1">Choose how quickly you reply to customers. You can use a preset or set a custom time.</p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <label className="text-xs text-slate-500">Use custom</label>
+                        <input
+                          type="checkbox"
+                          checked={useCustom}
+                          onChange={(e) => setUseCustom(e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      {!useCustom ? renderPresetList() : renderCustomEditor()}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <label className="text-sm font-semibold text-slate-900">Good reviews rating</label>
+                    <p className="text-xs text-slate-500 mt-1 mb-2">Select the rating you aim for (used in summaries).</p>
+                    <select
+                      value={goodReviewRating.toFixed(1)}
+                      onChange={(e) => setGoodReviewRating(Number(e.target.value))}
+                      className="w-full border border-slate-200 rounded-lg p-3 text-sm"
+                    >
+                      {RATING_OPTIONS.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <label className="text-sm font-semibold text-slate-900">Welcome DM</label>
+                    <p className="text-xs text-slate-500 mt-1 mb-2">Default message sent to new customers who DM you.</p>
+                    <DescriptionTextarea
+                      value={welcomeDm}
+                      onChange={setWelcomeDm}
+                      placeholder={FALLBACK_WELCOME}
+                      maxLength={500}
+                    />
+                    <div className="text-xs text-slate-400 mt-2">If left empty a friendly default will be used.</div>
+                  </div>
+
+                  <div className="text-xs text-slate-500">Tip: A short and clear reply time (e.g. “Within 2 hours”) sets the right expectation and reduces follow-up messages.</div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-3">
+              <button onClick={() => (saving ? null : onClose())} className="px-4 py-2 rounded-lg bg-white border" disabled={saving}>
+                Cancel
+              </button>
+              <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold" disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }

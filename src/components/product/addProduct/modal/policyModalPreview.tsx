@@ -2,16 +2,25 @@
 
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import {
+  TrashIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  CheckCircleIcon,
+  MapPinIcon
+} from "@heroicons/react/24/outline";
+import DeliveryAddressModal from "./deliveryAddressModal";
 
 type PolicyModalProps = {
   open: boolean;
   title?: string | null;
   body?: string | null;
   onClose: () => void;
+  onAddressChange?: (address: any) => void;
 };
 
-export default function PolicyModal({ open, title, body, onClose }: PolicyModalProps) {
+export default function PolicyModal({ open, title, body, onClose, onAddressChange }: PolicyModalProps) {
   const [copied, setCopied] = useState(false);
 
   // Extract promise duration from body with professional fallbacks
@@ -46,6 +55,103 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
     return "48 hours"; // Professional default fallback
   }, [body]);
 
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [activeAddressId, setActiveAddressId] = useState<string | null>(null);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<any>(null);
+
+  const loadAddresses = () => {
+    let list: any[] = [];
+    const savedList = localStorage.getItem("stoqle_delivery_addresses");
+    if (savedList) {
+      try {
+        list = JSON.parse(savedList);
+      } catch (e) {
+        console.error("Failed to parse addresses", e);
+      }
+    }
+
+    const active = localStorage.getItem("stoqle_delivery_address");
+    let activeObj: any = null;
+    if (active) {
+      try {
+        activeObj = JSON.parse(active);
+        // If we have an active address but it's not in the list, migrate it
+        if (list.length === 0 && activeObj) {
+          if (!activeObj.id) activeObj.id = Date.now().toString();
+          list = [activeObj];
+          localStorage.setItem("stoqle_delivery_addresses", JSON.stringify(list));
+          localStorage.setItem("stoqle_delivery_address", JSON.stringify(activeObj));
+        }
+        setActiveAddressId(activeObj?.id || null);
+      } catch { }
+    }
+
+    setAddresses(list);
+  };
+
+  useEffect(() => {
+    if (open) {
+      loadAddresses();
+    }
+  }, [open]);
+
+  const saveAddressesToStorage = (newAddresses: any[]) => {
+    localStorage.setItem("stoqle_delivery_addresses", JSON.stringify(newAddresses));
+    setAddresses(newAddresses);
+  };
+
+  const handleSelectAddress = (address: any) => {
+    localStorage.setItem("stoqle_delivery_address", JSON.stringify(address));
+    setActiveAddressId(address.id);
+    if (onAddressChange) onAddressChange(address);
+  };
+
+  const handleDeleteAddress = (id: string) => {
+    const next = addresses.filter(a => a.id !== id);
+    saveAddressesToStorage(next);
+    if (activeAddressId === id) {
+      if (next.length > 0) {
+        handleSelectAddress(next[0]);
+      } else {
+        localStorage.removeItem("stoqle_delivery_address");
+        setActiveAddressId(null);
+        if (onAddressChange) onAddressChange(null);
+      }
+    }
+  };
+
+  const handleAddAddress = () => {
+    setEditingAddress(null);
+    setAddressModalOpen(true);
+  };
+
+  const handleEditAddress = (address: any) => {
+    setEditingAddress(address);
+    setAddressModalOpen(true);
+  };
+
+  const onSaveAddress = (newAddress: any) => {
+    setAddressModalOpen(false);
+    let next: any[];
+    if (editingAddress) {
+      next = addresses.map(a => a.id === editingAddress.id ? { ...newAddress, id: a.id } : a);
+    } else {
+      const addressWithId = { ...newAddress, id: Date.now().toString() };
+      next = [...addresses, addressWithId];
+    }
+    saveAddressesToStorage(next);
+
+    // Automatically select it if it's the only one or if it was the one being edited
+    if (next.length === 1 || (editingAddress && activeAddressId === editingAddress.id)) {
+      const saved = next.find(a => a.id === (editingAddress?.id || next[next.length - 1].id));
+      if (saved) handleSelectAddress(saved);
+    } else if (!editingAddress) {
+      // Also select it if newly added
+      handleSelectAddress(next[next.length - 1]);
+    }
+  };
+
   const formatted = useMemo(() => {
     if (!body) return null;
     const trimmed = body.trim();
@@ -75,7 +181,7 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
 
   return (
     <div
-      className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[20000] flex items-end sm:items-center justify-center"
       role="dialog"
       aria-modal="true"
     >
@@ -119,18 +225,85 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
         </div>
 
         {/* Delivery address section */}
-        <div className="bg-white mt-2">
-          <div className="text-sm text-slate-700 p-5 whitespace-pre-wrap">
-            <p>Select delivery address</p>
+        <div className="bg-white mt-2 flex flex-col min-h-0">
+          <div className="flex items-center justify-between px-5 pt-5 pb-2">
+            <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <MapPinIcon className="w-4 h-4 text-red-500" />
+              Delivery Address
+            </h4>
+            <button
+              onClick={handleAddAddress}
+              className="text-xs font-bold text-red-500 flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+            >
+              <PlusIcon className="w-3 h-3" />
+              Add New
+            </button>
+          </div>
 
-            <div className="text-center justify-center mt-2">
-              <div className="text-slate-400 py-4">
-                No address yet, please add an address first
+          <div className="px-5 pb-5 overflow-auto max-h-[40vh]">
+            {addresses.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-slate-400 text-xs mb-4">
+                  No address yet, please add a delivery address first
+                </div>
+                <button
+                  onClick={handleAddAddress}
+                  className="inline-flex items-center gap-2 border border-red-500 px-6 py-2 rounded-full text-red-500 text-sm font-bold hover:bg-red-50 transition-all active:scale-95"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  Add address
+                </button>
               </div>
-              <button className="border border-red-500 px-5 py-2 rounded-full text-red-500">
-                Add delivery address
-              </button>
-            </div>
+            ) : (
+              <div className="space-y-3 mt-2">
+                {addresses.map((addr) => (
+                  <div
+                    key={addr.id}
+                    className={`relative p-4 rounded-2xl border transition-all cursor-pointer ${activeAddressId === addr.id
+                      ? "border-red-500 bg-red-50/30 ring-1 ring-red-500"
+                      : "border-slate-100 bg-slate-50 hover:border-slate-200"
+                      }`}
+                    onClick={() => handleSelectAddress(addr)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0 pr-8">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-sm text-slate-900 truncate">{addr.recipientName}</span>
+                          <span className="text-[10px] text-slate-500 font-medium">{addr.contactNo}</span>
+                          {addr.isDefault && (
+                            <span className="bg-red-100 text-red-600 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Default</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                          {addr.address}, {addr.region}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditAddress(addr); }}
+                          className="p-1.5 rounded-full hover:bg-white text-slate-400 hover:text-blue-500 transition-colors bg-white/50"
+                        >
+                          <PencilSquareIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteAddress(addr.id); }}
+                          className="p-1.5 rounded-full hover:bg-white text-slate-400 hover:text-red-500 transition-colors bg-white/50"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {activeAddressId === addr.id && (
+                      <div className="absolute top-2 right-2">
+                        <CheckCircleIcon className="w-5 h-5 text-red-500" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -158,6 +331,13 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
           </div>
         </div>
       </div>
-    </div>
+
+      <DeliveryAddressModal
+        open={addressModalOpen}
+        onClose={() => setAddressModalOpen(false)}
+        onSave={onSaveAddress}
+        initialData={editingAddress}
+      />
+    </div >
   );
 }

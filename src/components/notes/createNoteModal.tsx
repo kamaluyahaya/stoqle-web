@@ -4,8 +4,17 @@
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import DefaultInput from "@/src/components/input/default-input-post";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  XMarkIcon, 
+  CheckIcon, 
+  LockOpenIcon, 
+  LockClosedIcon, 
+  UsersIcon 
+} from "@heroicons/react/24/outline";
 
-type Visibility = "public" | "private";
+type Visibility = "public" | "private" | "friends";
 
 type BackgroundConfig = {
   seed?: number;
@@ -70,6 +79,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   const [selectedConfig, setSelectedConfig] = useState<BackgroundConfig | null>(null);
   const [posting, setPosting] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
     const router = useRouter();
 
   // derive seed from logged-in user if available (localStorage.user) else random
@@ -388,9 +398,9 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   return (
     <>
       {/* backdrop: dark + slight blur */}
-      <div className="fixed inset-0 z-[60] bg-black/50 " onClick={onClose} />
+      <div className="fixed inset-0 z-[200] bg-black/50 " onClick={onClose} />
 
-      <div className="fixed inset-0 z-[70] flex items-center justify-center pb-14 md:p-8">
+      <div className="fixed inset-0 z-[210] flex items-center justify-center md:p-8">
         <div
           className="w-full h-full md:h-[90vh] md:max-h-[92vh] md:max-w-4xl bg-green-50 rounded-none md:rounded-2xl shadow-xl overflow-hidden flex flex-col"
           role="dialog"
@@ -576,48 +586,77 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                   <PreviewCard cfg={selectedConfig} />
                 </div>
 
-                <div className="justify-between flex flex-col">
-                  {/* Title row */}
-                  <input
+                <div className="justify-between flex flex-col space-y-5">
+                  <DefaultInput
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Title"
-                    className="
-        w-full
-        rounded-full
-        bg-gray-100
-        px-5
-        py-2
-        text-sm
-        text-black
-        outline-none
-        focus:ring-1
-        focus:ring-gray-300
-      "
+                    onChange={(e: any) => setTitle(e.target.value)}
+                    placeholder="Add title"
                   />
 
-                  {/* Visibility row */}
-                  <br />
-                  <select
-                    value={visibility}
-                    onChange={(e) => setVisibility(e.target.value as Visibility)}
-                    className="
-        w-full
-        rounded-full
-        bg-gray-100
-        px-5
-        py-2
-        text-sm
-        text-black
-        outline-none
-        focus:ring-1
-        focus:ring-gray-300
-      "
-                  >
-                    <option value="public">Public</option>
-                    <option value="private">Private</option>
-                  </select>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setIsPrivacyModalOpen(true)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors group"
+                    >
+                      {visibility === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
+                      {visibility === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
+                      {visibility === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-red-600">
+                        {visibility === "public" ? "Public" : visibility === "private" ? "Private" : "Friends Only"}
+                      </span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Visibility Select Modal */}
+                <AnimatePresence>
+                  {isPrivacyModalOpen && (
+                    <div className="absolute inset-0 z-[100] flex items-end">
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsPrivacyModalOpen(false)}
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+                      />
+                      <motion.div
+                        initial={{ y: "100%" }}
+                        animate={{ y: 0 }}
+                        exit={{ y: "100%" }}
+                        className="relative w-full bg-white rounded-t-3xl shadow-2xl p-6 space-y-4"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Visibility</h3>
+                          <button onClick={() => setIsPrivacyModalOpen(false)}>
+                            <XMarkIcon className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </div>
+
+                        {[
+                          { id: "public", label: "Public", icon: LockOpenIcon },
+                          { id: "private", label: "Private", icon: LockClosedIcon },
+                          { id: "friends", label: "Visible to Friends only", icon: UsersIcon },
+                        ].map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setVisibility(opt.id as any);
+                              setIsPrivacyModalOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${visibility === opt.id ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                              }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <opt.icon className="w-5 h-5" />
+                              <span className="text-sm font-bold">{opt.label}</span>
+                            </div>
+                            {visibility === opt.id && <CheckIcon className="w-4 h-4" />}
+                          </button>
+                        ))}
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
 
                 {/* Footer */}
                 <div className="mt-4 flex flex-col gap-3 ">

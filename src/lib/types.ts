@@ -18,4 +18,5 @@ export type Post = {
   coverType?: string;
   noteConfig?: any;
   rawCreatedAt?: string;
+  allMedia?: string[];
 };

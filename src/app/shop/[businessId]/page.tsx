@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import { fetchBusinessProducts, fetchProductById } from "@/src/lib/api/productApi";
@@ -13,6 +13,7 @@ import type { PreviewPayload } from "@/src/types/product";
 // Icons for bottom navigation
 import { HomeIcon, ListBulletIcon, CalendarDaysIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { HomeIcon as HomeIconSolid, ListBulletIcon as ListBulletIconSolid, CalendarDaysIcon as CalendarDaysIconSolid } from "@heroicons/react/24/solid";
+import Image from "next/image";
 
 const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
@@ -26,6 +27,7 @@ export default function VendorShopPage() {
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<any[]>([]);
     const [productsLoading, setProductsLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
 
     // Bottom Navigation State
     const [activeNav, setActiveNav] = useState<"Home" | "Categories" | "New release">("Home");
@@ -43,8 +45,11 @@ export default function VendorShopPage() {
 
     const formatUrl = (url: string) => {
         if (!url) return NO_IMAGE_PLACEHOLDER;
-        if (url.startsWith("http")) return url;
-        return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+        let formatted = url;
+        if (!url.startsWith("http")) {
+            formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+        }
+        return encodeURI(formatted);
     };
 
     // Fetch Business Profile (using userId from some mapping or assume businessId is enough?)
@@ -78,8 +83,28 @@ export default function VendorShopPage() {
         loadShop();
     }, [businessId]);
 
-    const handleProductClick = async (productId: number) => {
+    const updateUrl = (productId: number | null, replace: boolean = false) => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (productId) {
+            urlParams.set("product_id", String(productId));
+        } else {
+            urlParams.delete("product_id");
+        }
+        const search = urlParams.toString();
+        const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+        if (newUrl !== window.location.pathname + window.location.search) {
+            if (replace) {
+                window.history.replaceState(window.history.state, "", newUrl);
+            } else {
+                window.history.pushState(window.history.state, "", newUrl);
+            }
+        }
+    };
+
+    const handleProductClick = async (productId: number, arg2?: string | boolean) => {
         if (fetchingProduct) return;
+        const replaceUrl = arg2 === true;
+        updateUrl(productId, replaceUrl);
         setFetchingProduct(true);
         try {
             const res = await fetchProductById(productId);
@@ -107,19 +132,23 @@ export default function VendorShopPage() {
                     })(),
                     useCombinations: dbProduct.use_combinations === 1,
                     params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
+                    soldCount: dbProduct.sold_count,
                     samePriceForAll: dbProduct.same_price_for_all === 1,
                     sharedPrice: dbProduct.price ?? "",
                     variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
                         id: String(g.group_id),
                         title: g.title,
                         allowImages: g.allow_images === 1,
-                        entries: (g.options || []).map((o: any) => ({
-                            id: String(o.option_id),
-                            name: o.name,
-                            price: o.price,
-                            quantity: o.initial_quantity || 0,
-                            images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-                        }))
+                        entries: (g.options || []).map((o: any) => {
+                            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
+                            return {
+                                id: String(o.option_id),
+                                name: o.name,
+                                price: o.price,
+                                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
+                                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
+                            };
+                        })
                     })),
                     skus: (dbProduct.skus || []).map((s: any) => {
                         let vIds: string[] = [];
@@ -147,6 +176,28 @@ export default function VendorShopPage() {
         finally { setFetchingProduct(false); }
     };
 
+    // Deep linking and Back button support
+    useEffect(() => {
+        const handleRouteChange = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get("product_id");
+
+            if (productId) {
+                const pid = Number(productId);
+                if (!productModalOpen && !fetchingProduct && selectedProductPayload?.productId !== pid) {
+                    handleProductClick(pid, true); // Use replace when triggered by route change
+                }
+            } else if (productModalOpen) {
+                setProductModalOpen(false);
+                setSelectedProductPayload(null);
+            }
+        };
+
+        window.addEventListener('popstate', handleRouteChange);
+        handleRouteChange(); // Initial check
+        return () => window.removeEventListener('popstate', handleRouteChange);
+    }, [productModalOpen, fetchingProduct, selectedProductPayload]);
+
     const categoriesList = useMemo(() => {
         const cats = new Set<string>();
         products.forEach(p => { if (p.category) cats.add(p.category); });
@@ -156,17 +207,28 @@ export default function VendorShopPage() {
     const filteredProducts = useMemo(() => {
         let list = [...products];
 
+        // Apply Search Filter First
+        if (searchTerm.trim() !== "") {
+            const lowTerm = searchTerm.toLowerCase();
+            list = list.filter(p => 
+                (p.product_name?.toLowerCase().includes(lowTerm)) || 
+                (p.description?.toLowerCase().includes(lowTerm)) ||
+                (p.category?.toLowerCase().includes(lowTerm))
+            );
+        }
+
         if (activeNav === "Home") {
             if (homeTab === "Latest") list.sort((a, b) => b.product_id - a.product_id);
             if (homeTab === "Prices") list.sort((a, b) => Number(a.price) - Number(b.price));
             // Featured/Best sellers could use some logic like likes_count
-            if (homeTab === "Featured" || homeTab === "Best Sellers") list.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
+            if (homeTab === "Featured") list.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
+            if (homeTab === "Best Sellers") list.sort((a, b) => (Number(b.sold_count) || 0) - (Number(a.sold_count) || 0));
         } else if (activeNav === "Categories") {
             if (selectedCategory !== "All") list = list.filter(p => p.category === selectedCategory);
         }
 
         return list;
-    }, [products, activeNav, homeTab, selectedCategory]);
+    }, [products, activeNav, homeTab, selectedCategory, searchTerm]);
 
     const formatReleaseDate = (dateStr: string) => {
         if (!dateStr || dateStr === 'Unknown') return 'Unknown';
@@ -216,14 +278,21 @@ export default function VendorShopPage() {
         <article
             key={p.product_id}
             onClick={() => handleProductClick(p.product_id)}
-            className="bg-white rounded-xl overflow-hidden  border border-slate-100 flex flex-col group cursor-pointer"
+            className="bg-white rounded-xl overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
         >
-            <div className="relative aspect-square bg-slate-100 overflow-hidden">
-                <img
+            <div className="relative aspect-square bg-slate-100 relative">
+                <Image
                     src={formatUrl(p.first_image || p.image_url)}
                     alt={p.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
+                {p.total_quantity !== undefined && Number(p.total_quantity) <= 4 && Number(p.total_quantity) > 0 && (
+                    <div className="absolute top-2 left-2 bg-red-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-full z-10">
+                        Low Stock
+                    </div>
+                )}
                 {p.product_video && (
                     <div className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full">
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z" /></svg>
@@ -238,10 +307,12 @@ export default function VendorShopPage() {
     );
 
     return (
-        <div className="min-h-screen bg-white pb-24">
+        <div className="min-h-dvh bg-white pb-24">
             <ShopHeader
                 profileApi={profileApi}
                 displayName={profileApi?.business?.business_name || ""}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
             />
 
             <main className="px-4 relative bg-white rounded-2xl p-4 -mt-6 z-10">
@@ -262,7 +333,7 @@ export default function VendorShopPage() {
                         </div>
 
                         {loading ? <ShimmerGrid count={8} /> : (
-                            <div className="grid grid-cols-2 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 
                                 {filteredProducts.map(renderProductItem)}
                             </div>
@@ -340,7 +411,7 @@ export default function VendorShopPage() {
             </main>
 
             {/* BOTTOM NAVIGATION */}
-            <nav className="fixed lg:bottom-0 bottom-10 left-0 lg:left-40 w-full lg:w-[calc(100%-160px)] bg-white px-6 py-2 pb-2 flex items-center justify-around z-[999]">
+            <nav className="fixed bottom-0 left-0 right-0 lg:left-40 lg:right-40 bg-white/95 backdrop-blur-md px-6 py-2 border-t border-slate-100 flex items-center justify-around z-[999] pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
                 <button onClick={() => setActiveNav("Home")} className="flex flex-col items-center gap-1 group">
                     {activeNav === "Home" ? <HomeIconSolid className="w-4 h-4 text-red-500" /> : <HomeIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
                     <span className={`text-[10px] font-bold ${activeNav === "Home" ? "text-red-500" : "text-slate-400"}`}>Home</span>
@@ -359,15 +430,25 @@ export default function VendorShopPage() {
                 <ProductPreviewModal
                     open={productModalOpen}
                     payload={selectedProductPayload}
-                    onClose={() => setProductModalOpen(false)}
+                    onClose={() => {
+                        setProductModalOpen(false);
+                        setSelectedProductPayload(null);
+                        updateUrl(null);
+                    }}
+                    onShopClick={() => {
+                        setProductModalOpen(false);
+                        setSelectedProductPayload(null);
+                        updateUrl(null);
+                    }}
                     onProductClick={handleProductClick}
                 />
             )}
 
             {/* FLOATING CART BUTTON */}
             <button
+                id="cart-icon-ref"
                 onClick={() => router.push('/cart')}
-                className="fixed bottom-28 right-6 z-[998] bg-red-600 text-white p-2 rounded-full shadow-2xl hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center"
+                className="fixed bottom-20 right-6 z-[998] bg-red-600 text-white p-2.5 rounded-full shadow-2xl hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center border-4 border-white"
             >
                 <ShoppingCartIcon className="w-5 h-5" />
             </button>

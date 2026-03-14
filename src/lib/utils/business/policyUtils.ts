@@ -62,15 +62,16 @@ export function mapPolicyToPrefs(policy: any): Record<string, string> {
   const paymentFirst = Array.isArray(policy.payments) ? policy.payments[0] : (policy.payment ?? null);
   const paymentObj: any = paymentFirst
     ? {
-        acct_no: paymentFirst.account_number ?? paymentFirst.account_no ?? paymentFirst.accountNo ?? null,
-        acct_name: paymentFirst.account_name ?? paymentFirst.accountName ?? null,
-        bank_name: paymentFirst.bank_name ?? paymentFirst.bankName ?? null,
-        bank_code: paymentFirst.bank_code ?? paymentFirst.bankCode ?? null,
-        cod: !!paymentFirst.cod_enabled,
-        pod: !!paymentFirst.pod_enabled,
-        supportAvailable: !!paymentFirst.support_available,
-        paystack_meta: paymentFirst.paystack_meta ?? null,
-      }
+      acct_no: paymentFirst.account_number ?? paymentFirst.account_no ?? paymentFirst.accountNo ?? null,
+      acct_name: paymentFirst.account_name ?? paymentFirst.accountName ?? null,
+      bank_name: paymentFirst.bank_name ?? paymentFirst.bankName ?? null,
+      bank_code: paymentFirst.bank_code ?? paymentFirst.bankCode ?? paymentFirst.bankCode ?? null,
+      cod: !!paymentFirst.cod_enabled,
+      pod: !!paymentFirst.pod_enabled,
+      supportAvailable: !!paymentFirst.support_available,
+      paystack_recipient_code: paymentFirst.paystack_recipient_code ?? null,
+      paystack_meta: paymentFirst.paystack_meta ?? null,
+    }
     : {};
 
   const cs = policy.customer_service ?? policy.cs ?? {};
@@ -99,19 +100,19 @@ export function mapPolicyToPrefs(policy: any): Record<string, string> {
 
   const promotionsArr = Array.isArray(policy.promotions)
     ? policy.promotions.map((p: any) => ({
-        occasion: p.title ?? p.occasion ?? p.name ?? "",
-        start: p.start_date ?? p.start ?? null,
-        end: p.end_date ?? p.end ?? null,
-        isActive: p.is_active ?? p.isActive ?? null,
-        discount: p.discount_percent ? Number(p.discount_percent) : (p.discount ? Number(p.discount) : null),
-      }))
+      occasion: p.title ?? p.occasion ?? p.name ?? "",
+      start: p.start_date ?? p.start ?? null,
+      end: p.end_date ?? p.end ?? null,
+      isActive: p.is_active ?? p.isActive ?? null,
+      discount: p.discount_percent ? Number(p.discount_percent) : (p.discount ? Number(p.discount) : null),
+    }))
     : [];
 
   const discountsArr = Array.isArray(policy.sales_discounts)
     ? policy.sales_discounts.map((d: any) => ({
-        type: d.discount_type ?? d.type ?? "",
-        discount: d.discount_percent ? Number(d.discount_percent) : (d.discount ? Number(d.discount) : null),
-      }))
+      type: d.discount_type ?? d.type ?? "",
+      discount: d.discount_percent ? Number(d.discount_percent) : (d.discount ? Number(d.discount) : null),
+    }))
     : [];
 
   // stringified shapes (matching your prior localStorage format)

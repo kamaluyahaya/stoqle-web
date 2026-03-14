@@ -1,6 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { CloudArrowUpIcon, TrashIcon, PhotoIcon, XMarkIcon, EyeIcon } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
+import { motion, Reorder, AnimatePresence } from "framer-motion";
+import PostModal from "@/src/components/modal/postModal";
+import { useAuth } from "@/src/context/authContext";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 export default function ImagesTab({
   images,
@@ -19,12 +26,30 @@ export default function ImagesTab({
   submitImages: () => void;
   clearImages: () => void;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [previewPost, setPreviewPost] = useState<any>(null);
+  const { user } = useAuth();
+
+  // Helper to reorder images and previews together
+  const handleReorder = (newItems: string[]) => {
+    // Find the new order of images based on previews
+    const newImages = newItems.map(preview => {
+      const idx = imagePreviews.indexOf(preview);
+      return images[idx];
+    });
+    setImages(newImages);
+    toast.success("Set", {
+      description: "Image position updated",
+      duration: 1500,
+    });
+  };
+
+  const slides = imagePreviews.map(src => ({ src }));
   return (
-    <>
+    <div className="space-y-6">
       <div
-        className="p-8 rounded-2xl border border-dashed border-slate-300 bg-white 
-        flex flex-col items-center justify-center gap-4
-        hover:border-blue-300 transition-all duration-200 cursor-pointer"
+        className="relative group p-10 rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
       >
         <input
           type="file"
@@ -35,80 +60,140 @@ export default function ImagesTab({
           id="images-upload"
         />
 
-        <label htmlFor="images-upload" className="cursor-pointer block text-center py-6 w-full">
-          <div className="mx-auto inline-flex items-center justify-center rounded-full h-12 w-12 bg-slate-50 shadow-sm">
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <path d="M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 8l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M21 21H3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+        <label htmlFor="images-upload" className="cursor-pointer flex flex-col items-center justify-center text-center w-full relative z-10">
+          <div className="mb-4 relative">
+            <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full scale-150 group-hover:bg-red-500/30 transition-all" />
+            <div className="relative inline-flex items-center justify-center rounded-2xl h-16 w-16 bg-white shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+              <CloudArrowUpIcon className="w-8 h-8 text-red-500" />
+            </div>
           </div>
-          <div className="text-sm font-medium text-slate-700 mt-2">Click to select images (or drag & drop)</div>
-          <div className="text-xs text-slate-400 mt-1">
-            You can upload up to <strong>5 images</strong>. Supported: png, jpg, jpeg, webp. Max 32MB each.
+
+          <h3 className="text-base text-slate-900 mb-1">Choose from gallery</h3>
+
+          <div className="mt-4 flex gap-3">
+            <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">Max 5 Photos</span>
+            <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">High Quality</span>
           </div>
         </label>
+      </div>
 
-        {/* previews */}
-        {imagePreviews.length > 0 && (
-          <div className="mt-3 grid grid-cols-3 gap-3 w-full">
-            {imagePreviews.map((src, i) => (
-              <div key={src} className="relative rounded-lg overflow-hidden bg-slate-100 aspect-[4/3]">
-                <img src={src} className="w-full h-full object-cover" alt={`preview-${i}`} />
-                <button
-                  onClick={() => removeImageAt(i)}
-                  className="absolute top-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white shadow"
-                  aria-label={`Remove image ${i + 1}`}
-                >
-                  ×
-                </button>
-                <div className="absolute left-2 bottom-2 px-2 py-0.5 rounded-full bg-black/50 text-xs text-white">
-                  {i + 1}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-3 flex w-full justify-between items-center">
-          <div className="text-xs text-slate-500">{images.length}/5 selected</div>
-          <div className="flex gap-2">
-            <button onClick={clearImages} className="rounded-full px-3 py-1 text-sm bg-slate-50">
-              Clear
-            </button>
+      {imagePreviews.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black text-slate-500 ">Selected Images</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white text-[10px] font-black">{images.length}</span>
+            </div>
             <button
-              onClick={submitImages}
-              disabled={images.length === 0}
-              className={`rounded-full px-4 py-2 text-sm font-medium text-white shadow-sm ${
-                images.length === 0 ? "bg-gray-300 cursor-not-allowed" : "bg-red-500 hover:bg-red-600 active:scale-95"
-              }`}
+              onClick={clearImages}
+              className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors"
             >
-              Post images
+              Remove All
             </button>
           </div>
+
+          <Reorder.Group
+            axis="x"
+            values={imagePreviews}
+            onReorder={handleReorder}
+            className="grid grid-cols-4 sm:grid-cols-5 gap-3"
+          >
+            {imagePreviews.map((src, i) => (
+              <Reorder.Item
+                key={src}
+                value={src}
+                className="relative group/thumb rounded-2xl overflow-hidden bg-slate-100 aspect-square ring-1 ring-slate-100 shadow-sm cursor-grab active:cursor-grabbing"
+              >
+                <img
+                  src={src}
+                  className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-500 pointer-events-none"
+                  alt={`preview-${i}`}
+                />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeImageAt(i);
+                  }}
+                  className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-md shadow-xl transition-all hover:bg-red-500 hover:text-white flex z-20 text-white"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewPost({
+                      id: "preview-" + i,
+                      src: src,
+                      allMedia: imagePreviews,
+                      isVideo: false,
+                      caption: "Post Preview",
+                      user: {
+                        name: user?.full_name || user?.name || "Guest User",
+                        avatar: user?.profile_pic || user?.avatar || "https://via.placeholder.com/150",
+                        id: user?.user_id || user?.id || 0
+                      },
+                      liked: false,
+                      likeCount: 0,
+                      rawCreatedAt: new Date().toISOString()
+                    });
+                  }}
+                  className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-md shadow-xl transition-all hover:bg-slate-900 hover:text-white flex z-20 text-white"
+                  title="Preview Mode"
+                >
+                  <EyeIcon className="w-4 h-4" />
+                </button>
+
+                <div
+                  onClick={() => {
+                    setLightboxIndex(i);
+                    setLightboxOpen(true);
+                  }}
+                  className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors flex items-center justify-center"
+                />
+
+
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
         </div>
+      )}
+
+      <Lightbox
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        index={lightboxIndex}
+        slides={slides}
+        styles={{
+          container: { backgroundColor: "rgba(0,0,0,0.95)" },
+        }}
+      />
+
+      {previewPost && (
+        <PostModal
+          post={previewPost}
+          onClose={() => setPreviewPost(null)}
+          onToggleLike={() => {}}
+          isPreview={true}
+        />
+      )}
+
+      <div className="pt-4">
+        <button
+          onClick={submitImages}
+          disabled={images.length === 0}
+          className={`w-full py-3 rounded-3xl text-sm font-black  tracking-[0.1em] shadow-xl transition-all duration-300 flex items-center justify-center gap-3
+            ${images.length === 0
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+              : "bg-red-500 text-white hover:bg-red-600 shadow-red-200 hover:scale-[1.02] active:scale-95"
+            }
+          `}
+        >
+          {images.length === 0 ? "Select Images to Post" : "Next Step"}
+        </button>
       </div>
 
-      <div className="mt-4 rounded-md text-sm grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
-        <div className="p-4">
-          <h4 className="text-sm font-semibold mb-1">Image size</h4>
-          <p className="text-xs text-slate-600">Supported image files up to 32MB</p>
-        </div>
 
-        <div className="p-4">
-          <h4 className="text-sm font-semibold mb-1">Image format</h4>
-          <p className="text-xs text-slate-600">
-            Use png, jpg, jpeg, webp. GIF/live photos are not supported.
-          </p>
-        </div>
-
-        <div className="p-4">
-          <h4 className="text-sm font-semibold mb-1">Image resolution</h4>
-          <p className="text-xs text-slate-600">
-            Recommended 720×960+. No strict aspect ratio required.
-          </p>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }

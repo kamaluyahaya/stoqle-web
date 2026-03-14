@@ -37,6 +37,7 @@ export function useEditBusinessProfile({
   const [promo, setPromo] = useState("");
   const [discount, setDiscount] = useState("");
   const [region, setRegion] = useState("");
+  const [shopProfile, setShopProfile] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -76,6 +77,7 @@ export function useEditBusinessProfile({
     const pr = (await loadField(KEYS.promo)) ?? "";
     const d = (await loadField(KEYS.discount)) ?? "";
     const rg = (await loadField(KEYS.region)) ?? "";
+    const sp = (await loadField(KEYS.shopProfile)) ?? "";
 
     return {
       name: n,
@@ -88,6 +90,7 @@ export function useEditBusinessProfile({
       promo: pr,
       discount: d,
       region: rg,
+      shopProfile: sp,
     };
   }
 
@@ -154,6 +157,17 @@ export function useEditBusinessProfile({
           safeSet(setDiscount, mapped[KEYS.discount] ?? "");
           safeSet(setName, mapped[KEYS.name] ?? "");
           safeSet(setRegion, mapped[KEYS.region] ?? "");
+
+          // Initial shop profile from props
+          const initialShop = {
+            business_name: business?.business_name,
+            business_address: business?.business_address,
+            bio: business?.bio,
+            business_category: business?.business_category,
+            bg_photo_url: business?.bg_photo_url,
+            profile_pic: business?.profile_pic || business?.logo,
+          };
+          safeSet(setShopProfile, JSON.stringify(initialShop));
         } catch (err) {
           console.error("mapPolicyToPrefs -> apply error:", err);
         }
@@ -173,6 +187,7 @@ export function useEditBusinessProfile({
           if (staged.promo) safeSet(setPromo, staged.promo);
           if (staged.discount) safeSet(setDiscount, staged.discount);
           if (staged.region) safeSet(setRegion, staged.region);
+          if (staged.shopProfile) safeSet(setShopProfile, staged.shopProfile);
         }
       } catch (err) {
         console.warn("failed to overlay staged edits:", err);
@@ -237,6 +252,7 @@ export function useEditBusinessProfile({
       case KEYS.promo: setPromo(val); break;
       case KEYS.discount: setDiscount(val); break;
       case KEYS.region: setRegion(val); break;
+      case KEYS.shopProfile: setShopProfile(val); break;
       default: break;
     }
   }
@@ -472,7 +488,30 @@ export function useEditBusinessProfile({
         setDiscount("");
       }
 
-      toast("Business policy synced successfully");
+      // 5) If shop profile is dirty, hit the business update endpoint
+      if (dirtyKeys.includes(KEYS.shopProfile)) {
+        const spData = safeParse(staged.shopProfile || shopProfile);
+        if (spData) {
+          // Note: If we have files to upload, the caller usually passes a FormData.
+          // In this staging-based hook, we might need a separate way to handle files.
+          // For now, let's assume if it's a JSON string, it's just text fields.
+          const bizRes = await fetch(`${apiBase.replace(/\/$/, "")}/api/business/${encodeURIComponent(String(bizId))}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(spData),
+          });
+
+          if (!bizRes.ok) {
+            const errData = await bizRes.json().catch(() => ({}));
+            throw new Error(errData.message || "Failed to update Shop Profile");
+          }
+        }
+      }
+
+      toast("Business profile synced successfully");
     } catch (e: any) {
       if (e instanceof ApiError && e.code === "ACCOUNT_ALREADY_EXISTS") {
         // Friendly toast, no scary console.error
@@ -502,6 +541,7 @@ export function useEditBusinessProfile({
     promo,
     discount,
     region,
+    shopProfile,
     isLoading,
     isSyncing,
     modalOpen,

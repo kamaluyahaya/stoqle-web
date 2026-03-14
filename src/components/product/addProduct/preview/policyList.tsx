@@ -15,6 +15,8 @@ type PolicyListProps = {
   payload?: any;
   selectedOptions?: Record<string, string>;
   onSelectClick?: () => void;
+  estimation?: any;
+  storedAddress?: any;
 };
 
 /** Convert numeric value + unit into a friendly string.
@@ -32,6 +34,8 @@ function formatDuration(value: number | string | undefined | null, unit?: string
 
   const u = String(unit ?? "").toLowerCase().trim();
 
+  if (u === "km") return `${n} km`;
+
   // normalize unit to hours or days
   if (u.startsWith("d")) {
     // value is days
@@ -47,7 +51,9 @@ function formatDuration(value: number | string | undefined | null, unit?: string
 
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;
+  if (days === 0 && hours === 0) return "less than an hour";
   if (hours === 0) return `${days} ${days === 1 ? "day" : "days"}`;
+  if (days === 0) return `${hours} ${hours === 1 ? "hour" : "hours"}`;
   return `${days} ${days === 1 ? "day" : "days"} ${hours} ${hours === 1 ? "hour" : "hours"}`;
 }
 
@@ -59,9 +65,51 @@ export default function PolicyList({
   payload,
   selectedOptions,
   onSelectClick,
+  estimation,
+  storedAddress,
 }: PolicyListProps) {
   const policy = businessData?.policy ?? null;
   const business = businessData?.business ?? null;
+
+  const vendorLoc = {
+    latitude: Number(businessData?.business?.latitude || (businessData?.business as any)?.lat),
+    longitude: Number(businessData?.business?.longitude || (businessData?.business as any)?.lng),
+  };
+
+  // Use estimation for durations if available
+  const displayAvgDuration = React.useMemo(() => {
+    if (estimation && !estimation.is_available) return "Out of delivery range";
+    if (estimation?.is_available && estimation.estimated_delivery_time.getTime() > 0) {
+      const now = new Date();
+      const diffMs = estimation.estimated_delivery_time.getTime() - now.getTime();
+      return formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours");
+    }
+    const shippingAvg = (policy?.shipping || policy?.shipping_duration)?.find((s: any) => s.kind === "avg" || s.type === "avg");
+    return shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : "8 hours";
+  }, [estimation, policy]);
+
+  const displayPromiseDuration = React.useMemo(() => {
+    if (estimation && !estimation.is_available) return "N/A";
+    if (estimation?.is_available && estimation.shipping_deadline.getTime() > 0) {
+      const now = new Date();
+      const diffMs = estimation.shipping_deadline.getTime() - now.getTime();
+      return formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours");
+    }
+    const shippingPromise = (policy?.shipping || policy?.shipping_duration)?.find((s: any) => s.kind === "promise" || s.type === "promise");
+    return shippingPromise ? formatDuration(shippingPromise.value, shippingPromise.unit) : "48 hours";
+  }, [estimation, policy]);
+
+  const selectedText = React.useMemo(() => {
+    if (!payload?.hasVariants || !payload?.variantGroups?.length) return null;
+
+    const selections = payload.variantGroups.map((group: any) => {
+      const optionId = selectedOptions?.[group.id];
+      const entry = group.entries.find((e: any) => e.id === optionId);
+      return entry ? entry.name : null;
+    }).filter(Boolean);
+
+    return selections.length > 0 ? selections.join(", ") : "Select options";
+  }, [payload, selectedOptions]);
 
   if (loading) return <div className="text-xs text-slate-400">loading…</div>;
   if (error) return <div className="mt-2 text-xs text-rose-600">{error}</div>;
@@ -70,6 +118,7 @@ export default function PolicyList({
   const shippingArray = Array.isArray(policy?.shipping) ? policy.shipping : Array.isArray(policy?.shipping_duration) ? policy.shipping_duration : [];
   const shippingAvg = shippingArray.find((s: any) => s.kind === "avg" || s.type === "avg") ?? null;
   const shippingPromise = shippingArray.find((s: any) => s.kind === "promise" || s.type === "promise") ?? null;
+  const deliveryRadius = shippingArray.find((s: any) => s.kind === "delivery_radius_km" || s.type === "delivery_radius_km") ?? null;
   const deliveryNotice = policy?.core?.delivery_notice ?? null;
   const returns = policy?.returns ?? {};
   const addressParts = [
@@ -83,20 +132,20 @@ export default function PolicyList({
   // Build a shipping-focused modal body
   const buildShippingInfoBody = () => {
     const lines: string[] = [];
-
     lines.push(`From: ${fromText}`);
     lines.push("");
 
-    if (shippingPromise) {
-      const val = shippingPromise.value;
-      const unit = shippingPromise.unit ?? "hours";
-      lines.push(`Shipping promise: We promise to ship within ${formatDuration(val, unit)} (${val} ${unit}).`);
-      if (shippingPromise?.notes) {
-        lines.push("");
-        lines.push(`Notes: ${String(shippingPromise.notes)}`);
-      }
-    } else {
-      lines.push("Shipping promise: We aim to ship within 48 hours.");
+    lines.push(`Average handling time: We aim to ship within ${displayAvgDuration} on average.`);
+    lines.push(`Shipping promise: We promise to ship within ${displayPromiseDuration}.`);
+
+    if (shippingPromise?.notes) {
+      lines.push("");
+      lines.push(`Notes: ${String(shippingPromise.notes)}`);
+    }
+
+    if (deliveryRadius) {
+      lines.push("");
+      lines.push(`Delivery coverage: We can deliver up to ${deliveryRadius.value} km from our store.`);
     }
 
     lines.push("");
@@ -123,25 +172,16 @@ export default function PolicyList({
   const buildDelayCompensationBody = () => {
     const lines: string[] = [];
 
-    if (shippingPromise) {
-      lines.push(`Promised shipping window: ${formatDuration(shippingPromise.value, shippingPromise.unit)} (${shippingPromise.value} ${shippingPromise.unit})`);
-      if (shippingPromise.estimated_handling_time) {
-        lines.push(`Estimated handling time: ${String(shippingPromise.estimated_handling_time)}`);
-      }
-      lines.push("");
-      lines.push("If your order is not shipped within the promised period:");
-      lines.push("- You may be eligible for delay compensation (coupon or discount).");
-      lines.push("- Compensation amount and form vary with product category and marketplace rules.");
-      lines.push("");
-      if (shippingPromise?.compensation) {
-        lines.push(`Configured compensation: ${String(shippingPromise.compensation)}`);
-      } else {
-        lines.push("Configured compensation: Not specified by seller (marketplace default applies).");
-      }
+    lines.push(`Current shipping guarantee: We promise to ship within ${displayPromiseDuration}.`);
+    lines.push("");
+    lines.push("If your order is not shipped within this period:");
+    lines.push("- You may be eligible for delay compensation (coupon or discount).");
+    lines.push("- Compensation amount and form vary with product category and marketplace rules.");
+    lines.push("");
+    if (shippingPromise?.compensation) {
+      lines.push(`Configured compensation: ${String(shippingPromise.compensation)}`);
     } else {
-      lines.push("No shipping promise configured. Marketplace default shipping guarantee applies (typically 48 hours).");
-      lines.push("");
-      lines.push("If your order isn't shipped within the expected time, contact support for delay compensation.");
+      lines.push("Configured compensation: Not specified by seller (marketplace default applies).");
     }
 
     return lines.join("\n");
@@ -158,17 +198,6 @@ export default function PolicyList({
     return lines.join("\n");
   };
 
-  const selectedText = React.useMemo(() => {
-    if (!payload?.hasVariants || !payload?.variantGroups?.length) return null;
-
-    const selections = payload.variantGroups.map((group: any) => {
-      const optionId = selectedOptions?.[group.id];
-      const entry = group.entries.find((e: any) => e.id === optionId);
-      return entry ? entry.name : null;
-    }).filter(Boolean);
-
-    return selections.length > 0 ? selections.join(", ") : "Select options";
-  }, [payload, selectedOptions]);
 
   return (
     <div className="rounded-lg mt-2 bg-white">
@@ -190,9 +219,11 @@ export default function PolicyList({
                 <TruckIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
                 <div className="min-w-0 ">
                   <div className="font-medium truncate text-emerald-600 flex truncate">
-                    Ships within {shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : "8 hours"} in average <div className="text-slate-600 truncate"> | Promise to ship within {shippingPromise ? formatDuration(shippingPromise.value, shippingPromise.unit) : "48 hours"} | Delayed compensation guaranteed </div>
+                    Ships within {displayAvgDuration} in average <div className="text-slate-600 truncate"> | Promise to ship within {displayPromiseDuration} | {deliveryRadius ? `Delivers up to ${deliveryRadius.value} km` : "Delayed compensation guaranteed"} </div>
                   </div>
-                  <div className="text-xs mt-1 truncate text-slate-500">Kaduna, From {fromText} Free shipping</div>
+                  <div className="text-xs mt-1 truncate text-slate-500">
+                    {fromText} · {estimation ? (estimation.is_available ? `${estimation.distance_km} km away` : "Address out of range") : (storedAddress ? "Calculating..." : "Set address to see distance")}
+                  </div>
                 </div>
               </div>
             </div>

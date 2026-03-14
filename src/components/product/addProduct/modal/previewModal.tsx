@@ -19,6 +19,7 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 export default function ProductPreviewModal({
   open,
@@ -30,6 +31,9 @@ export default function ProductPreviewModal({
   onBuyNow,
   onOpenChat,
   onProductClick,
+  onCartClick,
+  onShopClick,
+  origin,
 }: {
   open: boolean;
   payload: PreviewPayload | null;
@@ -40,11 +44,25 @@ export default function ProductPreviewModal({
   onBuyNow?: (payload?: PreviewPayload) => void;
   onOpenChat?: () => void;
   onProductClick?: (productId: number, businessName?: string) => void;
+  onCartClick?: () => void;
+  onShopClick?: () => void;
+  origin?: { x: number; y: number };
 }) {
   //
   // --- Hooks (always declared in the same order, unconditionally) ---
   //
   const auth = useAuth();
+  const { user, token } = auth;
+  const [estimation, setEstimation] = useState<{
+    distance_km: number;
+    travel_time_hours: number;
+    estimated_delivery_time: Date;
+    shipping_deadline: Date;
+    is_available: boolean;
+    message?: string;
+  } | null>(null);
+  const [storedAddress, setStoredAddress] = useState<any>(null);
+
   const router = useRouter();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -65,6 +83,51 @@ export default function ProductPreviewModal({
   // business data hook (unconditional hook call using payload ID if provided)
   const { businessData, loading: loadingBusiness, error: businessError } = useBusinessPolicy(open, payload?.businessId);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("stoqle_delivery_address");
+    if (saved) {
+      try {
+        setStoredAddress(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse saved address", e);
+      }
+    }
+  }, [open]);
+
+  useEffect(() => {
+    async function runEstimation() {
+      if (!open || !payload || !businessData?.business) return;
+
+      const vendorLoc = {
+        latitude: Number(businessData.business.latitude),
+        longitude: Number(businessData.business.longitude),
+      };
+
+      // Default to vendor location if no customer address is set, just to show a baseline or skip estimation
+      const customerLoc = storedAddress ? {
+        latitude: Number(storedAddress.latitude || storedAddress.lat),
+        longitude: Number(storedAddress.longitude || storedAddress.lng),
+      } : null;
+
+      if (vendorLoc.latitude === undefined || vendorLoc.longitude === undefined || !customerLoc) {
+        console.log("Estimation skipped: Missing coordinates", { vendorLoc, customerLoc, storedAddress });
+        setEstimation(null);
+        return;
+      }
+
+      console.log("Running estimation with:", { vendorLoc, customerLoc });
+      const policies = (businessData.policy?.shipping || businessData.policy?.shipping_duration || []) as any[];
+
+      const result = await import("@/src/lib/deliveryEstimation").then(m => m.estimateDelivery(
+        vendorLoc,
+        customerLoc,
+        policies
+      ));
+
+      setEstimation(result);
+    }
+    runEstimation();
+  }, [open, payload, businessData, storedAddress]);
   const [recommendedProducts, setRecommendedProducts] = useState<ProductFeedItem[]>([]);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
 
@@ -81,7 +144,7 @@ export default function ProductPreviewModal({
     const loadRecommended = async () => {
       setLoadingRecommended(true);
       try {
-        const res = await fetchBusinessProducts(payload.businessId as number, 6, undefined, payload.productId);
+        const res = await fetchBusinessProducts(payload.businessId as number, 6, undefined, payload.productId, token);
         setRecommendedProducts(res?.data?.products || []);
       } catch (err) {
         console.error("Failed to load recommended products:", err);
@@ -121,7 +184,7 @@ export default function ProductPreviewModal({
     if (globalLoading || !globalHasMore || !payload) return;
     setGlobalLoading(true);
     try {
-      const res = await fetchMarketFeed(12, page * 12, payload.productId, payload.businessId);
+      const res = await fetchMarketFeed(12, page * 12, payload.productId, payload.businessId, false, token);
       const newItems = res?.data?.products || [];
       if (newItems.length < 12) setGlobalHasMore(false);
       setGlobalRecommendations(prev => {
@@ -137,6 +200,70 @@ export default function ProductPreviewModal({
       setGlobalLoading(false);
     }
   }, [globalLoading, globalHasMore, payload]);
+
+  // Save/Restore State from sessionStorage for "Back" button support
+  const saveModalState = useCallback(() => {
+    if (!open || !payload?.productId) return;
+    const state = {
+      selectedIndex,
+      selectedOptions,
+      scrollPos: asideScrollRef.current?.scrollTop || 0
+    };
+    sessionStorage.setItem(`stoqle_modal_state_${payload.productId}`, JSON.stringify(state));
+  }, [open, payload?.productId, selectedIndex, selectedOptions]);
+
+  useEffect(() => {
+    if (!open || !payload?.productId) return;
+
+    const saved = sessionStorage.getItem(`stoqle_modal_state_${payload.productId}`);
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        if (typeof state.selectedIndex === 'number') setSelectedIndex(state.selectedIndex);
+        if (state.selectedOptions) setSelectedOptions(state.selectedOptions);
+
+        // Restore scroll after a tick
+        if (typeof state.scrollPos === 'number') {
+          setTimeout(() => {
+            if (asideScrollRef.current) asideScrollRef.current.scrollTop = state.scrollPos;
+          }, 50);
+        }
+      } catch (e) {
+        console.error("Failed to restore modal state", e);
+      }
+    } else {
+      // If no saved state, reset to top
+      setSelectedIndex(0);
+      setSelectedOptions({});
+      if (modalRef.current) modalRef.current.scrollTo(0, 0);
+      if (asideScrollRef.current) asideScrollRef.current.scrollTo(0, 0);
+    }
+  }, [open, payload?.productId]);
+
+  // Persist state changes
+  useEffect(() => {
+    if (open && payload?.productId) {
+      saveModalState();
+    }
+  }, [selectedIndex, selectedOptions, open, payload?.productId, saveModalState]);
+
+  // Track scroll position for persistence
+  useEffect(() => {
+    const scrollEl = asideScrollRef.current;
+    if (!open || !scrollEl) return;
+
+    let timeout: any;
+    const handleScroll = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(saveModalState, 200);
+    };
+
+    scrollEl.addEventListener('scroll', handleScroll);
+    return () => {
+      scrollEl.removeEventListener('scroll', handleScroll);
+      clearTimeout(timeout);
+    };
+  }, [open, saveModalState]);
 
   useEffect(() => {
     if (!open) return;
@@ -163,9 +290,13 @@ export default function ProductPreviewModal({
     };
   }, [open, globalHasMore, globalLoading, globalPage, fetchGlobalRecs]);
 
-  // Initialize selected options when payload changes or modal opens
+  // Initialize selected options when payload changes or modal opens (only if not already restored from cache)
   useEffect(() => {
     if (open && payload?.variantGroups && payload.variantGroups.length > 0) {
+      // Check if we already have matching selected options (probably from cache)
+      const hasSelections = Object.keys(selectedOptions).length > 0;
+      if (hasSelections) return;
+
       const initial: Record<string, string> = {};
 
       if (payload.useCombinations && payload.skus && payload.skus.length > 0) {
@@ -217,12 +348,12 @@ export default function ProductPreviewModal({
   // SKU Logic
   const currentSku = useMemo(() => {
     if (!payload?.useCombinations || !payload?.skus) return null;
-    const selectedIds = Object.values(selectedOptions);
+    const selectedIds = Object.values(selectedOptions).map(String);
     if (selectedIds.length === 0) return null;
 
     // Find SKU where all its variantOptionIds are in the current selection
     return payload.skus.find(s =>
-      s.variantOptionIds.every(id => selectedIds.includes(id))
+      s.variantOptionIds.every(id => selectedIds.includes(String(id)))
     );
   }, [payload?.useCombinations, payload?.skus, selectedOptions]);
 
@@ -259,7 +390,7 @@ export default function ProductPreviewModal({
     if (!payload) return;
 
     // Check if vendor is trying to buy their own product
-    const currentUserBizId = auth.user?.business_id || auth.user?.business?.business_id;
+    const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
     if (currentUserBizId && Number(currentUserBizId) === Number(payload.businessId)) {
       toast.error("You cannot purchase your own product.");
       return;
@@ -273,7 +404,7 @@ export default function ProductPreviewModal({
     if (!payload) return;
 
     // Check if vendor is trying to buy their own product
-    const currentUserBizId = auth.user?.business_id || auth.user?.business?.business_id;
+    const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
     if (currentUserBizId && Number(currentUserBizId) === Number(payload.businessId)) {
       toast.error("You cannot purchase your own product.");
       return;
@@ -281,6 +412,59 @@ export default function ProductPreviewModal({
 
     setCartActionType("buy");
     setCartModalOpen(true);
+  };
+
+  const handleOpenChatInternal = async () => {
+    const p = payload;
+    if (!p) return; 
+
+    if (onOpenChat) {
+      onOpenChat();
+      return;
+    }
+
+    const vendorUserId = businessData?.business?.user_id;
+    if (!vendorUserId) {
+      toast.error("Contact information for this vendor is currently unavailable.");
+      return;
+    }
+
+    // Check if logged in before redirecting to messages
+    if (auth?.ensureLoggedIn) {
+      const isLoggedIn = await auth.ensureLoggedIn();
+      if (!isLoggedIn) return;
+    } else if (!token) {
+      toast.error("Please login to message the vendor");
+      return;
+    }
+
+    // Construct query parameters with product details for context tagging in chat
+    const chatParams = new URLSearchParams({
+      user: String(vendorUserId),
+      product_id: String(p.productId),
+      pname: p.title || "",
+      pprice: String(discountedPrice || basePrice || ""),
+    });
+
+    if (p.productImages?.[0]?.url) {
+      chatParams.set("pimg", p.productImages[0].url);
+    }
+
+    // Capture current variant selections if any
+    if (Object.keys(selectedOptions).length > 0 && p.variantGroups) {
+      const selections = p.variantGroups.map(g => {
+        const optId = selectedOptions[g.id];
+        const opt = g.entries.find(e => e.id === optId);
+        return opt ? `${g.title}: ${opt.name}` : null;
+      }).filter(Boolean);
+
+      if (selections.length > 0) {
+        chatParams.set("pvariant", selections.join(", "));
+      }
+    }
+
+    // Redirect to messages page with the vendor's user ID and product info.
+    router.push(`/messages?${chatParams.toString()}`);
   };
 
   const handleCartConfirm = (data: { selectedOptions: Record<string, string>; quantity: number; sku: any; address?: any }) => {
@@ -315,36 +499,24 @@ export default function ProductPreviewModal({
   //
 
   // reset selected index and scroll when modal opens or payload changes
-  useEffect(() => {
-    if (open) {
-      setSelectedIndex(0);
-      if (modalRef.current) {
-        modalRef.current.scrollTo(0, 0);
-      }
-      if (asideScrollRef.current) {
-        asideScrollRef.current.scrollTo(0, 0);
-      }
-    }
-  }, [open, payload?.productId]);
+  // (REMOVED: Handled by State Restoration Logic above)
 
-  // lock background scroll while open
+  // Lock background scroll while open
   useEffect(() => {
     if (!open) return;
-    lastScrollY.current = window.scrollY || window.pageYOffset || 0;
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${lastScrollY.current}px`;
-    document.body.style.left = "0";
-    document.body.style.right = "0";
-    document.body.style.width = "100%";
-    document.documentElement.style.overflow = "hidden";
+
+    // Prevent background scrolling while modal is open
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    if (scrollBarWidth > 0) {
+      document.body.style.paddingRight = `${scrollBarWidth}px`;
+    }
+
     return () => {
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.left = "";
-      document.body.style.right = "";
-      document.body.style.width = "";
-      document.documentElement.style.overflow = "";
-      window.scrollTo(0, lastScrollY.current);
+      document.body.style.overflow = originalStyle;
+      document.body.style.paddingRight = "0";
     };
   }, [open]);
 
@@ -402,9 +574,12 @@ export default function ProductPreviewModal({
   };
 
   const formatUrl = (url: string) => {
-    if (!url) return "";
-    if (url.startsWith("http")) return url;
-    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+    if (!url) return "/assets/images/favio.png";
+    let formatted = url;
+    if (!url.startsWith("http")) {
+      formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+    }
+    return encodeURI(formatted);
   };
 
   //
@@ -412,11 +587,30 @@ export default function ProductPreviewModal({
   //
   return (
     <>
-      <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-center justify-center px-0 py-0" onMouseDown={onClose} onTouchStart={onClose}>
-        <div className="absolute inset-0 bg-black/55" aria-hidden />
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] flex items-center justify-center px-0 py-0 lg:p-4" onMouseDown={onClose} onTouchStart={onClose}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+          aria-hidden
+        />
 
 
-        <div className="relative z-10 w-full h-full lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] flex flex-col items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.85, y: 30 }}
+          transition={{
+            type: "spring",
+            damping: 25,
+            stiffness: 300,
+            opacity: { duration: 0.2 },
+            scale: { duration: 0.3 }
+          }}
+          className="relative z-10 w-full h-full lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] flex flex-col items-center justify-center"
+        >
           {/* Desktop Close Button (Outside but close to modal) */}
           <button
             onMouseDown={(e) => e.stopPropagation()}
@@ -516,7 +710,11 @@ export default function ProductPreviewModal({
                     </div>
 
                     <div className="text-right">
-                      <div className="text-xs text-slate-400">0 Sold</div>
+                      <div className="text-xs text-slate-400">
+                        {payload.soldCount && payload.soldCount > 0 
+                          ? `${payload.soldCount.toLocaleString()}+ Sold` 
+                          : "0 Sold"}
+                      </div>
                     </div>
                   </div>
 
@@ -531,6 +729,8 @@ export default function ProductPreviewModal({
                     openPolicyModal={openPolicyModal}
                     payload={payload}
                     selectedOptions={selectedOptions}
+                    estimation={estimation}
+                    storedAddress={storedAddress}
                     onSelectClick={() => {
                       if (payload.variantGroups && payload.variantGroups.length > 0) {
                         setCartActionType("cart");
@@ -543,7 +743,10 @@ export default function ProductPreviewModal({
                 {/* VARIANTS + params block */}
                 <div className="bg-white p-4 mt-2">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div
+                      className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => businessData?.business?.user_id && router.push(`/user/profile/${businessData.business.user_id}`)}
+                    >
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center flex-shrink-0">
                         <img
                           src={businessData?.business?.business_logo || businessData?.business?.logo || businessData?.business?.profile_pic || "/assets/images/favio.png"}
@@ -597,8 +800,8 @@ export default function ProductPreviewModal({
                             className="group cursor-pointer"
                             onClick={() => {
                               if (p.product_video) {
+                                saveModalState();
                                 router.push(`/shopping-reels?product_id=${p.product_id}`);
-                                onClose();
                               } else if (onProductClick) {
                                 onProductClick(p.product_id, businessData?.business?.business_name);
                               }
@@ -753,8 +956,8 @@ export default function ProductPreviewModal({
                           className="group cursor-pointer"
                           onClick={() => {
                             if (p.product_video) {
+                              saveModalState();
                               router.push(`/shopping-reels?product_id=${p.product_id}`);
-                              onClose();
                             } else if (onProductClick) {
                               onProductClick(p.product_id, p.business_name);
                             }
@@ -817,16 +1020,25 @@ export default function ProductPreviewModal({
               <ActionBar
                 onAddToCart={handleAddToCartClick}
                 onBuyNow={handleBuyNowClick}
-                onOpenChat={() => onOpenChat && onOpenChat()}
+                onOpenChat={handleOpenChatInternal}
+                onCartClick={onCartClick}
+                onShopClick={onShopClick}
                 cartCount={cartCount}
                 shopLogo={businessData?.business?.logo}
+                businessId={payload?.businessId}
               />
             </aside>
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      <PolicyModal open={policyModalOpen} title={policyModalData?.title ?? null} body={policyModalData?.body ?? null} onClose={closePolicyModal} />
+      <PolicyModal
+        open={policyModalOpen}
+        title={policyModalData?.title ?? null}
+        body={policyModalData?.body ?? null}
+        onClose={closePolicyModal}
+        onAddressChange={setStoredAddress}
+      />
       <AddToCartModal
         open={cartModalOpen}
         payload={payload}
@@ -835,6 +1047,8 @@ export default function ProductPreviewModal({
         onClose={() => setCartModalOpen(false)}
         onConfirm={handleCartConfirm}
         initialSelectedOptions={selectedOptions}
+        storedAddress={storedAddress}
+        onAddressChange={setStoredAddress}
       />
     </>
   );

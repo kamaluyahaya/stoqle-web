@@ -12,6 +12,13 @@ type MessageProps = {
     file?: { file_id?: string | number; file_url?: string } | null;
     fileUrl?: string | null;
     fileType?: string | null;
+    product_id?: string | number | null;
+    product_name?: string | null;
+    product_price?: string | null;
+    product_image?: string | null;
+    product_variant?: string | null;
+    senderAvatar?: string | null;
+    onProductClick?: (productId: string | number) => void;
 };
 
 export const ChatBubble: React.FC<MessageProps> = ({
@@ -24,6 +31,13 @@ export const ChatBubble: React.FC<MessageProps> = ({
     file,
     fileUrl,
     fileType,
+    product_id,
+    product_name,
+    product_price,
+    product_image,
+    product_variant,
+    senderAvatar,
+    onProductClick
 }) => {
     // Determine the actual URL and type from available props
     const actualUrl = fileUrl || file?.file_url;
@@ -34,17 +48,28 @@ export const ChatBubble: React.FC<MessageProps> = ({
     const isPdf = actualUrl && (actualType?.includes('pdf') || actualType === 'pdf');
 
     return (
-        <div className={`flex w-full mb-1 ${mine ? "justify-end" : "justify-start"}`}>
+        <div className={`flex w-full mb-2 items-end gap-2 ${mine ? "flex-row-reverse" : "flex-row"}`}>
+            {/* Sender Avatar */}
+            <div className={`shrink-0 mb-1 transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer`}>
+                {senderAvatar ? (
+                    <img src={senderAvatar} className="w-8 h-8 rounded-full border border-gray-100 object-cover shadow-sm bg-gray-50" alt="" />
+                ) : (
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm ${mine ? "bg-red-600 text-white" : "bg-red-50 text-red-500 border border-red-100"}`}>
+                        {senderName?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                )}
+            </div>
+
             <div
-                className={`flex flex-col max-w-[85%] md:max-w-[70%] ${mine ? "items-end" : "items-start"
+                className={`flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] ${mine ? "items-end" : "items-start"
                     }`}
             >
 
                 <div
                     className={`relative overflow-hidden transition-all duration-300 ${mine
-                        ? "bg-red-500 text-white rounded-2xl rounded-tr-none"
+                        ? "bg-red-500 text-white rounded-2xl rounded-tr-none shadow-md shadow-red-500/10"
                         : "bg-white text-gray-800 border-gray-100 rounded-2xl rounded-tl-none border shadow-sm"
-                        } ${isImage || isVideo ? "p-1" : "p-3"}`}
+                        } ${isImage || isVideo ? "p-1" : "p-2.5 px-3"}`}
                 >
                     {/* Media Rendering */}
                     {actualUrl && (
@@ -85,6 +110,29 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Product Metadata Tag */}
+                    {product_name && (
+                        <div 
+                            onClick={() => product_id && onProductClick?.(product_id)}
+                            className={`mb-3 p-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] ${mine ? "bg-black/10 hover:bg-black/20" : "bg-red-50 border border-red-100 hover:bg-red-100/50"}`}
+                        >
+                            {product_image && (
+                                <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/20 bg-white/50 shrink-0 shadow-sm">
+                                    <img src={product_image} className="w-full h-full object-cover" alt="" />
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2">
+                                    <h4 className={`text-[10px] font-bold uppercase tracking-tight leading-tight line-clamp-2 max-w-[calc(100%-65px)] ${mine ? "text-white" : "text-slate-900"}`}>{product_name}</h4>
+                                    <span className={`text-[11px] font-black shrink-0 ml-auto ${mine ? "text-white" : "text-red-600"}`}>₦{Number(product_price || 0).toLocaleString()}</span>
+                                </div>
+                                {product_variant && (
+                                    <p className={`text-[9px] font-bold mt-0.5 truncate uppercase tracking-widest ${mine ? "text-white/70" : "text-slate-400"}`}>{product_variant}</p>
+                                )}
+                            </div>
                         </div>
                     )}
 

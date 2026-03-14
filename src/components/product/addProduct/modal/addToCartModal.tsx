@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PreviewPayload } from "@/src/types/product";
 import { MinusIcon, PlusIcon, XMarkIcon, MapPinIcon, CreditCardIcon } from "@heroicons/react/24/outline";
 import { computeDiscountedPrice, parseNumberLike, parsePercent } from "@/src/lib/utils/product/price";
@@ -11,6 +12,7 @@ import { useAuth } from "@/src/context/authContext";
 import { initializePayment, verifyAndCompleteOrder } from "@/src/lib/api/paymentApi";
 import { addToCartApi } from "@/src/lib/api/cartApi";
 import { toast } from "sonner";
+import Swal from "sweetalert2";
 
 // No need to declare here if we use window.PaystackPop
 
@@ -24,6 +26,8 @@ interface AddToCartModalProps {
     actionType?: "cart" | "buy";
     initialQuantity?: number;
     initialSelectedOptions?: Record<string, string>;
+    storedAddress?: any;
+    onAddressChange?: (address: any) => void;
 }
 
 export default function AddToCartModal({
@@ -35,22 +39,34 @@ export default function AddToCartModal({
     actionType = "cart",
     initialQuantity = 1,
     initialSelectedOptions = {},
+    storedAddress: propStoredAddress,
+    onAddressChange,
 }: AddToCartModalProps) {
     const [quantity, setQuantity] = useState(initialQuantity);
     const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(initialSelectedOptions);
     const [addressModalOpen, setAddressModalOpen] = useState(false);
-    const [storedAddress, setStoredAddress] = useState<any>(null);
+    const [internalStoredAddress, setInternalStoredAddress] = useState<any>(null);
+
+    // Sync with prop if provided, otherwise use internal
+    const activeAddress = propStoredAddress !== undefined ? propStoredAddress : internalStoredAddress;
+
     const [sellerNote, setSellerNote] = useState("");
     const [paymentMethod, setPaymentMethod] = useState("paystack");
     const [isPaying, setIsPaying] = useState(false);
-    const [completedReceiptUrl, setCompletedReceiptUrl] = useState<string | null>(null);
     const { user, token } = useAuth();
+    const router = useRouter();
+    const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
+    const isOwner = currentUserBizId && payload?.businessId && Number(currentUserBizId) === Number(payload.businessId);
 
     const loadSavedAddress = () => {
         const saved = localStorage.getItem("stoqle_delivery_address");
         if (saved) {
             try {
-                setStoredAddress(JSON.parse(saved));
+                const parsed = JSON.parse(saved);
+                setInternalStoredAddress(parsed);
+                if (onAddressChange && !propStoredAddress) {
+                    onAddressChange(parsed);
+                }
             } catch (e) {
                 console.error("Failed to parse saved address", e);
             }
@@ -77,13 +93,15 @@ export default function AddToCartModal({
         }
     }, [open]);
 
-    // Reset state when modal opens
+    // Reset state when modal opens or product changes
     useEffect(() => {
         if (open && payload) {
             setQuantity(initialQuantity);
+            setSelectedOptions(initialSelectedOptions);
+            setSellerNote(""); // Reset note when product changes
 
-            // Only auto-select if we don't already have a valid selection from props
-            if (Object.keys(selectedOptions).length === 0) {
+            // If no valid selection from props, perform auto-selection
+            if (Object.keys(initialSelectedOptions).length === 0) {
                 const initial: Record<string, string> = {};
 
                 if (payload.useCombinations && payload.skus && payload.skus.length > 0) {
@@ -123,34 +141,81 @@ export default function AddToCartModal({
                 setSelectedOptions(initial);
             }
         }
-    }, [open, payload, initialQuantity, initialSelectedOptions]);
+    }, [open, payload?.productId, initialQuantity]);
 
     const currentSku = useMemo(() => {
         if (!payload || !payload.useCombinations || !payload.skus) return null;
-        const selectedIds = Object.values(selectedOptions);
+        const selectedIds = Object.values(selectedOptions).map(String);
         return payload.skus.find((s) =>
-            s.variantOptionIds.every((id) => selectedIds.includes(id))
+            s.variantOptionIds.every((id) => selectedIds.includes(String(id)))
         );
     }, [payload?.useCombinations, payload?.skus, selectedOptions]);
 
     const availableStock = useMemo(() => {
         if (!payload) return 0;
-        if (payload.useCombinations && currentSku) {
-            return Number(currentSku.quantity || 0);
+
+        // 1. COMBINATIONS MODE (SKUs)
+        if (payload.useCombinations && payload.skus && payload.skus.length > 0) {
+            if (currentSku) {
+                if (Number(currentSku.price || (payload.samePriceForAll ? payload.sharedPrice : 0) || 0) <= 0) return 0;
+                return Number(currentSku.quantity || 0);
+            }
+
+            // If not fully selected, calculate potential stock based on current selections
+            const selectedIds = Object.values(selectedOptions).map(String);
+            if (selectedIds.length === 0) {
+                // No selection: Total of all enabled SKUs
+                return payload.skus.reduce((acc, s) => s.enabled ? acc + Number(s.quantity || 0) : acc, 0);
+            }
+
+            // Partial selection: Sum of SKUs that match selected options and have valid price
+            const matchingSkus = payload.skus.filter(s =>
+                s.enabled && 
+                Number(s.price || (payload.samePriceForAll ? payload.sharedPrice : 0) || 0) > 0 &&
+                selectedIds.every(id => s.variantOptionIds.map(String).includes(id))
+            );
+            return matchingSkus.reduce((acc, s) => acc + Number(s.quantity || 0), 0);
         }
-        if (!payload.useCombinations) {
-            let minStock = 999999;
-            let hasStockDefined = false;
+
+        // 2. SIMPLE VARIANTS MODE (No combinations)
+        if (payload.variantGroups && payload.variantGroups.length > 0) {
+            let minStock = Infinity;
+            let hasStockOnSelection = false;
+            let selectionsMade = 0;
+
             for (const group of payload.variantGroups) {
                 const selectedId = selectedOptions[group.id];
-                const entry = group.entries.find(e => e.id === selectedId);
-                if (entry && entry.quantity !== undefined && entry.quantity !== null) {
-                    minStock = Math.min(minStock, Number(entry.quantity));
-                    hasStockDefined = true;
+                if (selectedId) {
+                    selectionsMade++;
+                    const entry = group.entries.find(e => e.id === selectedId);
+                    if (entry && entry.quantity !== undefined && entry.quantity !== null && entry.quantity !== "") {
+                        const entryPrice = Number(entry.price || (payload.samePriceForAll ? payload.sharedPrice : 0) || 0);
+                        if (!payload.samePriceForAll && entryPrice <= 0) {
+                            minStock = 0;
+                        } else {
+                            minStock = Math.min(minStock, Number(entry.quantity));
+                        }
+                        hasStockOnSelection = true;
+                    }
                 }
             }
-            return hasStockDefined ? minStock : Number(payload.quantity || 0);
+
+            if (hasStockOnSelection) return minStock;
+
+            // If nothing selected yet, return total possible stock (usually sum of the primary variant group)
+            if (selectionsMade === 0) {
+                // Sum up the first variant group as a representative total
+                const firstGroupTotal = payload.variantGroups[0].entries.reduce((acc, e) => acc + Number(e.quantity || 0), 0);
+                return firstGroupTotal || Number(payload.quantity || 0);
+            }
+
+            // Fallback for selections that don't have explicit variant quantities
+            if (Number(payload.price || 0) <= 0 && !payload.samePriceForAll) return 0;
+            return Number(payload.quantity || 0);
         }
+
+        // 3. NO VARIANTS MODE
+        if (Number(payload.price || 0) <= 0) return 0;
         return Number(payload.quantity || 0);
     }, [payload, currentSku, selectedOptions]);
 
@@ -207,11 +272,12 @@ export default function AddToCartModal({
     const shippingPromise = shippingArray.find((s: any) => s.kind === "promise" || s.type === "promise") ?? null;
 
     const formatUrl = (url: string) => {
-        if (!url) return "";
-        if (url.startsWith("http")) return url;
-        return url.startsWith("/public")
-            ? `${API_BASE_URL}${url}`
-            : `${API_BASE_URL}/public/${url}`;
+        if (!url) return "/assets/images/favio.png";
+        let formatted = url;
+        if (!url.startsWith("http")) {
+            formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+        }
+        return encodeURI(formatted);
     };
 
     const productImg = useMemo(() => {
@@ -247,19 +313,24 @@ export default function AddToCartModal({
         return `${days} ${days === 1 ? "day" : "days"} ${hours} ${hours === 1 ? "hour" : "hours"}`;
     };
 
-    const activeDiscountPercent = useMemo(() => {
-        if (!policy) return 0;
+    const activeDiscount = useMemo(() => {
+        if (!policy) return { percent: 0, name: "" };
         const now = new Date();
         const promo = (policy.promotions || []).find((p: any) => {
             const start = p.start_date ? new Date(p.start_date) : null;
             const end = p.end_date ? new Date(p.end_date) : null;
-            return p.discount_percent > 0 && (!start || now >= start) && (!end || now <= end);
+            return (Number(p.discount_percent) > 0) && (!start || now >= start) && (!end || now <= end);
         });
-        if (promo) return Number(promo.discount_percent);
+        if (promo) return { percent: Number(promo.discount_percent), name: promo.title || "Promotion" };
 
         const sale = (policy.sales_discounts || []).find((d: any) => Number(d.discount_percent) > 0);
-        return sale ? Number(sale.discount_percent) : 0;
+        if (sale) return { percent: Number(sale.discount_percent), name: (sale as any).title || (sale as any).discount_type || "Sales Discount" };
+
+        return { percent: 0, name: "" };
     }, [policy]);
+
+    const activeDiscountPercent = activeDiscount.percent;
+    const activeDiscountName = activeDiscount.name;
 
     const finalUnitPrice = useMemo(() => {
         const base = basePriceValue || 0;
@@ -274,8 +345,73 @@ export default function AddToCartModal({
 
     const returns = policy?.returns ?? {};
 
+    const imageRef = React.useRef<HTMLDivElement>(null);
+
+    const animateToCart = () => {
+        if (!imageRef.current) return;
+        const cartIcon = document.getElementById("cart-icon-ref");
+        if (!cartIcon) return;
+
+        const imgRect = imageRef.current.getBoundingClientRect();
+        const cartRect = cartIcon.getBoundingClientRect();
+
+        const flyer = document.createElement("div");
+        flyer.style.position = "fixed";
+        flyer.style.top = `${imgRect.top}px`;
+        flyer.style.left = `${imgRect.left}px`;
+        flyer.style.width = `${imgRect.width}px`;
+        flyer.style.height = `${imgRect.height}px`;
+        flyer.style.backgroundImage = `url("${productImg}")`;
+        flyer.style.backgroundSize = "cover";
+        flyer.style.borderRadius = "16px";
+        flyer.style.zIndex = "99999";
+        flyer.style.pointerEvents = "none";
+        flyer.style.transition = "all 0.8s cubic-bezier(0.42, 0, 0.58, 1)";
+        document.body.appendChild(flyer);
+
+        // Force reflow
+        flyer.offsetWidth;
+
+        flyer.style.top = `${cartRect.top + 10}px`;
+        flyer.style.left = `${cartRect.left + 15}px`;
+        flyer.style.width = "20px";
+        flyer.style.height = "20px";
+        flyer.style.opacity = "0.4";
+        flyer.style.transform = "rotate(360deg)";
+
+        setTimeout(() => {
+            flyer.remove();
+            // Subtle pulse on cart icon
+            cartIcon.classList.add("scale-110");
+            setTimeout(() => cartIcon.classList.remove("scale-110"), 200);
+        }, 800);
+    };
+
     const handleConfirmClick = async () => {
         if (!payload) return;
+
+        // Check internet connection
+        if (!navigator.onLine) {
+            Swal.fire({
+                title: "No Internet Connection",
+                text: "Please connect to the internet to proceed with your payment.",
+                icon: "warning",
+                confirmButtonText: "OK",
+                confirmButtonColor: "#f43f5e", // rose-500
+                customClass: {
+                    popup: "rounded-[2rem]",
+                    confirmButton: "rounded-xl font-bold px-6 py-3",
+                }
+            });
+            return;
+        }
+
+        // Restriction: Owner cannot buy their own product
+        const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
+        if (currentUserBizId && Number(currentUserBizId) === Number(payload.businessId)) {
+            toast.error("You are not allow to purchase your product");
+            return;
+        }
 
         // Ensure all required variant groups have a selection
         if (payload.variantGroups && payload.variantGroups.length > 0) {
@@ -288,7 +424,7 @@ export default function AddToCartModal({
         }
 
         if (actionType === "buy") {
-            if (!storedAddress) {
+            if (!activeAddress) { // Fix: Use activeAddress instead of storedAddress
                 setAddressModalOpen(true);
                 return;
             }
@@ -308,8 +444,11 @@ export default function AddToCartModal({
                         metadata: {
                             product_id: payload.productId,
                             quantity,
-                            selectedOptions,
-                            address: storedAddress,
+                            sku_id: currentSku ? Number(currentSku.id) : null,
+                            sku_price: currentSku ? Number(currentSku.price) : null,
+                            variant_option_ids: Object.values(selectedOptions).map(Number),
+                            selectedOptions, // legacy
+                            address: activeAddress,
                             note: sellerNote,
                             business_id: payload.businessId,
                             product_image: productImg,
@@ -334,8 +473,28 @@ export default function AddToCartModal({
                                 try {
                                     const completeRes = await verifyAndCompleteOrder(response.reference);
                                     if (completeRes.status) {
-                                        setCompletedReceiptUrl(completeRes.data.receiptUrl);
                                         toast.success("Order placed successfully!");
+                                        onClose(); // Close the modal
+
+                                        Swal.fire({
+                                            title: "Order Placed Successfully!",
+                                            text: "Your order has been confirmed. You can track it in your profile.",
+                                            icon: "success",
+                                            showCancelButton: true,
+                                            confirmButtonText: "View Orders",
+                                            cancelButtonText: "Close",
+                                            confirmButtonColor: "#f43f5e", // rose-500
+                                            cancelButtonColor: "#94a3b8", // slate-400
+                                            customClass: {
+                                                popup: "rounded-[2rem]",
+                                                confirmButton: "rounded-xl font-bold px-6 py-3",
+                                                cancelButton: "rounded-xl font-bold px-6 py-3"
+                                            }
+                                        }).then((result) => {
+                                            if (result.isConfirmed) {
+                                                router.push("/profile/orders");
+                                            }
+                                        });
                                     }
                                 } catch (e) {
                                     console.error("Order completion error", e);
@@ -363,7 +522,7 @@ export default function AddToCartModal({
                     selectedOptions,
                     quantity,
                     sku: currentSku,
-                    address: storedAddress,
+                    address: activeAddress,
                     note: sellerNote,
                     paymentMethod
                 });
@@ -389,9 +548,19 @@ export default function AddToCartModal({
                 }
 
                 await addToCartApi(cartData, token);
+                animateToCart();
+                window.dispatchEvent(new CustomEvent("cart-updated"));
+                
+                // Sync across tabs
+                const channel = new BroadcastChannel('stoqle_cart_sync');
+                channel.postMessage('update');
+                channel.close();
+
                 toast.success("Added to cart successfully!");
                 onConfirm({ selectedOptions, quantity, sku: currentSku });
-                onClose();
+                // We don't onClose immediately to let the animation finish if desired, 
+                // but usually onClose is fine if the animation is on document.body
+                setTimeout(() => onClose(), 600);
             } catch (err: any) {
                 console.error("Add to cart error", err);
                 toast.error(err?.body?.message || "Failed to add to cart");
@@ -403,51 +572,17 @@ export default function AddToCartModal({
 
     const handleAddressSave = (addressData: any) => {
         setAddressModalOpen(false);
-        setStoredAddress(addressData);
+        setInternalStoredAddress(addressData);
+        if (onAddressChange) {
+            onAddressChange(addressData);
+        }
     };
 
     if (!open || !payload) return null;
 
-    if (completedReceiptUrl) {
-        return (
-            <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-                <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl z-10 p-8 text-center animate-in fade-in zoom-in duration-300">
-                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg className="w-10 h-10 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900 mb-2">Payment Successful!</h2>
-                    <p className="text-slate-500 text-sm mb-8">Your order has been placed and your receipt is ready!!.</p>
-
-                    <div className="space-y-3">
-                        <a
-                            href={completedReceiptUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 w-full py-2 bg-red-500 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all active:scale-95 shadow-xl"
-                        >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Download Receipt
-                        </a>
-                        <button
-                            onClick={onClose}
-                            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div
-            className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center p-0"
+            className="fixed inset-0 z-[20000] flex items-end sm:items-center justify-center p-0"
             role="dialog"
             aria-modal="true"
         >
@@ -494,11 +629,11 @@ export default function AddToCartModal({
                         <div className="border-t border-emerald-200/50 p-2.5 px-5 bg-white flex items-center justify-between">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <MapPinIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                                {storedAddress ? (
+                                {activeAddress ? (
                                     <div className="text-[11px] text-slate-600 truncate">
-                                        Delivering to <span className="font-bold text-slate-800">{storedAddress.recipientName}</span>,
-                                        at <span className="font-bold text-slate-800">{storedAddress.address} {storedAddress.region}</span>,
-                                        <span className="text-slate-500 ml-1">{storedAddress.contactNo}</span>
+                                        Delivering to <span className="font-bold text-slate-800">{activeAddress.recipientName}</span>,
+                                        at <span className="font-bold text-slate-800">{activeAddress.address} {activeAddress.region}</span>,
+                                        <span className="text-slate-500 ml-1">{activeAddress.contactNo}</span>
                                     </div>
                                 ) : (
                                     <div className="text-[11px] text-slate-500 italic">
@@ -510,7 +645,7 @@ export default function AddToCartModal({
                                 onClick={() => setAddressModalOpen(true)}
                                 className="text-[11px] font-black text-red-500 hover:text-red-600 shrink-0 ml-4 underline underline-offset-2"
                             >
-                                {storedAddress ? "Change" : "Add Address"}
+                                {activeAddress ? "Change" : "Add Address"}
                             </button>
                         </div>
                     )}
@@ -522,7 +657,7 @@ export default function AddToCartModal({
                     <XMarkIcon className="w-5 h-5" />
                 </button>
                 <div className="p-5 flex items-start gap-4 border-b border-slate-100 relative">
-                    <div className="w-24 h-24 rounded-2xl overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0">
+                    <div ref={imageRef} className="w-24 h-24 rounded-2xl overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0">
                         <img
                             src={productImg}
                             alt={payload.title}
@@ -605,9 +740,11 @@ export default function AddToCartModal({
 
                                         // Find ALL enabled SKUs that include both this option 'e.id' 
                                         // and all currently selected options from other groups
+                                        // AND have a valid price
                                         const matchingSkus = payload.skus?.filter(
                                             (sku) =>
                                                 sku.enabled &&
+                                                Number(sku.price || (payload.samePriceForAll ? payload.sharedPrice : 0) || 0) > 0 &&
                                                 sku.variantOptionIds.includes(e.id) &&
                                                 otherSelectedIds.every((oid) => sku.variantOptionIds.includes(oid))
                                         ) || [];
@@ -619,7 +756,8 @@ export default function AddToCartModal({
                                         );
                                     }
 
-                                    const isOutOfStock = stock <= 0;
+                                    const isPriceInvalid = !payload.useCombinations && !payload.samePriceForAll && Number(e.price || 0) <= 0;
+                                    const isOutOfStock = stock <= 0 || isPriceInvalid;
 
                                     if (groupHasImages) {
                                         const displayUrl = hasImage
@@ -629,7 +767,6 @@ export default function AddToCartModal({
                                         return (
                                             <button
                                                 key={e.id}
-                                                disabled={isOutOfStock}
                                                 onClick={() => {
                                                     setSelectedOptions((prev) => {
                                                         if (prev[g.id] === e.id) {
@@ -643,7 +780,7 @@ export default function AddToCartModal({
                                                 className={`relative flex flex-col p-1.5 rounded-xl bg-red-100/50 border transition-all text-left group/btn ${isSelected
                                                     ? "border-red-500 bg-red-50/30 text-red-500"
                                                     : "border-white bg-slate-100 hover:border-slate-200"
-                                                    } ${isOutOfStock ? "opacity-40 cursor-not-allowed grayscale" : "cursor-pointer"
+                                                    } ${isOutOfStock ? "opacity-40 grayscale cursor-pointer" : "cursor-pointer"
                                                     }`}
                                             >
                                                 {/* STOCK FLAG */}
@@ -685,7 +822,6 @@ export default function AddToCartModal({
                                         return (
                                             <button
                                                 key={e.id}
-                                                disabled={isOutOfStock}
                                                 onClick={() => {
                                                     setSelectedOptions((prev) => {
                                                         if (prev[g.id] === e.id) {
@@ -699,7 +835,7 @@ export default function AddToCartModal({
                                                 className={`relative px-4 py-2 rounded-xl border text-[11px] font-black transition-all shadow-sm flex items-center gap-2 ${isSelected
                                                     ? "border-red-500 bg-red-50 text-red-600 shadow-red-100"
                                                     : "border-white bg-white text-slate-700 hover:border-slate-200"
-                                                    } ${isOutOfStock ? "opacity-30 cursor-not-allowed line-through" : "cursor-pointer"
+                                                    } ${isOutOfStock ? "opacity-30 line-through cursor-pointer" : "cursor-pointer"
                                                     }`}
                                             >
                                                 {/* STOCK FLAG FOR TEXT BUTTONS */}
@@ -717,22 +853,49 @@ export default function AddToCartModal({
                         </div>
                     ))}
 
+                    {/* Seller Note */}
+                    <div className="space-y-3">
+
+                        <DefaultInput
+                            label="Note"
+                            value={sellerNote}
+                            onChange={setSellerNote}
+                            placeholder="Note optional (seller confirm)"
+                        />
+                    </div>
+
                     {/* Checkout Specifics */}
                     {actionType === "buy" && (
-                        <div className="space-y-6 mt-2">
-                            {/* Seller Note */}
-                            <div className="space-y-3">
-                                <div className="text-xs font-black  tracking-widest text-slate-800 flex items-center gap-2">
-                                    <div className="w-1 h-3 bg-red-500 rounded-full" />
-                                    Order Note
+                        <div className="space-y-6 mt-4">
+                            {/* Integrated Price Summary moved from footer to scrollable area */}
+                            <div className="space-y-2.5 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-medium">Subtotal</span>
+                                    <span className="text-slate-900 font-bold">₦{(originalPrice * quantity).toLocaleString()}</span>
                                 </div>
-                                <DefaultInput
-                                    label="Note"
-                                    value={sellerNote}
-                                    onChange={setSellerNote}
-                                    placeholder="Note optional (seller confirm)"
-                                />
+
+                                {activeDiscountPercent > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-600 font-medium">{activeDiscountName}</span>
+                                        <span className="text-red-500 font-bold">-₦{((originalPrice - price) * quantity).toLocaleString()}</span>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-medium">Shipping Fee</span>
+                                    <span className="text-emerald-600 font-bold uppercase tracking-wider">Free</span>
+                                </div>
+
+                                {/* Total Savings */}
+                                {activeDiscountPercent > 0 && (
+                                    <div className="flex justify-between items-center text-xs text-rose-600 font-black pt-1 border-t border-rose-100/50">
+                                        <span>Total Savings</span>
+                                        <span>-₦{((originalPrice - price) * quantity).toLocaleString()}</span>
+                                    </div>
+                                )}
                             </div>
+
+
 
                             {/* Payment Method */}
                             <div className="space-y-3">
@@ -740,7 +903,35 @@ export default function AddToCartModal({
                                     <div className="w-1 h-3 bg-red-500 rounded-full" />
                                     Payment Method
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-3">
+                                    {[
+                                        { id: "paystack", label: "Paystack Payment", sub: "Card, Transfer, USSD", icon: "/assets/images/paystack.png" },
+                                        { id: "stoqle_pay", label: "StoqlePay Wallet", sub: "Fast in-app payment", icon: "/assets/images/logo.png" }
+                                    ].map((pm) => (
+                                        <button
+                                            key={pm.id}
+                                            onClick={() => setPaymentMethod(pm.id)}
+                                            className={`w-full flex items-center justify-between p-4 rounded-2xl  transition-all text-left ${paymentMethod === pm.id
+                                                ? "border-red-500 bg-red-50/30"
+                                                : "border-slate-100 bg-white hover:border-slate-200"
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-white p-2 flex items-center justify-center shrink-0 ">
+                                                    <img src={pm.icon} alt={pm.label} className="w-full h-full object-contain" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm text-slate-800">{pm.label}</div>
+                                                    <div className="text-[10px] text-slate-500">{pm.sub}</div>
+                                                </div>
+                                            </div>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === pm.id ? "border-red-500 bg-red-500" : "border-slate-200"}`}>
+                                                {paymentMethod === pm.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                                {/* <div className="space-y-2">
                                     {[
                                         { id: "paystack", label: "Paystack Payment", sub: "Credit/Debit Card, Transfer, USSD" },
                                         { id: "stoqle_pay", label: "StoqlePay Wallet", sub: "Fast & Secure in-app wallet" }
@@ -768,32 +959,47 @@ export default function AddToCartModal({
                                             </div>
                                         </button>
                                     ))}
-                                </div>
+                                </div> */}
                             </div>
                         </div>
                     )}
                 </div>
 
                 <div className="p-5 border-t border-slate-100 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-                    <div className="mb-4 space-y-1.5">
-                        <div className="flex-0 text-center items-center gap-2 text-[11px] font-bold text-slate-700">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Promise to ship within {shippingPromise ? formatDuration(shippingPromise.value, shippingPromise.unit) : "48 hours"}, Delay compensation guaranteed
+
+
+                    <div className="mb-4 space-y-1.5 px-1">
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                            Promise to ship within {shippingPromise ? formatDuration(shippingPromise.value, shippingPromise.unit) : "48 hours"}
                         </div>
-
-
                     </div>
 
-                    <button
-                        onClick={handleConfirmClick}
-                        disabled={isPaying || (isAllSelected && availableStock <= 0)}
-                        className={`w-full py-2 rounded-full font-black text-sm text-white transition-all shadow-lg active:scale-[0.98] ${actionType === "buy"
-                            ? "bg-gradient-to-r from-red-600 to-rose-600 hover:shadow-red-200"
-                            : "bg-red-600 hover:bg-red-700 shadow-red-100"
-                            } disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                        {isPaying ? "SECURELY REDIRECTING..." : (isAllSelected && availableStock <= 0 ? "OUT OF STOCK" : (actionType === "buy" ? "Proceed to Checkout" : `Confirm · ₦ ${(price * quantity).toLocaleString()}`))}
-                    </button>
+                    <div className={`flex items-center gap-4 ${actionType === 'buy' ? 'justify-between' : ''}`}>
+                        {actionType === 'buy' ? (
+                            <>
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">Total</span>
+                                    <span className="text-lg font-black text-red-600 leading-none">₦{(price * quantity).toLocaleString()}</span>
+                                </div>
+                                <button
+                                    onClick={handleConfirmClick}
+                                    disabled={isPaying || isOwner || (isAllSelected && availableStock <= 0)}
+                                    className="flex-1 max-w-[220px] py-3.5 bg-gradient-to-r from-red-600 to-rose-600 text-white font-black rounded-2xl shadow-xl shadow-red-100 hover:shadow-red-200 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-xs uppercase tracking-widest"
+                                >
+                                    {isPaying ? "Processing..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : "Pay Now"))}
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                onClick={handleConfirmClick}
+                                disabled={isPaying || isOwner || (isAllSelected && availableStock <= 0)}
+                                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl shadow-xl shadow-red-100 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            >
+                                {isPaying ? "Adding..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : `Confirm · ₦ ${(price * quantity).toLocaleString()}`))}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

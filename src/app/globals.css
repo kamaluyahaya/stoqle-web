@@ -3,6 +3,13 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --toaster-left: 65%;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --toaster-left: 55%;
+  }
 }
 
 @theme inline {
@@ -26,56 +33,43 @@ body {
 }
 
 
-.post-grid {
-  column-count: 5;
-  column-gap: 1.5rem; /* horizontal gap between columns */
-}
-
-/* Each article becomes an inline-block element that won't be split between columns.
-   We also enforce min/max heights here and prevent content from overflowing the rounded corners. */
-.post-grid > article {
-  width: 100%;               /* take full column width */
-  break-inside: avoid;       /* avoid breaking items between columns */
-  -webkit-column-break-inside: avoid;
-  -moz-column-break-inside: avoid;
-
-  /* the min / max heights you asked for — tweak to taste */
-  overflow: hidden;          /* crop any content past max-height (keeps rounded corners clean) */
-  border-radius: 1rem;       /* keep your card rounding if you want */
-}
-
 /* Ensure images & videos behave inside the card */
-.post-grid > article video {
+.post-grid>article video {
   display: block;
   width: 100%;
-  height: auto;            /* natural height but will be cropped by article's max-height */
+  height: auto;
+  /* natural height but will be cropped by article's max-height */
   object-fit: cover;
 }
 
 /* Responsive column counts (keep your original breakpoints) */
 @media (max-width: 1430px) {
   .post-grid {
-    column-count: 4;
-    column-gap: 1.5rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.5rem;
   }
-  .post-grid > article { margin-bottom: 1.5rem; }
+
+
 }
 
 @media (max-width: 1210px) {
   .post-grid {
-    column-count: 3;
-    column-gap: 1.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem;
   }
-  .post-grid > article { margin-bottom: 1.5rem; }
+
+
 }
 
 @media (max-width: 700px) {
   .post-grid {
-    column-count: 2;
-    column-gap: 0.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
   }
-  .post-grid > article { margin-bottom: 0.5rem; }
+
+
 }
+
 @media (max-width: 1210px) {
   .variant-name-input {
     width: 100% !important;
@@ -93,9 +87,15 @@ body {
 }
 
 @keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
+
 @keyframes shimmer-business {
   100% {
     transform: translateX(100%);
@@ -118,12 +118,15 @@ body {
 
 /* hide scrollbar but keep scrolling */
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE + Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE + Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 .no-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome, Safari */
+  display: none;
+  /* Chrome, Safari */
 }
 
 [data-sonner-toast] {
@@ -144,17 +147,32 @@ body {
 }
 
 @keyframes marquee {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 @keyframes toast-blink-in {
-  0% { transform: scale(0.9); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .toast-blink {
   animation: toast-blink-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-
+/* Ensure SweetAlert2 is always on top of modals */
+.swal2-container {
+  z-index: 10000 !important;
+}

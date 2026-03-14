@@ -3,6 +3,7 @@
 
 import { Profiler, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   HomeIcon as HomeOutline,
   StarIcon as StarOutline,
@@ -14,8 +15,9 @@ import {
   ShoppingCartIcon,
 } from "@heroicons/react/24/outline";
 import { UserCircleIcon } from "@heroicons/react/24/outline";
-import { useAuth } from "@/src/context/authContext"; // adjust path if needed
+import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
+import { fetchCartApi } from "@/src/lib/api/cartApi";
 
 type Props = {
   navHeight: number;
@@ -29,6 +31,7 @@ export default function Sidebar({ navHeight, width }: Props) {
 
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
+  const [cartCount, setCartCount] = useState(0);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -63,6 +66,38 @@ export default function Sidebar({ navHeight, width }: Props) {
       text: "To better interact and communicate with others.",
     },
   ];
+
+  const updateCartCount = async () => {
+    if (auth?.token) {
+      try {
+        const res = await fetchCartApi(auth.token);
+        setCartCount(res.data?.items?.length || 0);
+      } catch (e) {
+        console.error("Failed to fetch cart count in sidebar", e);
+      }
+    } else {
+      setCartCount(0);
+    }
+  };
+
+  useEffect(() => {
+    updateCartCount();
+    window.addEventListener("cart-updated", updateCartCount);
+
+    const channel = typeof window !== 'undefined' ? new BroadcastChannel('stoqle_cart_sync') : null;
+    if (channel) {
+      channel.onmessage = (event) => {
+        if (event.data === 'update') {
+          updateCartCount();
+        }
+      };
+    }
+
+    return () => {
+      window.removeEventListener("cart-updated", updateCartCount);
+      if (channel) channel.close();
+    };
+  }, [auth?.token]);
 
   // click outside and escape
   useEffect(() => {
@@ -124,9 +159,15 @@ export default function Sidebar({ navHeight, width }: Props) {
     badgeCount?: number;
   }) => (
     <li>
-      <button
-        onClick={() => navWithAuth(href, requireLogin)}
-        className="w-full flex items-center justify-between rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer group"
+      <Link
+        href={href}
+        onClick={(e) => {
+          if (requireLogin && !isLoggedIn) {
+            e.preventDefault();
+            auth.openLogin();
+          }
+        }}
+        className="w-full flex items-center justify-between rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer group transition-colors"
       >
         <div className="flex items-center gap-3">
           <Outline className="h-5 w-5 text-gray-500" />
@@ -137,18 +178,18 @@ export default function Sidebar({ navHeight, width }: Props) {
             {badgeCount > 99 ? "99+" : badgeCount}
           </span>
         )}
-      </button>
+      </Link>
     </li>
   );
 
   const SubmenuRow = ({ label, href }: { label: string; href: string }) => (
     <li>
-      <button
-        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+      <Link
+        href={href}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
         onClick={() => {
           setShowMenu(false);
           setActiveSubmenu(null);
-          router.push(href);
         }}
       >
         <span className="text-gray-500">{label}</span>
@@ -162,7 +203,7 @@ export default function Sidebar({ navHeight, width }: Props) {
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
         </svg>
-      </button>
+      </Link>
     </li>
   );
 
@@ -194,7 +235,7 @@ export default function Sidebar({ navHeight, width }: Props) {
             requireLogin={true}
           />
 
-          <MenuItem label="Cart" Outline={ShoppingCartIcon} href="/cart" requireLogin={true} />
+          <MenuItem label="Cart" Outline={ShoppingCartIcon} href="/cart" requireLogin={true} badgeCount={cartCount} />
 
           <MenuItem label="Messages" Outline={ChatOutline} href="/messages" requireLogin={true} badgeCount={unreadCount} />
           <MenuItem

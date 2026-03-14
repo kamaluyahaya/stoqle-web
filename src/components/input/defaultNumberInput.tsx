@@ -29,14 +29,9 @@ export default function NumberInput({
       return;
     }
 
-    // Numbers only
-    if (!/^\d+$/.test(raw)) return;
-
     const num = Number(raw);
 
-    // Reject <= 0
-    if (num < min) return;
-
+    // Allow typing, enforce min via the "Next" button in the parent component
     onChange(num);
   };
 

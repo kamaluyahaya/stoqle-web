@@ -1,4 +1,4 @@
-// ProfileHeader.tsx
+// userHeader.tsx
 "use client";
 
 import React, { useEffect, useMemo, useLayoutEffect, useState, useRef } from "react";
@@ -7,6 +7,15 @@ import { useAuth } from "@/src/context/authContext";
 import { useRouter } from "next/navigation";
 import Header from "./header";
 import ShimmerGrid from "../../shimmer";
+import ImageViewer from "../../modal/imageViewer";
+import { FaHeart, FaRegHeart } from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
+import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
+import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
+import type { PreviewPayload, ProductSku } from "@/src/types/product";
+import { API_BASE_URL } from "@/src/lib/config";
+import SocialModal from "../../modal/socialModal";
+
 
 type ApiPost = any;
 
@@ -80,7 +89,340 @@ const mapApiPost = (p: any): Post => {
   };
 };
 
-export default function ProfileHeader({ postCount = 12, userId }: Props) {
+function LikeBurst() {
+  const particles = Array.from({ length: 12 });
+  const colors = ["#EF4444", "#3B82F6", "#10B981", "#F59E0B"];
+  return (
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50">
+      {particles.map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ x: 0, y: 0, scale: 0, opacity: 1, rotate: 0 }}
+          animate={{
+            x: Math.cos((i * 30) * Math.PI / 180) * 60,
+            y: Math.sin((i * 30) * Math.PI / 180) * 60,
+            scale: [0.2, 1.2, 1.8, 0],
+            opacity: [1, 1, 1, 0],
+            rotate: [0, 45, 90]
+          }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          className="absolute"
+        >
+          <FaHeart size={12} style={{ color: colors[i % colors.length] }} className="drop-shadow-sm" />
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+const PostCard = React.memo(({
+  post,
+  openPostWithUrl,
+  toggleLike,
+  getNoteStyles,
+  setFullImageUrl
+}: any) => {
+  const [showBurst, setShowBurst] = useState(false);
+
+  return (
+    <article
+      onClick={() => openPostWithUrl(post)}
+      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+    >
+      <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+        {post.isVideo && (
+          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
+              <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+            </svg>
+          </div>
+        )}
+
+        {post.coverType === "note" && !post.src ? (
+          <div
+            className="w-full h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+            style={getNoteStyles(post.noteConfig)}
+          >
+            {(() => {
+              const cfg = typeof post.noteConfig === "string" ? JSON.parse(post.noteConfig) : post.noteConfig;
+              if (cfg?.emojis?.length > 0) {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
+                    {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
+                      <span key={idx} className="text-4xl transform rotate-12">
+                        {emoji}
+                      </span>
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            <div className="text-center relative z-10">
+              <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
+                {post.noteConfig?.text ?? post.caption ?? "Note"}
+              </p>
+            </div>
+          </div>
+        ) : post.isVideo ? (
+          <video
+            src={post.src}
+            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
+            muted
+            loop
+            playsInline
+          />
+        ) : (
+          <img
+            src={post.src || NO_IMAGE_PLACEHOLDER}
+            alt={post.caption}
+            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-110"
+          />
+        )}
+      </div>
+
+      <div className="p-3">
+        <p className="text-sm text-slate-800 line-clamp-2 leading-snug font-semibold mb-3">
+          {post.coverType === "note" && !post.src ? post.note_caption : post.caption}
+        </p>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div
+              className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
+              onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar); }}
+            >
+              <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
+            </div>
+            <span className="truncate text-[11px] font-semibold text-slate-400 max-w-[120px] capitalize">
+              {post.user.name}
+            </span>
+          </div>
+
+          <div
+            className="flex items-center gap-1 cursor-pointer relative"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!post.liked) {
+                setShowBurst(true);
+                setTimeout(() => setShowBurst(false), 800);
+              }
+              toggleLike(post.id);
+            }}
+          >
+            {showBurst && <LikeBurst />}
+            <div className="relative w-4 h-4 flex items-center justify-center">
+              <AnimatePresence>
+                <motion.div
+                  key={post.liked ? "liked" : "unliked"}
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
+                >
+                  {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
+                </motion.div>
+              </AnimatePresence>
+              {post.liked && (
+                <motion.div
+                  initial={{ scale: 1, opacity: 1 }}
+                  animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
+                  transition={{ duration: 0.6 }}
+                  className="absolute text-red-500 pointer-events-none"
+                >
+                  <FaHeart size={14} />
+                </motion.div>
+              )}
+            </div>
+            <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}, (prev, next) => {
+  return prev.post.id === next.post.id && prev.post.liked === next.post.liked && prev.post.likeCount === next.post.likeCount;
+});
+PostCard.displayName = "PostCard";
+
+const ProductCard = React.memo(({
+  p,
+  formatUrl,
+  handleProductClick,
+  handleLikeClick,
+  isLiked,
+  likeCount,
+  fetchingProduct
+}: any) => {
+  const [showBurst, setShowBurst] = useState(false);
+  const isPromoActive = !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
+
+  return (
+    <article
+      key={p.product_id}
+      onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
+      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+    >
+      <div className="relative w-full bg-slate-50 overflow-hidden post-media">
+        {p.product_video ? (
+          <video
+            src={formatUrl(p.product_video)}
+            poster={formatUrl(p.first_image)}
+            muted
+            loop
+            playsInline
+            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
+          />
+        ) : (
+          <img
+            src={formatUrl(p.first_image)}
+            alt={p.title}
+            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-110"
+          />
+        )}
+        {p.product_video && (
+          <div className="absolute top-3 right-3 bg-black/30 backdrop-blur-md rounded-full z-10 p-1">
+            <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5.14v14l11-7-11-7z" />
+            </svg>
+          </div>
+        )}
+        {fetchingProduct && (
+          <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+      </div>
+      <div className="p-3">
+        <div className="flex items-center justify-between pt-1 mb-1">
+          <span className="text-slate-900 text-sm font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
+          <div
+            className="flex items-center gap-1 cursor-pointer relative"
+            onClick={(e) => {
+              if (!isLiked) {
+                setShowBurst(true);
+                setTimeout(() => setShowBurst(false), 800);
+              }
+              handleLikeClick(e, p.product_id, p.likes_count || 0);
+            }}
+          >
+            {showBurst && <LikeBurst />}
+            <div className="relative w-4 h-4 flex items-center justify-center">
+              <AnimatePresence>
+                <motion.div
+                  key={isLiked ? "liked" : "unliked"}
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-slate-400'}`}
+                >
+                  {isLiked ? <FaHeart className="text-xs" /> : <FaRegHeart className="text-xs" />}
+                </motion.div>
+              </AnimatePresence>
+              {isLiked && (
+                <motion.div
+                  initial={{ scale: 1, opacity: 1 }}
+                  animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
+                  transition={{ duration: 0.6 }}
+                  className="absolute text-red-500 pointer-events-none"
+                >
+                  <FaHeart size={14} />
+                </motion.div>
+              )}
+            </div>
+            <span className="text-[10px] font-semibold text-slate-600 ml-0.5">{likeCount}</span>
+          </div>
+        </div>
+        <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>{p.title}</h3>
+        <div className="mt-2 min-h-[14px]">
+          {isPromoActive ? (
+            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
+              {p.promo_discount}% OFF
+            </span>
+          ) : p.sale_type ? (
+            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
+              {p.sale_discount}% Off
+            </span>
+          ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
+            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tighter">
+              Only {Number(p.total_quantity)} Left
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}, (prev, next) => {
+  return prev.p.product_id === next.p.product_id &&
+    prev.isLiked === next.isLiked &&
+    prev.likeCount === next.likeCount &&
+    prev.fetchingProduct === next.fetchingProduct;
+});
+ProductCard.displayName = "ProductCard";
+
+const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, setFullImageUrl, formatUrl, handleProductClick, handleLikeClick, likeData, fetchingProductId }: any) => {
+  const [columns, setColumns] = useState(5);
+
+  useEffect(() => {
+    const updateColumns = () => {
+      const w = window.innerWidth;
+      if (w < 700) setColumns(2);
+      else if (w < 1210) setColumns(3);
+      else if (w < 1430) setColumns(4);
+      else setColumns(5);
+    };
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, []);
+
+  const columnData = Array.from({ length: columns }, () => [] as any[]);
+  items.forEach((item: any, index: number) => {
+    columnData[index % columns].push(item);
+  });
+
+  return (
+    <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
+      {columnData.map((colItems, colIdx) => (
+        <div key={colIdx} className="flex-1 flex flex-col gap-2 sm:gap-6 min-w-0">
+          {colItems.map((item: any, index: number) => {
+            const isPost = type === 'post' || type === 'note' || (type === 'liked' && !item.isProduct);
+            if (isPost) {
+              return (
+                <PostCard
+                  key={item.id || index}
+                  post={item}
+                  openPostWithUrl={openPostWithUrl}
+                  toggleLike={toggleLike}
+                  getNoteStyles={getNoteStyles}
+                  setFullImageUrl={setFullImageUrl}
+                />
+              );
+            } else {
+              const ld = likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 };
+              return (
+                <ProductCard
+                  key={item.product_id}
+                  p={item}
+                  formatUrl={formatUrl}
+                  handleProductClick={handleProductClick}
+                  handleLikeClick={handleLikeClick}
+                  isLiked={ld.liked}
+                  likeCount={ld.count}
+                  fetchingProduct={fetchingProductId === item.product_id}
+                />
+              );
+            }
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default function UserHeader({ postCount = 12, userId }: Props) {
   const [profileApi, setProfileApi] = useState<any | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -91,27 +433,47 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
   const [postsError, setPostsError] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
+  // Products state
+  const [vendorProducts, setVendorProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [fetchingProduct, setFetchingProduct] = useState(false);
+  const [productLikeData, setProductLikeData] = useState<Record<number, { liked: boolean, count: number }>>({});
+  const [fetchingProductId, setFetchingProductId] = useState<number | null>(null);
+
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [socialModalOpen, setSocialModalOpen] = useState(false);
+  const [activeSocialTab, setActiveSocialTab] = useState<"friends" | "followers" | "following" | "recommend" | "liked">("followers");
+
+  const [likedItems, setLikedItems] = useState<any[]>([]);
+  const [likedLoading, setLikedLoading] = useState(false);
+
+  const formatUrl = (url: string) => {
+    if (!url) return NO_IMAGE_PLACEHOLDER;
+    if (url.startsWith("http")) return url;
+    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  };
+
   const auth = useAuth();
   const router = useRouter();
 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const viewUserId = userId ? String(userId) : "me";
+  const currentUserId = auth?.user?.user_id ? String(auth.user.user_id) : null;
+  const isOwner = viewUserId === "me" || (currentUserId && viewUserId === currentUserId);
+
   const tabs = useMemo(() => {
-    const base = ["Posts", "Notes"];
+    const base = ["Notes", "Posts"];
     if (profileApi?.is_business_owner) base.push("Products");
+    if (isOwner) base.push("Liked");
     return base;
-  }, [profileApi?.is_business_owner]);
+  }, [profileApi?.is_business_owner, isOwner]);
 
   const pushedRef = useRef(false);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
-  // Determine whether we're viewing "me" or another user
-  // If userId prop is undefined => view "me"
-  const viewUserId = userId ? String(userId) : "me";
-  const currentUserId = auth?.user?.user_id ? String(auth.user.user_id) : null;
-  const viewingOwnProfile = viewUserId === "me" || (currentUserId && viewUserId === currentUserId);
-
-  // fetch profile (either /me or /api/auth/users/:user_id)
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -133,15 +495,9 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
             : `${base.replace(/\/$/, "")}/api/auth/users/${encodeURIComponent(viewUserId)}`;
 
         const res = await fetch(endpoint, { signal: controller.signal, headers });
-
-        if (!res.ok) {
-          throw new Error(`Profile API returned ${res.status}`);
-        }
-
+        if (!res.ok) throw new Error(`Profile API returned ${res.status}`);
         const json = await res.json();
         if (cancelled) return;
-
-        // normalize response shapes (both your /me and /users/:id responses use data.user etc)
         const d = json?.data ?? json;
         const normalized = {
           user: d?.user ?? null,
@@ -166,9 +522,82 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [viewUserId]); // re-run when userId changes
+  }, [viewUserId]);
 
-  // fetch posts (either /me or /user/:user_id)
+  // fetch liked items if owner selects "Liked" tab
+  useEffect(() => {
+    if (tabs[activeTabIndex] !== "Liked" || !isOwner) return;
+
+    let cancelled = false;
+    async function loadLikedItems() {
+      setLikedLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        };
+
+        const [postsRes, productsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/social/liked/me`, { headers }),
+          fetch(`${API_BASE_URL}/api/products/liked/me`, { headers })
+        ]);
+
+        if (cancelled) return;
+
+        const postsJson = await postsRes.json();
+        const productsJson = await productsRes.json();
+
+        const postsList = (postsJson?.data?.posts || postsJson?.posts || []).map((p: any) => ({ ...mapApiPost(p), liked_at: p.liked_at }));
+        const productsList = (productsJson?.data?.products || productsJson?.products || []).map((p: any) => ({ ...p, isProduct: true }));
+
+        const merged = [...postsList, ...productsList].sort((a, b) => {
+          const dateA = new Date(a.liked_at || 0).getTime();
+          const dateB = new Date(b.liked_at || 0).getTime();
+          return dateB - dateA;
+        });
+
+        setLikedItems(merged);
+      } catch (err) {
+        console.error("Failed to load liked items:", err);
+      } finally {
+        if (!cancelled) setLikedLoading(false);
+      }
+    }
+    loadLikedItems();
+    return () => { cancelled = true; };
+  }, [activeTabIndex, tabs, isOwner]);
+
+  // fetch vendor products if owner
+  useEffect(() => {
+    const businessId = profileApi?.business?.business_id || profileApi?.business?.id;
+    const isOwner = profileApi?.is_business_owner;
+
+    if (!businessId || !isOwner) return;
+
+    const loadVendorProducts = async () => {
+      setProductsLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetchBusinessProducts(businessId, 100, undefined, undefined, token);
+        let foundProducts = [];
+        if (res?.data?.products && Array.isArray(res.data.products)) {
+          foundProducts = res.data.products;
+        } else if (res?.data && Array.isArray(res.data)) {
+          foundProducts = res.data;
+        } else if (Array.isArray(res)) {
+          foundProducts = res;
+        }
+        setVendorProducts(foundProducts);
+      } catch (err) {
+        console.error("Failed to load products", err);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+    loadVendorProducts();
+  }, [profileApi]);
+
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -189,34 +618,21 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
             : `${base.replace(/\/$/, "")}/api/social/user/${encodeURIComponent(viewUserId)}`;
 
         const resp = await fetch(endpoint, { signal: controller.signal, headers });
-
-        if (!resp.ok) {
-          throw new Error(`Posts API returned ${resp.status}`);
-        }
-
+        if (!resp.ok) throw new Error(`Posts API returned ${resp.status}`);
         const json = await resp.json();
 
-        // support different shapes (data.posts, data, posts)
         const apiPosts: any[] =
-          json?.data?.posts && Array.isArray(json.data.posts)
-            ? json.data.posts
-            : Array.isArray(json?.data)
-              ? json.data
-              : Array.isArray(json?.posts)
-                ? json.posts
-                : Array.isArray(json?.data?.posts)
-                  ? json.data.posts
-                  : [];
+          json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts :
+            (Array.isArray(json?.data) ? json.data :
+              (Array.isArray(json?.posts) ? json.posts :
+                (Array.isArray(json?.data?.posts) ? json.data.posts : [])));
 
         if (cancelled) return;
-
         const mapped = apiPosts.map((p) => mapApiPost(p));
-        const ordered = mapped;
-
         const media: Post[] = [];
         const notes: Post[] = [];
 
-        for (const m of ordered) {
+        for (const m of mapped) {
           if (m.coverType === "note") {
             notes.push(m);
             continue;
@@ -246,7 +662,6 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
     };
   }, [viewUserId, postCount]);
 
-  // rest of your modal/url/popstate/tab/touch/keyboard logic unchanged...
   useEffect(() => {
     const tryOpenFromUrl = async () => {
       if (typeof window === "undefined") return;
@@ -277,10 +692,10 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
         setSelectedPost({
           id: postId,
           caption: "Post unavailable",
-          user: { name: "---", avatar: `---` },
+          user: { name: "---", avatar: DEFAULT_AVATAR },
           liked: false,
           likeCount: 0,
-        });
+        } as Post);
         pushedRef.current = false;
       }
     };
@@ -316,10 +731,10 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
               setSelectedPost({
                 id: postId,
                 caption: "Post unavailable",
-                user: { name: "---", avatar: `---` },
+                user: { name: "---", avatar: DEFAULT_AVATAR },
                 liked: false,
                 likeCount: 0,
-              });
+              } as Post);
             }
           })();
         }
@@ -347,7 +762,6 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
 
   const closeModal = () => {
     setSelectedPost(null);
-
     try {
       const url = new URL(window.location.href);
       const hadParam = url.searchParams.has("post");
@@ -368,7 +782,112 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
   };
 
   const toggleLike = (postId: string | number) => {
-    // noop - implement your API call here if desired
+    setMediaPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
+          : p
+      )
+    );
+    setNotePosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
+          : p
+      )
+    );
+  };
+
+  const handleProductLike = async (e: React.MouseEvent, productId: number, baseCount: number) => {
+    e.stopPropagation();
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const current = productLikeData[productId] || { liked: false, count: baseCount };
+    const newLiked = !current.liked;
+    const newCount = newLiked ? current.count + 1 : Math.max(0, current.count - 1);
+
+    setProductLikeData(prev => ({
+      ...prev,
+      [productId]: { liked: newLiked, count: newCount }
+    }));
+
+    try {
+      const res = await toggleProductLike(productId, token);
+      setProductLikeData(prev => ({
+        ...prev,
+        [productId]: { liked: res.data.liked, count: res.data.likes_count }
+      }));
+    } catch (err) {
+      console.error("Like error", err);
+      setProductLikeData(prev => ({ ...prev, [productId]: current }));
+    }
+  };
+
+  const handleProductClick = async (productId: number, businessName?: string, e?: React.MouseEvent) => {
+    if (fetchingProductId) return;
+    const token = localStorage.getItem("token") || "";
+
+    try {
+      setFetchingProductId(productId);
+      const res = await fetchProductById(productId, token);
+      if (res?.data?.product) {
+        const dbProduct = res.data.product;
+        const mappedPayload: PreviewPayload = {
+          productId: dbProduct.product_id,
+          title: dbProduct.title,
+          description: dbProduct.description,
+          category: dbProduct.category,
+          hasVariants: dbProduct.has_variants === 1,
+          price: dbProduct.price || "",
+          quantity: dbProduct.quantity ?? "",
+          samePriceForAll: false,
+          sharedPrice: null,
+          businessId: Number(dbProduct.business_id),
+          productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
+          productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) } : null,
+          useCombinations: dbProduct.use_combinations === 1,
+          params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
+          variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
+            id: String(g.group_id),
+            title: g.title,
+            allowImages: g.allow_images === 1,
+            entries: (g.options || []).map((o: any) => {
+              const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
+              return {
+                id: String(o.option_id),
+                name: o.name,
+                price: o.price,
+                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
+                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
+              };
+            })
+          })),
+          skus: (dbProduct.skus || []).map((s: any) => {
+            let vIds: string[] = [];
+            try { vIds = typeof s.variant_option_ids === 'string' ? JSON.parse(s.variant_option_ids) : s.variant_option_ids; } catch (e) { }
+            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
+            return {
+              id: String(s.sku_id),
+              sku: s.sku_code || "",
+              name: "Combination",
+              price: s.price,
+              quantity: inventoryMatch ? inventoryMatch.quantity : 0,
+              enabled: s.status === 'active',
+              variantOptionIds: (vIds || []).map(String)
+            } as ProductSku;
+          })
+        };
+        const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
+        if (baseInv) mappedPayload.quantity = baseInv.quantity;
+        setSelectedProductPayload(mappedPayload);
+        setProductModalOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFetchingProductId(null);
+    }
   };
 
   const goToTab = (index: number) => {
@@ -414,11 +933,9 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
     return user?.full_name ?? user?.name ?? "---";
   }, [profileApi]);
 
-  // Sticky tabs logic (unchanged)
   const tabsWrapperRef = useRef<HTMLDivElement | null>(null);
   const tabsInnerRef = useRef<HTMLDivElement | null>(null);
   const tabsPlaceholderRef = useRef<HTMLDivElement | null>(null);
-  const [isSticky, setIsSticky] = useState(false);
   const [stickyStyle, setStickyStyle] = useState<React.CSSProperties | undefined>(undefined);
   const tabsInitialTopRef = useRef<number | null>(null);
 
@@ -432,12 +949,10 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
 
     const navbar = findNavbar();
     const navbarHeight = navbar ? navbar.offsetHeight : 0;
-
     const shouldStick = window.scrollY + navbarHeight >= initialTop + STICKY_BUFFER;
 
     if (shouldStick) {
       const rect = el.getBoundingClientRect();
-
       setStickyStyle({
         position: "fixed",
         top: `${navbarHeight}px`,
@@ -445,61 +960,36 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
         width: `${rect.width}px`,
         zIndex: 60,
       });
-
-      if (tabsPlaceholderRef.current) {
-        tabsPlaceholderRef.current.style.height = `${rect.height}px`;
-      }
+      if (tabsPlaceholderRef.current) tabsPlaceholderRef.current.style.height = `${rect.height}px`;
     } else {
       setStickyStyle(undefined);
-
-      if (tabsPlaceholderRef.current) {
-        tabsPlaceholderRef.current.style.height = "0px";
-      }
+      if (tabsPlaceholderRef.current) tabsPlaceholderRef.current.style.height = "0px";
     }
-
-    setIsSticky(shouldStick);
   };
 
   useLayoutEffect(() => {
     const el = tabsWrapperRef.current;
     if (!el) return;
-
     const rect = el.getBoundingClientRect();
     tabsInitialTopRef.current = rect.top + window.scrollY;
-
-    const onScroll = () => updateStickyState();
-    const onResize = () => updateStickyState();
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
-
+    window.addEventListener("scroll", updateStickyState, { passive: true });
+    window.addEventListener("resize", updateStickyState);
     return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", updateStickyState);
+      window.removeEventListener("resize", updateStickyState);
     };
   }, []);
 
-  // Prepare logout handler only when viewing own profile
-  const handleLogout = () => {
-    auth.logout();
-    router.push("/discover");
-  };
-
   const getNoteStyles = (config: any) => {
-    if (!config) return { background: "#f1f5f9" }; // Fallback
-
-    // Ensure config is an object (parse if it's a string from API)
+    if (!config) return { background: "#f1f5f9" };
     let cfg = config;
     if (typeof config === "string") {
       try { cfg = JSON.parse(config); } catch (e) { return { background: "#f1f5f9" }; }
     }
-
     const { template, startColor, endColor, lineSpacing = 25 } = cfg;
     const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
-
     let patternCSS = "";
     let bgSize = "auto";
-
     if (template === "grid") {
       patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
       bgSize = `${lineSpacing}px ${lineSpacing}px`;
@@ -511,30 +1001,26 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
       patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
       bgSize = `${lineSpacing}px ${lineSpacing}px`;
     }
-
     return {
       backgroundColor: startColor,
       backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
       backgroundSize: bgSize,
       color: cfg.textStyle?.color ?? "#111827",
-      fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`, // Scale down for grid thumbnails
+      fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`,
       fontWeight: cfg.textStyle?.fontWeight ?? "800",
     };
   };
 
-
   const TabsBar = (
     <>
       <div ref={tabsPlaceholderRef} style={{ height: 0, transition: "height 160ms ease" }} />
-
       <div ref={tabsWrapperRef} className="bg-white p-3 flex justify-center" style={stickyStyle}>
         <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto">
           {tabs.map((t, i) => (
             <button
               key={t}
               onClick={() => setActiveTabIndex(i)}
-              className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"
-                }`}
+              className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
             >
               {t}
             </button>
@@ -547,189 +1033,124 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
   const TabPanes = (
     <div className="relative overflow-hidden w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <div className="flex transition-transform duration-450 ease-in-out" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
-        <div style={{ width: `${100 / tabs.length}%` }} className="p-2">
-          {postsLoading ? (
-            <ShimmerGrid count={10} />
-          ) : postsError ? (
-            <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
-              <img
-                src="/assets/images/message-icon.png"
-                alt="No posts"
-                className="w-40 h-40 object-contain mb-4 opacity-80"
-              />
-              <p className="mb-3 justiffy-center font-bold">{"Check your internet connection try again."}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition"
-              >
-                Retry
-              </button>
-            </div>
-          ) : mediaPosts.length === 0 ? (
-            <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
-              <p className="text-sm font-medium">No image or video posts found.</p>
-            </div>
-          ) : (
-            <div className="post-grid mb-20">
-              {mediaPosts.map((post) => (
-                <article key={post.id} onClick={() => openPostWithUrl(post)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") openPostWithUrl(post); }} className="group flex flex-col rounded-3xl bg-white cursor-pointer transition">
-                  <div className="relative overflow-hidden rounded-2xl bg-slate-200">
-                    {post.isVideo && (
-                      <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="w-4 h-4 text-white ml-0.5"
-                        >
-                          <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-                        </svg>
-                      </div>
-
-                    )}
-
-                    {post.coverType === "note" && !post.src ? (
-                      <div
-                        className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200 relative overflow-hidden"
-                        style={getNoteStyles(post.noteConfig)}
-                      >
-                        {/* Emoji Layer (Parsed from config) */}
-                        {(() => {
-                          const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
-                          if (cfg?.emojis?.length > 0) {
-                            return (
-                              <div
-                                className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none"
-                                style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}
-                              >
-                                {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
-                                  <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>
-                                ))}
-                              </div>
-                            );
-                          }
-                        })()}
-
-                        <div className="text-center relative z-10">
-                          <p
-                            className="line-clamp-4 px-2"
-                            style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}
-                          >
-                            {post.noteConfig?.text ?? post.caption ?? "Note"}
-                          </p>
-                        </div>
-                      </div>
-                    ) : post.isVideo ? (
-                      <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border border-slate-200" muted loop playsInline />
-                    ) : (
-                      <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border border-slate-200 rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
-                    )}
-                  </div>
-
-                  <div className="flex flex-col p-4">
-                    {post.coverType === "note" && !post.src ? (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                    ) : (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                    )}
-
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <img src={post.user.avatar} className="h-5 w-5 rounded-full object-cover ring-2 ring-white" alt={post.user.name} />
-                        <span className="max-w-[150px] truncate text-xs font-medium text-slate-400 capitalize">{post.user.name}</span>
-                      </div>
-
-                      <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90" aria-label="Like post">
-                        <svg viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill={post.liked ? "currentColor" : "none"} className={`w-6 h-6 transition-colors duration-300 ${post.liked ? "text-rose-500" : "text-slate-300 hover:text-slate-400"}`}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                        </svg>
-                        <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
 
         {/* Notes pane */}
-        <div style={{ width: `${100 / tabs.length}%` }} className="">
+        <div style={{ width: `${100 / tabs.length}%` }}>
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : notePosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
-              <p className="text-sm font-medium">No note</p>
+              <img src="/assets/images/post.png" alt="No notes" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <p className="text-sm font-medium">No note found.</p>
             </div>
           ) : (
-            <div className="post-grid mb-20">
-              {notePosts.map((post) => (
-                <article key={post.id} onClick={() => openPostWithUrl(post)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") openPostWithUrl(post); }} className="group flex flex-col rounded-3xl bg-white cursor-pointer transition">
-                  <div className="relative overflow-hidden rounded-2xl bg-slate-200">
-                    {post.isVideo && (
-                      <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="w-4 h-4 text-white ml-0.5"
-                        >
-                          <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-                        </svg>
-                      </div>
-
-                    )}
-
-                    {post.coverType === "note" && !post.src ? (
-                      <div className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border border-slate-200" style={{ background: post.noteConfig && post.noteConfig.startColor && post.noteConfig.endColor ? `linear-gradient(135deg, ${post.noteConfig.startColor}, ${post.noteConfig.endColor})` : undefined }}>
-                        <div className="text-center ">
-                          <p className="text-slate-900 text-lg font-semibold">{post.noteConfig?.text ?? post.caption ?? "Note"}</p>
-                        </div>
-                      </div>
-                    ) : post.isVideo ? (
-                      <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border" muted loop playsInline />
-                    ) : (
-                      <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
-                    )}
-                  </div>
-
-                  <div className="flex flex-col p-4">
-                    {post.coverType === "note" && !post.src ? (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-                    ) : (
-                      <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-                    )}
-
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <img src={post.user.avatar} className="h-5 w-5 rounded-full object-cover ring-2 ring-white" alt={post.user.name} />
-                        <span className="max-w-[150px] truncate text-xs font-medium text-slate-400 capitalize">{post.user.name}</span>
-                      </div>
-
-                      <button onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 transition-all active:scale-90" aria-label="Like post">
-                        <svg viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" fill={post.liked ? "currentColor" : "none"} className={`w-6 h-6 transition-colors duration-300 ${post.liked ? "text-rose-500" : "text-slate-300 hover:text-slate-400"}`}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                        </svg>
-                        <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
+            <div className="p-2 sm:p-4 post-grid-container">
+              <MasonryGrid
+                items={notePosts}
+                type="note"
+                openPostWithUrl={openPostWithUrl}
+                toggleLike={toggleLike}
+                getNoteStyles={getNoteStyles}
+                setFullImageUrl={setFullImageUrl}
+              />
             </div>
           )}
         </div>
 
-        {profileApi?.is_business_owner && (
-          <div style={{ width: `${100 / tabs.length}%` }} className="p-4">
-            <div className="rounded-2xl bg-white p-6 min-h-[220px] flex items-center justify-center text-slate-500">
-              <div className="text-center">
-                <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                  <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
-                  <div className="text-xs mt-2">No Products.</div>
-                </div>
-              </div>
+        {/* Posts pane */}
+        <div style={{ width: `${100 / tabs.length}%` }}>
+          {postsLoading ? (
+            <ShimmerGrid count={10} />
+          ) : mediaPosts.length === 0 ? (
+            <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
+              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <p className="text-sm font-medium">No posts found.</p>
+              <button
+                onClick={() => router.push('/release/')}
+                className="px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                </svg>
+                Share your thought
+              </button>
             </div>
+          ) : (
+            <div className="p-2 sm:p-4 post-grid-container">
+              <MasonryGrid
+                items={mediaPosts}
+                type="post"
+                openPostWithUrl={openPostWithUrl}
+                toggleLike={toggleLike}
+                getNoteStyles={getNoteStyles}
+                setFullImageUrl={setFullImageUrl}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Products pane */}
+        {profileApi?.is_business_owner && (
+          <div style={{ width: `${100 / tabs.length}%` }}>
+            {productsLoading ? (
+              <ShimmerGrid count={10} />
+            ) : vendorProducts.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
+                <img src="/assets/images/post.png" alt="No products" className="w-40 h-40 object-contain mb-4 opacity-80" />
+                <p className="text-sm font-medium">Publish your first product now.</p>
+                <button
+                  onClick={() => router.push('/products/new')}
+                  className="px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                  </svg>
+                  Publish product
+                </button>
+              </div>
+            ) : (
+              <div className="p-2 sm:p-4 post-grid-container">
+                <MasonryGrid
+                  items={vendorProducts}
+                  type="product"
+                  formatUrl={formatUrl}
+                  handleProductClick={handleProductClick}
+                  handleLikeClick={handleProductLike}
+                  likeData={productLikeData}
+                  fetchingProductId={fetchingProductId}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Liked Items pane */}
+        {isOwner && (
+          <div style={{ width: `${100 / tabs.length}%` }}>
+            {likedLoading ? (
+              <ShimmerGrid count={10} />
+            ) : likedItems.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
+                <img src="/assets/images/post.png" alt="No liked items" className="w-40 h-40 object-contain mb-4 opacity-80" />
+                <p className="text-sm font-medium">You haven't liked anything yet.</p>
+              </div>
+            ) : (
+              <div className="p-2 sm:p-4 post-grid-container pb-12">
+                <MasonryGrid
+                  items={likedItems}
+                  type="liked"
+                  openPostWithUrl={openPostWithUrl}
+                  toggleLike={toggleLike}
+                  getNoteStyles={getNoteStyles}
+                  setFullImageUrl={setFullImageUrl}
+                  formatUrl={formatUrl}
+                  handleProductClick={handleProductClick}
+                  handleLikeClick={handleProductLike}
+                  likeData={productLikeData}
+                  fetchingProductId={fetchingProductId}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -737,19 +1158,53 @@ export default function ProfileHeader({ postCount = 12, userId }: Props) {
   );
 
   return (
-    <div>
+    <div className="">
       <Header
         profileApi={profileApi}
         displayName={displayName}
-        // only provide the logout handler when viewing your own profile
-        onLogout={viewingOwnProfile ? handleLogout : undefined}
+        onVisitShop={() => {
+          if (profileApi?.business?.business_id || profileApi?.business?.id) {
+            router.push(`/shop/${profileApi.business.business_id || profileApi.business.id}`);
+          }
+        }}
+        onSocialClick={(tab) => {
+          if (tab === "liked") {
+            const idx = tabs.indexOf("Liked");
+            if (idx !== -1) setActiveTabIndex(idx);
+            return;
+          }
+          setActiveSocialTab(tab);
+          setSocialModalOpen(true);
+        }}
       />
 
       {TabsBar}
       {TabPanes}
 
-
       {selectedPost && <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} />}
+
+      {productModalOpen && selectedProductPayload && (
+        <ProductPreviewModal
+          open={productModalOpen}
+          payload={selectedProductPayload}
+          onClose={() => {
+            setProductModalOpen(false);
+            setSelectedProductPayload(null);
+          }}
+          onProductClick={handleProductClick}
+        />
+      )}
+
+      {fullImageUrl && <ImageViewer src={fullImageUrl} onClose={() => setFullImageUrl(null)} />}
+
+      {profileApi?.user && (
+        <SocialModal
+          isOpen={socialModalOpen}
+          onClose={() => setSocialModalOpen(false)}
+          userId={profileApi.user.user_id || profileApi.user.id}
+          initialTab={activeSocialTab === "liked" ? "followers" : activeSocialTab as any}
+        />
+      )}
     </div>
   );
 }

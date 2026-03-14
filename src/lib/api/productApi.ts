@@ -59,15 +59,18 @@ export function postProduct(form: FormData, token: string, onProgress?: (percent
   });
 }
 
-export async function fetchMarketFeed(limit = 100, offset = 0, excludeProduct?: number | string, excludeBusiness?: number | string, hasVideo?: boolean) {
+export async function fetchMarketFeed(limit = 100, offset = 0, excludeProduct?: number | string, excludeBusiness?: number | string, hasVideo?: boolean, token?: string | null) {
   let url = `${API_BASE_URL}/api/products/market/feed?limit=${limit}&offset=${offset}`;
   if (excludeProduct) url += `&exclude_product=${excludeProduct}`;
   if (excludeBusiness) url += `&exclude_business=${excludeBusiness}`;
   if (hasVideo) url += `&has_video=true`;
 
+  const headers: any = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers,
   });
 
   const json = await res.json().catch(() => null);
@@ -75,10 +78,13 @@ export async function fetchMarketFeed(limit = 100, offset = 0, excludeProduct?: 
   return json;
 }
 
-export async function fetchProductById(productId: number | string) {
+export async function fetchProductById(productId: number | string, token?: string | null) {
+  const headers: any = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers,
   });
 
   const json = await res.json().catch(() => null);
@@ -86,14 +92,17 @@ export async function fetchProductById(productId: number | string) {
   return json;
 }
 
-export async function fetchBusinessProducts(businessId: number | string, limit = 6, status?: string, exclude?: number | string) {
+export async function fetchBusinessProducts(businessId: number | string, limit = 6, status?: string, exclude?: number | string, token?: string | null) {
   let url = `${API_BASE_URL}/api/products/business/${businessId}?limit=${limit}`;
   if (status) url += `&status=${status}`;
   if (exclude) url += `&exclude=${exclude}`;
 
+  const headers: any = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers,
   });
 
   const json = await res.json().catch(() => null);

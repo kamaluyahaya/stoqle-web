@@ -6,40 +6,61 @@ import DefaultInput from "../../../input/default-input";
 import NumberInput from "../../../input/defaultNumberInput";
 import AddressSelectionModal from "../../../business/addressSelectionModal";
 import { countries } from "@/src/lib/api/country";
+import { geocodeAddress } from "@/src/lib/geocoding";
 
 interface DeliveryAddressModalProps {
     open: boolean;
     onClose: () => void;
     onSave: (address: any) => void;
+    initialData?: any;
 }
 
 export default function DeliveryAddressModal({
     open,
     onClose,
     onSave,
+    initialData,
 }: DeliveryAddressModalProps) {
     const [recipientName, setRecipientName] = useState("");
     const [contactNo, setContactNo] = useState<number | "">("");
     const [region, setRegion] = useState("");
     const [address, setAddress] = useState("");
     const [isDefault, setIsDefault] = useState(false);
+    const [isGeocoding, setIsGeocoding] = useState(false);
 
-    // Load address from localStorage on mount
+    // Load address from initialData or localStorage on mount
     useEffect(() => {
-        const saved = localStorage.getItem("stoqle_delivery_address");
-        if (saved) {
-            try {
-                const data = JSON.parse(saved);
-                setRecipientName(data.recipientName || "");
-                setContactNo(data.contactNo ? Number(data.contactNo) : "");
-                setRegion(data.region || "");
-                setAddress(data.address || "");
-                setIsDefault(data.isDefault || false);
-            } catch (e) {
-                console.error("Failed to parse saved address", e);
+        if (!open) return;
+
+        if (initialData) {
+            setRecipientName(initialData.recipientName || "");
+            setContactNo(initialData.contactNo ? Number(initialData.contactNo) : "");
+            setRegion(initialData.region || "");
+            setAddress(initialData.address || "");
+            setIsDefault(initialData.isDefault || false);
+        } else {
+            const saved = localStorage.getItem("stoqle_delivery_address");
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    setRecipientName(data.recipientName || "");
+                    setContactNo(data.contactNo ? Number(data.contactNo) : "");
+                    setRegion(data.region || "");
+                    setAddress(data.address || "");
+                    setIsDefault(data.isDefault || false);
+                } catch (e) {
+                    console.error("Failed to parse saved address", e);
+                }
+            } else {
+                // Reset fields if no initialData and no saved data
+                setRecipientName("");
+                setContactNo("");
+                setRegion("");
+                setAddress("");
+                setIsDefault(false);
             }
         }
-    }, [open]);
+    }, [open, initialData]);
 
     // Prevent background scroll
     useEffect(() => {
@@ -78,10 +99,31 @@ export default function DeliveryAddressModal({
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!recipientName || !contactNo || !region || !address) {
             alert("Please fill all required fields");
             return;
+        }
+
+        setIsGeocoding(true);
+        const fullAddress = `${address}, ${region}`;
+
+        // Attempt real geocoding
+        let coords = await geocodeAddress(fullAddress);
+
+        let lat = coords?.latitude;
+        let lng = coords?.longitude;
+
+        // Fallback to mock coordinates if geocoding failed
+        if (lat === undefined || lng === undefined) {
+            console.log("Geocoding failed, falling back to mock coordinates.");
+            lat = 6.5244; // Default Lagos
+            lng = 3.3792;
+
+            if (region.includes("Abuja")) { lat = 9.0765; lng = 7.3986; }
+            else if (region.includes("Kano")) { lat = 12.0022; lng = 8.5920; }
+            else if (region.includes("Port Harcourt")) { lat = 4.8156; lng = 7.0498; }
+            else if (region.includes("Ibadan")) { lat = 7.3775; lng = 3.9470; }
         }
 
         const addressData = {
@@ -90,18 +132,21 @@ export default function DeliveryAddressModal({
             region,
             address,
             isDefault,
+            latitude: lat,
+            longitude: lng,
         };
 
         // Persist locally
         localStorage.setItem("stoqle_delivery_address", JSON.stringify(addressData));
 
+        setIsGeocoding(false);
         onSave(addressData);
     };
 
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[20005] flex items-end sm:items-center justify-center p-0" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/50 " onClick={onClose} />
 
             <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl z-10 h-[92vh] sm:h-auto max-h-[95vh] flex flex-col overflow-hidden">
@@ -113,7 +158,7 @@ export default function DeliveryAddressModal({
                     >
                         <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
                     </button>
-                    <h2 className="text-sm font-bold text-slate-900">Add Delivery Address</h2>
+                    <h2 className="text-sm font-bold text-slate-900">{initialData ? "Edit Delivery Address" : "Add Delivery Address"}</h2>
                 </div>
 
                 {/* Body */}
@@ -183,9 +228,18 @@ export default function DeliveryAddressModal({
                 <div className="p-1  border-slate-100 bg-white px-4">
                     <button
                         onClick={handleSave}
-                        className="w-full py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-red-100 active:scale-[0.98] transition-all"
+                        disabled={isGeocoding}
+                        className={`w-full py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-red-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""}`}
                     >
-                        Save and Use
+                        {isGeocoding ? (
+                            <>
+                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Verifying Address...</span>
+                            </>
+                        ) : "Save and Use"}
                     </button>
                 </div>
             </div>

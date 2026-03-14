@@ -7,17 +7,27 @@ import { useAuth } from "@/src/context/authContext"; // adjust path
 import LoginModal from "../../../components/modal/auth/loginModal"; // adjust path if needed
 import { API_BASE_URL } from "@/src/lib/config";
 import BalanceModal from "../../business/balanceModal";
+import { fetchMyWallet, requestWithdrawal, fetchMyPaymentAccount } from "@/src/lib/api/walletApi";
+import { toast } from "sonner";
+import PinSetupModal from "../../business/pinSetupModal";
+import TransferModal from "../../business/transferModal";
+import WithdrawModal from "../../business/withdrawModal";
+import { useWallet } from "@/src/context/walletContext";
 
+
+import ImageViewer from "../../../components/modal/imageViewer";
 
 type HeaderProps = {
   profileApi: any | null;
   displayName: string;
   onLogout?: () => void;
+  onSocialClick?: (tab: "friends" | "followers" | "following" | "recommend" | "liked") => void;
+  onVisitShop?: () => void;
 };
 
 const DEFAULT_AVATAR = "/assets/images/favio.png";
 
-export default function Header({ profileApi, displayName, onLogout }: HeaderProps) {
+export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop }: HeaderProps) {
   const router = useRouter();
   const auth = (useAuth?.() ?? null) as any;
   const currentUser = auth?.user ?? null;
@@ -27,6 +37,9 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
   const menuRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [showPinSetupModal, setShowPinSetupModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
   // login modal control (for actions requiring auth)
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -37,9 +50,14 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
     Number(profileApi?.stats?.followers ?? profileApi?.stats?.followers_count ?? 0)
   );
   const [actionLoading, setActionLoading] = useState(false);
+  const [statusFetched, setStatusFetched] = useState(false);
 
   // NEW: message init loading
   const [messageLoading, setMessageLoading] = useState(false);
+  const { wallet, updateBalance, refreshWallet: fetchWallet } = useWallet();
+  const [paymentAccountJson, setPaymentAccountJson] = useState<string>("");
+
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setFollowersCount(Number(profileApi?.stats?.followers ?? profileApi?.stats?.followers_count ?? 0));
@@ -50,6 +68,7 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
 
   useEffect(() => {
     if (!profileUserId) return;
+    setStatusFetched(false);
     const ac = new AbortController();
     let mounted = true;
 
@@ -104,6 +123,8 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
       } catch (err: any) {
         if (ac.signal.aborted) return;
         console.warn("Failed to fetch follow status/stats:", err?.message ?? err);
+      } finally {
+        if (mounted) setStatusFetched(true);
       }
     }
 
@@ -114,6 +135,60 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
       ac.abort();
     };
   }, [profileUserId, token, API_BASE_URL]); // eslint-disable-line
+
+
+
+  const fetchPaymentAccount = async () => {
+    try {
+      const res = await fetchMyPaymentAccount();
+      if (res?.data?.account) {
+        setPaymentAccountJson(JSON.stringify(res.data.account));
+      }
+    } catch (err) {
+      console.error("Failed to fetch payment account:", err);
+    }
+  };
+
+  const handleWithdrawAction = async () => {
+    setShowBalanceModal(false);
+    if (!wallet?.has_pin) {
+      setShowPinSetupModal(true);
+    } else {
+      if (profileApi?.is_business_owner) {
+        setShowWithdrawModal(true);
+      } else {
+        setShowTransferModal(true);
+      }
+    }
+  };
+
+  // Fetch real payment account if owner
+  useEffect(() => {
+    if (isOwner && token) {
+      fetchPaymentAccount();
+    }
+  }, [isOwner, token, currentUser]);
+
+  const formatAddress = (addrJson: any) => {
+    if (!addrJson) return profileApi?.user?.location || "";
+    try {
+      const parsed = typeof addrJson === 'string' && (addrJson.startsWith('{') || addrJson.startsWith('['))
+        ? JSON.parse(addrJson)
+        : addrJson;
+
+      if (typeof parsed === 'string') return parsed;
+
+      const line1 = parsed.address_line_1 || parsed.line1 || "";
+      const city = parsed.city || "";
+      const state = parsed.state || "";
+      const country = parsed.country || "";
+
+      const summary = [line1, city, state, country].filter(Boolean).join(", ");
+      return summary || profileApi?.user?.location || "";
+    } catch {
+      return (typeof addrJson === 'string' ? addrJson : "") || profileApi?.user?.location || "";
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -362,7 +437,9 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
                     className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
                   >
                     <span>Total Balance</span>
-                    <span className="text-sm text-gray-500">₦11,120,500</span>
+                    <span className="text-sm text-gray-500 font-bold">
+                      ₦{Number(wallet?.available_balance || 0).toLocaleString()}
+                    </span>
                   </button>
                 ) : (
                   <button
@@ -374,7 +451,9 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
                   >
 
                     <span>Balance</span>
-                    <span className="text-sm text-gray-500">₦10,500</span>
+                    <span className="text-sm text-gray-500 font-bold">
+                      ₦{Number(wallet?.available_balance || 0).toLocaleString()}
+                    </span>
                   </button>
                 )}
                 <button
@@ -398,7 +477,7 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
                 </button>
 
                 <button
-                  onClick={() => handleNavigate("/orders")}
+                  onClick={() => handleNavigate("/profile/orders")}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800 mt-1"
                 >
                   <span>Orders</span>
@@ -459,23 +538,39 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
           {/* Mobile */}
           <div className="md:hidden">
             <div className="flex items-center gap-3">
-              <img
-                src={
+              <div
+                className="flex-none cursor-pointer active:scale-95 transition-transform"
+                onClick={() => setFullImageUrl(
                   profileApi?.business?.business_logo ??
                   profileApi?.business?.logo ??
                   profileApi?.user?.profile_pic ??
                   profileApi?.user?.avatar ??
                   DEFAULT_AVATAR
-                }
-                alt={displayName ?? "Profile"}
-                className="h-20 w-20 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200"
-              />
+                )}
+              >
+                <img
+                  src={
+                    profileApi?.business?.business_logo ??
+                    profileApi?.business?.logo ??
+                    profileApi?.user?.profile_pic ??
+                    profileApi?.user?.avatar ??
+                    DEFAULT_AVATAR
+                  }
+                  alt={displayName ?? "Profile"}
+                  className="h-20 w-20 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200"
+                />
+              </div>
 
               <div className="flex-1">
                 <h2 className="lg:-mt-10 sm:-mt-5 font-semibold text-slate-900 leading-tight" style={{ fontSize: "clamp(1rem, 2.2vw, 1.25rem)" }}>
                   {displayName}
                 </h2>
-                <p className="text-sm text-slate-500">Nigeria Kaduna</p>
+                {profileApi?.business?.previous_business_name && (
+                  <p className="text-[10px] text-slate-400 leading-none mt-0.5 italic">
+                    Previously known as {profileApi.business.previous_business_name}
+                  </p>
+                )}
+                <p className="text-sm text-slate-500">{formatAddress(profileApi?.business?.business_address)}</p>
               </div>
             </div>
 
@@ -494,26 +589,42 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
 
                 <div className="flex items-center justify-between mt-4">
                   <div className="flex items-center gap-4">
-                    <div className="flex flex-col items-center">
+                    <div
+                      className={`flex flex-col items-center cursor-pointer active:scale-95 transition-transform`}
+                      onClick={() => onSocialClick?.("followers")}
+                    >
                       <div className="text-sm font-bold text-slate-800">{followersCount}</div>
                       <div className="text-xs text-slate-500">Followers</div>
                     </div>
 
-                    <div className="flex flex-col items-center">
+                    <div
+                      className={`flex flex-col items-center cursor-pointer active:scale-95 transition-transform`}
+                      onClick={() => onSocialClick?.("following")}
+                    >
                       <div className="text-sm font-bold text-slate-800">
                         {profileApi?.stats?.following ?? profileApi?.stats?.following_count ?? 0}
                       </div>
                       <div className="text-xs text-slate-500">Following</div>
                     </div>
 
-                    <div className="flex flex-col items-center">
-                      <div className="text-sm font-bold text-slate-800">{profileApi?.stats?.posts ?? 0}</div>
-                      <div className="text-xs text-slate-500">Posts</div>
+                    <div
+                      className={`flex flex-col items-center ${isOwner ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
+                      onClick={() => isOwner && onSocialClick?.("liked")}
+                    >
+                      <div className="text-sm font-bold text-slate-800">{profileApi?.stats?.total_likes ?? 0}</div>
+                      <div className="text-xs text-slate-500">Likes</div>
                     </div>
+
+
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {isOwner ? (
+                    {!statusFetched && !isOwner ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-24 rounded-full shimmer-bg opacity-60" />
+                        <div className="h-8 w-8 rounded-full shimmer-bg opacity-60" />
+                      </div>
+                    ) : isOwner ? (
                       <button
                         className="bg-red-500 text-white rounded-full px-4 py-2 text-sm font-medium shadow whitespace-nowrap"
                         onClick={() => {
@@ -529,20 +640,91 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
                       </button>
                     ) : (
                       <>
-                        <button
-                          className={`rounded-full px-4 py-2 text-sm font-medium shadow whitespace-nowrap ${isFollowing ? "bg-white text-slate-800 border border-slate-200" : "bg-rose-500 text-white"}`}
-                          onClick={(e) => {
-                            if (!currentUser) {
-                              setShowLoginModal(true);
-                              return;
-                            }
-                            isFollowing ? unfollowUser() : followUser();
-                          }}
-                          disabled={actionLoading}
-                        >
-                          {actionLoading ? "..." : isFollowing ? "Unfollow" : "Follow"}
-                        </button>
-
+                        {isFollowing ? (
+                          profileApi?.is_business_owner ? (
+                            <>
+                              <button
+                                className="rounded-full px-3 py-1 text-sm shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onVisitShop?.();
+                                }}
+                              >
+                                Visit Shop
+                              </button>
+                              <button
+                                className="rounded-full p-2 text-slate-800 bg-white border border-slate-200 shadow-sm transition-transform active:scale-95 hover:bg-slate-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMessageClick();
+                                }}
+                                disabled={messageLoading}
+                                aria-label="Message"
+                              >
+                                {messageLoading ? (
+                                  <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                                  </svg>
+                                )}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="rounded-full p-2 text-slate-800 bg-white border border-slate-200  transition-transform active:scale-95 hover:bg-slate-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMessageClick();
+                              }}
+                              disabled={messageLoading}
+                              aria-label="Message"
+                            >
+                              {messageLoading ? (
+                                <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                                </svg>
+                              )}
+                            </button>
+                          )
+                        ) : (
+                          <>
+                            {statusFetched && !actionLoading && (
+                              <button
+                                className="rounded-full px-5 py-2 text-sm font-bold shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
+                                onClick={(e) => {
+                                  if (!currentUser) {
+                                    setShowLoginModal(true);
+                                    return;
+                                  }
+                                  followUser();
+                                }}
+                                disabled={actionLoading}
+                              >
+                                Follow
+                              </button>
+                            )}
+                            <button
+                              className="rounded-full p-2 text-slate-800 bg-white border border-slate-200 shadow-sm transition-transform active:scale-95 hover:bg-slate-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMessageClick();
+                              }}
+                              disabled={messageLoading}
+                              aria-label="Message"
+                            >
+                              {messageLoading ? (
+                                <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                                </svg>
+                              )}
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                     <MoreMenu />
@@ -554,7 +736,16 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
 
           {/* Desktop Layout */}
           <div className="hidden md:flex md:items-start md:gap-6">
-            <div className="flex-none">
+            <div
+              className="flex-none cursor-pointer active:scale-95 transition-transform"
+              onClick={() => setFullImageUrl(
+                profileApi?.business?.business_logo ??
+                profileApi?.business?.logo ??
+                profileApi?.user?.profile_pic ??
+                profileApi?.user?.avatar ??
+                DEFAULT_AVATAR
+              )}
+            >
               <img
                 src={
                   profileApi?.business?.business_logo ??
@@ -572,7 +763,12 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
               <h2 className="font-semibold text-slate-900 truncate leading-tight" style={{ fontSize: "clamp(1rem, 1.80vw, 1.10rem)" }}>
                 {displayName}
               </h2>
-              <p className="text-sm text-slate-500 mt-2 max-w-xl leading-snug">Nigeria Kaduna</p>
+              {profileApi?.business?.previous_business_name && (
+                <p className="text-[10px] text-slate-400 italic mt-0.5">
+                  Previously known as {profileApi.business.previous_business_name}
+                </p>
+              )}
+              <p className="text-sm text-slate-500 mt-2 max-w-xl leading-snug">{formatAddress(profileApi?.business?.business_address)}</p>
               <div className="flex items-start gap-2 mt-2 max-w-xl">
                 <svg className="w-4 h-4 mt-0.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
@@ -584,25 +780,42 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
               </div>
 
               <div className="flex items-center gap-6 mt-4">
-                <div className="flex items-center gap-2">
+                <div
+                  className={`flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors`}
+                  onClick={() => onSocialClick?.("followers")}
+                >
                   <div className="text-lg font-bold text-slate-800">{followersCount}</div>
                   <div className="text-sm text-slate-500">Followers</div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div
+                  className={`flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors`}
+                  onClick={() => onSocialClick?.("following")}
+                >
                   <div className="text-lg font-bold text-slate-800">
                     {profileApi?.stats?.following ?? profileApi?.stats?.following_count ?? 0}
                   </div>
                   <div className="text-sm text-slate-500">Following</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-lg font-bold text-slate-800">{profileApi?.stats?.posts ?? 0}</div>
-                  <div className="text-sm text-slate-500">Posts</div>
+
+                <div
+                  className={`flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors' : ''}`}
+                  onClick={() => isOwner && onSocialClick?.("liked")}
+                >
+                  <div className="text-lg font-bold text-slate-800">{profileApi?.stats?.total_likes ?? 0}</div>
+                  <div className="text-sm text-slate-500">Likes</div>
                 </div>
+
+
               </div>
             </div>
 
             <div className="flex-none self-center flex items-center gap-3">
-              {isOwner ? (
+              {!statusFetched && !isOwner ? (
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-32 rounded-full shimmer-bg opacity-60" />
+                  <div className="h-10 w-10 rounded-full shimmer-bg opacity-60" />
+                </div>
+              ) : isOwner ? (
                 <button
                   className="bg-red-500 text-white rounded-full px-4 py-2 text-sm font-medium shadow active:scale-95 transition-transform"
                   onClick={() => router.push("/profile/business/business-status")}
@@ -611,23 +824,91 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
                 </button>
               ) : (
                 <>
-                  <button
-                    className={`rounded-full px-5 py-2 text-sm font-medium shadow transition-all ${isFollowing ? "bg-white text-slate-800 border border-slate-200" : "bg-rose-500 text-white"}`}
-                    onClick={isFollowing ? unfollowUser : followUser}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? "..." : isFollowing ? "Unfollow" : "Follow"}
-                  </button>
-                  <button
-                    className="rounded-full px-6 py-2 text-sm font-medium bg-white text-slate-800 border border-slate-200 shadow-sm active:scale-95 transition-transform"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMessageClick();
-                    }}
-                    disabled={messageLoading}
-                  >
-                    {messageLoading ? "Opening..." : "Message"}
-                  </button>
+                  {isFollowing ? (
+                    profileApi?.is_business_owner ? (
+                      <>
+                        <button
+                          className="rounded-full px-5 py-2 text-sm font-bold shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onVisitShop?.();
+                          }}
+                        >
+                          Visit Shop
+                        </button>
+                        <button
+                          className="rounded-full p-2 text-slate-800 bg-white border border-slate-200 shadow-sm transition-transform active:scale-95 hover:bg-slate-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMessageClick();
+                          }}
+                          disabled={messageLoading}
+                          aria-label="Message"
+                        >
+                          {messageLoading ? (
+                            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                            </svg>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="rounded-full p-2 text-slate-800 bg-white border border-slate-200 shadow-sm transition-transform active:scale-95 hover:bg-slate-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMessageClick();
+                        }}
+                        disabled={messageLoading}
+                        aria-label="Message"
+                      >
+                        {messageLoading ? (
+                          <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                          </svg>
+                        )}
+                      </button>
+                    )
+                  ) : (
+                    <>
+                      {statusFetched && !actionLoading && (
+                        <button
+                          className="rounded-full px-6 py-2 text-sm font-bold shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
+                          onClick={(e) => {
+                            if (!currentUser) {
+                              setShowLoginModal(true);
+                              return;
+                            }
+                            followUser();
+                          }}
+                          disabled={actionLoading}
+                        >
+                          Follow
+                        </button>
+                      )}
+                      <button
+                        className="rounded-full p-2 text-slate-800 bg-white border border-slate-200 shadow-sm transition-transform active:scale-95 hover:bg-slate-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMessageClick();
+                        }}
+                        disabled={messageLoading}
+                        aria-label="Message"
+                      >
+                        {messageLoading ? (
+                          <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                          </svg>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </>
               )}
               <MoreMenu />
@@ -641,12 +922,51 @@ export default function Header({ profileApi, displayName, onLogout }: HeaderProp
         open={showBalanceModal}
         onClose={() => setShowBalanceModal(false)}
         balances={{
-          available: 11205000,
-          pending: 50000,
-          virtualAccount: "1234567890",
-          currency: "NGN",
+          available: Number(wallet?.available_balance || 0),
+          pending: Number(wallet?.pending_balance || 0),
+          virtualAccount: String(wallet?.owner_id || "Stoqle Wallet"),
+          currency: wallet?.currency || "₦",
         }}
-        role="vendor"
+        role={profileApi?.is_business_owner ? "vendor" : "user"}
+        onWithdraw={handleWithdrawAction}
+        onBalanceUpdate={(newBal) => updateBalance(newBal)}
+      />
+
+      <PinSetupModal
+        isOpen={showPinSetupModal}
+        onClose={() => setShowPinSetupModal(false)}
+        onSuccess={() => {
+          fetchWallet();
+          // Optionally re-trigger the action they wanted
+          if (profileApi?.is_business_owner) setShowWithdrawModal(true);
+          else setShowTransferModal(true);
+        }}
+      />
+
+      <TransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        availableBalance={Number(wallet?.available_balance || 0)}
+        onBalanceUpdate={(newBal) => updateBalance(newBal)}
+      />
+
+      <WithdrawModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        availableBalance={Number(wallet?.available_balance || 0)}
+        onEditAccount={() => {
+          setShowWithdrawModal(false);
+          router.push("/profile/business/business-status?edit=true");
+        }}
+        activePaymentJson={paymentAccountJson}
+        onBalanceUpdate={(newBal) => updateBalance(newBal)}
+        role={profileApi?.is_business_owner ? "vendor" : "user"}
+      />
+
+      <ImageViewer
+        src={fullImageUrl}
+        onClose={() => setFullImageUrl(null)}
+        profileUserId={profileApi?.user?.user_id ?? profileApi?.business?.user_id}
       />
     </>
   );

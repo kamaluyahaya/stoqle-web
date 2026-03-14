@@ -117,6 +117,7 @@ export type PreviewPayload = {
     }>;
   }[];
   params: { key: string; value: string }[];
+  soldCount?: number;
 };
 
 
@@ -159,6 +160,8 @@ export type Business = {
   profile_pic?: string | null;
   bg_photo_url?: string | null;
   stats?: BusinessStats;
+  latitude?: number | string;
+  longitude?: number | string;
 };
 
 export type BusinessStats = {
@@ -185,6 +188,7 @@ export type Staff = {
 export type BusinessPolicy = {
   core?: PolicyCore;
   shipping?: ShippingPolicy[];
+  shipping_duration?: ShippingPolicy[];
   returns?: ReturnPolicy;
   payments?: PaymentPolicy[];
   customer_service?: CustomerServicePolicy;
@@ -213,7 +217,7 @@ export type PolicyCore = {
 export type ShippingPolicy = {
   id: number;
   business_policy_id: number;
-  kind: "avg" | "promise";
+  kind: "avg" | "promise" | "delivery_radius_km";
   value: number;
   unit: string;
   created_at?: string;
@@ -360,6 +364,7 @@ export type ProductFeedItem = {
   business_name: string;
   logo?: string;
   first_image?: string;
+  images?: string[];
   product_video?: string;
   min_variant_price?: number;
   min_sku_price?: number;
@@ -372,4 +377,8 @@ export type ProductFeedItem = {
   promo_end?: string;
   sale_type?: string;
   sale_discount?: number;
+  likes_count?: number;
+  isLiked?: boolean;
+  params?: { key: string; value: string }[];
+  sold_count?: number;
 };

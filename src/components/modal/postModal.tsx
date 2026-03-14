@@ -4,15 +4,28 @@
 
 import { API_BASE_URL } from "@/src/lib/config";
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/src/context/authContext";
 import VideoPlayer from "@/src/components/posts/videoPlayer";
+import ImageViewer from "./imageViewer";
+
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type User = { name: string; avatar?: string; id?: number | string; };
-type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; };
+type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; allMedia?: string[]; };
 type APIComment = { comment_id: number; post_id: number; user_id: number; comment_content: string; comment_at: string; is_author: number; is_first_comment: number; author_name: string; author_pic?: string; likes_count: number; author_liked?: boolean; followers_count?: number; posts_count?: number; liked_by_user?: boolean; };
 
-type Props = { post: Post; onClose: () => void; onToggleLike: (postId: string) => void; userToken?: string | null; };
+type Props = {
+  post: Post;
+  onClose: () => void;
+  onToggleLike: (postId: string) => void;
+  userToken?: string | null;
+  isPreview?: boolean;
+};
 
 const NO_IMAGE_PLACEHOLDER = "https://via.placeholder.com/1600x1200?text=No+Image";
 
@@ -37,7 +50,7 @@ function formatDate(dateStr?: string) {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default function PostModal({ post, onClose, onToggleLike, userToken }: Props) {
+export default function PostModal({ post, onClose, onToggleLike, userToken, isPreview = false }: Props) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
 
@@ -47,6 +60,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   // mediaRef still used for convenience measurement (will point to *main* img/video)
   const mediaRef = useRef<HTMLElement | null>(null);
   const auth = useAuth();
+  const router = useRouter();
 
   const [computedWidth, setComputedWidth] = useState<number | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState<boolean>(typeof window !== "undefined" ? window.innerWidth >= 1024 : false);
@@ -62,12 +76,33 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentPosting, setCommentPosting] = useState(false);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [viewerProfileUserId, setViewerProfileUserId] = useState<string | number | undefined>(undefined);
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(() => {
+    if (post.allMedia && post.allMedia.length > 0 && post.src) {
+      const idx = post.allMedia.indexOf(post.src);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
+  });
+  const [swipeDirection, setSwipeDirection] = useState(0);
+
+  const mediaList = post.allMedia && post.allMedia.length > 0 ? post.allMedia : (post.src ? [post.src] : []);
 
   const currentUserId = auth?.user?.user_id || auth?.user?.id;
   const postAuthorId = post.user?.id;
   const isPostOwner = Boolean(currentUserId && postAuthorId && String(currentUserId) === String(postAuthorId));
 
   const getToken = () => userToken ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+
+  useEffect(() => {
+    if (post.allMedia && post.allMedia.length > 0 && post.src) {
+      const idx = post.allMedia.indexOf(post.src);
+      setCurrentMediaIndex(idx >= 0 ? idx : 0);
+    } else {
+      setCurrentMediaIndex(0);
+    }
+  }, [post.id, post.src]);
 
   useEffect(() => {
     const original = document.body.style.overflow;
@@ -82,6 +117,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
 
   // comments/follow handlers unchanged (kept from your file)
   useEffect(() => {
+    if (isPreview) return;
     const controller = new AbortController();
     const token = getToken();
     async function fetchComments() {
@@ -124,6 +160,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   }, [post.id, userToken]);
 
   useEffect(() => {
+    if (isPreview) return;
     const controller = new AbortController();
     const token = getToken();
     const userId = Number(post.user?.id ?? 0);
@@ -213,7 +250,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
 
     return () => cleanupFns.forEach((fn) => fn());
     // rerun when main media or screen breakpoint changes
-  }, [post.src, post.isVideo, post.coverType, isLargeScreen]);
+  }, [post.src, post.isVideo, post.coverType, isLargeScreen, currentMediaIndex]);
 
   // EFFECT B: recompute on resize (uses the mediaRef which points to left media)
   useEffect(() => {
@@ -263,6 +300,10 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
 
   // --- keep your action handlers (with login checks) ---
   const toggleLikeComment = async (commentId: number) => {
+    if (isPreview) {
+      toast.info("Interactions are not allowed in preview mode");
+      return;
+    }
     const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
     if (!ensure) return;
     // ... rest unchanged (same as your implementation)
@@ -310,6 +351,10 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   };
 
   const handleAddComment = async () => {
+    if (isPreview) {
+      toast.info("Interactions are not allowed in preview mode");
+      return;
+    }
     const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
     if (!ensure) return;
     const token = getToken();
@@ -352,6 +397,10 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   };
 
   const handleToggleLike = async () => {
+    if (isPreview) {
+      toast.info("Interactions are not allowed in preview mode");
+      return;
+    }
     const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
     if (!ensure) return;
     setPostLiked((s) => !s);
@@ -381,6 +430,10 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
   };
 
   const toggleFollowAuthor = async () => {
+    if (isPreview) {
+      toast.info("Interactions are not allowed in preview mode");
+      return;
+    }
     const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
     if (!ensure) return;
     const userId = Number(post.user?.id);
@@ -452,7 +505,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
       : undefined;
 
   return (
-    <div role="dialog" aria-modal="true" ref={wrapperRef} className="fixed inset-0 z-70 flex items-center justify-center px-0 py-0" onMouseDown={onClose}>
+    <div role="dialog" aria-modal="true" ref={wrapperRef} className="fixed inset-0 z-[300] flex items-center justify-center px-0 py-0" onMouseDown={onClose}>
       <div className="absolute inset-0 bg-black/55 " aria-hidden />
 
       <button onMouseDown={(e) => e.stopPropagation()} onClick={onClose} aria-label="Close post" className="hidden lg:flex absolute top-5 right-5 z-50 h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 hover:bg-white/7 transition-shadow shadow-sm" title="Close">
@@ -467,8 +520,26 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
               <svg viewBox="0 0 24 24" className="w-4 h-4 text-slate-700"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
             </button>
             <div className="flex items-center gap-3 min-w-0">
-              <img src={post.user.avatar} alt={post.user.name} className="h-10 w-10 rounded-full object-cover" />
-              <div className="min-w-0"><div className="text-sm text-black font-semibold truncate">{post.user.name}</div></div>
+              <Link 
+                href={`/user/profile/${post.user.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-shrink-0 active:scale-95 transition-transform"
+              >
+                <img
+                  src={post.user.avatar}
+                  alt={post.user.name}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              </Link>
+              <div className="min-w-0">
+                <Link 
+                  href={`/user/profile/${post.user.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-sm text-black font-semibold truncate hover:text-red-500 transition-colors block"
+                >
+                  {post.user.name}
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -481,7 +552,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
 
         {/* LEFT: media */}
         {/* NOTE: we attach leftMediaRef here so our effects look only inside this container */}
-        <div ref={leftMediaRef} className="flex-1 flex items-center justify-center min-h-[300px] lg:min-h-0 border-r border-slate-200">
+        <div ref={leftMediaRef} className="flex-1 flex items-center justify-center min-h-[300px] lg:min-h-0 border-r border-slate-200 relative group/media bg-slate-50">
           {post.coverType === "note" && !post.src ? (
             <div className="w-full h-full flex items-center justify-center p-6 border border-slate-200 relative" style={getNoteStyles(post.noteConfig)}>
               {(() => {
@@ -504,11 +575,89 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
               <VideoPlayer src={post.src} className="w-full h-full object-contain" />
             </div>
           ) : (
-            <img
-              src={post.src ?? NO_IMAGE_PLACEHOLDER}
-              alt={post.caption}
-              className="w-full h-full object-contain"
-            />
+            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+              <AnimatePresence initial={false} custom={swipeDirection} mode="popLayout">
+                <motion.img
+                  key={currentMediaIndex}
+                  src={mediaList[currentMediaIndex] ?? NO_IMAGE_PLACEHOLDER}
+                  alt={post.caption}
+                  custom={swipeDirection}
+                  variants={{
+                    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
+                    center: { x: 0, opacity: 1 },
+                    exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 })
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.6}
+                  onDragEnd={(e, info) => {
+                    const swipeThreshold = 50;
+                    if (info.offset.x < -swipeThreshold) {
+                      setSwipeDirection(1);
+                      setCurrentMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
+                    } else if (info.offset.x > swipeThreshold) {
+                      setSwipeDirection(-1);
+                      setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
+                    }
+                  }}
+                  onTap={() => {
+                    setViewerProfileUserId(undefined);
+                    setFullImageUrl(mediaList[currentMediaIndex]);
+                  }}
+                  className="w-full h-full object-contain cursor-zoom-in active:cursor-grabbing touch-none"
+                />
+              </AnimatePresence>
+
+              {mediaList.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSwipeDirection(-1);
+                      setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
+                    }}
+                    className="absolute left-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all opacity-0 group-hover/media:opacity-100 backdrop-blur-sm z-20"
+                  >
+                    <ChevronLeftIcon className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSwipeDirection(1);
+                      setCurrentMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
+                    }}
+                    className="absolute right-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all opacity-0 group-hover/media:opacity-100 backdrop-blur-sm z-20"
+                  >
+                    <ChevronRightIcon className="w-6 h-6" />
+                  </button>
+
+                  <div className="absolute bottom-4 left-0 right-0 flex items-center justify-between px-6 z-20 pointer-events-none">
+                    <div className="flex-1" /> {/* Spacer */}
+
+                    <div className="flex gap-1.5 px-3 py-1.5 pointer-events-auto">
+                      {mediaList.map((_, i) => (
+                        <div
+                          key={i}
+                          className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentMediaIndex ? "bg-red-500 scale-125" : "bg-white/40 shadow-sm"
+                            }`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex-1 flex justify-end">
+                      {/* Counter Badge */}
+                      <div className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md text-[10px] font-black text-white/90 tracking-widest shadow-lg border border-white/10 pointer-events-auto">
+                        {currentMediaIndex + 1} / {mediaList.length}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 
@@ -517,7 +666,12 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
           {/* HEADER for lg */}
           <div className="flex items-center justify-between gap-4 p-4 lg:p-5 flex-shrink-0 border-b lg:border-b-0 border-slate-200 hidden lg:flex">
             <div className="flex items-center gap-3 min-w-0">
-              <img src={post.user.avatar} alt={post.user.name} className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-sm flex-shrink-0" />
+              <img
+                src={post.user.avatar}
+                alt={post.user.name}
+                className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-sm flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+                onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar || null); setViewerProfileUserId(post.user.id); }}
+              />
               <div className="min-w-0">
                 <div className="text-base font-semibold text-slate-900 truncate">{post.user.name}</div>
               </div>
@@ -576,11 +730,27 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
               ) : (
                 comments.map((c) => (
                   <div key={c.comment_id} className="flex items-start gap-4">
-                    <img src={c.author_pic ?? `https://i.pravatar.cc/40?u=${c.author_name}-${c.comment_id}`} alt={c.author_name} className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                    <Link 
+                      href={`/user/profile/${c.user_id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-shrink-0 active:scale-95 transition-transform"
+                    >
+                      <img
+                        src={c.author_pic ?? `https://i.pravatar.cc/40?u=${c.author_name}-${c.comment_id}`}
+                        alt={c.author_name}
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
+                    </Link>
                     <div className="flex-1">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="text-sm font-medium text-slate-400 truncate">{c.author_name}</div>
+                          <Link 
+                            href={`/user/profile/${c.user_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-sm font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
+                          >
+                            {c.author_name}
+                          </Link>
                           {c.is_author === 1 && (
                             <span className="text-xs inline-flex items-center px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">Author</span>
                           )}
@@ -618,92 +788,106 @@ export default function PostModal({ post, onClose, onToggleLike, userToken }: Pr
             </div>
           </div>
 
-          <div className="lg:absolute fixed left-0 w-full bg-white border-t border-slate-200 z-50 p-4 bottom-[52px] lg:bottom-0 lg:p-4">
-            {isCommenting ? (
-              <div className="space-y-3">
-                <input
-                  autoFocus
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleAddComment();
-                      setIsCommenting(false);
-                    }
-                  }}
-                  placeholder="Say something..."
-                  className="w-full rounded-2xl bg-gray-100 px-5 py-3 text-sm text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-gray-300"
-                  onMouseDown={(e) => e.stopPropagation()}
-                />
-
-                <div className="flex items-center justify-end gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsCommenting(false);
-                      setCommentText("");
+          {!isPreview && (
+            <div className="lg:absolute fixed left-0 w-full bg-white border-t border-slate-200 z-50 p-4 bottom-0 lg:p-4">
+              {isCommenting ? (
+                <div className="space-y-3">
+                  <input
+                    autoFocus
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddComment();
+                        setIsCommenting(false);
+                      }
                     }}
-                    className="px-4 py-2 rounded-full text-sm text-slate-600 hover:bg-slate-100"
-                  >
-                    Cancel
-                  </button>
+                    placeholder="Say something..."
+                    className="w-full rounded-full bg-gray-100 px-3 py-3 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-gray-300"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  />
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddComment();
-                      setIsCommenting(false);
-                    }}
-                    disabled={commentPosting}
-                    className="px-5 py-2 rounded-full bg-red-600 text-white text-sm font-medium shadow-sm hover:brightness-95"
-                  >
-                    {commentPosting ? "Sending..." : "Send"}
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsCommenting(false);
+                        setCommentText("");
+                      }}
+                      className="px-4 py-2 rounded-full text-sm text-slate-600 hover:bg-slate-100"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddComment();
+                        setIsCommenting(false);
+                      }}
+                      disabled={commentPosting}
+                      className="px-5 py-2 rounded-full bg-red-600 text-white text-sm font-medium shadow-sm hover:brightness-95"
+                    >
+                      {commentPosting ? "Sending..." : "Send"}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCommenting(true);
-                  }}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-full text-sm text-slate-600"
-                >
-                  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8-1.11 0-2.173-.113-3.168-.322L3 20l1.322-5.832C3.937 13.755 3 12.007 3 10c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <span className="text-xs">Say something</span>
-                </button>
-
-                <div className="ml-auto flex items-center gap-3">
+              ) : (
+                <div className="flex items-center gap-3">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleToggleLike();
+                      setIsCommenting(true);
                     }}
-                    aria-pressed={postLiked}
-                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition ${postLiked ? "text-rose-500" : "text-slate-600"}`}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-full text-sm text-slate-600"
                   >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill={postLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                    <span className="text-xs font-semibold">{postLikeCount}</span>
-                  </button>
-
-                  <button onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-slate-600">
                     <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 8a3 3 0 10-6 0v4a3 3 0 006 0V8z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5A8.25 8.25 0 116 16.5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8-1.11 0-2.173-.113-3.168-.322L3 20l1.322-5.832C3.937 13.755 3 12.007 3 10c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
+                    <span className="text-xs">Say something</span>
                   </button>
+
+                  <div className="ml-auto flex items-center gap-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleLike();
+                      }}
+                      aria-pressed={postLiked}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition ${postLiked ? "text-rose-500" : "text-slate-600"}`}
+                    >
+                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill={postLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                      </svg>
+                      <span className="text-xs font-semibold">{postLikeCount}</span>
+                    </button>
+
+                    <button onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-slate-600">
+                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 8a3 3 0 10-6 0v4a3 3 0 006 0V8z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5A8.25 8.25 0 116 16.5" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+      <ImageViewer
+        src={fullImageUrl ? (viewerProfileUserId ? fullImageUrl : mediaList[currentMediaIndex]) : null}
+        onClose={() => setFullImageUrl(null)}
+        profileUserId={viewerProfileUserId}
+        mediaList={viewerProfileUserId ? [] : mediaList}
+        currentIndex={currentMediaIndex}
+        onIndexChange={(idx) => {
+          setSwipeDirection(idx > currentMediaIndex ? 1 : -1);
+          setCurrentMediaIndex(idx);
+        }}
+        direction={swipeDirection}
+      />
     </div>
   );
 }

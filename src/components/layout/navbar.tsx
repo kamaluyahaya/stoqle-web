@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import RightMenus from "../right-menus";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/src/context/authContext"; // adjust path if needed
 type Props = {
   height: number;
 };
 
 export default function Navbar({ height }: Props) {
+  const pathname = usePathname();
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false); // new: mobile dropdown open
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null); // new: which submenu is visible
@@ -77,7 +79,11 @@ const isLoggedIn =
 
   return (
     <header
-      className="fixed top-0 inset-x-0 z-30 bg-white backdrop-blur-md p-2"
+      className={`fixed top-0 inset-x-0 z-30 bg-white backdrop-blur-md p-2 ${
+        pathname === "/messages" || pathname?.startsWith("/shop")
+          ? "hidden sm:block"
+          : ""
+      }`}
       style={{ height }}
     >
       <div className="mx-auto flex h-full items-center px-4">
@@ -127,12 +133,11 @@ const isLoggedIn =
         ) : (
           /* ---------- Normal navbar (unchanged UI) ---------- */
           <>
-            {/* LEFT — Title / Brand */}
-            <div className="flex min-w-[160px] items-center">
+            <Link href="/discover" className="flex min-w-[160px] items-center cursor-pointer">
               <div className="rounded-full bg-red-500 px-3 py-1.5 text-md font-semibold text-white">
                 Stoqle
               </div>
-            </div>
+            </Link>
 
             {/* CENTER — Search (desktop / tablet) */}
             <div className="flex flex-1 justify-center px-6">
@@ -327,13 +332,12 @@ const isLoggedIn =
     <ul className="flex flex-col gap-1">
       <div className="my-2 border-t border-gray-100" />
       <li>
-        
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/creative/portfolio"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/creative/portfolio");
           }}
         >
           <span className="text-gray-500">Portfolio</span>
@@ -345,18 +349,17 @@ const isLoggedIn =
             stroke="currentColor"
             strokeWidth={2}
           >
-            {/* up-right arrow */}
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/creative/contact"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/creative/contact");
           }}
         >
           <span className="text-gray-500">Contact creatives</span>
@@ -370,7 +373,7 @@ const isLoggedIn =
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
     </ul>
   )}
@@ -380,12 +383,12 @@ const isLoggedIn =
     <ul className="flex flex-col gap-1">
       <div className="my-2 border-t border-gray-100" />
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/business/account"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/business/account");
           }}
         >
           <span className="text-gray-500">Business account</span>
@@ -399,15 +402,15 @@ const isLoggedIn =
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/business/onboarding"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/business/onboarding");
           }}
         >
           <span className="text-gray-500">Merchant onboarding</span>
@@ -421,7 +424,7 @@ const isLoggedIn =
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
     </ul>
   )}
@@ -432,34 +435,34 @@ const isLoggedIn =
     <ul className="flex flex-col gap-1">
       <div className="my-2 border-t border-gray-100" />
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/help/faq"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/help/faq");
           }}
         >
           <span className="text-gray-500">FAQ</span>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/help/contact"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/help/contact");
           }}
         >
           <span className="text-gray-500">Contact support</span>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
     </ul>
   )}
@@ -469,34 +472,34 @@ const isLoggedIn =
     <ul className="flex flex-col gap-1">
       <div className="my-2 border-t border-gray-100" />
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/legal/terms"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/legal/terms");
           }}
         >
           <span className="text-gray-500">Terms of Service</span>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/legal/privacy"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/legal/privacy");
           }}
         >
           <span className="text-gray-500">Privacy Policy</span>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
     </ul>
   )}
@@ -506,34 +509,34 @@ const isLoggedIn =
     <ul className="flex flex-col gap-1">
       <div className="my-2 border-t border-gray-100" />
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/about/team"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/about/team");
           }}
         >
           <span className="text-gray-500">Our team</span>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
       <li>
-        <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group"
+        <Link
+          href="/about/careers"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
           onClick={() => {
             setShowMobileMenu(false);
             setActiveSubmenu(null);
-            router.push("/about/careers");
           }}
         >
           <span className="text-gray-500">Careers</span>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
           </svg>
-        </button>
+        </Link>
       </li>
     </ul>
   )}

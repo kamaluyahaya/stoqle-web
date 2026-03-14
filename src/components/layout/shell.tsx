@@ -6,19 +6,21 @@ import Sidebar from "./sidebar";
 import LoginModal from "@/src/components/modal/auth/loginModal";
 import BottomNav from "./bottomNav"; // <-- add this
 import { useAuth } from "@/src/context/authContext";
+import { usePathname } from "next/navigation";
 
 const NAV_HEIGHT = 64;
 const SIDEBAR_WIDTH = 300;
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
+  const pathname = usePathname();
 
   return (
     <div className=" bg-white relative">
       <Navbar height={NAV_HEIGHT} />
       <Sidebar navHeight={NAV_HEIGHT} width={SIDEBAR_WIDTH} />
 
-      <main className="pt-16 lg:ml-[300px] transition-all duration-300">
+      <main className={`${(pathname === '/messages' || pathname?.startsWith('/shop')) ? 'pt-0 sm:pt-16' : 'pt-16'} lg:ml-[300px] transition-all duration-300`}>
         {children}
       </main>
 

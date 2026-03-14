@@ -16,7 +16,8 @@ type AuthContextValue = {
   ensureLoggedIn: () => Promise<boolean>;
   closeLogin: () => void;
   // internal: called by LoginModal when login succeeds
-logout: () => Promise<void>;
+  logout: () => Promise<void>;
+  isHydrated: boolean;
   _onLoginSuccess: (user: User, token: string) => void;
 };
 
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const resolverRef = useRef<LoginResolver>(null);
   const mountedRef = useRef(false);
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
     window.addEventListener("storage", onStorage);
+    setIsHydrated(true);
 
     return () => {
       mountedRef.current = false;
@@ -121,32 +124,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
   const logout = async () => {
-  // clear storage FIRST (most important)
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-  }
+    // clear storage FIRST (most important)
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
 
-  // then update state
-  setUser(null);
-  setToken(null);
-  setLoginOpen(false);
-};
+    // then update state
+    setUser(null);
+    setToken(null);
+    setLoginOpen(false);
+  };
 
 
   return (
- <AuthContext.Provider
-  value={{
-    user,
-    token,
-    loginOpen,
-    openLogin,
-    ensureLoggedIn,
-    closeLogin,
-    _onLoginSuccess,
-    logout, // ← include this
-  }}
->
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loginOpen,
+        openLogin,
+        ensureLoggedIn,
+        closeLogin,
+        _onLoginSuccess,
+        logout, // ← include this
+        isHydrated,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

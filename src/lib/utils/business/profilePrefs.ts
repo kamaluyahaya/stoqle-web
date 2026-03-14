@@ -10,6 +10,7 @@ export const KEYS = {
   promo: "business_promotional_sale",
   discount: "business_sales_discount",
   region: "business_region",
+  shopProfile: "business_shop_profile",
 } as const;
 
 const DIRTY_KEY = "business_policy_dirty_keys";
@@ -28,7 +29,7 @@ function readDirtySet(): string[] {
 function writeDirtySet(keys: string[]) {
   try {
     localStorage.setItem(DIRTY_KEY, JSON.stringify([...new Set(keys)]));
-  } catch {}
+  } catch { }
 }
 
 /** Public: mark a key as modified by the user (staged) */
@@ -37,7 +38,7 @@ export function markDirty(key: string) {
     const set = new Set(readDirtySet());
     set.add(key);
     writeDirtySet([...set]);
-  } catch {}
+  } catch { }
 }
 
 /** Public: remove a key from the dirty set */
@@ -46,14 +47,14 @@ export function unmarkDirty(key: string) {
     const set = new Set(readDirtySet());
     set.delete(key);
     writeDirtySet([...set]);
-  } catch {}
+  } catch { }
 }
 
 /** Public: clear all dirty markers */
 export function clearDirty() {
   try {
     localStorage.removeItem(DIRTY_KEY);
-  } catch {}
+  } catch { }
 }
 
 /** Public: return dirty keys */
@@ -84,7 +85,7 @@ export async function loadField(key: string): Promise<string | null> {
 export async function saveField(key: string, value: string): Promise<void> {
   try {
     localStorage.setItem(key, value);
-  } catch {}
+  } catch { }
 }
 
 /** remove a single staged field */
@@ -92,7 +93,7 @@ export async function removeField(key: string): Promise<void> {
   try {
     localStorage.removeItem(key);
     unmarkDirty(key);
-  } catch {}
+  } catch { }
 }
 
 /**
@@ -104,11 +105,11 @@ export async function clearAll(): Promise<void> {
     Object.values(KEYS).forEach((k) => {
       try {
         localStorage.removeItem(k);
-      } catch {}
+      } catch { }
     });
     // also remove dirty marker
     localStorage.removeItem(DIRTY_KEY);
-  } catch {}
+  } catch { }
 }
 
 /**

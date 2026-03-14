@@ -182,7 +182,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
           auth._onLoginSuccess(user, token);
         }
         onClose();
- window.location.href = "/discover";
+        window.location.href = "/discover";
       }
     } catch (e: any) {
       toast.error("Network error. Try again.");
@@ -228,7 +228,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
 
       if (!res.ok || data?.status === "fail") {
         const message = data?.message || "Failed to update name";
-        toast.error(message, );
+        toast.error(message,);
         setError(message);
         setLoading(false);
         return;
@@ -256,7 +256,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
-      className="fixed inset-0 z-[60] flex items-center justify-center lg:px-4 lg:py-6 "
+      className="fixed inset-0 z-[2000] flex items-center justify-center lg:px-4 lg:py-6 "
       onMouseDown={onClose}
     >
       <div className="absolute inset-0 bg-black/50 " aria-hidden />

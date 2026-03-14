@@ -20,32 +20,26 @@ export default function ManageCategoriesModal({ open, onClose, categories, onUpd
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [loadingId, setLoadingId] = useState<number | null>(null);
-    const modalRef = useRef<HTMLDivElement | null>(null);
-    const lastScrollY = useRef<number>(0);
- // lock background scroll while open
-   useEffect(() => {
-  if (!open) return;
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const lastScrollY = useRef<number>(0);
+  // Lock background scroll while open
+  useEffect(() => {
+    if (!open) return;
 
-  // save scroll position
-  const scrollY = window.scrollY || window.pageYOffset;
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.left = "0";
-  document.body.style.right = "0";
-  document.body.style.width = "100%";
-  document.documentElement.style.overflow = "hidden";
+    // Prevent background scrolling while modal is open
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
 
-  return () => {
-    // restore scroll
-    document.body.style.position = "";
-    document.body.style.top = "";
-    document.body.style.left = "";
-    document.body.style.right = "";
-    document.body.style.width = "";
-    document.documentElement.style.overflow = "";
-    window.scrollTo(0, scrollY);
-  };
-}, [open]);
+    document.body.style.overflow = "hidden";
+    if (scrollBarWidth > 0) {
+      document.body.style.paddingRight = `${scrollBarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = originalStyle;
+      document.body.style.paddingRight = "0";
+    };
+  }, [open]);
 
 
   if (!open) return null;
@@ -62,33 +56,33 @@ export default function ManageCategoriesModal({ open, onClose, categories, onUpd
     setDesc("");
   }
 
-  
+
   async function saveEdit(id: number) {
     if (!name.trim()) return toast("Category name is required");
     setLoadingId(id);
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-     const res = await updateCategory(
-  id,
-  { category_name: name.trim(), description: desc.trim() },
-  token || undefined
-);
+      const res = await updateCategory(
+        id,
+        { category_name: name.trim(), description: desc.trim() },
+        token || undefined
+      );
 
-// normalize response
-const updated: Category = {
-  category_id: id,
-  category_name: res?.category_name ?? name.trim(),
-  description: res?.description ?? desc.trim(),
-  updated_at: res?.updated_at ?? new Date().toISOString(),
-};
+      // normalize response
+      const updated: Category = {
+        category_id: id,
+        category_name: res?.category_name ?? name.trim(),
+        description: res?.description ?? desc.trim(),
+        updated_at: res?.updated_at ?? new Date().toISOString(),
+      };
 
-onUpdated(updated);
+      onUpdated(updated);
 
 
       toast("Category updated");
-cancelEdit();
-// <-- optionally:
-onClose();
+      cancelEdit();
+      // <-- optionally:
+      onClose();
 
     } catch (err: any) {
       console.error("updateCategory error", err);
@@ -97,7 +91,7 @@ onClose();
       setLoadingId(null);
     }
   }
- 
+
 
 
   return (
@@ -123,11 +117,11 @@ onClose();
                   <div className="space-y-2">
                     <DefaultInput label="Category name" value={name} onChange={setName} placeholder="Category" required />
                     <DescriptionTextarea
-                                        value={desc}
-                                        onChange={setDesc}
-                                        placeholder="Write category description(Optional)..."
-                                        maxLength={100}
-                                      />
+                      value={desc}
+                      onChange={setDesc}
+                      placeholder="Write category description(Optional)..."
+                      maxLength={100}
+                    />
                     <div className="flex gap-2 mt-2">
                       <button onClick={() => saveEdit(c.category_id)} disabled={loadingId === c.category_id} className="px-3 py-2 rounded-full bg-red-500 text-white text-sm">
                         {loadingId === c.category_id ? "Saving..." : "Save"}

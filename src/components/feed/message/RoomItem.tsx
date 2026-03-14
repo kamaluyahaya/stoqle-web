@@ -27,7 +27,7 @@ export const RoomItem: React.FC<RoomItemProps> = ({
     active,
     onClick,
 }) => {
-    const displayName = room.business_name || room.full_name || `User ${room.other_user_id}`;
+    const displayName = room.business_name || room.full_name || `stoqleID ${room.other_user_id}`;
     const avatarSrc = room.business_logo || room.profile_pic;
     const timestamp = room.sent_at || room.last_message_time || room.updated_at;
     const preview = room.message_content || room.last_message?.message_content || "No messages yet";

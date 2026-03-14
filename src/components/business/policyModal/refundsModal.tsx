@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Props = {
   open: boolean;
@@ -74,8 +75,6 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
     };
   }, [open]);
 
-  if (!open) return null;
-
   async function handleSave() {
     setSaving(true);
     try {
@@ -86,7 +85,7 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
         rapid_refund: !!rapidRefund,
         // also write alternative key used elsewhere
         additional_info: !!noReasonReturn7Days,
-        
+
       };
 
       const payloadJson = JSON.stringify(payloadObj);
@@ -111,172 +110,182 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
   }
 
   return (
-    <div className="fixed inset-0 z-75 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={() => (saving ? null : onClose())} />
-
-      {/* Modal panel */}
-      <div className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Returns & Refunds</h3>
-          <button
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => (saving ? null : onClose())}
-            className="text-sm px-3 py-1 rounded-md hover:bg-slate-100"
-            aria-label="Close refunds modal"
+          />
+
+          {/* Modal panel */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10 flex flex-col"
           >
-            <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Returns & Refunds</h3>
+              <button
+                onClick={() => (saving ? null : onClose())}
+                className="text-sm px-3 py-1 rounded-md hover:bg-slate-100"
+                aria-label="Close refunds modal"
+              >
+                <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
 
-        {/* Body */}
-        <div className="mt-4 max-h-[60vh] overflow-auto">
-          {loading ? (
-            <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Return shipping subsidy</div>
-                        <div className="text-xs text-slate-500 mt-1">We cover return shipping costs in eligible cases.</div>
-                      </div>
+            {/* Body */}
+            <div className="mt-4 max-h-[60vh] overflow-auto">
+              {loading ? (
+                <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Return shipping subsidy</div>
+                            <div className="text-xs text-slate-500 mt-1">We cover return shipping costs in eligible cases.</div>
+                          </div>
 
-                      <label className="inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={returnShippingSubsidy}
-                          onChange={(e) => setReturnShippingSubsidy(e.target.checked)}
-                          className="sr-only"
-                        />
-                        <span
-                          className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                            returnShippingSubsidy ? "bg-rose-500" : "bg-slate-200"
-                          }`}
-                          aria-hidden
-                        >
-                          <span
-                            className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                              returnShippingSubsidy ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">7-day no reason return</div>
-                        <div className="text-xs text-slate-500 mt-1">Buyers can return items within 7 days without explanation.</div>
-                      </div>
-
-                      <label className="inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={noReasonReturn7Days}
-                          onChange={(e) => setNoReasonReturn7Days(e.target.checked)}
-                          className="sr-only"
-                        />
-                        <span
-                          className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                            noReasonReturn7Days ? "bg-rose-500" : "bg-slate-200"
-                          }`}
-                          aria-hidden
-                        >
-                          <span
-                            className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                              noReasonReturn7Days ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Rapid refund</div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          When conditions are met, customers receive an instant refund.
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={returnShippingSubsidy}
+                              onChange={(e) => setReturnShippingSubsidy(e.target.checked)}
+                              className="sr-only"
+                            />
+                            <span
+                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${returnShippingSubsidy ? "bg-rose-500" : "bg-slate-200"
+                                }`}
+                              aria-hidden
+                            >
+                              <span
+                                className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${returnShippingSubsidy ? "translate-x-5" : "translate-x-0"
+                                  }`}
+                              />
+                            </span>
+                          </label>
                         </div>
                       </div>
-
-                      <label className="inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={rapidRefund}
-                          onChange={(e) => setRapidRefund(e.target.checked)}
-                          className="sr-only"
-                        />
-                        <span
-                          className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                            rapidRefund ? "bg-rose-500" : "bg-slate-200"
-                          }`}
-                          aria-hidden
-                        >
-                          <span
-                            className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                              rapidRefund ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </span>
-                      </label>
                     </div>
                   </div>
-                </div>
-              </div>
-              {/* Note */}
-              <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <label className="text-sm font-semibold text-slate-900">Notes</label>
-                <p className="text-xs text-slate-500 mt-1 mb-2">Optional info (e.g. Online only, Delivery only)</p>
-                <textarea
-                  value={note}
-                  onChange={(e) => {
-                    if (e.target.value.length <= 100) setNote(e.target.value);
-                  }}
-                  rows={4}
-                  placeholder="Optional note (max 100 chars)"
-                  className="w-full border border-slate-200 rounded-lg p-3 text-sm resize-none"
-                />
-                <div className="text-xs text-slate-400 mt-2 text-right">{note.length}/100</div>
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <div className="mt-4 flex justify-end gap-3">
-          <button
-            onClick={() => (saving ? null : onClose())}
-            className="px-4 py-2 rounded-lg bg-white border"
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold"
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">7-day no reason return</div>
+                            <div className="text-xs text-slate-500 mt-1">Buyers can return items within 7 days without explanation.</div>
+                          </div>
+
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={noReasonReturn7Days}
+                              onChange={(e) => setNoReasonReturn7Days(e.target.checked)}
+                              className="sr-only"
+                            />
+                            <span
+                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${noReasonReturn7Days ? "bg-rose-500" : "bg-slate-200"
+                                }`}
+                              aria-hidden
+                            >
+                              <span
+                                className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${noReasonReturn7Days ? "translate-x-5" : "translate-x-0"
+                                  }`}
+                              />
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Rapid refund</div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              When conditions are met, customers receive an instant refund.
+                            </div>
+                          </div>
+
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={rapidRefund}
+                              onChange={(e) => setRapidRefund(e.target.checked)}
+                              className="sr-only"
+                            />
+                            <span
+                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${rapidRefund ? "bg-rose-500" : "bg-slate-200"
+                                }`}
+                              aria-hidden
+                            >
+                              <span
+                                className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${rapidRefund ? "translate-x-5" : "translate-x-0"
+                                  }`}
+                              />
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Note */}
+                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <label className="text-sm font-semibold text-slate-900">Notes</label>
+                    <p className="text-xs text-slate-500 mt-1 mb-2">Optional info (e.g. Online only, Delivery only)</p>
+                    <textarea
+                      value={note}
+                      onChange={(e) => {
+                        if (e.target.value.length <= 100) setNote(e.target.value);
+                      }}
+                      rows={4}
+                      placeholder="Optional note (max 100 chars)"
+                      className="w-full border border-slate-200 rounded-lg p-3 text-sm resize-none"
+                    />
+                    <div className="text-xs text-slate-400 mt-2 text-right">{note.length}/100</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => (saving ? null : onClose())}
+                className="px-4 py-2 rounded-lg bg-white border"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold"
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
