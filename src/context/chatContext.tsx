@@ -18,6 +18,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const socketRef = useRef<Socket | null>(null);
 
     const fetchUnreadCount = async () => {
+        const userId = user?.user_id || user?.id;
         if (!token) {
             setUnreadCount(0);
             return;
@@ -31,9 +32,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
             if (Array.isArray(rooms)) {
                 const total = rooms.reduce((acc: number, room: any) => {
-                    // Check for unread_count or is_read on last message
-                    if (room.unread_count) return acc + Number(room.unread_count);
-                    if (room.is_read === 0 || room.is_read === false) return acc + 1;
+                    // Favor the dedicated unread_count field from backend
+                    if (room.unread_count !== undefined) {
+                        return acc + Number(room.unread_count);
+                    }
+                    // Fallback for rooms without the field
+                    if (room.is_read === 0 && String(room.sender_id) !== String(userId)) {
+                        return acc + 1;
+                    }
                     return acc;
                 }, 0);
                 setUnreadCount(total);
@@ -53,9 +59,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 socketRef.current = socket;
 
                 const handleNewMessage = (msg: any) => {
-                    // Only increment if we are not on the messages page (or let the page handle it)
-                    // Actually, we can just fetchUnreadCount again or increment
-                    // To be safe and simple, let's just re-fetch or increment
+                    // Only increment if we are not the sender
                     if (String(msg.sender_id) !== String(userId)) {
                         setUnreadCount(prev => prev + 1);
                     }
@@ -64,11 +68,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 socket.on("chat:message", handleNewMessage);
                 socket.on("chat:file", handleNewMessage);
 
-                // When a message is read, we might want to decrement
-                // But it's easier to just re-fetch when needed or listen for read events
-                socket.on("chat:message:read", () => {
-                    fetchUnreadCount();
-                });
+                // Listen for both message-specific and room-wide read events
+                socket.on("chat:message:read", () => fetchUnreadCount());
+                socket.on("chat:room:read", () => fetchUnreadCount());
 
                 return () => {
                     socket.disconnect();

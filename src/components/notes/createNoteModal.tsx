@@ -13,6 +13,7 @@ import {
   LockClosedIcon, 
   UsersIcon 
 } from "@heroicons/react/24/outline";
+import { getCurrentLocationName, getCachedLocationName } from "@/src/lib/location";
 
 type Visibility = "public" | "private" | "friends";
 
@@ -260,12 +261,17 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
 
       const cfg = buildConfigPayload();
 
+      // Capture current location for the note
+      const freshLocation = await getCurrentLocationName();
+      const location = freshLocation || getCachedLocationName();
+
       const body: any = {
         text: title || null,
         subtitle: title || null,
         config: JSON.stringify(cfg),
         privacy: visibility,
         cover_type: "note",
+        location: location || null,
       };
 
       const token = typeof window !== "undefined" ? localStorage.getItem("token") || localStorage.getItem("auth") : null;
@@ -290,7 +296,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
       setSelectedConfig(backgrounds[0] ?? null);
       setStep(0);
       toast.success("Note posted successfully");
-      router.push("profile");
+      router.push("/profile?tab=Notes");
       onClose();
     } catch (err: any) {
       console.error(err);

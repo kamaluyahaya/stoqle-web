@@ -10,15 +10,6 @@ type HeaderProps = {
 };
 
 export default function Header({ profileApi, displayName, onLogout, isOwner, isFollowing, followLoading, onToggleFollow }: HeaderProps) {
-  // ... existing code above unchanged
-
-  // More menu for OWN profile (Edit/Profile, Orders, Logout)
-  const OwnerMenu = () => (
-    <div className="relative inline-block text-left">
-      {/* same as your existing MoreMenu for owner */}
-      {/* keep Edit Profile / Orders / Logout */}
-    </div>
-  );
 
   // Actions for VIEWING OTHER PEOPLE
   const OtherActions = () => (

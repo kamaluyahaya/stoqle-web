@@ -31,6 +31,28 @@ export default function EditBusinessProfile({
 
   const displayName = business?.business_name ?? name ?? "Business name";
 
+  const formatAddress = (addrJson: any) => {
+    if (!addrJson) return "";
+    try {
+      const parsed =
+        typeof addrJson === "string" && (addrJson.startsWith("{") || addrJson.startsWith("["))
+          ? JSON.parse(addrJson)
+          : addrJson;
+
+      if (typeof parsed === "string") return parsed;
+
+      const line1 = parsed.address_line_1 || parsed.line1 || "";
+      const city = parsed.city || "";
+      const state = parsed.state || "";
+      const country = parsed.country || "";
+
+      const summary = [line1, city, state, country].filter(Boolean).join(", ");
+      return summary;
+    } catch {
+      return typeof addrJson === "string" ? addrJson : "";
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
@@ -67,12 +89,12 @@ export default function EditBusinessProfile({
             <div className="text-slate-700 text-sm flex flex-col sm:flex-row sm:justify-center sm:gap-1 break-words mt-1">
               <span className="whitespace-normal">{business?.phone ?? business?.business_email}</span>
               <span className="hidden sm:inline">,</span>
-              <span className="whitespace-normal">{business?.business_address}</span>
+              <span className="whitespace-normal">{formatAddress(business?.business_address)}</span>
             </div>
             <div className="inline-block mt-2 text-sm font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full capitalize">
               {business?.business_status}
             </div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">NGN 2,002,830.00</div>
+            <div className="mt-1 text-lg font-semibold text-slate-900">₦0.00</div>
           </div>
         </div>
 
@@ -228,6 +250,7 @@ export default function EditBusinessProfile({
         initialValue={modalProps?.value ?? ""}
         onClose={() => { setModalOpen(false); }}
         onSave={async (payloadJson) => { await saveEditorValue(KEYS.payment, payloadJson); }}
+        businessId={business?.business_id}
       />
       <MarketModal
         open={modalOpen && modalProps?.key === KEYS.market}

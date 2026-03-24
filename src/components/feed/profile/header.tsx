@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext"; // adjust path
+import { useCart } from "@/src/context/cartContext";
 import LoginModal from "../../../components/modal/auth/loginModal"; // adjust path if needed
 import { API_BASE_URL } from "@/src/lib/config";
 import BalanceModal from "../../business/balanceModal";
@@ -13,6 +14,7 @@ import PinSetupModal from "../../business/pinSetupModal";
 import TransferModal from "../../business/transferModal";
 import WithdrawModal from "../../business/withdrawModal";
 import { useWallet } from "@/src/context/walletContext";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 
 import ImageViewer from "../../../components/modal/imageViewer";
@@ -30,6 +32,7 @@ const DEFAULT_AVATAR = "/assets/images/favio.png";
 export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop }: HeaderProps) {
   const router = useRouter();
   const auth = (useAuth?.() ?? null) as any;
+  const { cartCount } = useCart();
   const currentUser = auth?.user ?? null;
   const token = auth?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
 
@@ -58,6 +61,17 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   const [paymentAccountJson, setPaymentAccountJson] = useState<string>("");
 
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+
+  const [hideBalance, setHideBalance] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("hideBalance") === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("hideBalance", String(hideBalance));
+  }, [hideBalance]);
 
   useEffect(() => {
     setFollowersCount(Number(profileApi?.stats?.followers ?? profileApi?.stats?.followers_count ?? 0));
@@ -421,53 +435,90 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
       {open && (
         <div
           ref={menuRef}
-          className="absolute right-0 mt-2 w-70 rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50"
+          className="absolute right-0 mt-2 w-70 rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-[70]"
         >
           <div className="p-2">
             {isOwner ? (
               <>
                 {/* owner menu... (unchanged) */}
                 {profileApi?.is_business_owner ? (
-                  <button
+                  <div
+                    role="button"
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       handleBalance()
                     }}
-
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800 cursor-pointer"
                   >
                     <span>Total Balance</span>
-                    <span className="text-sm text-gray-500 font-bold">
-                      ₦{Number(wallet?.available_balance || 0).toLocaleString()}
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
+                      <span>
+                        {hideBalance ? "****" : `₦${(Number(wallet?.available_balance) || 0).toLocaleString()}`}
+                      </span>
+                      <button
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          setHideBalance(!hideBalance);
+                        }}
+                        className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                      >
+                        {hideBalance ? (
+                          <EyeIcon className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeSlashIcon className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <button
+                  <div
+                    role="button"
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       handleBalance()
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800 cursor-pointer"
                   >
 
                     <span>Balance</span>
-                    <span className="text-sm text-gray-500 font-bold">
-                      ₦{Number(wallet?.available_balance || 0).toLocaleString()}
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
+                      <span>
+                        {hideBalance ? "****" : `₦${(Number(wallet?.available_balance) || 0).toLocaleString()}`}
+                      </span>
+                      <button
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          setHideBalance(!hideBalance);
+                        }}
+                        className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                      >
+                        {hideBalance ? (
+                          <EyeIcon className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeSlashIcon className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 )}
                 <button
-                  onClick={() => handleNavigate("/cart")}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleNavigate("/cart");
+                  }}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800 mt-1"
                 >
                   <span>Cart</span>
-                  <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">3</span>
+                  <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{cartCount}</span>
                 </button>
 
                 <div className="my-2 border-t border-gray-100" />
 
                 <button
-                  onClick={() => handleNavigate("/profile/edit")}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleNavigate("/profile/edit");
+                  }}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
                 >
                   <span>Edit Profile</span>
@@ -477,7 +528,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 </button>
 
                 <button
-                  onClick={() => handleNavigate("/profile/orders")}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleNavigate("/profile/orders");
+                  }}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800 mt-1"
                 >
                   <span>Orders</span>
@@ -928,6 +982,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           currency: wallet?.currency || "₦",
         }}
         role={profileApi?.is_business_owner ? "vendor" : "user"}
+        businessId={profileApi?.business?.business_id}
         onWithdraw={handleWithdrawAction}
         onBalanceUpdate={(newBal) => updateBalance(newBal)}
       />

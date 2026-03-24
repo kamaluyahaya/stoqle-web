@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { fetchMarketFeed, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
+import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
 import { ProductFeedItem, PreviewPayload, ProductSku } from "@/src/types/product";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import ProductPreviewModal from "./previewModal";
 import { API_BASE_URL } from "@/src/lib/config";
 import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaTimes, FaStore, FaHeart, FaRegHeart, FaShare, FaCheckCircle } from "react-icons/fa";
@@ -29,7 +30,7 @@ interface ReelsModalProps {
     open: boolean;
     onClose: () => void;
     initialProductId: number | null;
-    onActiveProductChange?: (productId: number) => void;
+    onActiveProductChange?: (productId: number, businessName?: string) => void;
     origin?: { x: number; y: number };
 }
 
@@ -62,6 +63,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
     const [detailModalOpen, setDetailModalOpen] = useState(false);
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [fetchingProduct, setFetchingProduct] = useState(false);
+    const [previewOrigin, setPreviewOrigin] = useState<{ x: number; y: number } | null>(null);
 
     // Audio interaction logic mirrored from reference
     const [isGlobalMuted, setIsGlobalMuted] = useState(() => {
@@ -153,6 +155,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                 if (res?.data) {
                     const p = res.data.product || res.data;
                     initialProduct = mapToFeedItem(p);
+                    logUserActivity({ product_id: initialProduct.product_id, action_type: 'view', category: initialProduct.category }, token);
                 }
             }
 
@@ -233,69 +236,81 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
     }, [open]);
 
     const handleScroll = () => {
-        if (!containerRef.current) return;
+        if (!containerRef.current || fetchingProduct) return;
         const scrollPosition = containerRef.current.scrollTop;
         const viewHeight = containerRef.current.clientHeight;
         const index = Math.round(scrollPosition / viewHeight);
 
         if (index !== activeVideoIndex && index >= 0 && index < products.length) {
             setActiveVideoIndex(index);
-            if (onActiveProductChange) onActiveProductChange(products[index].product_id);
+            const p = products[index];
+            if (onActiveProductChange) onActiveProductChange(p.product_id, p.business_name);
+            logUserActivity({ product_id: p.product_id, action_type: 'view', category: p.category }, token);
         }
     };
 
-    const handleProductBuyClick = async (productId: number) => {
+    const handleNavigateToReel = useCallback(async (productId: number) => {
+        // Close the detail modal so the user can see the video they just reselected
+        setDetailModalOpen(false);
+        setSelectedProductPayload(null);
+
+        // 2. See if we have this product already
+        const existingIndex = products.findIndex(p => p.product_id === productId);
+        if (existingIndex !== -1) {
+            setActiveVideoIndex(existingIndex);
+            if (containerRef.current) {
+                containerRef.current.scrollTo({
+                    top: existingIndex * containerRef.current.clientHeight,
+                    behavior: "smooth"
+                });
+            }
+            if (onActiveProductChange) onActiveProductChange(productId, products[existingIndex].business_name);
+            logUserActivity({ product_id: productId, action_type: 'view', category: products[existingIndex].category }, token);
+        } else {
+            // If not found, we might need to fetch it and prepend or reload. 
+            // For now, simpler to reload or just use the master page logic.
+            // But we can try to fetch and prepend to keep it smooth.
+            try {
+                setLoading(true);
+                const res = await fetchProductById(productId);
+                if (res?.data) {
+                    const p = res.data.product || res.data;
+                    const newItem = mapToFeedItem(p);
+                    setProducts(prev => [newItem, ...prev]);
+                    setActiveVideoIndex(0);
+                    if (containerRef.current) {
+                        containerRef.current.scrollTop = 0;
+                    }
+                    if (onActiveProductChange) onActiveProductChange(productId);
+                    logUserActivity({ product_id: productId, action_type: 'view', category: newItem.category }, token);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        }
+    }, [products, onActiveProductChange, mapToFeedItem]);
+
+    const handleProductBuyClick = async (productId: number, businessNameOrEvent?: string | React.MouseEvent, e?: React.MouseEvent) => {
         if (fetchingProduct) return;
+
+        let clickEvent: React.MouseEvent | undefined;
+        if (typeof businessNameOrEvent !== "string") {
+            clickEvent = businessNameOrEvent;
+        } else {
+            clickEvent = e;
+        }
+
+        if (clickEvent) setPreviewOrigin({ x: clickEvent.clientX, y: clickEvent.clientY });
+        else setPreviewOrigin({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+
         try {
             setFetchingProduct(true);
             const res = await fetchProductById(productId, token);
             if (res?.data?.product) {
                 const dbProduct = res.data.product;
-                const mappedPayload: PreviewPayload = {
-                    productId: dbProduct.product_id,
-                    title: dbProduct.title,
-                    description: dbProduct.description,
-                    category: dbProduct.category,
-                    hasVariants: dbProduct.has_variants === 1,
-                    price: dbProduct.price ?? "",
-                    quantity: dbProduct.quantity ?? "",
-                    samePriceForAll: false,
-                    sharedPrice: null,
-                    businessId: Number(dbProduct.business_id),
-                    productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
-                    productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) } : null,
-                    useCombinations: dbProduct.use_combinations === 1,
-                    params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-                    soldCount: dbProduct.sold_count,
-                    variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-                        id: String(g.group_id),
-                        title: g.title,
-                        allowImages: g.allow_images === 1,
-                        entries: (g.options || []).map((o: any) => {
-                            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
-                            return {
-                                id: String(o.option_id),
-                                name: o.name,
-                                price: o.price,
-                                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-                            };
-                        })
-                    })),
-                    skus: (dbProduct.skus || []).map((s: any) => {
-                        let vIds: string[] = [];
-                        try { vIds = typeof s.variant_option_ids === 'string' ? JSON.parse(s.variant_option_ids) : s.variant_option_ids; } catch (e) { }
-                        return {
-                            id: String(s.sku_id),
-                            sku: s.sku_code || "",
-                            name: "Combination",
-                            price: s.price,
-                            quantity: 0,
-                            enabled: s.status === 'active',
-                            variantOptionIds: (vIds || []).map(String)
-                        } as ProductSku;
-                    })
-                };
+                const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
                 setSelectedProductPayload(mappedPayload);
                 setDetailModalOpen(true);
             }
@@ -336,6 +351,9 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                     }
                     return p;
                 }));
+                if (res.data.liked) {
+                    logUserActivity({ product_id: productId, action_type: 'like' }, token);
+                }
             }
         } catch (err) {
             console.error("Like failed", err);
@@ -368,7 +386,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
     return (
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none">
+                <div className="fixed inset-0 z-[11000] flex items-center justify-center pointer-events-none">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -421,7 +439,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                                         <ReelItem
                                             product={p}
                                             isActive={i === activeVideoIndex}
-                                            onBuyClick={() => handleProductBuyClick(p.product_id)}
+                                            onBuyClick={(e: React.MouseEvent) => handleProductBuyClick(p.product_id, e)}
                                             onVendorClick={() => handleVendorClick(p.business_id)}
                                             onLikeClick={() => handleLikeClick(p.product_id)}
                                             onShareClick={() => handleShareClick(p)}
@@ -442,11 +460,13 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                         <ProductPreviewModal
                             open={detailModalOpen}
                             payload={selectedProductPayload}
+                            origin={previewOrigin || undefined}
                             onClose={() => {
                                 setDetailModalOpen(false);
                                 setSelectedProductPayload(null);
                             }}
                             onProductClick={handleProductBuyClick}
+                            onReelsClick={handleNavigateToReel}
                         />
                     </motion.div>
                 </div>
@@ -725,21 +745,29 @@ function ReelItem({
                 </div>
                 <h3
                     className="text-white text-sm font-semibold mb-2 line-clamp-1 cursor-pointer hover:text-slate-200 transition-colors drop-shadow-md"
-                    onClick={(e) => { e.stopPropagation(); onBuyClick(); }}
+                    onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
                 >
                     {product.title}
                 </h3>
 
                 {((product.images && product.images.length > 0) || product.price) && (
                     <div className="flex items-center justify-between gap-3 mb-1 mt-1">
-                        <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-xl pr-3">
+                        <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-xl pr-3 relative">
+                            {/* Discount Badge */}
+                            {(product.promo_discount || product.sale_discount) && (
+                                <div className="absolute -top-6 left-0 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-lg flex items-center gap-1">
+                                    <span>{product.promo_title || product.sale_type || "SALE"}</span>
+                                    <span>{product.promo_discount || product.sale_discount}% OFF</span>
+                                </div>
+                            )}
+
                             {product.images && product.images.length > 0 && (
                                 <div className="flex items-center gap-1.5">
                                     {product.images.slice(0, 2).map((img: string, idx: number) => (
                                         <div
                                             key={idx}
                                             className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 shrink-0 shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                                            onClick={(e) => { e.stopPropagation(); onBuyClick(); }}
+                                            onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
                                         >
                                             <img src={formatUrl(img)} alt="" className="w-full h-full object-cover" />
                                         </div>
@@ -747,7 +775,7 @@ function ReelItem({
                                     {product.images.length > 2 && (
                                         <div
                                             className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer relative overflow-hidden group shadow-lg"
-                                            onClick={(e) => { e.stopPropagation(); onBuyClick(); }}
+                                            onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
                                         >
                                             {/* Show the 3rd image behind the counter overlay */}
                                             <img src={formatUrl(product.images[2])} alt="" className="absolute inset-0 w-full h-full object-cover opacity-90 contrast-75" />
@@ -758,12 +786,19 @@ function ReelItem({
                                     )}
                                 </div>
                             )}
-                            <span className="text-white font-black text-base drop-shadow-lg ml-1">₦{Number(product.price).toLocaleString()}</span>
+                            <div className="flex flex-col ml-1">
+                                <span className="text-white font-black text-base drop-shadow-lg leading-tight">₦{Number(product.price).toLocaleString()}</span>
+                                {(product.promo_discount || product.sale_discount) && (
+                                    <span className="text-[9px] text-white/50 line-through font-bold leading-tight">
+                                        ₦{Math.round(Number(product.price) / (1 - (product.promo_discount || product.sale_discount || 0) / 100)).toLocaleString()}
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
                         <button
-                            onClick={(e) => { e.stopPropagation(); onBuyClick(); }}
-                            className="bg-red-600 text-white text-[10px] font-black px-4 py-2.5 rounded-full active:scale-95 transition-all shadow-lg hover:bg-red-700 whitespace-nowrap"
+                            onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
+                            className="bg-red-600 text-white text-[10px] font-black px-5 py-2.5 rounded-full active:scale-95 transition-all shadow-lg hover:bg-red-700 whitespace-nowrap"
                         >
                             Buy Now
                         </button>

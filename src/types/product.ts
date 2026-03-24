@@ -4,9 +4,11 @@ export type VariantEntry = {
   name: string;
   quantity: number;
   price?: number | null;
-  images: File[]; // per-variant images (limit 0..1 in UI)
+  images: (File | string)[]; // per-variant images (limit 0..1 in UI)
   imagePreviews: string[];
   options?: VariantOption[];
+  reservedQuantity?: number;
+  soldCount?: number;
 };
 
 export type VariantOption = {
@@ -58,10 +60,20 @@ export type ProductDraft = {
   params: ParamKV[];
   samePriceForAll: boolean;
   sharedPrice: number | null;
-  productImages: File[];
-  productVideo: File | null;
+  productImages: (File | string)[];
+  productVideo: File | string | null;
   skus: ProductSku[];
   useCombinations: boolean;
+  // Policy Overrides
+  policyOverrides?: {
+    useStoreDefaultReturn: boolean;
+    returnPolicy: any;
+    useStoreDefaultShipping: boolean;
+    shippingPolicy: any;
+    useStoreDefaultPromotions: boolean;
+    promotions: any[];
+    saleDiscount: any;
+  };
 };
 
 export type ProductSku = {
@@ -70,9 +82,10 @@ export type ProductSku = {
   variantOptionIds: string[]; // IDs of the constituent options (VariantEntry.id)
   price: number | "";
   quantity: number | "";
-  image?: File | null;
+  image?: File | string | null;
   imagePreview?: string | null;
   enabled: boolean;
+  reservedQuantity?: number;
 };
 
 export type VariantEntryModal = {
@@ -85,6 +98,7 @@ export type VariantEntryModal = {
   samePriceForAll?: boolean;
   sharedPrice?: number | null;
   existingNames?: string[]; // names already in the group, normalized to lowercase
+  readOnlyQuantity?: boolean;
 };
 
 
@@ -100,8 +114,9 @@ export type PreviewPayload = {
   samePriceForAll: boolean;
   sharedPrice: number | null;
   businessId?: number;
-  productImages: { file?: File; name?: string; url?: string }[]; // urls for previews
-  productVideo?: { file?: File; name?: string; url?: string } | null;
+  userId?: number;
+  productImages: { file?: File | string; name?: string; url?: string }[]; // urls for previews
+  productVideo?: { file?: File | string; name?: string; url?: string } | null;
   useCombinations: boolean;
   skus: ProductSku[];
   variantGroups: {
@@ -113,11 +128,20 @@ export type PreviewPayload = {
       name: string;
       quantity?: number | "";
       price?: number | null;
-      images?: { file?: File; name?: string; url?: string; imagePreviews?: string[] }[];
+      images?: { file?: File | string; name?: string; url?: string; imagePreviews?: string[] }[];
     }>;
   }[];
   params: { key: string; value: string }[];
   soldCount?: number;
+  policyOverrides?: {
+    useStoreDefaultReturn: boolean;
+    returnPolicy: any;
+    useStoreDefaultShipping: boolean;
+    shippingPolicy: any;
+    useStoreDefaultPromotions: boolean;
+    promotions: any[];
+    saleDiscount: any;
+  };
 };
 
 
@@ -168,6 +192,10 @@ export type BusinessStats = {
   followers?: number;
   following?: number;
   posts?: number;
+  total_sold?: number;
+  avg_rating?: string | number;
+  total_reviews?: number;
+  positive_percent?: number;
 };
 
 /* =========================
@@ -363,6 +391,7 @@ export type ProductFeedItem = {
   business_id: number;
   business_name: string;
   logo?: string;
+  profile_pic?: string;
   first_image?: string;
   images?: string[];
   product_video?: string;

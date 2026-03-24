@@ -19,4 +19,6 @@ export type Post = {
   noteConfig?: any;
   rawCreatedAt?: string;
   allMedia?: string[];
+  location?: string | null;
+  category?: string;
 };

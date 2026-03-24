@@ -1,4 +1,3 @@
-"use client";
 import React, { useState, useEffect } from "react";
 import { FaTimes, FaWallet, FaUser, FaCheckCircle, FaExclamationTriangle, FaLock, FaArrowRight, FaSearch } from "react-icons/fa";
 import { toast } from "sonner";
@@ -6,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/src/lib/config";
 import DefaultInput from "../input/default-input";
 import NumberInput from "../input/defaultNumberInput";
+import PinVerifyModal from "./pinVerifyModal";
 
 interface TransferModalProps {
     isOpen: boolean;
@@ -35,6 +35,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
     const [showAllRecents, setShowAllRecents] = useState(false);
     const [suggestions, setSuggestions] = useState<Recipient[]>([]);
     const [notFound, setNotFound] = useState(false);
+    const [isPinVerifyOpen, setIsPinVerifyOpen] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem("stoqlepay_recents");
@@ -168,8 +169,9 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
         setStep(3);
     };
 
-    const handleTransfer = async () => {
-        if (pin.length < 4) {
+    const handleTransfer = async (verificationPin?: string) => {
+        const finalPin = verificationPin || pin;
+        if (finalPin.length < 4) {
             toast.error("Enter your 4-digit PIN");
             return;
         }
@@ -185,7 +187,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                 body: JSON.stringify({
                     recipient_identifier: recipientIdentifier,
                     amount: parseFloat(amount),
-                    pin: pin,
+                    pin: finalPin,
                     description: `Transfer to ${recipient?.display_name}`
                 }),
             });
@@ -212,7 +214,8 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
     };
 
     return (
-        <AnimatePresence>
+        <>
+            <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4">
                     <motion.div
@@ -228,14 +231,14 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden"
+                        className="relative bg-white w-full max-w-md rounded-[0.5rem] shadow-2xl overflow-hidden"
                     >
 
                         {/* Header */}
                         <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-white relative z-10">
                             <div>
                                 <h3 className="text-2xl font-black text-slate-900 leading-tight">StoqlePay</h3>
-                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Available: ₦{availableBalance.toLocaleString()}</p>
+                                <p className="text-[10px] font-black text-emerald-500  tracking-widest mt-1">Available: ₦{availableBalance.toLocaleString()}</p>
                             </div>
                             <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition text-slate-400">
                                 <FaTimes size={20} />
@@ -361,8 +364,8 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                         <div className="bg-slate-100 rounded-[2.2rem] overflow-hidden border-2 border-transparent focus-within:border-blue-500/20 focus-within:bg-white transition">
                                             <NumberInput
                                                 label="Amount"
-                                                value={amount === "" ? "" : parseFloat(amount)}
-                                                onChange={(val) => setAmount(val === "" ? "" : val.toString())}
+                                                value={amount}
+                                                onChange={(val) => setAmount(val.toString())}
                                                 placeholder="0.00"
                                                 min={50}
                                             />
@@ -406,20 +409,11 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                     </div>
 
                                     <div className="space-y-4">
-                                        <input
-                                            type="password"
-                                            maxLength={4}
-                                            value={pin}
-                                            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                                            placeholder="••••"
-                                            className="w-full bg-slate-100 border-2 border-transparent focus:border-blue-500/20 focus:bg-white rounded-[1.5rem] px-6 py-5 text-center text-3xl font-black tracking-[0.5em] text-slate-900 placeholder:text-slate-300 transition outline-none"
-                                        />
-
                                         <button
-                                            onClick={handleTransfer}
-                                            disabled={isSubmitting || pin.length < 4}
+                                            onClick={() => setIsPinVerifyOpen(true)}
+                                            disabled={isSubmitting}
                                             className={`w-full py-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-3
-                                        ${(!isSubmitting && pin.length >= 4)
+                                        ${(!isSubmitting)
                                                     ? "bg-red-500 text-white shadow-md active:scale-95"
                                                     : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                     `}
@@ -484,5 +478,17 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                 </div>
             )}
         </AnimatePresence>
+
+        <PinVerifyModal
+            isOpen={isPinVerifyOpen}
+            onClose={() => setIsPinVerifyOpen(false)}
+            onSuccess={(verifiedPin) => {
+                setIsPinVerifyOpen(false);
+                handleTransfer(verifiedPin);
+            }}
+            title="Authorize Transfer"
+            description={`Please enter your 4-digit PIN to authorize the transfer of ₦${parseFloat(amount || '0').toLocaleString()} to ${recipient?.display_name}.`}
+        />
+    </>
     );
 }

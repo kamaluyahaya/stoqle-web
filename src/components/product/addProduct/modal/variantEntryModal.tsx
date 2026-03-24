@@ -17,11 +17,12 @@ export default function VariantEntryModal({
   samePriceForAll,
   sharedPrice,
   existingNames = [], // default to empty
+  readOnlyQuantity = false,
 }: VariantEntryModal) {
   const [name, setName] = useState("");
-  const [quantity, setQuantity] = useState<number | "">("");
+  const [quantity, setQuantity] = useState<number | "">(0);
   const [price, setPrice] = useState<number | "">("");
-  const [images, setImages] = useState<File[]>([]);
+  const [images, setImages] = useState<(File | string)[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   // Only show these fields if NOT using combination manager
@@ -30,7 +31,7 @@ export default function VariantEntryModal({
   useEffect(() => {
     if (!initialData) {
       setName("");
-      setQuantity("");
+      setQuantity(0);
       setPrice("");
       setImages([]);
       setImagePreviews([]);
@@ -44,8 +45,6 @@ export default function VariantEntryModal({
     setImagePreviews(initialData.imagePreviews ?? []);
   }, [initialData]);
 
-  if (!open) return null;
-
   const handleImageChange = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const file = files[0];
@@ -54,9 +53,22 @@ export default function VariantEntryModal({
   };
 
   const removeImage = () => {
+    if (imagePreviews[0] && !imagePreviews[0].startsWith('http')) {
+      URL.revokeObjectURL(imagePreviews[0]);
+    }
     setImages([]);
     setImagePreviews([]);
   };
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(p => {
+        if (p && !p.startsWith('http')) URL.revokeObjectURL(p);
+      });
+    };
+  }, [imagePreviews]);
+
+  if (!open) return null;
 
   const handleSubmit = () => {
     const trimmed = name.trim();
@@ -77,19 +89,18 @@ export default function VariantEntryModal({
       return;
     }
 
-    if (showFields && (quantity === "" || quantity < 0)) {
-      toast("Quantity is required and must be 0 or more");
-      return;
-    }
+    const finalQty = showFields
+      ? (quantity === "" ? (readOnlyQuantity ? 0 : "") : Number(quantity))
+      : Number(initialData?.quantity ?? 0);
 
-    if (showFields && !samePriceForAll && (price === "" || Number(price) < 0)) {
-      toast("Price is required and must be 0 or more");
+    if (showFields && finalQty === "" && !readOnlyQuantity) {
+      toast("Quantity is required and must be 0 or more");
       return;
     }
 
     onSubmit({
       name: trimmed,
-      quantity: showFields ? Number(quantity || 0) : Number(initialData?.quantity ?? 0),
+      quantity: Number(finalQty || 0),
       price: showFields ? (samePriceForAll ? sharedPrice ?? null : Number(price || 0)) : (initialData?.price ?? null),
       images: allowImages ? images : [],
       imagePreviews: allowImages ? imagePreviews : [],
@@ -97,7 +108,7 @@ export default function VariantEntryModal({
 
     // Reset after submit
     setName("");
-    setQuantity("");
+    setQuantity(0);
     setPrice("");
     setImages([]);
     setImagePreviews([]);
@@ -108,7 +119,7 @@ export default function VariantEntryModal({
     <div className="fixed inset-0 z-75 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40" onClick={() => onClose()} />
 
-      <div className="relative w-full max-w-2xl bg-white lg:rounded-2xl md:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10 h-[75vh] sm:h-auto flex flex-col">
+      <div className="relative w-full max-w-2xl bg-white lg:rounded-[0.5rem] md:rounded-[0.5rem] rounded-t-[0.5rem] p-5 z-10 h-[75vh] sm:h-auto flex flex-col">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold mb-4">{initialData ? "Edit Variant Option" : "Add Variant Option"}</h3>
           <button onClick={() => onClose()} className="text-sm px-3 py-1 rounded-md hover:bg-slate-100">
@@ -122,8 +133,18 @@ export default function VariantEntryModal({
           <DefaultInput label="Variant option name" value={name} onChange={setName} placeholder="e.g. Red, XL, 128GB" required />
 
           {showFields ? (
-            <div className="grid grid-cols-2 gap-4">
-              <NumberInput label="Status/Quantity" value={quantity} onChange={setQuantity} placeholder="Units in stock" />
+            <div className="grid sm:grid-cols-2 grid-cols-1 gap-4">
+              {readOnlyQuantity ? (
+                <div className="space-y-1.5 opacity-80">
+                  <span className="text-xs font-bold text-slate-700">Stock Status</span>
+                  <div className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-4 text-slate-600 font-bold text-sm">
+                    {quantity || 0} Units
+                  </div>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase">Managed in Inventory</p>
+                </div>
+              ) : (
+                <NumberInput label="Quantity" value={quantity} onChange={setQuantity} placeholder="Units in stock" />
+              )}
               {!samePriceForAll && (
                 <NumberInput label="Option Price (₦)" value={price} onChange={setPrice} placeholder="Price for this option" />
               )}

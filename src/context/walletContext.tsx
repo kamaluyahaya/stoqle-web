@@ -40,7 +40,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(true);
             const res = await fetchMyWallet();
             if (res?.data?.wallet) {
-                setWallet(res.data.wallet);
+                const w = res.data.wallet;
+                setWallet({
+                    ...w,
+                    available_balance: Number(w.available_balance || 0) || 0,
+                    pending_balance: Number(w.pending_balance || 0) || 0
+                });
             }
         } catch (err) {
             console.error("Failed to fetch wallet:", err);

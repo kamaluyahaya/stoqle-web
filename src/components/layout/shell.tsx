@@ -1,6 +1,7 @@
 // src/components/layout/shell.tsx
 "use client";
 
+import React from "react";
 import Navbar from "./navbar";
 import Sidebar from "./sidebar";
 import LoginModal from "@/src/components/modal/auth/loginModal";
@@ -20,11 +21,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <Navbar height={NAV_HEIGHT} />
       <Sidebar navHeight={NAV_HEIGHT} width={SIDEBAR_WIDTH} />
 
-      <main className={`${(pathname === '/messages' || pathname?.startsWith('/shop')) ? 'pt-0 sm:pt-16' : 'pt-16'} lg:ml-[300px] transition-all duration-300`}>
+      <main className={`${(pathname === '/messages' || pathname?.startsWith('/shop') || pathname === '/profile/business/customer-order' || pathname?.startsWith('/profile/business/inventory')) ? 'pt-0 sm:pt-16' : 'pt-16'} lg:ml-[300px] transition-all duration-300`}>
         {children}
       </main>
 
-      <BottomNav />
+      <React.Suspense fallback={null}>
+        <BottomNav />
+      </React.Suspense>
 
       {/* 🔥 MODAL LAYER (always on top) */}
       <div className="fixed inset-0 z-[9999] pointer-events-none">

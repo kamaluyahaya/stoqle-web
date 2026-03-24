@@ -17,6 +17,7 @@ import {
 import { UserCircleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
+import { useCart } from "@/src/context/cartContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 
 type Props = {
@@ -28,10 +29,10 @@ export default function Sidebar({ navHeight, width }: Props) {
   const router = useRouter();
   const auth = useAuth();
   const { unreadCount } = useChat();
+  const { cartCount } = useCart();
 
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
-  const [cartCount, setCartCount] = useState(0);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -67,37 +68,6 @@ export default function Sidebar({ navHeight, width }: Props) {
     },
   ];
 
-  const updateCartCount = async () => {
-    if (auth?.token) {
-      try {
-        const res = await fetchCartApi(auth.token);
-        setCartCount(res.data?.items?.length || 0);
-      } catch (e) {
-        console.error("Failed to fetch cart count in sidebar", e);
-      }
-    } else {
-      setCartCount(0);
-    }
-  };
-
-  useEffect(() => {
-    updateCartCount();
-    window.addEventListener("cart-updated", updateCartCount);
-
-    const channel = typeof window !== 'undefined' ? new BroadcastChannel('stoqle_cart_sync') : null;
-    if (channel) {
-      channel.onmessage = (event) => {
-        if (event.data === 'update') {
-          updateCartCount();
-        }
-      };
-    }
-
-    return () => {
-      window.removeEventListener("cart-updated", updateCartCount);
-      if (channel) channel.close();
-    };
-  }, [auth?.token]);
 
   // click outside and escape
   useEffect(() => {

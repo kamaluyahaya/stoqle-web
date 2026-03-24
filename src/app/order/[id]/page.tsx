@@ -127,18 +127,18 @@ export default function TrackOrderPage() {
                     <div className="p-8 bg-black text-white relative">
                         <div className="flex justify-between items-start">
                             <div>
-                                <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">
+                                <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold   mb-2">
                                     <Truck size={12} /> Live tracking
                                 </div>
-                                <h1 className="text-3xl font-black">{getStatusInfo(order.status).label}</h1>
-                                <p className="text-white/60 font-bold uppercase tracking-[0.2em] text-[10px] mt-2 border-l-2 border-rose-500 pl-3">
+                                <h1 className="text-3xl font-bold">{getStatusInfo(order.status).label}</h1>
+                                <p className="text-white/60 font-bold  tracking-[0.2em] text-[10px] mt-2 border-l-2 border-rose-500 pl-3">
                                     {order.product_name}
                                     {order.variant_info && <span className="text-rose-400"> • {order.variant_info}</span>}
                                 </p>
                                 <p className="text-slate-400 text-xs mt-3">{getStatusInfo(order.status).desc}</p>
                             </div>
                             <div className="flex flex-col items-end">
-                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Request Ref</div>
+                                <div className="text-[10px] font-bold text-slate-400   mb-1.5">Request Ref</div>
                                 <div className="px-3 py-1.5 bg-white/10 rounded-lg border border-white/10 font-mono text-sm font-bold">#{order.order_id}</div>
                             </div>
                         </div>
@@ -153,7 +153,7 @@ export default function TrackOrderPage() {
                                     <div className={`w-6 h-6 rounded-full border-4 flex items-center justify-center transition-all duration-500 ${idx <= currentStatusIndex ? 'bg-rose-500 border-black ring-4 ring-rose-500/20' : 'bg-slate-900 border-white/10'}`}>
                                         {idx < currentStatusIndex ? <CheckCircle2 size={12} className="text-black" /> : <div className={`w-1 h-1 rounded-full ${idx === currentStatusIndex ? 'bg-black animate-pulse' : 'bg-white/20'}`} />}
                                     </div>
-                                    <span className={`absolute -bottom-8 whitespace-nowrap text-[9px] font-bold uppercase transition-all duration-500 ${idx <= currentStatusIndex ? 'text-white' : 'text-slate-500'}`}>
+                                    <span className={`absolute -bottom-8 whitespace-nowrap text-[9px] font-bold  transition-all duration-500 ${idx <= currentStatusIndex ? 'text-white' : 'text-slate-500'}`}>
                                         {s.replace(/_/g, ' ')}
                                     </span>
                                 </div>
@@ -164,7 +164,7 @@ export default function TrackOrderPage() {
                     <div className="p-6 md:p-8 space-y-12 mt-4">
                         {/* Timeline History */}
                         <section>
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Activity Logistics</h3>
+                            <h3 className="text-[10px] font-bold text-slate-400   mb-6">Activity Logistics</h3>
                             <div className="space-y-8 relative">
                                 {/* Timeline vertical line */}
                                 <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-slate-50"></div>
@@ -178,7 +178,7 @@ export default function TrackOrderPage() {
 
                                         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 transition">
                                             <div className="flex items-center justify-between mb-1">
-                                                <p className={`text-[10px] font-black uppercase tracking-widest ${idx === 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                <p className={`text-[10px] font-bold   ${idx === 0 ? 'text-rose-600' : 'text-slate-400'}`}>
                                                     {h.status.replace(/_/g, ' ')}
                                                 </p>
                                                 <span className="text-[10px] text-slate-400 font-bold">
@@ -200,13 +200,13 @@ export default function TrackOrderPage() {
                         {/* Summary & Destination */}
                         <div className="grid md:grid-cols-2 gap-8">
                             <section>
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Destination</h3>
+                                <h3 className="text-[10px] font-bold text-slate-400   mb-4">Destination</h3>
                                 <div className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
                                     <div className="p-3 bg-white rounded-xl border shadow-sm h-fit">
                                         <MapPin size={20} className="text-rose-500" />
                                     </div>
                                     <div>
-                                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Shipping to</h4>
+                                        <h4 className="text-xs font-bold text-slate-400   mb-1">Shipping to</h4>
                                         <p className="text-sm font-bold text-slate-900 leading-relaxed">
                                             {order.delivery_address}
                                         </p>
@@ -214,7 +214,7 @@ export default function TrackOrderPage() {
                                 </div>
                             </section>
                             <section>
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Vendor details</h3>
+                                <h3 className="text-[10px] font-bold text-slate-400   mb-4">Vendor details</h3>
                                 <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
                                     <div className="w-12 h-12 bg-white rounded-xl border flex items-center justify-center text-lg font-bold text-slate-900 shadow-sm">
                                         {order.business_name.charAt(0)}
@@ -224,7 +224,7 @@ export default function TrackOrderPage() {
                                         <p className="text-xs text-slate-500 font-medium mb-2">Processed by partner</p>
                                         <button
                                             onClick={() => order.owner_id && router.push(`/messages?user=${order.owner_id}`)}
-                                            className="flex items-center gap-1.5 text-[10px] font-black uppercase text-rose-500 hover:text-rose-600 transition"
+                                            className="flex items-center gap-1.5 text-[10px] font-bold  text-rose-500 hover:text-rose-600 transition"
                                         >
                                             <MessageCircle size={12} /> Contact merchant
                                         </button>
@@ -239,9 +239,9 @@ export default function TrackOrderPage() {
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
                             <HelpCircle size={14} /> Need help?
                         </div>
-                        <button className="text-[10px] font-black uppercase tracking-widest text-slate-900 hover:opacity-70 transition">Support Hub</button>
+                        <button className="text-[10px] font-bold   text-slate-900 hover:opacity-70 transition">Support Hub</button>
                         <span className="text-slate-200">|</span>
-                        <button className="text-[10px] font-black uppercase tracking-widest text-slate-900 hover:opacity-70 transition">Logistics Policy</button>
+                        <button className="text-[10px] font-bold   text-slate-900 hover:opacity-70 transition">Logistics Policy</button>
                     </div>
                 </div>
             </main>

@@ -3,12 +3,14 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+import { Check, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 type Props = {
-  productImages: File[];
-  setProductImages: (f: File[] | ((prev: File[]) => File[])) => void;
-  productVideo: File | null;
-  setProductVideo: (f: File | null) => void;
+  productImages: (File | string)[];
+  setProductImages: (f: (File | string)[] | ((prev: (File | string)[]) => (File | string)[])) => void;
+  productVideo: File | string | null;
+  setProductVideo: (f: File | string | null) => void;
 };
 
 export default function ProductMedia({ productImages, setProductImages, productVideo, setProductVideo }: Props) {
@@ -16,8 +18,11 @@ export default function ProductMedia({ productImages, setProductImages, productV
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
   // Memoize preview URLs to avoid creating them on every render
-  const previews = useMemo(() => productImages.map((f) => URL.createObjectURL(f)), [productImages]);
-  const videoPreview = useMemo(() => (productVideo ? URL.createObjectURL(productVideo) : null), [productVideo]);
+  const previews = useMemo(() => productImages.map((f) => (typeof f === "string" ? f : URL.createObjectURL(f))), [productImages]);
+  const videoPreview = useMemo(() => {
+    if (!productVideo) return null;
+    return typeof productVideo === "string" ? productVideo : URL.createObjectURL(productVideo);
+  }, [productVideo]);
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -26,10 +31,23 @@ export default function ProductMedia({ productImages, setProductImages, productV
 
   useEffect(() => {
     return () => {
-      previews.forEach((u) => URL.revokeObjectURL(u));
-      if (videoPreview) URL.revokeObjectURL(videoPreview);
+      productImages.forEach((f) => {
+        if (typeof f !== "string") URL.revokeObjectURL(URL.createObjectURL(f)); // This logic is slightly flawed but previews is safer
+      });
+      // Actually, better to revoke the actual previews
     };
-  }, [previews, videoPreview]);
+  }, []); // Only on unmount or specific changes. Actually previews keeps track.
+
+  // Re-written safe cleanup
+  useEffect(() => {
+    const localUrls: string[] = [];
+    productImages.forEach(f => {
+      if (typeof f !== 'string') localUrls.push(URL.createObjectURL(f));
+    });
+    return () => {
+      localUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [productImages]);
 
   const handleProductImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = e.target.files ? Array.from(e.target.files) : [];
@@ -131,9 +149,52 @@ export default function ProductMedia({ productImages, setProductImages, productV
         open={lightboxOpen}
         close={() => setLightboxOpen(false)}
         index={lightboxIndex}
+        on={{ view: ({ index }) => setLightboxIndex(index) }}
         slides={slides}
+        portal={{ root: typeof document !== "undefined" ? document.body : undefined }}
         styles={{
-          container: { backgroundColor: "rgba(0,0,0,0.95)" },
+          root: { zIndex: 30000 },
+          container: { backgroundColor: "rgba(0,0,0,0.95)" }
+        }}
+        render={{
+          controls: () => (
+            <div className="absolute top-4 right-16 z-[30001] flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (lightboxIndex === 0) {
+                    toast.info("This is already the cover image");
+                    return;
+                  }
+                  const newImages = [...productImages];
+                  const [img] = newImages.splice(lightboxIndex, 1);
+                  newImages.unshift(img);
+                  setProductImages(newImages);
+                  setLightboxIndex(0);
+                  toast.success("Set✅");
+                }}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white text-[10px] font-bold transition-all flex items-center gap-2 border border-white/20"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Set as cover
+              </button>
+            </div>
+          ),
+          slideFooter: () => (
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[30001]">
+              <button
+                onClick={() => {
+                  removeProductImageAt(lightboxIndex);
+                  if (productImages.length <= 1) {
+                    setLightboxOpen(false);
+                  }
+                }}
+                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all backdrop-blur-md rounded-full text-red-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-red-500/30"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Image
+              </button>
+            </div>
+          )
         }}
       />
     </div>

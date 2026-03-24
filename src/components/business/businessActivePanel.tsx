@@ -27,12 +27,14 @@ export default function EditBusinessProfile({
   businessPolicy = null,
   wallet = null,
   pendingOrdersCount = 0,
+  customerDeliveredCount = 0,
 }: {
   apiBase?: string;
   business?: any | null;
   businessPolicy?: any | null;
   wallet?: any | null;
   pendingOrdersCount?: number;
+  customerDeliveredCount?: number;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -167,12 +169,29 @@ export default function EditBusinessProfile({
   };
 
 
+  const formatAddress = (addrJson?: string | null) => {
+    if (!addrJson) return "No address provided";
+    try {
+      const parsed = typeof addrJson === 'string' ? JSON.parse(addrJson) : addrJson;
+      const line1 = parsed.address_line_1 || parsed.line1 || "";
+      const city = parsed.city || "";
+      const state = parsed.state || "";
+      return [line1, city, state].filter(Boolean).join(", ");
+    } catch {
+      return addrJson;
+    }
+  };
+
   return (
     <div className="pb-1 bg-slate-100 p-4">
       <div className="max-w-7xl mx-auto px-1 pt-2 space-y-4">
         {/* Header */}
         <div className="flex flex-col items-center">
-          <div className="rounded-full bg-white p-2 shadow flex items-center justify-center">
+          <div
+            className="rounded-full bg-white p-2 shadow flex items-center justify-center cursor-pointer hover:scale-105 transition-transform active:scale-95"
+            onClick={() => openEditor("Shop Profile", KEYS.shopProfile, shopProfile)}
+            title="Edit Shop Profile"
+          >
             {business?.profile_pic ? (
               <img
                 src={business.logo ?? business.profile_pic}
@@ -186,19 +205,21 @@ export default function EditBusinessProfile({
             )}
           </div>
           <div className="mt-3 text-center">
-            <div className="font-semibold text-slate-900 text-lg truncate">{displayName}</div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="font-semibold text-slate-900 text-lg truncate">{displayName}</div>
+              <div className="text-xs font-semibold px-2 py-1 rounded-full capitalize bg-emerald-50 text-emerald-700">
+                {business?.business_status}
+              </div>
+            </div>
             <div className="text-slate-700 text-sm flex flex-col sm:flex-row sm:justify-center sm:gap-1 break-words mt-1">
               <span className="whitespace-normal">{business?.phone ?? business?.business_email}</span>
               <span className="hidden sm:inline">,</span>
-              <span className="whitespace-normal">{business?.business_address}</span>
-            </div>
-            <div className="inline-block mt-2 text-sm font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full capitalize">
-              {business?.business_status}
+              <span className="whitespace-normal">{formatAddress(business?.business_address)}</span>
             </div>
 
             <div className="mt-4 flex flex-col items-center">
               <div className="text-2xl font-bold text-slate-900">
-                {localWallet?.currency || 'NGN'} {Number(localWallet?.available_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {localWallet?.currency || '₦'} {Number(localWallet?.available_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div className="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">Available Balance</div>
 
@@ -206,7 +227,7 @@ export default function EditBusinessProfile({
                 <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-full border border-amber-100">
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                   <span className="text-[10px] font-bold text-amber-700 uppercase">
-                    Pending: {localWallet?.currency || 'NGN'} {Number(localWallet?.pending_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    Pending: {localWallet?.currency || '₦'} {Number(localWallet?.pending_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               )}
@@ -214,20 +235,52 @@ export default function EditBusinessProfile({
           </div>
         </div>
 
-        {/* Pending Orders Marquee */}
-        {pendingOrdersCount > 0 && (
-          <div className="w-full bg-orange-50 border-y border-orange-100 py-2.5 overflow-hidden group cursor-pointer" onClick={() => (window.location.href = "/profile/business/customer-order")}>
+        {/* Actionable Orders Marquee */}
+        {(pendingOrdersCount > 0 || customerDeliveredCount > 0) && (
+          <div
+            className={`w-full border-y py-1 overflow-hidden group cursor-pointer ${pendingOrdersCount > 0 ? "bg-orange-50 border-orange-100" : "bg-blue-50 border-blue-100"
+              }`}
+            onClick={() => {
+              if (pendingOrdersCount > 0) {
+                router.push("/profile/business/customer-order");
+              } else {
+                router.push("/profile/orders");
+              }
+            }}
+          >
             <div className="flex animate-marquee whitespace-nowrap">
-              <div className="flex items-center gap-4 px-4">
-                <span className="text-sm font-bold text-orange-700">
-                  ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
-                </span>
-                <span className="text-sm font-bold text-orange-700">
-                  ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
-                </span>
-                <span className="text-sm font-bold text-orange-700">
-                  ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
-                </span>
+              <div className="flex items-center gap-12 px-4">
+                {pendingOrdersCount > 0 ? (
+                  <>
+                    <span className="text-[10px] text-orange-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                      ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible. Click here to view.
+                    </span>
+                    <span className="text-[10px] text-orange-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                      ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible. Click here to view.
+                    </span>
+                    <span className="text-[10px] text-orange-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                      ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible. Click here to view.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      📦 You have ({customerDeliveredCount}) {customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment to vendor.
+                    </span>
+                    <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      📦 You have ({customerDeliveredCount}) {customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment to vendor.
+                    </span>
+                    <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      📦 You have ({customerDeliveredCount}) {customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment to vendor.
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -238,7 +291,7 @@ export default function EditBusinessProfile({
               }
               .animate-marquee {
                 display: flex;
-                animation: marquee 25s linear infinite;
+                animation: marquee 30s linear infinite;
               }
               .group:hover .animate-marquee {
                 animation-play-state: paused;
@@ -248,7 +301,7 @@ export default function EditBusinessProfile({
         )}
 
         {/* Action grid */}
-        <div className="mt-6 w-full">
+        <div className="mt-2 w-full">
           <div className="grid grid-cols-4 gap-2 lg:gap-5">
             <a href="/profile/business/customer-order" className="block">
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
@@ -259,12 +312,12 @@ export default function EditBusinessProfile({
               </div>
             </a>
 
-            <a href="/products/new" className="block">
+            <a href="/profile/business/inventory" className="block">
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                   <FaBox className="text-slate-700" size={18} />
                 </div>
-                <span className="text-xs font-medium text-slate-700">Products</span>
+                <span className="text-xs font-medium text-slate-700">Inventory</span>
               </div>
             </a>
 
@@ -431,6 +484,7 @@ export default function EditBusinessProfile({
         initialValue={modalProps?.value ?? ""}
         onClose={() => { setModalOpen(false); }}
         onSave={async (payloadJson) => { await saveEditorValue(KEYS.payment, payloadJson); }}
+        businessId={business?.business_id}
       />
       <MarketModal
         open={modalOpen && modalProps?.key === KEYS.market}

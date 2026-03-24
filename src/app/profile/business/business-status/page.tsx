@@ -22,6 +22,7 @@ export default function BusinessStatusPage() {
   const [staffStatus, setStaffStatus] = useState<string | null>(null);
   const [wallet, setWallet] = useState<any | null>(null);
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
+  const [customerDeliveredCount, setCustomerDeliveredCount] = useState<number>(0);
 
 
 
@@ -68,6 +69,7 @@ export default function BusinessStatusPage() {
         setBusinessPolicy(payload.data?.policy ?? null);
         setWallet(payload.data?.wallet ?? null);
         setPendingOrdersCount(payload.data?.pendingOrdersCount ?? 0);
+        setCustomerDeliveredCount(payload.data?.customerDeliveredCount ?? 0);
         setStaffStatus(payload.data?.staff?.status ?? null);
       } catch (err: any) {
         setError(err?.message ?? "Failed to load business status");
@@ -201,10 +203,24 @@ export default function BusinessStatusPage() {
 
             {/* Business content */}
             <div className="flex-1 min-w-0">
-              {/* Business name — FULL WIDTH */}
-              <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug break-words">
-                {business?.business_name}
-              </h3>
+              {/* Business name & Status — SAME LINE */}
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug break-words">
+                  {business?.business_name}
+                </h3>
+                <span
+                  className={`text-xs font-semibold px-2 py-1 rounded-full capitalize
+            ${business?.business_status === "active"
+                      ? "bg-green-100 text-green-700"
+                      : business?.business_status === "pending"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-red-100 text-red-700"
+                    }
+          `}
+                >
+                  {business?.business_status}
+                </span>
+              </div>
 
               {/* Details under name */}
               <div className="mt-1 space-y-1">
@@ -212,22 +228,9 @@ export default function BusinessStatusPage() {
                   {formatAddress(business?.business_address)}
                 </p>
 
-                <div className="flex flex-wrap items-center gap-2 pt-1">
+                <div className="pt-1">
                   <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
                     {business?.business_category || "Business category"}
-                  </span>
-
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full capitalize
-            ${business?.business_status === "active"
-                        ? "bg-green-100 text-green-700"
-                        : business?.business_status === "pending"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-red-100 text-red-700"
-                      }
-          `}
-                  >
-                    {business?.business_status}
                   </span>
                 </div>
               </div>
@@ -247,7 +250,7 @@ export default function BusinessStatusPage() {
       )}
 
 
-      {status === "active" && <EditBusinessProfileWithBusinessInfo apiBase={process.env.NEXT_PUBLIC_API_URL} business={business} businessPolicy={businessPolicy} wallet={wallet} pendingOrdersCount={pendingOrdersCount} />}
+      {status === "active" && <EditBusinessProfileWithBusinessInfo apiBase={process.env.NEXT_PUBLIC_API_URL} business={business} businessPolicy={businessPolicy} wallet={wallet} pendingOrdersCount={pendingOrdersCount} customerDeliveredCount={customerDeliveredCount} />}
 
 
       {status === "rejected" && (

@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FaChevronLeft, FaPlus, FaStore, FaUser } from "react-icons/fa";
+import { geocodeAddress } from "@/src/lib/geocoding";
+import { FaChevronLeft, FaPlus, FaStore, FaUser, FaExclamationTriangle } from "react-icons/fa";
 import DefaultInput from "../input/default-input";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/src/lib/config";
@@ -32,6 +33,8 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
 
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showGeocodeWarning, setShowGeocodeWarning] = useState(false);
+  const [pendingCoords, setPendingCoords] = useState<{ latitude: number, longitude: number } | null>(null);
 
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
 
@@ -125,18 +128,7 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
     return null;
   }
 
-  async function handleSubmit(e?: React.FormEvent) {
-    e?.preventDefault();
-    // basic validation
-    if (!storeType) return;
-    if (!ninFile) return toast.warning("Please upload NIN");
-    if (storeType === "enterprise" && !cacFile) return toast.warning("Please upload CAC");
-    if (!businessName.trim()) return toast.warning("Please enter business name");
-    if (!category.trim()) return toast.warning("Please select a category");
-    if (!address.trim()) return toast.warning("Please enter address");
-
-    if (!agreed) return toast.warning("Please agree to terms");
-
+  const submitFinal = async (coords?: { latitude: number, longitude: number } | null) => {
     setSubmitting(true);
     try {
       // build formData and send to your API
@@ -144,8 +136,13 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
       form.append("nin_image", ninFile as File);
       form.append("business_name", businessName.trim());
       form.append("business_category", category.trim());
-      form.append("account_type", storeType);
+      form.append("account_type", storeType as string);
       form.append("business_address", address.trim());
+
+      if (coords) {
+        form.append("latitude", coords.latitude.toString());
+        form.append("longitude", coords.longitude.toString());
+      }
 
       if (cacFile) form.append("cac_image", cacFile as File);
 
@@ -188,6 +185,33 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
       toast.error("Submission failed — check console for details");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  async function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    // basic validation
+    if (!storeType) return;
+    if (!ninFile) return toast.warning("Please upload NIN");
+    if (storeType === "enterprise" && !cacFile) return toast.warning("Please upload CAC");
+    if (!businessName.trim()) return toast.warning("Please enter business name");
+    if (!category.trim()) return toast.warning("Please select a category");
+    if (!address.trim()) return toast.warning("Please enter address");
+
+    if (!agreed) return toast.warning("Please agree to terms");
+
+    setSubmitting(true);
+    try {
+      const coords = await geocodeAddress(address);
+      if (coords) {
+        await submitFinal(coords);
+      } else {
+        setSubmitting(false);
+        setShowGeocodeWarning(true);
+      }
+    } catch (err) {
+      console.error("Geocoding/submit error", err);
+      await submitFinal(null);
     }
   }
 
@@ -240,9 +264,9 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isOpen && (
-        <div className="fixed inset-0 z-[1001] flex items-center justify-center p-0 overflow-hidden">
+        <div key="main-modal" className="fixed inset-0 z-[1001] flex items-center justify-center p-0 overflow-hidden">
           {/* backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -484,6 +508,61 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
           </motion.div>
         </div>
       )}
+
+      {/* Geocode Warning Modal */}
+      <AnimatePresence key="geocode-warning-presence">
+        {showGeocodeWarning && (
+          <div key="geocode-warning-modal" className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => setShowGeocodeWarning(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 text-center sm:p-10"
+            >
+              <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
+                <FaExclamationTriangle size={36} />
+              </div>
+              <h4 className="text-2xl font-extrabold text-slate-900 mb-4 tracking-tight">Check Your Address</h4>
+              <div className="space-y-4 mb-8">
+                <p className="text-slate-600 leading-relaxed text-[15px]">
+                  Courier may be unable to deliver your order as the address provided, may be missing the
+                  <span className="font-bold text-slate-900"> building/house number</span>.
+                </p>
+                <p className="text-[13px] text-slate-500 italic bg-slate-50 p-4 rounded-2xl border border-slate-100 font-medium">
+                  "{address}"
+                </p>
+                <p className="text-sm text-slate-400">
+                  Please check if the address provided is correct.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => setShowGeocodeWarning(false)}
+                  className="w-full py-4 rounded-2xl font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xl shadow-slate-200"
+                >
+                  Edit Address
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowGeocodeWarning(false);
+                    await submitFinal(null);
+                  }}
+                  className="w-full py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition border border-transparent hover:border-slate-100 mt-1"
+                >
+                  It is correct
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 }

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { fetchMarketFeed, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
+import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
 import { ProductFeedItem, PreviewPayload, ProductSku } from "@/src/types/product";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import { API_BASE_URL } from "@/src/lib/config";
 import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaArrowLeft, FaStore, FaHeart, FaRegHeart, FaShare } from "react-icons/fa";
@@ -36,6 +37,7 @@ function ShoppingReelsContent() {
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [fetchingProduct, setFetchingProduct] = useState(false);
+    const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
 
     // Audio states (Initialize from localStorage to persist preference)
     const [isGlobalMuted, setIsGlobalMuted] = useState(() => {
@@ -129,6 +131,9 @@ function ShoppingReelsContent() {
                     }
                     return p;
                 }));
+                if (res.data.liked) {
+                    logUserActivity({ product_id: productId, action_type: 'like' }, token);
+                }
             }
         } catch (err) {
             console.error("Like failed", err);
@@ -149,67 +154,17 @@ function ShoppingReelsContent() {
         }
     };
 
-    const handleProductBuyClick = async (productId: number, businessName?: string) => {
+    const handleProductBuyClick = async (productId: number, businessName?: string, e?: React.MouseEvent) => {
         if (fetchingProduct) return;
+        if (e) setClickPos({ x: e.clientX, y: e.clientY });
+        else setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
         try {
             setFetchingProduct(true);
             const res = await fetchProductById(productId);
             if (res?.data?.product) {
                 const dbProduct = res.data.product;
 
-                const mappedPayload: PreviewPayload = {
-                    productId: dbProduct.product_id,
-                    title: dbProduct.title,
-                    description: dbProduct.description,
-                    category: dbProduct.category,
-                    hasVariants: dbProduct.has_variants === 1,
-                    price: dbProduct.price ?? "",
-                    quantity: dbProduct.quantity ?? "",
-                    samePriceForAll: false,
-                    sharedPrice: null,
-                    businessId: Number(dbProduct.business_id),
-                    productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url || "") })),
-                    productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url || "") } : null,
-                    useCombinations: dbProduct.use_combinations === 1,
-                    params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-                    soldCount: dbProduct.sold_count,
-                    variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-                        id: String(g.group_id),
-                        title: g.title,
-                        allowImages: g.allow_images === 1,
-                        entries: (g.options || []).map((o: any) => {
-                            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
-                            return {
-                                id: String(o.option_id),
-                                name: o.name,
-                                price: o.price,
-                                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url || "") }))
-                            };
-                        })
-                    })),
-
-                    skus: (dbProduct.skus || []).map((s: any) => {
-                        let vIds: string[] = [];
-                        try {
-                            vIds = typeof s.variant_option_ids === 'string'
-                                ? JSON.parse(s.variant_option_ids)
-                                : s.variant_option_ids;
-                        } catch (e) { }
-
-                        const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
-
-                        return {
-                            id: String(s.sku_id),
-                            sku: s.sku_code || "",
-                            name: "Combination",
-                            price: s.price,
-                            quantity: inventoryMatch ? inventoryMatch.quantity : 0,
-                            enabled: s.status === 'active',
-                            variantOptionIds: vIds.map(String)
-                        } as ProductSku;
-                    })
-                };
+                const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
 
                 const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
                 if (baseInv) mappedPayload.quantity = baseInv.quantity;
@@ -271,6 +226,7 @@ function ShoppingReelsContent() {
                 if (res?.data) {
                     const p = res.data.product || res.data;
                     initialProduct = mapToFeedItem(p);
+                    logUserActivity({ product_id: initialProduct.product_id, action_type: 'view', category: initialProduct.category }, token);
                 }
             }
 
@@ -367,6 +323,7 @@ function ShoppingReelsContent() {
         if (index !== activeVideoIndex && index >= 0 && index < products.length) {
             setActiveVideoIndex(index);
             updateUrl(products[index].product_id);
+            logUserActivity({ product_id: products[index].product_id, action_type: 'view', category: products[index].category }, token);
         }
     };
 
@@ -412,7 +369,7 @@ function ShoppingReelsContent() {
                             <ReelItem
                                 product={p}
                                 isActive={i === activeVideoIndex}
-                                onBuyClick={() => handleProductBuyClick(p.product_id, p.business_name)}
+                                onBuyClick={(e?: React.MouseEvent) => handleProductBuyClick(p.product_id, p.business_name, e)}
                                 onVendorClick={(bid) => router.push(`/shop/${bid}`)}
                                 onLikeClick={() => handleLikeClick(p.product_id)}
                                 onShareClick={() => handleShareClick(p)}
@@ -435,6 +392,7 @@ function ShoppingReelsContent() {
                     <ProductPreviewModal
                         open={modalOpen}
                         payload={selectedProductPayload}
+                        origin={clickPos}
                         onClose={() => {
                             setModalOpen(false);
                             setSelectedProductPayload(null);
@@ -519,8 +477,8 @@ function MarqueeLane({ items, speed, reverse = false }: { items: any[], speed: n
                 {displayItems.map((p, i) => (
                     <div key={i} className="bg-black/50 backdrop-blur-xl px-4 py-1.5 rounded-full border border-white/20 shadow-2xl flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
-                        <span className="text-orange-400 text-[9px] font-black uppercase tracking-tighter">{p.key}</span>
-                        <span className="text-white text-[12px] font-bold uppercase tracking-widest">{p.value}</span>
+                        <span className="text-orange-400 text-[9px] font-bold  tracking-tighter">{p.key}</span>
+                        <span className="text-white text-[12px] font-bold  ">{p.value}</span>
                     </div>
                 ))}
             </motion.div>
@@ -540,7 +498,7 @@ function ReelItem({
 }: {
     product: ProductFeedItem;
     isActive: boolean;
-    onBuyClick: () => void;
+    onBuyClick: (e?: React.MouseEvent) => void;
     onVendorClick: (businessId: number) => void;
     onLikeClick: () => void;
     onShareClick: () => void;
@@ -753,7 +711,7 @@ function ReelItem({
                             )}
                         </span>
                         {product.category && (
-                            <span className="text-white/70 text-[10px] font-bold uppercase tracking-wider">{product.category}</span>
+                            <span className="text-white/70 text-[10px] font-bold  tracking-wider">{product.category}</span>
                         )}
                     </div>
                 </div>
@@ -778,24 +736,24 @@ function ReelItem({
                                     {product.images.length > 2 && (
                                         <div
                                             className="w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer relative overflow-hidden group shadow-lg"
-                                            onClick={(e) => { e.stopPropagation(); onBuyClick(); }}
+                                            onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
                                         >
                                             {/* Show the 3rd image behind the counter overlay */}
                                             <Image src={formatUrl(product.images[2])} alt="" fill sizes="40px" className="object-cover opacity-90 contrast-75" />
                                             <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
-                                                <span className="text-[10px] text-white font-black drop-shadow-md">{product.images.length}+</span>
+                                                <span className="text-[10px] text-white font-bold drop-shadow-md">{product.images.length}+</span>
                                             </div>
                                         </div>
                                     )}
                                 </div>
                             )}
-                            <span className="text-white font-black text-base drop-shadow-lg ml-1">₦{Number(product.price).toLocaleString()}</span>
+                            <span className="text-white font-bold text-base drop-shadow-lg ml-1">₦{Number(product.price).toLocaleString()}</span>
                         </div>
 
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onBuyClick();
+                                onBuyClick(e);
                             }}
                             className="bg-red-600 font-bold text-white text-[10px] px-4 py-2.5 rounded-full shadow-lg hover:bg-red-700 active:scale-95 transition-all whitespace-nowrap"
                         >

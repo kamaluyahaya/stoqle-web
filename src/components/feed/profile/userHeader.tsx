@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { API_BASE_URL } from "@/src/lib/config";
 import SocialModal from "../../modal/socialModal";
 
@@ -127,7 +128,7 @@ const PostCard = React.memo(({
   return (
     <article
       onClick={() => openPostWithUrl(post)}
-      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
         {post.isVideo && (
@@ -140,7 +141,7 @@ const PostCard = React.memo(({
 
         {post.coverType === "note" && !post.src ? (
           <div
-            className="w-full h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+            className="w-full  h-[250px] sm:h-[300px]  flex items-center justify-center p-6 relative overflow-hidden"
             style={getNoteStyles(post.noteConfig)}
           >
             {(() => {
@@ -167,7 +168,7 @@ const PostCard = React.memo(({
         ) : post.isVideo ? (
           <video
             src={post.src}
-            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-auto min-h-[250px] max-h-[200px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-105"
             muted
             loop
             playsInline
@@ -176,7 +177,7 @@ const PostCard = React.memo(({
           <img
             src={post.src || NO_IMAGE_PLACEHOLDER}
             alt={post.caption}
-            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
           />
         )}
       </div>
@@ -262,7 +263,7 @@ const ProductCard = React.memo(({
     <article
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
-      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-50 overflow-hidden post-media">
         {p.product_video ? (
@@ -272,13 +273,13 @@ const ProductCard = React.memo(({
             muted
             loop
             playsInline
-            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <img
             src={formatUrl(p.first_image)}
             alt={p.title}
-            className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110"
           />
         )}
         {p.product_video && (
@@ -384,7 +385,7 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
   });
 
   return (
-    <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
+    <div className="flex gap-2 sm:gap-4 items-start w-full max-w-full overflow-hidden mb-30">
       {columnData.map((colItems, colIdx) => (
         <div key={colIdx} className="flex-1 flex flex-col gap-2 sm:gap-6 min-w-0">
           {colItems.map((item: any, index: number) => {
@@ -833,51 +834,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       const res = await fetchProductById(productId, token);
       if (res?.data?.product) {
         const dbProduct = res.data.product;
-        const mappedPayload: PreviewPayload = {
-          productId: dbProduct.product_id,
-          title: dbProduct.title,
-          description: dbProduct.description,
-          category: dbProduct.category,
-          hasVariants: dbProduct.has_variants === 1,
-          price: dbProduct.price || "",
-          quantity: dbProduct.quantity ?? "",
-          samePriceForAll: false,
-          sharedPrice: null,
-          businessId: Number(dbProduct.business_id),
-          productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
-          productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) } : null,
-          useCombinations: dbProduct.use_combinations === 1,
-          params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-          variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-            id: String(g.group_id),
-            title: g.title,
-            allowImages: g.allow_images === 1,
-            entries: (g.options || []).map((o: any) => {
-              const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
-              return {
-                id: String(o.option_id),
-                name: o.name,
-                price: o.price,
-                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-              };
-            })
-          })),
-          skus: (dbProduct.skus || []).map((s: any) => {
-            let vIds: string[] = [];
-            try { vIds = typeof s.variant_option_ids === 'string' ? JSON.parse(s.variant_option_ids) : s.variant_option_ids; } catch (e) { }
-            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
-            return {
-              id: String(s.sku_id),
-              sku: s.sku_code || "",
-              name: "Combination",
-              price: s.price,
-              quantity: inventoryMatch ? inventoryMatch.quantity : 0,
-              enabled: s.status === 'active',
-              variantOptionIds: (vIds || []).map(String)
-            } as ProductSku;
-          })
-        };
+        const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
         const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
         if (baseInv) mappedPayload.quantity = baseInv.quantity;
         setSelectedProductPayload(mappedPayload);

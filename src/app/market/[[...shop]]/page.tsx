@@ -5,15 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import LoginModal from "@/src/components/modal/auth/loginModal";
 import ShimmerGrid from "@/src/components/shimmer";
-import { fetchMarketFeed, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
+import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import ReelsModal from "@/src/components/product/addProduct/modal/reelsModal";
 import type { PreviewPayload, ProductSku, ProductFeedItem } from "@/src/types/product";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import { fetchBusinessCategories, fetchTrendingProducts, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
 import { API_BASE_URL } from "@/src/lib/config";
 import { MARKET_CACHE } from "@/src/lib/cache";
+import { fetchActionableSummary } from "@/src/lib/api/orderApi";
 
 type Props = {
     params: Promise<{ shop?: string[] }>,
@@ -68,7 +71,8 @@ const ProductCard = React.memo(({
     likeCount,
     fetchingProduct,
     router,
-    isRestored = false
+    isRestored = false,
+    isPartnerTab = false
 }: any) => {
     const [showBurst, setShowBurst] = useState(false);
 
@@ -76,13 +80,84 @@ const ProductCard = React.memo(({
         return !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
     }, [p.promo_title, p.promo_discount, p.promo_end]);
 
+    const isSaleActive = useMemo(() => {
+        return !!(!isPromoActive && p.sale_discount && Number(p.sale_discount) > 0);
+    }, [isPromoActive, p.sale_discount]);
+
+    const activeDiscount = isPromoActive ? p.promo_discount : isSaleActive ? p.sale_discount : 0;
+    const discountLabel = isPromoActive ? p.promo_title : isSaleActive ? (p.sale_type || "SALE") : "";
+
+    if (p.isIntro) {
+        return (
+            <motion.article
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="rounded-[0.8rem] bg-white border border-emerald-50 p-4 shadow-sm shadow-emerald-100/40 flex flex-col justify-between h-full group relative overflow-hidden"
+            >
+                {/* Micro-animation background hint */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+                <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                        <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Certified Program</span>
+                    </div>
+
+                    <h2 className="text-xl font-bold text-slate-900 leading-none mb-1 italic tracking-tighter">
+                        Stoqle<span className="text-emerald-600">Partners</span>
+                    </h2>
+
+                    <p className="text-[10px] text-slate-500 font-medium leading-relaxed mb-6 max-w-[200px]">
+                        Elite businesses handpicked for reliability and exceptional service.
+                    </p>
+
+                    <div className="space-y-3.5 mb-6">
+                        {[
+                            { title: "Premium express delivery", sub: "Priority nationwide shipping" },
+                            { title: "Verified store status", sub: "Vetted for quality by Stoqle" },
+                            { title: "Exclusive shop deals", sub: "Save up to 25% on purchases" }
+                        ].map((offer, idx) => (
+                            <motion.div
+                                key={idx}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.2 + (idx * 0.1) }}
+                                className="flex items-start gap-3"
+                            >
+                                <div className="w-4.5 h-4.5 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+                                    <svg className="w-2.5 h-2.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-800 leading-none">{offer.title}</p>
+                                    <p className="text-[9px] text-slate-400 mt-1 font-medium">{offer.sub}</p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="relative z-10 pt-4 border-t border-slate-50 mt-auto">
+                    <a
+                        href="/partners"
+                        className="text-[10px] font-bold text-emerald-600   flex items-center justify-between group/link"
+                    >
+                        Learn what makes a partner
+                        <span className="text-sm group-hover/link:translate-x-1 transition-transform ml-1">→</span>
+                    </a>
+                </div>
+            </motion.article>
+        );
+    }
+
     // Animation variants
     const entryVariants = {
         initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
         animate: { opacity: 1, scale: 1, y: 0 },
-        transition: isRestored ? { duration: 0 } : { 
-            duration: 0.9, 
-            delay: Math.min(index * 0.1, 1.2), 
+        transition: isRestored ? { duration: 0 } : {
+            duration: 0.9,
+            delay: Math.min(index * 0.1, 1.2),
             ease: [0.21, 1.11, 0.81, 0.99] as any
         }
     };
@@ -97,73 +172,68 @@ const ProductCard = React.memo(({
                     handleProductClick(p.product_id, p.business_name, e);
                 }
             }}
-            className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
-            style={{ 
+            className={`group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border overflow-hidden ${isPartnerTab ? "border-emerald-100 shadow-sm shadow-emerald-50/50" : "border-slate-100"}`}
+            style={{
                 willChange: "transform, opacity",
                 contentVisibility: "auto",
                 containIntrinsicSize: "auto 400px"
             }}
         >
-            <div className="relative w-full overflow-hidden bg-slate-100 min-h-[220px]" style={{ aspectRatio: "10/11" }}>
+            <div className="relative w-full overflow-hidden bg-slate-100">
                 <motion.div
                     initial={entryVariants.initial}
                     animate={entryVariants.animate}
                     transition={entryVariants.transition}
                     className="w-full h-full"
                 >
-                {isVideoCover ? (
-                    <video
-                        src={formatUrl(p.product_video!)} // Removed seeking fragment to prevent blinking
-                        poster={formatUrl(p.first_image)}
-                        muted
-                        loop
-                        playsInline
-                        preload="auto"
-                        className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
-                ) : (
-                    <div className="relative w-full h-full">
-                        <style jsx global>{`
-                            @keyframes fadeIn {
-                                from { opacity: 0; }
-                                to { opacity: 1; }
-                            }
-                        `}</style>
-                        <Image
-                            src={formatUrl(p.first_image)}
-                            alt={p.title}
-                            fill
-                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                            className="object-cover transition-all duration-700 group-hover:scale-110"
-                            priority={p.product_id % 5 < 2}
-                            onLoadingComplete={(img) => {
-                                img.style.animation = "fadeIn 0.6s ease-in-out forwards";
-                            }}
-                            style={{ opacity: 0 }}
+                    {p.product_video && isVideoCover ? (
+                        <video
+                            src={formatUrl(p.product_video!)}
+                            poster={formatUrl(p.first_image)}
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            className="w-full min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
                         />
-                    </div>
-                )}
+                    ) : (
+                        <div className="relative w-full h-auto">
+                            <img
+                                src={formatUrl(p.first_image)}
+                                alt={p.title}
+                                className="w-full min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-all duration-700 group-hover:scale-110"
+                                loading="lazy"
+                                onLoad={(e) => {
+                                    (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
+                                }}
+                                style={{ opacity: 0 }}
+                            />
+                        </div>
+                    )}
 
-                {isVideoCover && (
-                    <div className="absolute top-3 right-3 bg-black/30 backdrop-blur-md rounded-full  z-10  p-1">
-                        <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5.14v14l11-7-11-7z" />
-                        </svg>
-                    </div>
-                )}
+                    {isVideoCover && (
+                        <div className="absolute top-3 right-3 bg-black/30 backdrop-blur-md rounded-full  z-10  p-1">
+                            <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5.14v14l11-7-11-7z" />
+                            </svg>
+                        </div>
+                    )}
 
-                {!isVideoCover && fetchingProduct && (
-                    <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
-                        <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                )}
+
+                    {!isVideoCover && fetchingProduct && (
+                        <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
+                            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    )}
+
+
                 </motion.div>
-                
+
                 {/* Placeholder frame indicator */}
                 <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
                     <div className="flex flex-col items-center gap-2 opacity-20">
                         <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-                        <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Opening...</span>
+                        <span className="text-[10px] font-bold  text-slate-400 ">Opening...</span>
                     </div>
                 </div>
             </div>
@@ -181,7 +251,14 @@ const ProductCard = React.memo(({
                                     className="object-cover"
                                 />
                             </div>
-                            <span className="text-slate-900 text-sm font-bold tracking-tight pr-1">₦{Number(p.price || 0).toLocaleString()}</span>
+                            <div className="flex flex-col pr-1">
+                                <span className="text-slate-900 text-sm font-bold tracking-tight">₦{Number(p.price || 0).toLocaleString()}</span>
+                                {activeDiscount > 0 && (
+                                    <span className="text-[9px] text-slate-400 line-through font-medium leading-none">
+                                        ₦{Math.round(Number(p.price) / (1 - activeDiscount / 100)).toLocaleString()}
+                                    </span>
+                                )}
+                            </div>
                             {p.sold_count > 0 && (
                                 <span className="text-[10px] text-slate-500 font-medium ml-auto pr-1">{p.sold_count.toLocaleString()} Sold</span>
                             )}
@@ -283,7 +360,7 @@ const ProductCard = React.memo(({
                                 </div>
                             </div>
                         </div>
-                        <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-2.5" title={p.title}>
+                        <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-1" title={p.title}>
                             {p.trusted_partner === 1 && (
                                 <span className="inline-flex items-center gap-1 shrink-0 mr-1.5 align-text-bottom">
                                     <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm  tracking-wider">
@@ -296,23 +373,23 @@ const ProductCard = React.memo(({
 
                         <div className=" flex items-center min-h-[16px]">
                             {isPromoActive ? (
-                                <span className="text-[10px] font-bold text-rose-500 border-red-500 border px-1 tracking-widest truncate">
-                                    {p.promo_title} {p.promo_discount}% OFF
+                                <span className="text-[10px] font-medium text-rose-500 border-red-500 border-[0.5px] px-1  truncate">
+                                    {p.promo_title} {p.promo_discount}% Off
                                 </span>
                             ) : p.sale_type ? (
-                                <span className="text-[10px] font-bold text-rose-500 border-red-500 border tracking-widest truncate">
+                                <span className="text-[10px]  text-rose-500 border-red-500 border-[0.5] px-1  truncate">
                                     {p.sale_type} {p.sale_discount}% Off
                                 </span>
                             ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest truncate">
-                                    Only {Number(p.total_quantity)} Left
+                                <span className="text-[10px] font-bold text-rose-500   truncate">
+                                    Only {Number(p.total_quantity)} left
                                 </span>
                             ) : p.return_shipping_subsidy === 1 ? (
-                                <span className="text-[10px] font-bold text-green-700  tracking-widest truncate">
+                                <span className="text-[10px] font-bold text-green-700   truncate">
                                     Return Shipping Subsidy
                                 </span>
                             ) : p.market_name ? (
-                                <span className="text-[10px] font-bold text-rose-500  tracking-widest truncate">
+                                <span className="text-[10px] font-bold text-rose-500   truncate">
                                     {p.market_name}
                                 </span>
                             ) : null}
@@ -321,6 +398,7 @@ const ProductCard = React.memo(({
                         <div className="flex items-center gap-1.5 text-xs font-semibold">
                             <span className="text-slate-900 text-base">₦{Number(p.price || 0).toLocaleString()}</span>
                         </div>
+
                     </>
                 )}
             </div>
@@ -336,7 +414,7 @@ const ProductCard = React.memo(({
 });
 ProductCard.displayName = "ProductCard";
 
-const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, formatUrl, router, isRestored }: any) => {
+const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, formatUrl, router, isRestored, isPartnerTab }: any) => {
     const [columns, setColumns] = useState(5);
 
     useEffect(() => {
@@ -388,6 +466,7 @@ const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, h
                                     fetchingProduct={fetchingProductId === p.product_id}
                                     router={router}
                                     isRestored={isRestored}
+                                    isPartnerTab={isPartnerTab}
                                 />
                             );
                         })}
@@ -420,12 +499,55 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
     const [hasMore, setHasMore] = useState(MARKET_CACHE.hasMore);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const loaderRef = useRef<HTMLDivElement>(null);
+    const tabsRef = useRef<HTMLDivElement>(null);
     const LIMIT = 10;
 
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, token } = useAuth();
+    const { user, token, isHydrated } = useAuth();
     const [showLoginModal, setShowLoginModal] = useState(false);
+
+    // --- Actionable Orders State ---
+    const [actionableData, setActionableData] = useState<{ vendorPendingCount: number, customerDeliveredCount: number } | null>(null);
+    const [fetchedCategories, setFetchedCategories] = useState<string[]>([]);
+    const [isScrolled, setIsScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            if (window.scrollY > 10) {
+                setIsScrolled(true);
+            } else {
+                setIsScrolled(false);
+            }
+        };
+        window.addEventListener("scroll", handleScroll);
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
+    useEffect(() => {
+        fetchBusinessCategories()
+            .then(res => {
+                if (res?.success) {
+                    const cats = res.data.map((c: any) => c.category_name);
+                    setFetchedCategories(["For you", "Trending", ...cats]);
+                }
+            })
+            .catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        if (token) {
+            fetchActionableSummary(token)
+                .then(res => {
+                    if (res?.success) {
+                        setActionableData(res.data);
+                    }
+                })
+                .catch(console.error);
+        } else {
+            setActionableData(null);
+        }
+    }, [token]);
 
     const [likeData, setLikeData] = useState<Record<number, { liked: boolean, count: number }>>(MARKET_CACHE.likeData);
     // const formatUrl = React.useCallback((url: string) => {
@@ -456,6 +578,9 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                 ...prev,
                 [productId]: { liked: res.data.liked, count: res.data.likes_count }
             }));
+            if (res.data.liked) {
+                logUserActivity({ product_id: productId, action_type: 'like' }, token);
+            }
         } catch (err) {
             console.error("Like error", err);
             // Revert on error
@@ -468,22 +593,21 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     // We could fetch actual categories or just have common ones
     const CATEGORIES = useMemo(
-        () => [
-            "All",
-            "Food & Groceries",
+        () => fetchedCategories.length > 0 ? fetchedCategories : [
+            "For you",
+            "PARTNERS",
             "Fashion",
-            "Home",
             "Sports",
-            "Electronics",
+            "Home",
             "Beauty",
-            "Toys",
+            "Food",
             "Crafts",
+            "Tech",
+            "Fresh",
+            "Toys",
             "Kids",
-            "Pets",
-            "Shoes",
-            "Automotive",
         ],
-        []
+        [fetchedCategories]
     );
 
 
@@ -494,8 +618,24 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         if (pageNum === 0) setLoading(true);
 
         try {
-            const res = await fetchMarketFeed(LIMIT, pageNum * LIMIT, undefined, undefined, false, token);
-            const nextProducts: ProductFeedItem[] = res?.data?.products || [];
+            let nextProducts: ProductFeedItem[] = [];
+
+            if (activeCategory === "Trending") {
+                const res = await fetchTrendingProducts(LIMIT, pageNum * LIMIT);
+                nextProducts = res?.data || [];
+            } else if (activeCategory === "PARTNERS") {
+                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true);
+                nextProducts = res?.data || [];
+            } else {
+                const bizCat = activeCategory === "For you" ? null : activeCategory;
+                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, bizCat);
+                nextProducts = res?.data || [];
+            }
+
+            // If this was an authenticated fetch, mark the cache as personalized
+            if (pageNum === 0) {
+                MARKET_CACHE.personalized = !!token;
+            }
 
             // Update likeData based on all fetched products
             const nextLikeData: Record<number, { liked: boolean, count: number }> = {};
@@ -506,12 +646,21 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
             setProducts(prev => {
                 const mappedProducts = nextProducts.map((p: any, i: number) => {
-                    const mediaImages = (p.media || []).filter((m: any) => m.type === "image").map((m: any) => m.url);
+                    const media = p.media || [];
+                    const imgs = media.filter((m: any) => m.type === "image");
+                    const coverRef = p.first_image || p.image_url;
+                    
+                    // Robust cover detection: check is_cover flag OR matching URL
+                    const foundCover = imgs.find((m: any) => 
+                        m.is_cover === 1 || (coverRef && m.url && m.url.includes(coverRef))
+                    ) || imgs[0];
+
                     return {
                         ...p,
                         originalIndex: (pageNum === 0 ? 0 : prev.length) + i,
-                        first_image: mediaImages[0] || p.first_image || (p.media?.[0]?.type === 'image' ? p.media[0].url : "") || "",
-                        product_video: p.product_video || p.media?.find((m: any) => m.type === 'video')?.url || "",
+                        // Priority: Explicit cover -> product first_image -> first media image -> empty
+                        first_image: foundCover?.url || coverRef || (media[0]?.type === 'image' ? media[0].url : "") || "",
+                        product_video: p.product_video || media.find((m: any) => m.type === 'video')?.url || "",
                     };
                 });
                 const existingIds = new Set(prev.map(p => p.product_id));
@@ -541,16 +690,65 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     // Initial load logic with cache check
     useEffect(() => {
-        if (MARKET_CACHE.products.length > 0) {
-            setLoading(false);
-            return;
+        if (!isHydrated) return; // Wait for auth state to be resolved from storage
+
+        // If we have cached products for the right category...
+        if (MARKET_CACHE.products.length > 0 && MARKET_CACHE.category === activeCategory) {
+            // ...but we just got a token and the cache isn't personalized, we MUST re-fetch
+            const needsPersonalization = token && !MARKET_CACHE.personalized && activeCategory !== "Trending";
+
+            if (!needsPersonalization) {
+                setLoading(false);
+                return;
+            }
         }
+
+        // Only clear if category actually changed and it's not the restored state
+        if (MARKET_CACHE.category !== activeCategory) {
+            MARKET_CACHE.products = [];
+            MARKET_CACHE.page = 0;
+            MARKET_CACHE.hasMore = true;
+            MARKET_CACHE.category = activeCategory;
+        }
+
         setPage(0);
         setHasMore(true);
         setProducts([]);
         fetchPage(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [token]);
+    }, [isHydrated, token, activeCategory]);
+
+    // Center active tab automatically on change
+    useEffect(() => {
+        const container = tabsRef.current;
+        if (!container) return;
+
+        const activeTab = container.querySelector(`[data-active="true"]`) as HTMLElement;
+        if (activeTab) {
+            const containerWidth = container.offsetWidth;
+            const targetWidth = activeTab.offsetWidth;
+            const targetLeft = activeTab.offsetLeft;
+            const scrollLeft = targetLeft - (containerWidth / 2) + (targetWidth / 2);
+            container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+        }
+    }, [activeCategory]);
+
+    // Dynamic Navbar / Header coloring for Partners
+    useEffect(() => {
+        // Find the main shell header
+        const header = document.querySelector('header.fixed.top-0');
+        if (!header) return;
+
+        if (activeCategory === "PARTNERS") {
+            header.classList.add('is-partners');
+        } else {
+            header.classList.remove('is-partners');
+        }
+
+        return () => {
+            header.classList.remove('is-partners');
+        };
+    }, [activeCategory]);
 
     // Handle Scroll Persistence
     useEffect(() => {
@@ -588,11 +786,13 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         };
     }, [page, hasMore, isLoadingMore, loading]);
 
-    // Client-side category filtering
+    // Category sorting: Since we fetch by category server-side, we just return the products
     const filteredProducts = useMemo(() => {
-        if (!products || products.length === 0) return [];
-        if (activeCategory === "All") return products;
-        return products.filter((p) => (p.category || "").toLowerCase() === activeCategory.toLowerCase());
+        let list = products || [];
+        if (activeCategory === "PARTNERS" && list.length > 0) {
+            return [{ isIntro: true, product_id: 'intro' }, ...list];
+        }
+        return list;
     }, [products, activeCategory]);
 
     const formatUrl = React.useCallback((url: string) => {
@@ -657,71 +857,16 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
             setFetchingProductId(productId);
             const res = await fetchProductById(productId, token);
             if (res?.data?.product) {
-                // Map DB product to PreviewPayload shape so we can recycle the preview modal!
                 const dbProduct = res.data.product;
-
-                const mappedPayload: PreviewPayload = {
-                    productId: dbProduct.product_id,
-                    title: dbProduct.title,
-                    description: dbProduct.description,
-                    category: dbProduct.category,
-                    hasVariants: dbProduct.has_variants === 1,
-                    price: dbProduct.price ?? "",
-                    quantity: dbProduct.quantity ?? "", // Actually from inventory, but fallback
-                    samePriceForAll: false, // We don't necessarily know, defaults to false on display
-                    sharedPrice: null,
-                    businessId: Number(dbProduct.business_id),
-                    productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
-                    productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) } : null,
-                    useCombinations: dbProduct.use_combinations === 1,
-                    params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-                    soldCount: dbProduct.sold_count,
-                    variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-                        id: String(g.group_id),
-                        title: g.title,
-                        allowImages: g.allow_images === 1,
-                        entries: (g.options || []).map((o: any) => {
-                            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
-                            return {
-                                id: String(o.option_id),
-                                name: o.name,
-                                price: o.price,
-                                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-                            };
-                        })
-                    })),
-
-                    skus: (dbProduct.skus || []).map((s: any) => {
-                        // Safely parse variant IDs array
-                        let vIds: string[] = [];
-                        try {
-                            vIds = typeof s.variant_option_ids === 'string'
-                                ? JSON.parse(s.variant_option_ids)
-                                : s.variant_option_ids;
-                        } catch (e) { }
-
-                        // Try to map inventory quantity if available
-                        const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
-
-                        return {
-                            id: String(s.sku_id),
-                            sku: s.sku_code || "",
-                            name: "Combination",
-                            price: s.price,
-                            quantity: inventoryMatch ? inventoryMatch.quantity : 0,
-                            enabled: s.status === 'active',
-                            variantOptionIds: vIds.map(String)
-                        } as ProductSku;
-                    })
-                };
+                const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
 
                 // If top-level quantity exists in inventory fallback
                 const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
-                if (baseInv) mappedPayload.quantity = baseInv.quantity;
+                if (baseInv && mappedPayload) mappedPayload.quantity = baseInv.quantity;
 
                 setSelectedProductPayload(mappedPayload);
                 setModalOpen(true);
+                logUserActivity({ product_id: productId, action_type: 'view', category: dbProduct.category }, token);
 
                 // If on initial load we didn't have the business name, update URL now
                 if (dbProduct.business_name) {
@@ -730,11 +875,10 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
             }
         } catch (err) {
             console.error(err);
-            // Don't alert if it's just the initial load failing quietly
         } finally {
             setFetchingProductId(null);
         }
-    }, [fetchingProductId, formatUrl, updateUrl]);
+    }, [fetchingProductId, formatUrl, updateUrl, token]);
 
     // Handle deep linking from URL and Browser Back/Forward buttons
     useEffect(() => {
@@ -779,24 +923,93 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     return (
         <>
-            <section className="min-h-screen bg-slate-50 pb-10 ">
-                <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
-                    <div className="flex px-4 py-3 gap-2 overflow-x-auto no-scrollbar">
+            <section className={`min-h-screen transition-colors duration-500 pb-10 ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-slate-50"}`}>
+                <div className={`sticky transition-all duration-300 ${isScrolled ? "top-0 z-[100] translate-y-0" : "top-16 z-20"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"}`}>
+                    <div ref={tabsRef} className="flex px-4 py-2.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
                         {CATEGORIES.map((item) => (
                             <button
                                 key={item}
+                                data-active={activeCategory === item}
                                 onClick={() => setActiveCategory(item)}
-                                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-all ${activeCategory === item ? "bg-slate-900 text-white shadow-md" : "text-slate-600 bg-slate-100 hover:bg-slate-200"
+                                className={`whitespace-nowrap relative rounded-full px-3 py-1.5 text-sm transition-all ${activeCategory === "PARTNERS"
+                                    ? item === "PARTNERS"
+                                        ? "text-emerald-600 font-bold italic tracking-tighter"
+                                        : activeCategory === item
+                                            ? "text-white bg-emerald-600 font-bold italic shadow-md shadow-emerald-100"
+                                            : "hover:bg-emerald-100 text-emerald-700"
+                                    : item === "PARTNERS"
+                                        ? "text-emerald-600 font-bold italic tracking-tighter"
+                                        : activeCategory === item
+                                            ? "text-red-500 font-bold monospace italic"
+                                            : "hover:bg-slate-200 text-slate-600"
                                     }`}
                             >
+                                {item === "PARTNERS" && activeCategory === "PARTNERS" && (
+                                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white text-red-500 text-[7px] font-bold border-[0.5px] border-red-500 px-1.5 rounded-full z-10  tracking-tighter shadow-sm py-0.5">Verified</span>
+                                )}
                                 {item}
                             </button>
                         ))}
                     </div>
+
+                    {/* Actionable Orders Marquee - hide when scrolled to reduce height */}
+                    {!isScrolled && actionableData && (actionableData.vendorPendingCount > 0 || actionableData.customerDeliveredCount > 0) && (
+                        <div
+                            className={`w-full py-1.5 overflow-hidden group cursor-pointer ${actionableData.vendorPendingCount > 0
+                                ? "bg-orange-50 border-orange-100"
+                                : "bg-blue-50 border-blue-100"
+                                }`}
+                            onClick={() => {
+                                if (actionableData.vendorPendingCount > 0) {
+                                    router.push("/profile/business/customer-order");
+                                } else {
+                                    router.push("/profile/orders");
+                                }
+                            }}
+                        >
+                            <div className="flex animate-marquee-market whitespace-nowrap">
+                                <div className="flex items-center gap-12 px-4">
+                                    {actionableData.vendorPendingCount > 0 ? (
+                                        <>
+                                            <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+
+                                            </span>
+                                            <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+                                            </span>
+                                            <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
+                                            </span>
+                                            <span className="text-[10px] font-bold text-blue-700  tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
+                                            </span>
+                                            <span className="text-[10px] font-bold text-blue-700  tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+                    )}
                 </div>
 
                 {loading ? (
-                    <div className="p-2 sm:p-4"><ShimmerGrid count={5} /></div>
+                    <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
                 ) : error ? (
                     <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
                         <p className="mb-3 font-bold">{error}</p>
@@ -804,8 +1017,6 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                             Retry
                         </button>
                     </div>
-                ) : filteredProducts.length === 0 ? (
-                    <div className="py-12 flex items-center justify-center text-sm text-slate-500 font-medium">No products found in this category.</div>
                 ) : (
                     <div className="p-2 sm:p-4 ">
                         <MasonryGrid
@@ -818,6 +1029,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                             formatUrl={formatUrl}
                             router={router}
                             isRestored={isRestoring}
+                            isPartnerTab={activeCategory === "PARTNERS"}
                         />
                     </div>
                 )}
@@ -848,6 +1060,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                                 updateUrl(null);
                             }}
                             onProductClick={handleProductClick}
+                            onReelsClick={handleReelsClick}
                         />
                     )
                 }
@@ -860,20 +1073,66 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                 onClose={() => {
                     setReelsModalOpen(false);
                     setSelectedProductId(null);
-                    updateUrl(null);
+                    // Instead of null, restore the preview ID if it exists
+                    updateUrl(selectedProductPayload?.productId || null);
                 }}
-                onActiveProductChange={(pid) => {
+                onActiveProductChange={(pid, bizName) => {
                     setSelectedProductId(pid);
                     const params = new URLSearchParams(window.location.search);
                     params.set("reels", "true");
                     params.set("product_id", String(pid));
                     const search = params.toString();
-                    const currentUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+
+                    let path = window.location.pathname;
+                    if (bizName) {
+                        path = `/market/${slugify(bizName)}`;
+                    }
+
+                    const currentUrl = `${path}${search ? `?${search}` : ""}`;
                     window.history.replaceState(window.history.state, "", currentUrl);
                 }}
             />
 
             <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+
+            <style jsx global>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes marquee-market {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(-33.33%); }
+                }
+                .animate-marquee-market {
+                    display: flex;
+                    animation: marquee-market 30s linear infinite;
+                }
+                .group:hover .animate-marquee-market {
+                    animation-play-state: paused;
+                }
+                header.fixed.top-0.is-partners {
+                    background-color: #f0fdf4 !important; /* light emerald matching bg */
+                    color: #059669 !important;
+                    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.05) !important;
+                    transition: background-color 0.4s ease, color 0.4s ease;
+                }
+                header.fixed.top-0.is-partners span, 
+                header.fixed.top-0.is-partners a,
+                header.fixed.top-0.is-partners p,
+                header.fixed.top-0.is-partners svg,
+                header.fixed.top-0.is-partners h1 {
+                    color: #059669 !important;
+                }
+                header.fixed.top-0.is-partners input {
+                    background-color: white !important;
+                    color: #059669 !important;
+                    border-color: #d1fae5 !important;
+                }
+                header.fixed.top-0.is-partners input::placeholder {
+                    color: #6ee7b7 !important;
+                }
+            `}</style>
         </>
     );
 }

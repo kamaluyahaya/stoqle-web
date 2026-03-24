@@ -31,8 +31,10 @@ import { fetchMyPaymentAccount } from "@/src/lib/api/walletApi";
 import { toast } from "sonner";
 import WithdrawModal from "./withdrawModal";
 import TransferModal from "./transferModal";
+import PinSetupModal from "./pinSetupModal";
 import PaymentInfoModal from "./policyModal/paymentInfoModal";
 import { motion, AnimatePresence } from "framer-motion";
+import { useWallet } from "@/src/context/walletContext";
 
 type Role = "user" | "vendor";
 
@@ -50,6 +52,7 @@ type Props = {
   hintText?: string;
   balances: Balances;
   role?: Role;
+  businessId?: number;
   onWithdraw?: (availableAmount: number) => Promise<void> | void;
   onBalanceUpdate?: (newBalance: number) => void;
 };
@@ -61,6 +64,7 @@ export default function BalanceModal({
   hintText = "View balances",
   balances,
   role = "user",
+  businessId,
   onWithdraw,
   onBalanceUpdate
 }: Props) {
@@ -87,8 +91,12 @@ export default function BalanceModal({
   // Modal States
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [isPinSetupOpen, setIsPinSetupOpen] = useState(false);
+  const [intendedActionAfterPin, setIntendedActionAfterPin] = useState<"withdraw" | "transfer" | null>(null);
   const [isPaymentInfoOpen, setIsPaymentInfoOpen] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<string>("");
+
+  const { wallet, refreshWallet: fetchWallet } = useWallet();
 
   // Report Modal state (unified with orders page)
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -121,7 +129,7 @@ export default function BalanceModal({
         maximumFractionDigits: 0
       }).format(v).replace("NGN", "₦");
     } catch (e) {
-      return `₦${Number(v).toLocaleString()}`;
+      return `₦${(Number(v) || 0).toLocaleString()}`;
     }
   };
 
@@ -428,6 +436,12 @@ export default function BalanceModal({
   async function handleWithdraw() {
     if (!onWithdraw) return;
     if (balances.available <= 0) return;
+
+    if (!wallet?.has_pin) {
+      setIsPinSetupOpen(true);
+      return;
+    }
+
     try {
       isWithdrawingRef.current = true;
       await onWithdraw(balances.available);
@@ -438,6 +452,20 @@ export default function BalanceModal({
       isWithdrawingRef.current = false;
     }
   }
+
+  const handleActionWithPinCheck = (action: "withdraw" | "transfer") => {
+    if (!wallet?.has_pin) {
+      setIntendedActionAfterPin(action);
+      setIsPinSetupOpen(true);
+      return;
+    }
+
+    if (action === "withdraw") {
+      setIsWithdrawOpen(true);
+    } else if (action === "transfer") {
+      setIsTransferOpen(true);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -485,11 +513,11 @@ export default function BalanceModal({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full sm:w-[500px] max-h-[90vh] sm:max-h-[85vh] bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+              className="relative w-full sm:w-[500px] max-h-[90vh] sm:max-h-[85vh] bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] overflow-hidden flex flex-col"
             >
 
               {/* Header */}
-              <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0">
+              <div className="px-6 py-5 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="w-10">
                     {currentView !== "overview" && (
@@ -520,10 +548,10 @@ export default function BalanceModal({
                 {currentView === "overview" ? (
                   <div className="space-y-6">
                     {/* Primary Balance Card */}
-                    <div className="bg-rose-500 rounded-[2rem] p-7 text-white shadow-xl shadow-rose-100 relative overflow-hidden">
-                      <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+                    <div className="bg-rose-500 rounded-[1rem] p-7 text-white shadow-xl shadow-rose-100 relative overflow-hidden">
+                      <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full pointer-events-none" />
 
-                      <div className="flex justify-between items-start">
+                      <div className="relative z-10 flex justify-between items-start">
                         <div>
                           <p className="text-white/70 text-sm font-medium">Available Balance</p>
                           <div className="mt-1 flex items-center gap-3">
@@ -538,20 +566,27 @@ export default function BalanceModal({
                             </button>
                           </div>
                         </div>
+                        <button
+                          onClick={() => setCurrentView("transactions")}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all text-white/90 hover:text-white active:scale-95"
+                        >
+                          <span className="text-[10px] font-bold tracking-wider">Transaction</span>
+                          <ClockIcon className="w-3.5 h-3.5" />
+                        </button>
                       </div>
 
-                      <div className="mt-8 flex gap-3">
+                      <div className="mt-4 flex gap-3">
                         {role === "vendor" ? (
                           <>
                             <button
-                              onClick={() => setIsWithdrawOpen(true)}
-                              className="flex-1 h-12 rounded-2xl bg-white text-rose-500 font-bold text-xs shadow-sm active:scale-95 transition"
+                              onClick={() => handleActionWithPinCheck("withdraw")}
+                              className="flex-1 h-10 rounded-full bg-white text-rose-500 font-bold text-xs shadow-sm active:scale-95 transition"
                             >
                               Request Payout
                             </button>
                             <button
-                              onClick={() => setIsTransferOpen(true)}
-                              className="flex-1 h-12 rounded-2xl bg-rose-600 text-white font-bold text-xs shadow-lg shadow-rose-100 active:scale-95 transition"
+                              onClick={() => handleActionWithPinCheck("transfer")}
+                              className="flex-1 h-10 rounded-full bg-rose-600 text-white font-bold text-xs shadow-lg shadow-rose-100 active:scale-95 transition"
                             >
                               Transfer to StoqlePay
                             </button>
@@ -559,14 +594,14 @@ export default function BalanceModal({
                         ) : (
                           <>
                             <button
-                              onClick={() => setIsTransferOpen(true)}
-                              className="flex-1 h-12 rounded-2xl bg-white text-rose-500 font-bold text-xs shadow-sm active:scale-95 transition"
+                              onClick={() => handleActionWithPinCheck("transfer")}
+                              className="flex-1 h-10 rounded-full bg-white text-rose-500 font-bold text-xs shadow-sm active:scale-95 transition"
                             >
                               Transfer
                             </button>
                             <button
-                              onClick={() => setIsWithdrawOpen(true)}
-                              className="flex-1 h-12 rounded-2xl bg-rose-600 text-white font-bold text-xs shadow-lg shadow-rose-100 active:scale-95 transition"
+                              onClick={() => handleActionWithPinCheck("withdraw")}
+                              className="flex-1 h-10 rounded-full text-white border border-slate-200 text-xs shadow-lg active:scale-95 transition"
                             >
                               Withdraw
                             </button>
@@ -575,21 +610,16 @@ export default function BalanceModal({
                       </div>
                     </div>
 
-                    {/* Secondary Stats Group */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-slate-50 rounded-[1.5rem] p-5 border border-slate-100">
-                        <p className="text-xs text-slate-500 font-medium font-bold">Pending</p>
-                        <p className="mt-1 text-lg font-bold text-slate-800">{fmt(balances.pending ?? 0)}</p>
+                    {/* Pending Balance Row */}
+                    <div className="bg-slate-50 rounded-[1.2rem] p-5 border border-slate-100 flex justify-between items-center group cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Pending Balance</p>
+                        <p className="mt-1 text-xl font-bold text-slate-800">{fmt(balances.pending ?? 0)}</p>
                       </div>
-                      <button
-                        onClick={() => setCurrentView("transactions")}
-                        className="bg-slate-50 rounded-[1.5rem] p-5 border border-slate-100 flex flex-col items-start hover:bg-slate-100 transition group"
-                      >
-                        <p className="text-xs text-slate-500 font-medium group-hover:text-rose-500 transition-colors font-bold">History</p>
-                        <div className="mt-1 flex items-center gap-1">
-                          <p className="text-lg font-bold text-slate-800">View All</p>
-                        </div>
-                      </button>
+                      <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
+                        <ClockIcon className="w-5 h-5 text-amber-500" />
+                      </div>
                     </div>
 
                     {/* Virtual Account Section */}
@@ -1153,6 +1183,25 @@ export default function BalanceModal({
           setPaymentInfo(json);
         }}
         role={role as any}
+        businessId={businessId}
+      />
+
+      <PinSetupModal
+        isOpen={isPinSetupOpen}
+        onClose={() => {
+          setIsPinSetupOpen(false);
+          setIntendedActionAfterPin(null);
+        }}
+        onSuccess={() => {
+          fetchWallet();
+          setIsPinSetupOpen(false);
+          if (intendedActionAfterPin === "withdraw") {
+            setIsWithdrawOpen(true);
+          } else if (intendedActionAfterPin === "transfer") {
+            setIsTransferOpen(true);
+          }
+          setIntendedActionAfterPin(null);
+        }}
       />
 
       {/* Unified Report Modal for Balance Modal */}

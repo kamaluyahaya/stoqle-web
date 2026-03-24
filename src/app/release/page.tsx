@@ -17,6 +17,7 @@ import PostModal from "@/src/components/modal/postModal";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import DefaultInput from "@/src/components/input/default-input-post";
+import { getCurrentLocationName, getCachedLocationName } from "@/src/lib/location";
 
 export default function PostComposerTabs({
   onSubmit,
@@ -138,7 +139,12 @@ export default function PostComposerTabs({
     }
     setLoading(true);
     try {
+      // Capture current location for the post
+      const freshLocation = await getCurrentLocationName();
+      const location = freshLocation || getCachedLocationName();
+
       const formData = new FormData();
+      if (location) formData.append('location', location);
       if (payload.type === 'note') {
         formData.append('text', payload.text || '');
         formData.append('cover_type', 'note');
@@ -212,7 +218,7 @@ export default function PostComposerTabs({
       <div className="bg-white  border border-slate-100 overflow-hidden">
         {/* Header */}
         <div className="px-8 pt-8 pb-4">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Share your experience</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Share your experience</h1>
         </div>
 
         {/* Custom Tabs */}
@@ -287,7 +293,7 @@ export default function PostComposerTabs({
         onCreated={(newPost) => {
           setCreateNoteOpen(false);
           toast.success("Note created!");
-          router.push("/discover");
+          router.push("/profile?tab=Notes");
         }}
       />
 
@@ -387,7 +393,7 @@ function VideoPreviewModal({
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between relative border-b border-slate-100">
           <div className="w-10"></div>
-          <h2 className="text-sm font-black text-slate-900 absolute left-1/2 -translate-x-1/2 uppercase tracking-widest">Video Post</h2>
+          <h2 className="text-sm font-bold text-slate-900 absolute left-1/2 -translate-x-1/2  ">Video Post</h2>
           <div className="w-10 flex justify-end">
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
               <XMarkIcon className="w-5 h-5 text-slate-500" />
@@ -424,7 +430,7 @@ function VideoPreviewModal({
               {privacy === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
               {privacy === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
               {privacy === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-red-600">
+              <span className="text-[10px] font-bold   text-slate-500 group-hover:text-red-600">
                 {privacy === "public" ? "Public" : privacy === "private" ? "Private" : "Friends Only"}
               </span>
             </button>
@@ -449,7 +455,7 @@ function VideoPreviewModal({
                 className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[60] p-6 space-y-4"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Visibility</h3>
+                  <h3 className="text-xs font-bold   text-slate-400">Visibility</h3>
                   <button onClick={() => setIsPrivacyModalOpen(false)}>
                     <XMarkIcon className="w-4 h-4 text-slate-400" />
                   </button>
@@ -514,11 +520,11 @@ function VideoPreviewModal({
                     className="text-red-500 transition-all duration-300"
                   />
                 </svg>
-                <div className="absolute inset-0 flex items-center justify-center font-black text-2xl text-slate-900">
+                <div className="absolute inset-0 flex items-center justify-center font-bold text-2xl text-slate-900">
                   {uploadProgress}%
                 </div>
               </div>
-              <p className="text-sm font-black text-slate-400 uppercase tracking-widest animate-pulse">Uploading Video</p>
+              <p className="text-sm font-bold text-slate-400   animate-pulse">Uploading Video</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -725,7 +731,7 @@ function ImagePreviewModal({
                   </div>
 
                   {/* Counter Badge */}
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-[10px] font-black text-white  tracking-widest shadow-lg">
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/40 backdrop-blur-md text-[10px] font-bold text-white   shadow-lg">
                     {index + 1} / {imagePreviews.length}
                   </div>
                 </div>
@@ -745,7 +751,7 @@ function ImagePreviewModal({
                       >
                         <img src={src} className="w-full h-full object-cover" alt={`thumb-${i}`} />
                         {i === 0 && (
-                          <div className="absolute top-1 left-1 px-1 rounded-md bg-red-500 text-[6px] text-white font-black">Cover</div>
+                          <div className="absolute top-1 left-1 px-1 rounded-md bg-red-500 text-[6px] text-white font-bold">Cover</div>
                         )}
                       </button>
                       <button
@@ -789,7 +795,7 @@ function ImagePreviewModal({
                         >
                           <img src={src} className="w-full h-full object-cover" alt={`final-thumb-${i}`} />
                           {i === 0 && (
-                            <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-red-500 text-[6px] text-white font-black uppercase">Cover</div>
+                            <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-red-500 text-[6px] text-white font-bold ">Cover</div>
                           )}
                         </div>
                         <button
@@ -797,7 +803,7 @@ function ImagePreviewModal({
                             e.stopPropagation();
                             removeImageAt(i);
                           }}
-                          className="absolute -top-1.5 -right-1.5 h-6 w-6 bg-black/40 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-white hover:bg-red-500 transition-all ring-1 ring-white/20 text-[10px] font-black"
+                          className="absolute -top-1.5 -right-1.5 h-6 w-6 bg-black/40 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-white hover:bg-red-500 transition-all ring-1 ring-white/20 text-[10px] font-bold"
                         >
                           {i + 1}
                         </button>
@@ -829,7 +835,7 @@ function ImagePreviewModal({
                     {privacy === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
                     {privacy === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
                     {privacy === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-red-600">
+                    <span className="text-[10px] font-bold   text-slate-500 group-hover:text-red-600">
                       {privacy === "public" ? "Public" : privacy === "private" ? "Private" : "Friends Only"}
                     </span>
                   </button>
@@ -854,7 +860,7 @@ function ImagePreviewModal({
                       className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[60] p-6 space-y-4"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Visibility</h3>
+                        <h3 className="text-xs font-bold   text-slate-400">Visibility</h3>
                         <button onClick={() => setIsPrivacyModalOpen(false)}>
                           <XMarkIcon className="w-4 h-4 text-slate-400" />
                         </button>
@@ -919,11 +925,11 @@ function ImagePreviewModal({
                           className="text-red-500 transition-all duration-300"
                         />
                       </svg>
-                      <div className="absolute inset-0 flex items-center justify-center font-black text-2xl text-slate-900">
+                      <div className="absolute inset-0 flex items-center justify-center font-bold text-2xl text-slate-900">
                         {uploadProgress}%
                       </div>
                     </div>
-                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest animate-pulse">Uploading Post</p>
+                    <p className="text-sm font-bold text-slate-400   animate-pulse">Uploading Post</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -992,7 +998,7 @@ function ImagePreviewModal({
                   setLightboxIndex(0);
                   toast.success("Set✅");
                 }}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-white/20"
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white text-[10px] font-bold   transition-all flex items-center gap-2 border border-white/20"
               >
                 <CheckIcon className="w-3.5 h-3.5" />
                 Set as cover
@@ -1008,7 +1014,7 @@ function ImagePreviewModal({
                     setLightboxOpen(false);
                   }
                 }}
-                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all backdrop-blur-md rounded-full text-red-500 hover:text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-3 border border-red-500/30"
+                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all backdrop-blur-md rounded-full text-red-500 hover:text-white text-[10px] font-bold   flex items-center gap-3 border border-red-500/30"
               >
                 <TrashIcon className="w-4 h-4" />
                 Delete Image

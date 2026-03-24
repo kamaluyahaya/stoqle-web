@@ -50,6 +50,8 @@ export const mapApiPost = (p: any): Post => {
     noteConfig: p.config,
     rawCreatedAt: p.created_at,
     allMedia,
+    location: p.location,
+    category: p.category,
   };
 };
 
@@ -58,6 +60,8 @@ type FetchPostsOptions = {
   signal?: AbortSignal;
   limit?: number;
   offset?: number;
+  category?: string;
+  token?: string | null;
 };
 
 /**
@@ -70,9 +74,14 @@ export async function fetchSocialPosts(opts: FetchPostsOptions = {}) {
   const url = new URL(`${base.replace(/\/$/, "")}/api/social/`);
   if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
   if (opts.offset !== undefined) url.searchParams.set("offset", String(opts.offset));
+  if (opts.category !== undefined) url.searchParams.set("category", String(opts.category));
+
+  const headers: any = { Accept: "application/json" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
 
   const res = await fetch(url.toString(), {
     signal: opts.signal,
+    headers
   });
   if (!res.ok) throw new Error(`API returned ${res.status}`);
   const json = await res.json();
@@ -193,4 +202,77 @@ export async function createSocialPost(
     xhr.onerror = () => reject(new Error("Network error"));
     xhr.send(formData);
   });
+}
+
+/**
+ * Toggle like for a social post
+ */
+export async function toggleSocialPostLike(postId: number | string, token: string) {
+  const base = process.env.NEXT_PUBLIC_API_URL || "";
+  const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}/like`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(json?.message || "Failed to toggle like");
+  return json;
+}
+
+/**
+ * Log activity for a social post (view, save, share, etc.)
+ */
+export async function logSocialActivity(
+  activity: { social_post_id: number; action_type: string; category?: string; watch_time?: number },
+  token?: string
+) {
+  const base = process.env.NEXT_PUBLIC_API_URL || "";
+  if (!base) return;
+
+  try {
+    const headers: any = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    fetch(`${base.replace(/\/$/, "")}/api/social/activity`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(activity),
+    }).catch(() => { }); // fire and forget
+  } catch (e) {
+    console.error("Failed to log social activity", e);
+  }
+}
+
+/**
+ * Fetch a personalized discovery feed
+ */
+export async function fetchDiscoverFeed(opts: FetchPostsOptions = {}) {
+  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+
+  const url = new URL(`${base.replace(/\/$/, "")}/api/social/discover`);
+  if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) url.searchParams.set("offset", String(opts.offset));
+
+  const headers: any = { Accept: "application/json" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+
+  const res = await fetch(url.toString(), {
+    signal: opts.signal,
+    headers
+  });
+
+  if (!res.ok) throw new Error(`Discovery API returned ${res.status}`);
+  const json = await res.json();
+  const data = json?.data || {};
+
+  return {
+    forYou: (data.for_you || []).map(mapApiPost),
+    trending: (data.trending || []).map(mapApiPost),
+    following: (data.following || []).map(mapApiPost),
+    similar: (data.similar || []).map(mapApiPost),
+  };
 }

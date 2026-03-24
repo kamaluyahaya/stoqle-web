@@ -5,13 +5,13 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Types
-type Occasion = {
+export type Occasion = {
   name: string;
   windowStart: string; // ISO date YYYY-MM-DD
   windowEnd: string; // ISO date YYYY-MM-DD
 };
 
-type PromotionPayload = {
+export type PromotionPayload = {
   occasion: string;
   start: string;
   end: string;
@@ -29,13 +29,13 @@ type Props = {
   onSave?: (payloadJson: string) => Promise<void> | void;
 };
 
-function isoDate(d: Date) {
+export function isoDate(d: Date) {
   return d.getFullYear() + "-" +
     String(d.getMonth() + 1).padStart(2, "0") + "-" +
     String(d.getDate()).padStart(2, "0");
 }
 
-function parseIsoToLocalDate(iso: string) {
+export function parseIsoToLocalDate(iso: string) {
   if (!iso || typeof iso !== "string") return new Date(NaN);
   // keep only the date portion if a time exists
   const datePart = iso.split("T")[0];
@@ -49,74 +49,44 @@ function parseIsoToLocalDate(iso: string) {
 
 
 
-const make = (name: string, month0Index: number, day: number, y: number) => {
+export const make = (name: string, month0Index: number, day: number, y: number) => {
   const core = new Date(y, month0Index, day);
   const start = addDays(core, -7);
   const end = addDays(core, 7);
   return { name, windowStart: isoDate(start), windowEnd: isoDate(end) };
 };
 
-function addDays(date: Date, days: number) {
+export function addDays(date: Date, days: number) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
 
-function parseJsonSafe<T>(s?: string | null): T[] {
-  try {
-    if (!s) return [];
-    const parsed = JSON.parse(s);
-    if (Array.isArray(parsed)) return parsed as T[];
-    return [];
-  } catch {
-    return [];
-  }
+
+export function toLocalDateOnly(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+// parse either "YYYY-MM-DD" or full ISO "2026-01-03T00:00:00.000Z" into a local Date at midnight
+export function parseAnyDateToLocalMidnight(s: string) {
+  if (!s || typeof s !== "string") return new Date(NaN);
 
-// Helper used for validation safety (not strictly required with parseCampaignWindow but kept for robustness)
-function ensureEndNotBeforeStart(startDateObj: Date, endDateObj: Date, windowEndObj: Date) {
-  const e = new Date(endDateObj.getTime());
-  let safety = 0;
-  while (e < startDateObj && safety < 5) {
-    e.setFullYear(e.getFullYear() + 1);
-    safety += 1;
-    if (e > windowEndObj) break;
+  // if it contains a 'T' (full ISO) or time zone marker, use Date(iso)
+  if (s.includes("T") || s.includes("Z") || s.length > 10) {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return new Date(NaN);
+    return toLocalDateOnly(d);
   }
-  if (e < startDateObj) return new Date(startDateObj.getTime());
-  if (e > windowEndObj) return new Date(windowEndObj.getTime());
-  return e;
+
+  // otherwise expect "YYYY-MM-DD"
+  const parts = s.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const day = Number(parts[2]);
+  if ([y, m, day].some((n) => !Number.isFinite(n))) return new Date(NaN);
+  return new Date(y, m - 1, day);
 }
 
-export default function PromotionsModal({
-  open,
-  prefKey,
-  discountPrefKey = "business_sales_discount",
-  initialValue = null,
-  occasions,
-  onClose,
-  onSave,
-}: Props) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  // editor state
-  // selectedOccasionKey is the stable key: `${name}::${windowStart}`
-  const [selectedOccasionKey, setSelectedOccasionKey] = useState<string | null>(null);
-  const [selectedOccasionName, setSelectedOccasionName] = useState<string | null>(null);
-
-  // auto-assigned, not editable by user
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
-
-  const [discount, setDiscount] = useState<number>(0);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  const [joined, setJoined] = useState<PromotionPayload[]>([]);
-
-  const defaultOccasions = useMemo<Occasion[]>(() => {
+export function generateDefaultOccasions(mounted: boolean): Occasion[] {
     if (!mounted) return [];
 
     const now = new Date();
@@ -238,10 +208,84 @@ export default function PromotionsModal({
       built.push({ name: `Eid al-Adha (set manually for ${y})`, windowStart: "-", windowEnd: "-" });
     });
 
-    // dedupe by name + windowStart
     const map = new Map<string, Occasion>();
     built.forEach((o) => map.set(`${o.name}::${o.windowStart}`, o));
     return Array.from(map.values());
+}
+
+export function getAvailableOccasionsFrom(occasions: Occasion[]) {
+  const now = toLocalDateOnly(new Date());
+  return occasions.filter((o) => {
+    try {
+      const s = parseAnyDateToLocalMidnight(o.windowStart);
+      const e = parseAnyDateToLocalMidnight(o.windowEnd);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return false;
+      if (e < s) e.setFullYear(e.getFullYear() + 1);
+      return now >= toLocalDateOnly(s) && now <= toLocalDateOnly(e);
+    } catch {
+      return false;
+    }
+  });
+}
+
+
+function parseJsonSafe<T>(s?: string | null): T[] {
+  try {
+    if (!s) return [];
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed)) return parsed as T[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+
+// Helper used for validation safety (not strictly required with parseCampaignWindow but kept for robustness)
+function ensureEndNotBeforeStart(startDateObj: Date, endDateObj: Date, windowEndObj: Date) {
+  const e = new Date(endDateObj.getTime());
+  let safety = 0;
+  while (e < startDateObj && safety < 5) {
+    e.setFullYear(e.getFullYear() + 1);
+    safety += 1;
+    if (e > windowEndObj) break;
+  }
+  if (e < startDateObj) return new Date(startDateObj.getTime());
+  if (e > windowEndObj) return new Date(windowEndObj.getTime());
+  return e;
+}
+
+export default function PromotionsModal({
+  open,
+  prefKey,
+  discountPrefKey = "business_sales_discount",
+  initialValue = null,
+  occasions,
+  onClose,
+  onSave,
+}: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // editor state
+  // selectedOccasionKey is the stable key: `${name}::${windowStart}`
+  const [selectedOccasionKey, setSelectedOccasionKey] = useState<string | null>(null);
+  const [selectedOccasionName, setSelectedOccasionName] = useState<string | null>(null);
+
+  // auto-assigned, not editable by user
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  const [discount, setDiscount] = useState<number>(0);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const [joined, setJoined] = useState<PromotionPayload[]>([]);
+
+  const defaultOccasions = useMemo<Occasion[]>(() => {
+    return generateDefaultOccasions(mounted);
   }, [mounted]);
 
   const allOccasions = (occasions && occasions.length) ? occasions : defaultOccasions;
@@ -250,29 +294,6 @@ export default function PromotionsModal({
     if (!mounted) return [];
     return getAvailableOccasionsFrom(allOccasions);
   }, [allOccasions, mounted]);
-  // parse either "YYYY-MM-DD" or full ISO "2026-01-03T00:00:00.000Z" into a local Date at midnight
-  function parseAnyDateToLocalMidnight(s: string) {
-    if (!s || typeof s !== "string") return new Date(NaN);
-
-    // if it contains a 'T' (full ISO) or time zone marker, use Date(iso)
-    if (s.includes("T") || s.includes("Z") || s.length > 10) {
-      const d = new Date(s);
-      if (isNaN(d.getTime())) return new Date(NaN);
-      return toLocalDateOnly(d);
-    }
-
-    // otherwise expect "YYYY-MM-DD"
-    const parts = s.split("-");
-    const y = Number(parts[0]);
-    const m = Number(parts[1]);
-    const day = Number(parts[2]);
-    if ([y, m, day].some((n) => !Number.isFinite(n))) return new Date(NaN);
-    return new Date(y, m - 1, day);
-  }
-
-  function toLocalDateOnly(d: Date) {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  }
 
 
 
@@ -290,21 +311,7 @@ export default function PromotionsModal({
     return dateStr.slice(0, 10); // YYYY-MM-DD
   }
 
-  // getAvailableOccasionsFrom
-  function getAvailableOccasionsFrom(occasions: Occasion[]) {
-    const now = toLocalDateOnly(new Date());
-    return occasions.filter((o) => {
-      try {
-        const s = parseAnyDateToLocalMidnight(o.windowStart);
-        const e = parseAnyDateToLocalMidnight(o.windowEnd);
-        if (isNaN(s.getTime()) || isNaN(e.getTime())) return false;
-        if (e < s) e.setFullYear(e.getFullYear() + 1);
-        return now >= toLocalDateOnly(s) && now <= toLocalDateOnly(e);
-      } catch {
-        return false;
-      }
-    });
-  }
+  // getAvailableOccasionsFrom moved outside
 
   function normalizePromotionItem(p: any): PromotionPayload {
     if (!p || typeof p !== "object") return p;

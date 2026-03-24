@@ -10,8 +10,10 @@ import Header from "../../components/feed/profile/header";
 import CreateNoteModal from "../../components/notes/createNoteModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
+import { toggleSocialPostLike } from "@/src/lib/api/social";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { API_BASE_URL } from "@/src/lib/config";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,10 +41,10 @@ type Post = {
   rawCreatedAt?: string;
   apiId?: number;
   allMedia?: string[];
+  location?: string | null;
 };
 
 type Props = { postCount?: number };
-const STICKY_BUFFER = 10; // px — prevents shaking
 
 
 const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
@@ -94,6 +96,7 @@ const mapApiPost = (p: any): Post => {
     noteConfig: p.config,
     rawCreatedAt: p.created_at,
     allMedia,
+    location: p.location,
   };
 };
 
@@ -147,14 +150,14 @@ const PostCard = React.memo(({
   return (
     <article
       onClick={() => openPostWithUrl(post)}
-      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
       style={{
         willChange: "transform, opacity",
         contentVisibility: "auto",
         containIntrinsicSize: "auto 400px"
       }}
     >
-      <div className="relative w-full bg-slate-100 overflow-hidden post-media min-h-[200px]">
+      <div className="relative w-full bg-slate-100 overflow-hidden post-media min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[350px]">
         <motion.div
           initial={entryVariants.initial}
           animate={entryVariants.animate}
@@ -171,7 +174,7 @@ const PostCard = React.memo(({
 
           {post.coverType === "note" && !post.src ? (
             <div
-              className="w-full h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+              className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
               style={getNoteStyles(post.noteConfig)}
             >
               {(() => {
@@ -228,7 +231,7 @@ const PostCard = React.memo(({
         <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
           <div className="flex flex-col items-center gap-2 opacity-20">
             <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-            <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Opening...</span>
+            <span className="text-[10px] font-bold  text-slate-400 ">Opening...</span>
           </div>
         </div>
       </div>
@@ -326,14 +329,14 @@ const ProductCard = React.memo(({
     <article
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
-      className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
       style={{
         willChange: "transform, opacity",
         contentVisibility: "auto",
         containIntrinsicSize: "auto 400px"
       }}
     >
-      <div className="relative w-full bg-slate-100 overflow-hidden post-media min-h-[220px]">
+      <div className="relative w-full bg-slate-100 overflow-hidden post-media min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px]">
         <motion.div
           initial={entryVariants.initial}
           animate={entryVariants.animate}
@@ -388,7 +391,7 @@ const ProductCard = React.memo(({
         <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
           <div className="flex flex-col items-center gap-2 opacity-20">
             <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-            <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Opening...</span>
+            <span className="text-[10px] font-bold  text-slate-400 ">Opening...</span>
           </div>
         </div>
       </div>
@@ -439,15 +442,15 @@ const ProductCard = React.memo(({
         </h3>
         <div className="mt-2 min-h-[14px]">
           {isPromoActive ? (
-            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
+            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1  tracking-tighter">
               {p.promo_discount}% OFF
             </span>
           ) : p.sale_type ? (
-            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
+            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1  tracking-tighter">
               {p.sale_discount}% Off
             </span>
           ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tighter">
+            <span className="text-[9px] font-bold text-rose-500  tracking-tighter">
               Only {Number(p.total_quantity)} Left
             </span>
           ) : null}
@@ -557,6 +560,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [fetchingProduct, setFetchingProduct] = useState(false);
   const [productLikeData, setProductLikeData] = useState<Record<number, { liked: boolean, count: number }>>(PROFILE_CACHE.productLikeData);
   const [fetchingProductId, setFetchingProductId] = useState<number | null>(null);
+  const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
   const [socialModalOpen, setSocialModalOpen] = useState(false);
   const [activeSocialTab, setActiveSocialTab] = useState<"friends" | "followers" | "following" | "recommend" | "liked">("followers");
 
@@ -571,6 +575,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
   const auth = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Tabs state & animation
   const [activeTabIndex, setActiveTabIndex] = useState(PROFILE_CACHE.activeTabIndex);
@@ -580,6 +585,18 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     base.push("Liked");
     return base;
   }, [profileApi?.is_business_owner]);
+
+  useEffect(() => {
+    const tabName = searchParams.get("tab");
+    if (tabName) {
+      const idx = tabs.indexOf(tabName);
+      if (idx !== -1) setActiveTabIndex(idx);
+    }
+  }, [searchParams, tabs]);
+
+  useEffect(() => {
+    PROFILE_CACHE.activeTabIndex = activeTabIndex;
+  }, [activeTabIndex]);
 
   // history push tracking for modal
   const pushedRef = useRef(false);
@@ -912,21 +929,72 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     }
   };
 
-  const toggleLike = (postId: string | number) => {
-    setMediaPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
-          : p
-      )
-    );
-    setNotePosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
-          : p
-      )
-    );
+  const toggleLike = async (postId: string | number) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+
+    let targetPost: Post | undefined;
+    const all = [...mediaPosts, ...notePosts, ...likedItems];
+    targetPost = all.find(p => p.id === postId && !p.isProduct);
+
+    if (!targetPost) return;
+
+    const wasLiked = targetPost.liked;
+    const newLiked = !wasLiked;
+    const diff = newLiked ? 1 : -1;
+
+    // Optimistic UI updates
+    const updatePost = (p: Post) =>
+      p.id === postId ? { ...p, liked: newLiked, likeCount: Math.max(0, p.likeCount + diff) } : p;
+
+    setMediaPosts(prev => prev.map(updatePost));
+    setNotePosts(prev => prev.map(updatePost));
+    setLikedItems(prev => prev.map(p => (p.id === postId && !p.isProduct) ? updatePost(p) : p));
+
+    // Update global total likes count if it's the user's own post
+    const currentUserId = profileApi?.user?.user_id || profileApi?.user?.id;
+    if (String(targetPost.user.id) === String(currentUserId)) {
+      setProfileApi((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          stats: {
+            ...prev.stats,
+            total_likes: Math.max(0, (Number(prev.stats?.total_likes) || 0) + diff)
+          }
+        };
+      });
+    }
+
+    try {
+      const res = await toggleSocialPostLike(postId, token);
+      const finalUpdate = (p: Post) =>
+        p.id === postId ? { ...p, liked: res.data.liked, likeCount: res.data.likes_count } : p;
+      setMediaPosts(prev => prev.map(finalUpdate));
+      setNotePosts(prev => prev.map(finalUpdate));
+      setLikedItems(prev => prev.map(p => (p.id === postId && !p.isProduct) ? finalUpdate(p) : p));
+    } catch (err) {
+      console.error("Like error", err);
+      // Revert optimism if failed
+      const revertPost = (p: Post) =>
+        p.id === postId ? { ...p, liked: wasLiked, likeCount: targetPost!.likeCount } : p;
+      setMediaPosts(prev => prev.map(revertPost));
+      setNotePosts(prev => prev.map(revertPost));
+      setLikedItems(prev => prev.map(p => (p.id === postId && !p.isProduct) ? revertPost(p) : p));
+
+      if (String(targetPost.user.id) === String(currentUserId)) {
+        setProfileApi((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              total_likes: Math.max(0, (Number(prev.stats?.total_likes) || 0) - diff)
+            }
+          };
+        });
+      }
+    }
   };
 
   const handleProductLike = async (e: React.MouseEvent, productId: number, baseCount: number) => {
@@ -936,12 +1004,34 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
     const current = productLikeData[productId] || { liked: false, count: baseCount };
     const newLiked = !current.liked;
-    const newCount = newLiked ? current.count + 1 : Math.max(0, current.count - 1);
+    const diff = newLiked ? 1 : -1;
+    const newCount = Math.max(0, current.count + diff);
+
+    // Find the product in vendorProducts or likedItems to check ownership
+    const targetProduct = [...vendorProducts, ...likedItems].find(p => p.product_id === productId && p.isProduct);
 
     setProductLikeData(prev => ({
       ...prev,
       [productId]: { liked: newLiked, count: newCount }
     }));
+
+    // Update likedItems optimistically
+    setLikedItems(prev => prev.map(p => (p.product_id === productId && p.isProduct) ? { ...p, isLiked: newLiked, likes_count: newCount } : p));
+
+    // Update global total likes count if it's the user's own product
+    const currentBusinessId = profileApi?.business?.business_id || profileApi?.business?.id;
+    if (targetProduct && String(targetProduct.business_id) === String(currentBusinessId)) {
+      setProfileApi((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          stats: {
+            ...prev.stats,
+            total_likes: Math.max(0, (Number(prev.stats?.total_likes) || 0) + diff)
+          }
+        };
+      });
+    }
 
     try {
       const res = await toggleProductLike(productId, token);
@@ -949,14 +1039,31 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         ...prev,
         [productId]: { liked: res.data.liked, count: res.data.likes_count }
       }));
+      setLikedItems(prev => prev.map(p => (p.product_id === productId && p.isProduct) ? { ...p, isLiked: res.data.liked, likes_count: res.data.likes_count } : p));
     } catch (err) {
       console.error("Like error", err);
       setProductLikeData(prev => ({ ...prev, [productId]: current }));
+      setLikedItems(prev => prev.map(p => (p.product_id === productId && p.isProduct) ? { ...p, isLiked: current.liked, likes_count: current.count } : p));
+
+      if (targetProduct && String(targetProduct.business_id) === String(currentBusinessId)) {
+        setProfileApi((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              total_likes: Math.max(0, (Number(prev.stats?.total_likes) || 0) - diff)
+            }
+          };
+        });
+      }
     }
   };
 
   const handleProductClick = async (productId: number, businessName?: string, e?: React.MouseEvent) => {
     if (fetchingProductId) return;
+    if (e) setClickPos({ x: e.clientX, y: e.clientY });
+    else setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
     const token = localStorage.getItem("token") || "";
 
     try {
@@ -964,51 +1071,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       const res = await fetchProductById(productId, token);
       if (res?.data?.product) {
         const dbProduct = res.data.product;
-        const mappedPayload: PreviewPayload = {
-          productId: dbProduct.product_id,
-          title: dbProduct.title,
-          description: dbProduct.description,
-          category: dbProduct.category,
-          hasVariants: dbProduct.has_variants === 1,
-          price: dbProduct.price || "",
-          quantity: dbProduct.quantity ?? "",
-          samePriceForAll: false,
-          sharedPrice: null,
-          businessId: Number(dbProduct.business_id),
-          productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) })),
-          productVideo: (dbProduct.media || []).find((m: any) => m.type === "video") ? { name: "vid", url: formatUrl(dbProduct.media.find((m: any) => m.type === "video")!.url) } : null,
-          useCombinations: dbProduct.use_combinations === 1,
-          params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-          variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-            id: String(g.group_id),
-            title: g.title,
-            allowImages: g.allow_images === 1,
-            entries: (g.options || []).map((o: any) => {
-              const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
-              return {
-                id: String(o.option_id),
-                name: o.name,
-                price: o.price,
-                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-              };
-            })
-          })),
-          skus: (dbProduct.skus || []).map((s: any) => {
-            let vIds: string[] = [];
-            try { vIds = typeof s.variant_option_ids === 'string' ? JSON.parse(s.variant_option_ids) : s.variant_option_ids; } catch (e) { }
-            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
-            return {
-              id: String(s.sku_id),
-              sku: s.sku_code || "",
-              name: "Combination",
-              price: s.price,
-              quantity: inventoryMatch ? inventoryMatch.quantity : 0,
-              enabled: s.status === 'active',
-              variantOptionIds: (vIds || []).map(String)
-            } as ProductSku;
-          })
-        };
+        const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
         const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
         if (baseInv) mappedPayload.quantity = baseInv.quantity;
         setSelectedProductPayload(mappedPayload);
@@ -1087,48 +1150,28 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
   const tabsWrapperRef = useRef<HTMLDivElement | null>(null);
   const tabsInnerRef = useRef<HTMLDivElement | null>(null);
-  const tabsPlaceholderRef = useRef<HTMLDivElement | null>(null);
-  const [stickyStyle, setStickyStyle] = useState<React.CSSProperties | undefined>(undefined);
-  const tabsInitialTopRef = useRef<number | null>(null);
+  const [navbarHeight, setNavbarHeight] = useState(0);
 
   const findNavbar = () =>
     document.querySelector("header, [role='banner'], .main-navbar") as HTMLElement | null;
 
-  const updateStickyState = () => {
-    const el = tabsWrapperRef.current;
-    const initialTop = tabsInitialTopRef.current;
-    if (!el || initialTop === null) return;
-
-    const navbar = findNavbar();
-    const navbarHeight = navbar ? navbar.offsetHeight : 0;
-    const shouldStick = window.scrollY + navbarHeight >= initialTop + STICKY_BUFFER;
-
-    if (shouldStick) {
-      const rect = el.getBoundingClientRect();
-      setStickyStyle({
-        position: "fixed",
-        top: `${navbarHeight}px`,
-        left: `${rect.left}px`,
-        width: `${rect.width}px`,
-        zIndex: 60,
-      });
-      if (tabsPlaceholderRef.current) tabsPlaceholderRef.current.style.height = `${rect.height}px`;
-    } else {
-      setStickyStyle(undefined);
-      if (tabsPlaceholderRef.current) tabsPlaceholderRef.current.style.height = "0px";
-    }
-  };
-
   useLayoutEffect(() => {
-    const el = tabsWrapperRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    tabsInitialTopRef.current = rect.top + window.scrollY;
-    window.addEventListener("scroll", updateStickyState, { passive: true });
-    window.addEventListener("resize", updateStickyState);
+    const updateNavbarHeight = () => {
+      const navbar = findNavbar();
+      if (navbar) {
+        setNavbarHeight(navbar.offsetHeight);
+        document.documentElement.style.setProperty('--navbar-height', `${navbar.offsetHeight}px`);
+      }
+    };
+    
+    updateNavbarHeight();
+    window.addEventListener("resize", updateNavbarHeight);
+    // Also update on scroll in case navbar has transition
+    window.addEventListener("scroll", updateNavbarHeight, { passive: true });
+    
     return () => {
-      window.removeEventListener("scroll", updateStickyState);
-      window.removeEventListener("resize", updateStickyState);
+      window.removeEventListener("resize", updateNavbarHeight);
+      window.removeEventListener("scroll", updateNavbarHeight);
     };
   }, []);
 
@@ -1165,22 +1208,23 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
 
   const TabsBar = (
-    <>
-      <div ref={tabsPlaceholderRef} style={{ height: 0, transition: "height 160ms ease" }} />
-      <div ref={tabsWrapperRef} className="bg-white p-3 flex justify-center" style={stickyStyle}>
-        <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto">
-          {tabs.map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setActiveTabIndex(i)}
-              className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+    <div 
+      ref={tabsWrapperRef} 
+      className="bg-white p-3 flex justify-center sticky z-50 border-b border-slate-100" 
+      style={{ top: `${navbarHeight}px` }}
+    >
+      <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto no-scrollbar">
+        {tabs.map((t, i) => (
+          <button
+            key={t}
+            onClick={() => setActiveTabIndex(i)}
+            className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
-    </>
+    </div>
   );
 
   const TabPanes = (
@@ -1338,6 +1382,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         <ProductPreviewModal
           open={productModalOpen}
           payload={selectedProductPayload}
+          origin={clickPos}
           onClose={() => {
             setProductModalOpen(false);
             setSelectedProductPayload(null);

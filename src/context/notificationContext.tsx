@@ -70,7 +70,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 });
 
                 socket.on("connect_error", (err) => {
-                    console.error("Socket connection error:", err.message);
+                    if (!navigator.onLine) {
+                        Swal.fire({
+                            title: "Connection Lost",
+                            text: "Please check your internet connection.",
+                            icon: "warning",
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 3000,
+                        });
+                    } else {
+                        console.error("Socket connection error:", err.message);
+                    }
                 });
 
                 socket.on("new-order", (data: any) => {
@@ -105,7 +117,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     console.log("Received order-status-update:", data);
                     Swal.fire({
                         title: `<strong>${data.title}</strong>`,
-                        icon: data.status === 'delivered' ? "success" : "info",
+                        icon: (data.status === 'delivered' || data.status === 'cancelled') ? "success" : "info",
                         text: data.message,
                         showCloseButton: true,
                         focusConfirm: false,
@@ -149,11 +161,11 @@ function StoredNotificationAlarmer({ notifications, markAsRead }: { notification
                 if (!displayedIds.has(notif.id)) {
                     // We only want to show popups for 'new_order' types or all?
                     // Let's show all stored as alerts as requested
-                    if (notif.type === 'escrow_release' || notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped') {
-                        const isOrderUpdate = notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped';
+                    if (notif.type === 'escrow_release' || notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped' || notif.type === 'order_refunded') {
+                        const isOrderUpdate = notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped' || notif.type === 'order_refunded';
                         Swal.fire({
                             title: `<strong>${notif.title}</strong>`,
-                            icon: (notif.type === 'order_delivered' || notif.type === 'escrow_release') ? "success" : "info",
+                            icon: (notif.type === 'order_delivered' || notif.type === 'escrow_release' || notif.type === 'order_refunded') ? "success" : "info",
                             html: notif.message,
                             showCloseButton: true,
                             focusConfirm: false,

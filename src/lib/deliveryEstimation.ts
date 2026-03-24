@@ -11,13 +11,14 @@ export interface ShippingPolicy {
 export interface EstimationResult {
     distance_km: number;
     travel_time_hours: number;
+    prep_time_hours: number;
     estimated_delivery_time: Date;
     shipping_deadline: Date;
     is_available: boolean;
     message?: string;
 }
 
-const AVERAGE_DELIVERY_SPEED_KMH = 25;
+const AVERAGE_DELIVERY_SPEED_KMH = 24; // 2.5 minutes per km
 const LOGISTICS_BUFFER_HOURS = 0.5; // 30 minutes
 
 import { getDistance } from "geolib";
@@ -71,10 +72,11 @@ export function estimateDelivery(
         return {
             distance_km: parseFloat(distance.toFixed(2)),
             travel_time_hours: 0,
+            prep_time_hours: 0,
             estimated_delivery_time: new Date(0),
             shipping_deadline: new Date(0),
             is_available: false,
-            message: "Delivery not available for this address",
+            message: `Delivery available within ${maxRadius} km\nDistance to you: ${parseFloat(distance.toFixed(1))} km\nThis vendor does not deliver to your location.`,
         };
     }
 
@@ -85,11 +87,14 @@ export function estimateDelivery(
     const totalDeliveryTimeHours = avgPrepTimeHours + travelTimeHours + LOGISTICS_BUFFER_HOURS;
 
     const estimatedDeliveryTime = new Date(orderTime.getTime() + totalDeliveryTimeHours * 60 * 60 * 1000);
-    const shippingDeadline = new Date(orderTime.getTime() + promiseShipDurationHours * 60 * 60 * 1000);
+    // Adjust promise if estimation exceeds it (Requirement 5)
+    const effectivePromiseHours = Math.max(promiseShipDurationHours, totalDeliveryTimeHours);
+    const shippingDeadline = new Date(orderTime.getTime() + effectivePromiseHours * 60 * 60 * 1000);
 
     return {
         distance_km: parseFloat(distance.toFixed(2)),
         travel_time_hours: parseFloat(travelTimeHours.toFixed(2)),
+        prep_time_hours: avgPrepTimeHours,
         estimated_delivery_time: estimatedDeliveryTime,
         shipping_deadline: shippingDeadline,
         is_available: true,

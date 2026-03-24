@@ -15,6 +15,7 @@ type PolicyListProps = {
   payload?: any;
   selectedOptions?: Record<string, string>;
   onSelectClick?: () => void;
+  onAddressClick?: () => void;
   estimation?: any;
   storedAddress?: any;
 };
@@ -46,15 +47,21 @@ function formatDuration(value: number | string | undefined | null, unit?: string
   }
 
   // treat everything else as hours
-  const totalHours = Math.round(n);
-  if (totalHours < 24) return `${totalHours} ${totalHours === 1 ? "hour" : "hours"}`;
+  const totalMinutes = Math.round(n * 60);
+  if (totalMinutes < 60) return `${totalMinutes} ${totalMinutes === 1 ? "minute" : "minutes"}`;
 
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-  if (days === 0 && hours === 0) return "less than an hour";
-  if (hours === 0) return `${days} ${days === 1 ? "day" : "days"}`;
-  if (days === 0) return `${hours} ${hours === 1 ? "hour" : "hours"}`;
-  return `${days} ${days === 1 ? "day" : "days"} ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const remainingMinutes = totalMinutes % (24 * 60);
+  const hours = Math.floor(remainingMinutes / 60);
+  const mins = remainingMinutes % 60;
+
+  let parts = [];
+  if (days > 0) parts.push(`${days} ${days === 1 ? "day" : "days"}`);
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
+  if (mins > 0) parts.push(`${mins} ${mins === 1 ? "minute" : "minutes"}`);
+
+  if (parts.length === 0) return "less than a minute";
+  return parts.join(" ");
 }
 
 export default function PolicyList({
@@ -67,9 +74,35 @@ export default function PolicyList({
   onSelectClick,
   estimation,
   storedAddress,
+  onAddressClick,
 }: PolicyListProps) {
   const policy = businessData?.policy ?? null;
   const business = businessData?.business ?? null;
+
+  const effectiveReturnPolicy = React.useMemo(() => {
+    if (payload?.policyOverrides && !payload.policyOverrides.useStoreDefaultReturn) {
+      const over = payload.policyOverrides.returnPolicy;
+      return {
+        seven_day_no_reason: (over?.['7dayNoReasonReturn'] || over?.sevenDayNoReasonReturn) ? 1 : 0,
+        rapid_refund: over?.rapidRefund ? 1 : 0,
+        return_shipping_subsidy: over?.returnShippingSubsidy ? 1 : 0,
+        return_window: over?.returnWindow ?? 3
+      };
+    }
+    return policy?.returns ?? {};
+  }, [payload?.policyOverrides, policy]);
+
+  const effectiveShippingPolicies = React.useMemo(() => {
+    if (payload?.policyOverrides && !payload.policyOverrides.useStoreDefaultShipping) {
+      const over = payload.policyOverrides.shippingPolicy;
+      return [
+        { kind: "avg", value: over?.avgDuration, unit: over?.avgUnit },
+        { kind: "promise", value: over?.promiseDuration, unit: over?.promiseUnit },
+        { kind: "delivery_radius_km", value: over?.radiusKm, unit: "km" }
+      ] as any[];
+    }
+    return (policy?.shipping || policy?.shipping_duration) ?? [];
+  }, [payload?.policyOverrides, policy]);
 
   const vendorLoc = {
     latitude: Number(businessData?.business?.latitude || (businessData?.business as any)?.lat),
@@ -78,26 +111,28 @@ export default function PolicyList({
 
   // Use estimation for durations if available
   const displayAvgDuration = React.useMemo(() => {
-    if (estimation && !estimation.is_available) return "Out of delivery range";
+    if (estimation && !estimation.is_available) return "This vendor does not deliver to your location.";
     if (estimation?.is_available && estimation.estimated_delivery_time.getTime() > 0) {
       const now = new Date();
       const diffMs = estimation.estimated_delivery_time.getTime() - now.getTime();
-      return formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours");
+      return `Ships within ${formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours")}`;
     }
-    const shippingAvg = (policy?.shipping || policy?.shipping_duration)?.find((s: any) => s.kind === "avg" || s.type === "avg");
-    return shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : "8 hours";
-  }, [estimation, policy]);
+    const shippingAvg = effectiveShippingPolicies.find((s: any) => s.kind === "avg" || s.type === "avg");
+    const val = shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : "8 hours";
+    return `Ships within ${val} on average`;
+  }, [estimation, effectiveShippingPolicies]);
 
   const displayPromiseDuration = React.useMemo(() => {
     if (estimation && !estimation.is_available) return "N/A";
     if (estimation?.is_available && estimation.shipping_deadline.getTime() > 0) {
       const now = new Date();
       const diffMs = estimation.shipping_deadline.getTime() - now.getTime();
-      return formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours");
+      return `Promise to ship within ${formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours")}`;
     }
-    const shippingPromise = (policy?.shipping || policy?.shipping_duration)?.find((s: any) => s.kind === "promise" || s.type === "promise");
-    return shippingPromise ? formatDuration(shippingPromise.value, shippingPromise.unit) : "48 hours";
-  }, [estimation, policy]);
+    const shippingPromise = effectiveShippingPolicies.find((s: any) => s.kind === "promise" || s.type === "promise");
+    const val = shippingPromise ? formatDuration(shippingPromise.value, shippingPromise.unit) : "48 hours";
+    return `Promise to ship within ${val}`;
+  }, [estimation, effectiveShippingPolicies]);
 
   const selectedText = React.useMemo(() => {
     if (!payload?.hasVariants || !payload?.variantGroups?.length) return null;
@@ -115,19 +150,18 @@ export default function PolicyList({
   if (error) return <div className="mt-2 text-xs text-rose-600">{error}</div>;
   if (!businessData || !policy) return <div className="mt-2 text-xs text-slate-400">No business details available</div>;
 
-  const shippingArray = Array.isArray(policy?.shipping) ? policy.shipping : Array.isArray(policy?.shipping_duration) ? policy.shipping_duration : [];
+  const shippingArray = effectiveShippingPolicies;
   const shippingAvg = shippingArray.find((s: any) => s.kind === "avg" || s.type === "avg") ?? null;
   const shippingPromise = shippingArray.find((s: any) => s.kind === "promise" || s.type === "promise") ?? null;
   const deliveryRadius = shippingArray.find((s: any) => s.kind === "delivery_radius_km" || s.type === "delivery_radius_km") ?? null;
   const deliveryNotice = policy?.core?.delivery_notice ?? null;
-  const returns = policy?.returns ?? {};
+  const returns = effectiveReturnPolicy;
   const addressParts = [
     policy?.market_affiliation?.market_name || null,
-    policy?.address?.line1,
     policy?.address?.city,
     policy?.address?.state,
   ].filter(Boolean);
-  const fromText = addressParts.join(", ") || business?.business_address || "Unknown";
+  const fromText = addressParts.join(", ") || "Unknown";
 
   // Build a shipping-focused modal body
   const buildShippingInfoBody = () => {
@@ -135,12 +169,15 @@ export default function PolicyList({
     lines.push(`From: ${fromText}`);
     lines.push("");
 
-    lines.push(`Average handling time: We aim to ship within ${displayAvgDuration} on average.`);
-    lines.push(`Shipping promise: We promise to ship within ${displayPromiseDuration}.`);
+    lines.push(`Average handling time: ${displayAvgDuration}`);
+    lines.push(displayPromiseDuration);
 
-    if (shippingPromise?.notes) {
+    if (estimation?.is_available) {
       lines.push("");
-      lines.push(`Notes: ${String(shippingPromise.notes)}`);
+      lines.push(`--- Delivery Breakdown ---`);
+      lines.push(`Distance: ${estimation.distance_km} km`);
+      lines.push(`Vendor prep time: ${formatDuration(estimation.prep_time_hours, "hours")}`);
+      lines.push(`Rider travel time: ${formatDuration(estimation.travel_time_hours, "hours")}`);
     }
 
     if (deliveryRadius) {
@@ -201,10 +238,6 @@ export default function PolicyList({
 
   return (
     <div className="rounded-lg mt-2 bg-white">
-      <div className="flex items-center justify-between ">
-        <div className="text-sm font-medium text-slate-800">Business policies</div>
-      </div>
-
       <ul className="mt-3 space-y-2 text-sm text-slate-700">
         {/* Shipping information */}
         <li>
@@ -218,17 +251,26 @@ export default function PolicyList({
               <div className="flex items-start gap-2 min-w-0">
                 <TruckIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
                 <div className="min-w-0 ">
-                  <div className="font-medium truncate text-emerald-600 flex truncate">
-                    Ships within {displayAvgDuration} in average <div className="text-slate-600 truncate"> | Promise to ship within {displayPromiseDuration} | {deliveryRadius ? `Delivers up to ${deliveryRadius.value} km` : "Delayed compensation guaranteed"} </div>
+                  <div className="flex items-center gap-1.5 text-xs font-medium truncate text-slate-600">
+                    <span className="text-emerald-600 truncate shrink-0">{displayAvgDuration}</span>
+                    <span className="text-slate-300 shrink-0">|</span>
+                    <span className="truncate">{displayPromiseDuration}</span>
                   </div>
-                  <div className="text-xs mt-1 truncate text-slate-500">
-                    {fromText} · {estimation ? (estimation.is_available ? `${estimation.distance_km} km away` : "Address out of range") : (storedAddress ? "Calculating..." : "Set address to see distance")}
+                  <div
+                    className="mt-1 flex flex-col group cursor-pointer"
+                  >
+                    <span className="text-[11px] text-slate-400 group-hover:text-red-500 transition-colors leading-snug truncate">
+                      {fromText}
+                    </span>
+                    <span className="font-medium text-[10px] text-slate-500 mt-0.5">
+                      {estimation?.is_available ? `${estimation.distance_km} km away | Free shipping` : storedAddress ? `· ${estimation?.message || "Calculating..."}` : "· Set address to see distance | Free shipping"}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
+            <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
           </button>
         </li>
         {/* Returns / subsidy */}
@@ -284,7 +326,7 @@ export default function PolicyList({
               </div>
             </div>
 
-            <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
+            <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
           </button>
         </li>
 
@@ -306,7 +348,7 @@ export default function PolicyList({
                 </div>
               </div>
 
-              <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
+              <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
             </button>
           </li>
         )}
@@ -330,7 +372,7 @@ export default function PolicyList({
                 </div>
               </div>
 
-              <ChevronRightIcon className="w-5 h-5 text-slate-400 shrink-0" />
+              <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
             </button>
           </li>
         )}

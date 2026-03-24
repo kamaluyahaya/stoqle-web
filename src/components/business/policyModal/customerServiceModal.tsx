@@ -178,8 +178,8 @@ export default function CustomerServiceModal({
               setReplyPreset(opt);
             }}
             className={`text-left p-3 rounded-lg border ${!useCustom && replyPreset === opt
-                ? "border-rose-400 bg-rose-50"
-                : "border-slate-100 bg-white hover:bg-slate-50"
+              ? "border-rose-400 bg-rose-50"
+              : "border-slate-100 bg-white hover:bg-slate-50"
               }`}
           >
             <div className="text-sm font-medium">{opt}</div>
@@ -293,7 +293,7 @@ export default function CustomerServiceModal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

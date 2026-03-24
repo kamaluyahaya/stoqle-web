@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { PreviewPayload } from "@/src/types/product";
 import VideoPlayer from "@/src/components/posts/videoPlayer";
 import { ChevronLeftIcon, ChevronRightIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { motion, AnimatePresence } from "framer-motion";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 export default function MediaViewer({
   main,
@@ -17,102 +20,114 @@ export default function MediaViewer({
   onIndexChange: (index: number) => void;
 }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [direction, setDirection] = useState(0);
 
-  const handlePrev = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedIndex > 0) {
-      onIndexChange(selectedIndex - 1);
+  const paginate = (newDirection: number) => {
+    setDirection(newDirection);
+    if (newDirection === 1) {
+      if (selectedIndex < images.length - 1) {
+        onIndexChange(selectedIndex + 1);
+      } else {
+        onIndexChange(0);
+      }
     } else {
-      onIndexChange(images.length - 1);
+      if (selectedIndex > 0) {
+        onIndexChange(selectedIndex - 1);
+      } else {
+        onIndexChange(images.length - 1);
+      }
     }
   };
 
-  const handleNext = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedIndex < images.length - 1) {
-      onIndexChange(selectedIndex + 1);
-    } else {
-      onIndexChange(0);
-    }
+  const variants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 300 : -300,
+      opacity: 0
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1
+    },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction < 0 ? 300 : -300,
+      opacity: 0
+    })
+  };
+
+  const swipeConfidenceThreshold = 10000;
+  const swipePower = (offset: number, velocity: number) => {
+    return Math.abs(offset) * velocity;
   };
 
   return (
-    <div className="flex-1 min-h-[400px] bg-slate-100 flex items-center justify-center relative overflow-hidden group">
-      {main && main.url ? (
-        <div
-          className="w-full h-full cursor-zoom-in"
-          onClick={() => setIsFullScreen(true)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={main.url} alt={main.name ?? payload.title} className="w-full h-full object-contain" />
+    <div className="w-full h-full flex-1 min-h-[400px] lg:min-h-0 aspect-square lg:aspect-auto flex items-center justify-center relative overflow-hidden group bg-slate-100">
+      <AnimatePresence initial={false} custom={direction}>
+        {main && main.url ? (
+          <motion.div
+            key={selectedIndex}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: "spring", stiffness: 300, damping: 30 },
+              opacity: { duration: 0.2 }
+            }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={1}
+            onDragEnd={(e, { offset, velocity }) => {
+              const swipe = swipePower(offset.x, velocity.x);
 
-          {/* Mobile indicator for count */}
-          <div className="absolute top-4 right-4 bg-black/50 text-white text-[10px] font-bold px-2 py-1 rounded-full lg:hidden">
-            {selectedIndex + 1} / {images.length}
-          </div>
-        </div>
-      ) : payload.productVideo?.url ? (
-        <VideoPlayer
-          src={payload.productVideo.url}
-          className="w-full h-full object-contain bg-black"
-          autoplay={true}
-          loop={true}
-          mutedByDefault={true}
-          playsInline={true}
-        />
-      ) : (
-        <div className="text-sm text-slate-400 mt-20">No preview available</div>
-      )}
-
-      {/* Full Screen Overlay */}
-      {isFullScreen && main && main.url && (
-        <div
-          className="fixed inset-0 z-[2000] bg-black flex items-center justify-center"
-          onClick={() => setIsFullScreen(false)}
-        >
-          {/* Top Counter */}
-          <div className="absolute top-0 left-0 right-0 p-6 flex items-center justify-between text-white z-50">
-            <div className="text-sm font-bold tracking-widest bg-black/20 backdrop-blur-sm px-4 py-2 rounded-full border border-white/10">
-              {selectedIndex + 1} / {images.length}
-            </div>
-            <button
-              onClick={() => setIsFullScreen(false)}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-colors shadow-lg"
-            >
-              <XMarkIcon className="w-6 h-6" />
-            </button>
-          </div>
-
-          {/* Navigation Arrows */}
-          {images.length > 1 && (
-            <>
-              <button
-                onClick={handlePrev}
-                className="absolute left-4 z-50 p-3 bg-black/20 hover:bg-white/10 text-white rounded-full backdrop-blur-md transition-all border border-white/5 active:scale-95"
-              >
-                <ChevronLeftIcon className="w-6 h-6" />
-              </button>
-              <button
-                onClick={handleNext}
-                className="absolute right-4 z-50 p-3 bg-black/20 hover:bg-white/10 text-white rounded-full backdrop-blur-md transition-all border border-white/5 active:scale-95"
-              >
-                <ChevronRightIcon className="w-6 h-6" />
-              </button>
-            </>
-          )}
-
-          {/* Large Image */}
-          <div className="w-full h-full p-4 flex items-center justify-center">
+              if (swipe < -swipeConfidenceThreshold) {
+                paginate(1);
+              } else if (swipe > swipeConfidenceThreshold) {
+                paginate(-1);
+              }
+            }}
+            className="absolute inset-0 w-full h-full flex items-center justify-center cursor-zoom-in"
+            onClick={() => setIsFullScreen(true)}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={images[selectedIndex]?.url}
-              alt="Zoomed product"
-              className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
+            <img src={main.url} alt={main.name ?? payload.title} className="w-full h-full object-contain pointer-events-none" />
+          </motion.div>
+        ) : payload.productVideo?.url ? (
+          <div className="w-full h-full absolute inset-0">
+            <VideoPlayer
+              src={payload.productVideo.url}
+              className="w-full h-full object-contain bg-black"
+              autoplay={true}
+              loop={true}
+              mutedByDefault={true}
+              playsInline={true}
             />
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-sm text-slate-400 mt-20">No preview available</div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile indicator for count */}
+      <div className="absolute bottom-4 right-4 bg-black/50 text-white text-[10px] font-bold px-4 py-1.5 rounded-full lg:hidden z-20">
+        {selectedIndex + 1} / {images.length}
+      </div>
+
+      {/* Full Screen Lightbox Overlay */}
+      <Lightbox
+        open={isFullScreen}
+        close={() => setIsFullScreen(false)}
+        index={selectedIndex}
+        on={{ view: ({ index }) => onIndexChange(index) }}
+        slides={images.map(img => ({ src: img.url || "" }))}
+        portal={{ root: typeof document !== "undefined" ? document.body : undefined }}
+        styles={{
+          root: { zIndex: 30000 },
+          container: { backgroundColor: "rgba(0,0,0,0.95)" }
+        }}
+      />
     </div>
   );
 }

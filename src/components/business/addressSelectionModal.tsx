@@ -153,11 +153,11 @@ export default function AddressSelectionModal({
 
           {/* sheet */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full sm:w-[640px] max-h-[84vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            initial={{ y: "100%", opacity: 0.5 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0.5 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="relative w-full sm:w-[500px] max-h-[85vh] bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] overflow-hidden flex flex-col"
           >
             {/* header */}
             <div className="px-4 py-4">
@@ -246,10 +246,10 @@ export default function AddressSelectionModal({
                           >
                             <div
                               className={`text-sm ${isEnabled
-                                  ? isSelected
-                                    ? "text-red-600 font-semibold"
-                                    : "text-slate-900"
-                                  : "text-slate-400"
+                                ? isSelected
+                                  ? "text-red-600 font-semibold"
+                                  : "text-slate-900"
+                                : "text-slate-400"
                                 }`}
                             >
                               {c}

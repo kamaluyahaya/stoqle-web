@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import React from "react";
 import { useAuth } from "@/src/context/authContext";
 import {
@@ -12,6 +12,13 @@ import {
   ChatBubbleLeftRightIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
+import {
+  HomeIcon as HomeIconSolid,
+  ShoppingBagIcon as ShoppingBagIconSolid,
+  PlusIcon as PlusIconSolid,
+  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
+  UserCircleIcon as UserCircleIconSolid,
+} from "@heroicons/react/24/solid";
 
 type NavItem = {
   id: string;
@@ -27,6 +34,7 @@ export default function BottomNav() {
   const auth = useAuth();
   const { unreadCount } = useChat();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const isLoggedIn =
     !!(auth && (auth.user || (auth as any).token || (auth as any).isAuthenticated || (auth as any).loggedIn));
@@ -37,10 +45,14 @@ export default function BottomNav() {
   if (
     pathname === "/cart" || 
     pathname === "/checkout" || 
-    pathname === "/messages" || 
+    (pathname === "/messages" && (searchParams.get("room") || searchParams.get("user"))) || 
     pathname?.startsWith("/shop") ||
     pathname?.startsWith("/profile/business/business-status") ||
-    pathname?.startsWith("/products/new")
+    pathname === "/profile/business/customer-order" ||
+    pathname?.startsWith("/products/new") ||
+    pathname === "/profile/orders" ||
+    pathname?.startsWith("/profile/business/inventory") ||
+    pathname?.includes("/track/")
   ) return null;
 
   const rawProfileImage = auth?.user?.business_logo || auth?.user?.profile_pic || auth?.user?.avatar || auth?.user?.photoURL || null;
@@ -56,28 +68,32 @@ export default function BottomNav() {
       id: "discover",
       title: "Discover",
       href: "/discover",
-      icon: <HomeIcon className="w-5 h-5" aria-hidden />,
+      iconOutline: <HomeIcon className="w-5 h-5" aria-hidden />,
+      iconSolid: <HomeIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
       protected: false,
     },
     {
       id: "market",
       title: "Market",
       href: "/market",
-      icon: <ShoppingBagIcon className="w-5 h-5" aria-hidden />,
+      iconOutline: <ShoppingBagIcon className="w-5 h-5" aria-hidden />,
+      iconSolid: <ShoppingBagIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
       protected: false,
     },
     {
       id: "release",
       title: "Release",
       href: "/release",
-      icon: <PlusIcon className="w-5 h-5" aria-hidden />,
+      iconOutline: <PlusIcon className="w-5 h-5" aria-hidden />,
+      iconSolid: <PlusIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
       protected: true,
     },
     {
       id: "message",
       title: "Message",
       href: "/messages",
-      icon: <ChatBubbleLeftRightIcon className="w-5 h-5" aria-hidden />,
+      iconOutline: <ChatBubbleLeftRightIcon className="w-5 h-5" aria-hidden />,
+      iconSolid: <ChatBubbleLeftRightIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
       badge: unreadCount,
       protected: true,
     },
@@ -85,10 +101,15 @@ export default function BottomNav() {
       id: "profile",
       title: "Profile",
       href: "/profile",
-      icon: isLoggedIn && profileImage ? (
+      iconOutline: isLoggedIn && profileImage ? (
         <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover" />
       ) : (
         <UserCircleIcon className="h-6 w-6" aria-hidden />
+      ),
+      iconSolid: isLoggedIn && profileImage ? (
+        <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border-2 border-red-500" />
+      ) : (
+        <UserCircleIconSolid className="h-6 w-6 text-red-500" aria-hidden />
       ),
       protected: true,
     },
@@ -105,7 +126,7 @@ export default function BottomNav() {
     >
       <div className="max-w-[900px] mx-auto px-3">
         {/* compact row: icons only on small screens, icon + label inline on md */}
-        <div className="flex items-center justify-between gap-1 py-2">
+        <div className="flex items-center justify-between gap-1 pt-1 pb-0.5">
           {items.map((it) => {
             const active = pathname === it.href;
             const isProtected = it.protected;
@@ -127,25 +148,21 @@ export default function BottomNav() {
                 key={it.id}
                 href={it.href}
                 onClick={handleClick}
-                className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-lg transition
-                  ${active ? "text-rose-600" : "text-slate-600 hover:text-slate-900"}`}
+                className={`flex-1 min-w-0 flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 px-1 py-1 rounded-lg transition
+                  ${active ? "text-red-500" : "text-slate-500 hover:text-slate-900"}`}
                 aria-current={active ? "page" : undefined}
                 aria-label={it.title}
               >
-                <div
-                  className={`relative flex items-center justify-center rounded-md w-9 h-6 ${active ? "bg-rose-100" : "bg-transparent"
-                    }`}
-                >
-                  {it.icon}
+                <div className="relative flex items-center justify-center bg-transparent mt-0 mb-0">
+                  {active ? it.iconSolid : it.iconOutline}
                   {isLoggedIn && it.badge ? (
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white ring-1 ring-white">
+                    <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white ring-1 ring-white">
                       {it.badge > 99 ? "99+" : it.badge}
                     </span>
                   ) : null}
                 </div>
-
-                {/* label placed inline to the right of the icon on md+, hidden on small screens */}
-                <span className="text-sm font-medium hidden md:inline-block whitespace-nowrap">
+                
+                <span className={`text-[9px] sm:text-[10px] md:text-sm md:inline-block whitespace-nowrap mt-0.5 md:mt-0 ${active ? "font-bold text-red-500" : "font-medium"}`}>
                   {it.title}
                 </span>
               </Link>

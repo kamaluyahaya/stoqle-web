@@ -4,7 +4,7 @@ import { useAuth } from "@/src/context/authContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { useRouter } from "next/navigation";
 
-export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartClick, onShopClick, cartCount = 0, shopLogo, businessId }: any) {
+export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartClick, onShopClick, cartCount = 0, shopLogo, shopProfilePic, businessId }: any) {
   const router = useRouter();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const { token, user } = useAuth();
@@ -17,7 +17,14 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
     try {
       const res = await fetchCartApi(token);
       if (res.status === "success" && res.data?.items) {
-        setLocalCount(res.data.items.length);
+        const items = res.data.items || [];
+        // Deduplicate by cart_id to ensure accurate count
+        const uniqueItems = items.filter((item: any, index: number, self: any[]) =>
+          index === self.findIndex((t: any) => t.cart_id === item.cart_id)
+        );
+        // Calculate total pieces (sum of quantities)
+        const totalPieces = uniqueItems.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+        setLocalCount(totalPieces);
       }
     } catch (err) {
       console.error("Failed to fetch cart count:", err);
@@ -43,6 +50,10 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
     }
   }, [cartCount]);
 
+  const displayLogo = (shopLogo && !shopLogo.includes('favio.png')) 
+    ? shopLogo 
+    : (shopProfilePic && !shopProfilePic.includes('favio.png') ? shopProfilePic : null);
+
   return (
     <div onMouseDown={stop} className="fixed lg:sticky left-0 bottom-0 z-40 w-full border-t border-slate-100 bg-white/95 backdrop-blur px-1 py-1">
       <div className="flex items-center gap-1">
@@ -52,8 +63,8 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
           className="flex flex-col items-center justify-center w-14"
         >
           <div className="rounded-xl bg-white flex items-center justify-center overflow-hidden hover:shadow-sm">
-            {shopLogo ? (
-              <img src={String(shopLogo)} alt="Shop logo" className="h-5 w-5 object-cover mt-1 border border-slate-300 rounded-full p-1" />
+            {displayLogo ? (
+              <img src={String(displayLogo)} alt="Shop logo" className="h-5 w-5 object-cover mt-1 border border-slate-300 rounded-full p-1" />
             ) : (
               <BuildingStorefrontIcon className="w-5 h-5 text-slate-600" />
             )}
@@ -85,8 +96,8 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
             </div>
           ) : (
             <>
-              <button onMouseDown={stop} onClick={onAddToCart} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
-              <button onMouseDown={stop} onClick={onBuyNow} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
+              <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
+              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
             </>
           )}
         </div>

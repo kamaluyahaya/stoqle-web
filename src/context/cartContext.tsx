@@ -1,0 +1,79 @@
+"use client";
+
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useAuth } from "./authContext";
+import { fetchCartApi } from "@/src/lib/api/cartApi";
+
+interface CartContextType {
+    cartCount: number;
+    refreshCart: () => Promise<void>;
+}
+
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+    const auth = useAuth();
+    const [cartCount, setCartCount] = useState(0);
+
+    const refreshCart = useCallback(async () => {
+        const token = auth?.token || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+        if (token) {
+            try {
+                const res = await fetchCartApi(token);
+                if (res.status === "success" && res.data?.items) {
+                    const items = res.data.items || [];
+                    // Deduplicate by cart_id to ensure accurate unique item source
+                    const uniqueItems = items.filter((item: any, index: number, self: any[]) =>
+                        index === self.findIndex((t: any) => t.cart_id === item.cart_id)
+                    );
+                    // Calculate total pieces (sum of quantities)
+                    const totalPieces = uniqueItems.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+                    setCartCount(totalPieces);
+                } else {
+                    setCartCount(0); // Clear cart if API response is not successful or items are missing
+                }
+            } catch (e) {
+                console.error("Failed to fetch cart count", e);
+                setCartCount(0); // Clear cart on error
+            }
+        } else {
+            setCartCount(0);
+        }
+    }, [auth?.token]);
+
+    useEffect(() => {
+        refreshCart();
+        
+        // Local window event listener
+        window.addEventListener("cart-updated", refreshCart);
+
+        // BroadcastChannel for cross-tab sync
+        const channel = typeof window !== 'undefined' ? new BroadcastChannel('stoqle_cart_sync') : null;
+        if (channel) {
+            channel.onmessage = (event) => {
+                if (event.data === 'update') { // The original logic was to call refreshCart()
+                    refreshCart(); // This ensures the cart is re-fetched and counted correctly
+                }
+            };
+        }
+
+        return () => {
+            window.removeEventListener("cart-updated", refreshCart);
+            if (channel) channel.close();
+        };
+    }, [refreshCart]);
+
+    return (
+        <CartContext.Provider value={{ cartCount, refreshCart }}>
+            {children}
+        </CartContext.Provider>
+    );
+}
+
+export function useCart() {
+    const context = useContext(CartContext);
+    if (context === undefined) {
+        throw new Error("useCart must be used within a CartProvider");
+    }
+    return context;
+}

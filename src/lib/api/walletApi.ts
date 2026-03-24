@@ -159,7 +159,7 @@ export async function fetchMyPaymentAccount() {
     return json;
 }
 
-export async function cancelEscrowOrder(escrowId: string | number) {
+export async function cancelEscrowOrder(escrowId: string | number, reason?: string) {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await fetch(`${API_BASE_URL}/api/wallet/escrow/cancel`, {
         method: "POST",
@@ -168,7 +168,24 @@ export async function cancelEscrowOrder(escrowId: string | number) {
             "Accept": "application/json",
             "Authorization": token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify({ escrowId }),
+        body: JSON.stringify({ escrowId, reason }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw { status: res.status, body: json };
+    return json;
+}
+
+export async function walletCheckoutApi(data: { amount: number; pin: string; metadata: any; email?: string; }) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch(`${API_BASE_URL}/api/wallet/checkout`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify(data),
     });
 
     const json = await res.json().catch(() => null);

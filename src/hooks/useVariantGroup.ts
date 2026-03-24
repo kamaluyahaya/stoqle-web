@@ -42,7 +42,14 @@ const addVariantGroup = () => {
 
 
   const removeVariantGroup = (groupId: string) =>
-    setVariantGroups((g) => g.filter((gg) => gg.id !== groupId));
+    setVariantGroups((g) => {
+      const filtered = g.filter((gg) => gg.id !== groupId);
+      // Ensure if one remains, it has images enabled
+      if (filtered.length === 1) {
+        filtered[0].allowImages = true;
+      }
+      return [...filtered];
+    });
 
   const updateVariantGroupTitle = (groupId: string, newTitle: string) =>
     setVariantGroups((g) => g.map((gg) => (gg.id === groupId ? { ...gg, title: newTitle } : gg)));

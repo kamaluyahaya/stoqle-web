@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { FaTimes, FaShieldAlt, FaLock, FaCheckCircle, FaChevronLeft } from "react-icons/fa";
+import { FaChevronLeft } from "react-icons/fa";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/src/lib/config";
@@ -107,14 +107,14 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden"
+                        className="relative bg-white w-full max-w-md rounded-[0.5rem] overflow-hidden"
                     >
                         <div className="p-8 space-y-8">
                             {step === 1 ? (
                                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
                                     <div className="text-center space-y-3">
-                                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 shadow-sm">
-                                            <FaShieldAlt size={28} />
+                                        <div className="mx-auto mb-4">
+                                            <img src="/assets/images/logos.png" alt="Stoqle Logo" className="w-16 h-16 object-contain mx-auto" />
                                         </div>
                                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Create Wallet PIN</h3>
                                         <p className="text-xs text-slate-500 font-medium px-4">Set a 4-digit security code for your wallet transactions.</p>
@@ -155,8 +155,8 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
                                     <div className="text-center space-y-3 relative">
                                         <button onClick={() => setStep(1)} className="absolute -top-1 -left-1 p-2 text-slate-400 hover:text-slate-600 transition"><FaChevronLeft size={16} /></button>
-                                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto text-red-500 shadow-sm">
-                                            <FaLock size={24} />
+                                        <div className="mx-auto mb-4">
+                                            <img src="/assets/images/logos.png" alt="Stoqle Logo" className="w-16 h-16 object-contain mx-auto" />
                                         </div>
                                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Confirm PIN</h3>
                                         <p className="text-xs text-slate-500 font-medium px-4">Type your 4-digit security code again to confirm.</p>
@@ -200,9 +200,9 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                                 </div>
                             ) : (
                                 <div className="text-center py-10 space-y-6 animate-in zoom-in-95 duration-500">
-                                    <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto relative">
-                                        <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-20" />
-                                        <FaCheckCircle className="text-emerald-500 relative z-10" size={56} />
+                                    <div className="mx-auto mb-4 relative">
+                                        <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-20 scale-150" />
+                                        <img src="/assets/images/logos.png" alt="Stoqle Logo" className="w-20 h-20 object-contain mx-auto relative z-10" />
                                     </div>
                                     <div className="space-y-3">
                                         <h3 className="text-2xl font-black text-slate-900 tracking-tight">Security Activated!</h3>

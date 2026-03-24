@@ -13,10 +13,11 @@ export const MARKET_CACHE = {
   products: [] as any[],
   page: 0,
   hasMore: true,
-  category: "All",
+  category: "For you",
   likeData: {} as Record<number, { liked: boolean, count: number }>,
   scrollPos: 0,
-  lastFetchedAt: 0
+  lastFetchedAt: 0,
+  personalized: false
 };
 
 export const PROFILE_CACHE = {

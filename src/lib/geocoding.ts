@@ -70,3 +70,10 @@ export async function geocodeAddress(address: string): Promise<GeoPoint | null> 
         return null;
     }
 }
+/**
+ * Formats an address specifically for Nigeria-based geocoding as requested.
+ * Format: address(street, LGA(lga), State(state))
+ */
+export function arrangeAddressForNigeria(address: string, lga: string, state: string): string {
+    return `address(${address}, LGA(${lga}), State(${state}))`;
+}

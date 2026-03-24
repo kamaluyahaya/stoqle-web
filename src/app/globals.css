@@ -174,5 +174,5 @@ body {
 
 /* Ensure SweetAlert2 is always on top of modals */
 .swal2-container {
-  z-index: 10000 !important;
+  z-index: 200000 !important;
 }

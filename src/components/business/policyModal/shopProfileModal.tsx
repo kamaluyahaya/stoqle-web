@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import DefaultInput from "../../input/default-input";
 import DefaultSelect from "../../input/default-select";
 import BusinessAddressModal from "./businessAddressModal";
-import { FaCamera, FaStore, FaImage, FaMapMarkerAlt } from "react-icons/fa";
-import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { geocodeAddress, arrangeAddressForNigeria } from "../../../lib/geocoding";
+import { FaCamera, FaStore, FaImage, FaMapMarkerAlt, FaExclamationTriangle } from "react-icons/fa";
 
 type Props = {
     open: boolean;
@@ -49,6 +49,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [showGeocodeWarning, setShowGeocodeWarning] = useState(false);
 
     const profileInputRef = useRef<HTMLInputElement>(null);
     const bgInputRef = useRef<HTMLInputElement>(null);
@@ -93,15 +94,15 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
         try {
             const parsed = JSON.parse(addrJson);
             const line1 = parsed.address_line_1 || parsed.line1 || "";
-            const city = parsed.city || "";
+            const lga = parsed.city || "";
             const state = parsed.state || "";
-            return [line1, city, state].filter(Boolean).join(", ");
+            return arrangeAddressForNigeria(line1, lga, state);
         } catch {
             return addrJson;
         }
     };
 
-    const handleSave = async () => {
+    const finalSave = async (coords?: { latitude: number; longitude: number } | null) => {
         setSaving(true);
         try {
             const formData = new FormData();
@@ -109,6 +110,11 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
             formData.append("business_address", businessAddress);
             formData.append("business_category", businessCategory);
             formData.append("bio", bio);
+
+            if (coords) {
+                formData.append("latitude", coords.latitude.toString());
+                formData.append("longitude", coords.longitude.toString());
+            }
 
             if (profileFile) {
                 formData.append("profile_pic", profileFile);
@@ -118,18 +124,35 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
             }
 
             if (onSave) await onSave(formData);
+            onClose();
         } catch (e) {
             console.error("Save error", e);
         } finally {
             setSaving(false);
-            onClose();
+        }
+    };
+
+    const handleSave = async () => {
+        const fullAddress = formatAddress(businessAddress);
+        if (!fullAddress) {
+            await finalSave();
+            return;
+        }
+
+        setSaving(true);
+        const coords = await geocodeAddress(fullAddress);
+        if (coords) {
+            await finalSave(coords);
+        } else {
+            setSaving(false);
+            setShowGeocodeWarning(true);
         }
     };
 
     return (
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-4">
+                <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -143,11 +166,11 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+                        className="relative bg-white w-full max-w-xl rounded-[0.5rem] shadow-2xl overflow-hidden"
                     >
                         {/* Header */}
                         <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-                            <h3 className="text-xl font-bold text-slate-900">Shop Profile</h3>
+                            <h3 className="text-xl font-bold text-slate-600">Shop Profile</h3>
                             <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -170,8 +193,8 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                             <FaImage size={24} />
                                         </div>
                                     )}
-                                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <FaCamera className="text-white text-xl" />
+                                    <div className="absolute bottom-2 right-2 w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center text-white border border-white/20 shadow-lg">
+                                        <FaCamera size={14} />
                                     </div>
                                     <input
                                         type="file"
@@ -185,7 +208,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                 {/* Profile Picture */}
                                 <div className="absolute -bottom-10 left-6">
                                     <div
-                                        className="w-24 h-24 rounded-full bg-white p-1 shadow-lg cursor-pointer relative group overflow-hidden"
+                                        className="w-24 h-24 rounded-full bg-white p-1 shadow-lg cursor-pointer relative overflow-hidden"
                                         onClick={handleProfileClick}
                                     >
                                         <div className="w-full h-full rounded-full bg-slate-50 overflow-hidden flex items-center justify-center border-2 border-white">
@@ -195,8 +218,8 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                                 <FaStore className="text-slate-300 text-3xl" />
                                             )}
                                         </div>
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
-                                            <FaCamera className="text-white text-lg" />
+                                        <div className="absolute bottom-1 right-1 w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-md">
+                                            <FaCamera size={12} />
                                         </div>
                                     </div>
                                     <input
@@ -287,6 +310,57 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                             setIsAddressModalOpen(false);
                         }}
                     />
+
+                    {/* Geocode Warning Modal */}
+                    <AnimatePresence>
+                        {showGeocodeWarning && (
+                            <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+                                />
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 text-center"
+                                >
+                                    <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
+                                        <FaExclamationTriangle size={32} />
+                                    </div>
+                                    <h4 className="text-xl font-extrabold text-slate-900 mb-4">Check Your Address</h4>
+                                    <div className="space-y-4 mb-8">
+                                        <p className="text-slate-600 leading-relaxed text-[15px]">
+                                            Courier may be unable to deliver your order as the address provided may be missing the
+                                            <span className="font-bold text-slate-900"> building/house number</span>.
+                                        </p>
+                                        <p className="text-sm text-slate-500 italic bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                            "{formatAddress(businessAddress)}"
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col gap-3">
+                                        <button
+                                            onClick={() => setShowGeocodeWarning(false)}
+                                            className="w-full py-4 rounded-2xl font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-lg shadow-slate-200"
+                                        >
+                                            Edit Address
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowGeocodeWarning(false);
+                                                finalSave(null);
+                                            }}
+                                            className="w-full py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition border border-transparent hover:border-slate-100"
+                                        >
+                                            It is correct
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
                 </div>
             )}
         </AnimatePresence>

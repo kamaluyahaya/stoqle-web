@@ -23,15 +23,21 @@ export default function NumberInput({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
 
-    // Allow empty (so user can delete)
     if (raw === "") {
       onChange("");
       return;
     }
 
+    // If the raw input is just a dot, don't update to prevent NaN (since type is number | "")
+    if (raw === "." || raw === "0.") {
+      return;
+    }
+
     const num = Number(raw);
 
-    // Allow typing, enforce min via the "Next" button in the parent component
+    // If it's not a valid number, don't update
+    if (isNaN(num)) return;
+
     onChange(num);
   };
 
@@ -49,7 +55,7 @@ export default function NumberInput({
         type="text"
         inputMode="numeric"
         pattern="[0-9]*"
-        value={value}
+        value={typeof value === 'number' && isNaN(value) ? "" : value}
         onChange={handleChange}
         placeholder={placeholder || (isCompact ? label : "")}
         className={`${isCompact ? "px-3 py-1.5 text-xs bg-slate-50 border border-slate-200" : "px-4 py-2 text-sm bg-white"} flex-1 rounded-full text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-red-400`}

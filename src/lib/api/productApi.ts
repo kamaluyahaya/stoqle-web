@@ -59,11 +59,51 @@ export function postProduct(form: FormData, token: string, onProgress?: (percent
   });
 }
 
-export async function fetchMarketFeed(limit = 100, offset = 0, excludeProduct?: number | string, excludeBusiness?: number | string, hasVideo?: boolean, token?: string | null) {
+export function patchProduct(productId: number | string, form: FormData, token: string, onProgress?: (percent: number) => void): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PATCH", `${API_BASE_URL}/api/products/${productId}`, true);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Accept", "application/json");
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          onProgress(percentComplete);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      let json = null;
+      try {
+        json = JSON.parse(xhr.responseText);
+      } catch (e) {
+        // failed to parse JSON
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(json);
+      } else {
+        reject({ status: xhr.status, body: json || xhr.responseText });
+      }
+    };
+
+    xhr.onerror = () => {
+      reject({ status: 0, body: "Network Error" });
+    };
+
+    xhr.send(form);
+  });
+}
+
+export async function fetchMarketFeed(limit = 100, offset = 0, excludeProduct?: number | string, excludeBusiness?: number | string, hasVideo?: boolean, token?: string | null, businessCategory?: string) {
   let url = `${API_BASE_URL}/api/products/market/feed?limit=${limit}&offset=${offset}`;
   if (excludeProduct) url += `&exclude_product=${excludeProduct}`;
   if (excludeBusiness) url += `&exclude_business=${excludeBusiness}`;
   if (hasVideo) url += `&has_video=true`;
+  if (businessCategory && businessCategory !== "For you") url += `&business_category=${encodeURIComponent(businessCategory)}`;
 
   const headers: any = { Accept: "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -117,6 +157,142 @@ export async function toggleProductLike(productId: number | string, token: strin
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`
     }
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function logUserActivity(activity: { product_id?: number | string, action_type: 'view' | 'like' | 'cart' | 'purchase', category?: string }, token?: string | null) {
+  const headers: any = { 
+    "Content-Type": "application/json",
+    "Accept": "application/json" 
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/activity/log`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(activity)
+    });
+    return await res.json().catch(() => null);
+  } catch (err) {
+    console.error("Failed to log activity", err);
+    return null;
+  }
+}
+
+export async function fetchBusinessCategories() {
+  const res = await fetch(`${API_BASE_URL}/api/meta/business-categories`, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json"
+    }
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function fetchTrendingProducts(limit = 20, offset = 0) {
+  const res = await fetch(`${API_BASE_URL}/api/activity/trending?limit=${limit}&offset=${offset}`, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json"
+    }
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function fetchPersonalizedFeed(limit = 20, offset = 0, token?: string | null, businessCategory?: string | null, isPartner?: boolean) {
+  const headers: any = { "Accept": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let url = `${API_BASE_URL}/api/activity/personalized?limit=${limit}&offset=${offset}`;
+  if (businessCategory) url += `&business_category=${encodeURIComponent(businessCategory)}`;
+  if (isPartner) url += `&is_partner=true`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function checkConversionSafety(productId: number | string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/api/products/${productId}/check-conversion-safety`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function convertToVariantProduct(productId: number | string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/api/products/${productId}/convert-to-variant`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function convertToSimpleProduct(productId: number | string, primaryVariantId: number | string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/api/products/${productId}/convert-to-simple`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ primaryVariantId }),
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function checkDeletionSafety(productId: number | string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/api/products/${productId}/check-deletion-safety`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw { status: res.status, body: json };
+  return json;
+}
+
+export async function deleteProduct(productId: number | string, token: string, permanent: boolean = false) {
+  const res = await fetch(`${API_BASE_URL}/api/products/${productId}${permanent ? '?permanent=true' : ''}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
   });
 
   const json = await res.json().catch(() => null);

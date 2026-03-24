@@ -4,11 +4,12 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
-import { fetchBusinessProducts, fetchProductById } from "@/src/lib/api/productApi";
+import { fetchBusinessProducts, fetchProductById, logUserActivity } from "@/src/lib/api/productApi";
 import ShopHeader from "@/src/components/shop/shopHeader";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import type { PreviewPayload } from "@/src/types/product";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 
 // Icons for bottom navigation
 import { HomeIcon, ListBulletIcon, CalendarDaysIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
@@ -42,6 +43,7 @@ export default function VendorShopPage() {
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [productModalOpen, setProductModalOpen] = useState(false);
     const [fetchingProduct, setFetchingProduct] = useState(false);
+    const [clickPos, setClickPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
     const formatUrl = (url: string) => {
         if (!url) return NO_IMAGE_PLACEHOLDER;
@@ -101,76 +103,35 @@ export default function VendorShopPage() {
         }
     };
 
-    const handleProductClick = async (productId: number, arg2?: string | boolean) => {
+    const handleProductClick = async (productId: number, arg2?: string | boolean | React.MouseEvent, e?: React.MouseEvent) => {
         if (fetchingProduct) return;
-        const replaceUrl = arg2 === true;
+        
+        let actualEvent: React.MouseEvent | undefined;
+        let replaceUrl = false;
+
+        if (typeof arg2 === 'boolean') {
+            replaceUrl = arg2;
+            actualEvent = e;
+        } else if (arg2 && typeof arg2 === 'object' && 'clientX' in arg2) {
+            actualEvent = arg2 as React.MouseEvent;
+        }
+
+        if (actualEvent) {
+            setClickPos({ x: actualEvent.clientX, y: actualEvent.clientY });
+        } else {
+            setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+        }
+
         updateUrl(productId, replaceUrl);
         setFetchingProduct(true);
         try {
             const res = await fetchProductById(productId);
             if (res?.data?.product) {
                 const dbProduct = res.data.product;
-                const mapped: PreviewPayload = {
-                    productId: dbProduct.product_id,
-                    title: dbProduct.title,
-                    description: dbProduct.description,
-                    category: dbProduct.category,
-                    hasVariants: dbProduct.has_variants === 1,
-                    price: dbProduct.price ?? "",
-                    quantity: dbProduct.quantity ?? "",
-                    businessId: Number(dbProduct.business_id),
-                    productImages: (dbProduct.media || []).filter((m: any) => m.type === "image").length > 0
-                        ? (dbProduct.media || []).filter((m: any) => m.type === "image").map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-                        : (dbProduct.first_image || dbProduct.image_url)
-                            ? [{ name: "img", url: formatUrl(dbProduct.first_image || dbProduct.image_url) }]
-                            : [],
-                    productVideo: (() => {
-                        const vid = (dbProduct.media || []).find((m: any) => m.type === "video");
-                        if (vid) return { name: "vid", url: formatUrl(vid.url) };
-                        if (dbProduct.product_video) return { name: "vid", url: formatUrl(dbProduct.product_video) };
-                        return null;
-                    })(),
-                    useCombinations: dbProduct.use_combinations === 1,
-                    params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-                    soldCount: dbProduct.sold_count,
-                    samePriceForAll: dbProduct.same_price_for_all === 1,
-                    sharedPrice: dbProduct.price ?? "",
-                    variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-                        id: String(g.group_id),
-                        title: g.title,
-                        allowImages: g.allow_images === 1,
-                        entries: (g.options || []).map((o: any) => {
-                            const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
-                            return {
-                                id: String(o.option_id),
-                                name: o.name,
-                                price: o.price,
-                                quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                                images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
-                            };
-                        })
-                    })),
-                    skus: (dbProduct.skus || []).map((s: any) => {
-                        let vIds: string[] = [];
-                        try {
-                            vIds = typeof s.variant_option_ids === 'string'
-                                ? JSON.parse(s.variant_option_ids)
-                                : (s.variant_option_ids || []);
-                        } catch (e) { }
-
-                        const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => inv.sku_id === s.sku_id);
-                        return {
-                            id: String(s.sku_id),
-                            name: s.sku_code || "Combination",
-                            variantOptionIds: vIds.map(String),
-                            price: s.price ?? "",
-                            quantity: inventoryMatch ? inventoryMatch.quantity : (s.quantity ?? 0),
-                            enabled: s.status === 'active'
-                        };
-                    })
-                };
+                const mapped = mapProductToPreviewPayload(dbProduct, formatUrl);
                 setSelectedProductPayload(mapped);
                 setProductModalOpen(true);
+                logUserActivity({ product_id: productId, action_type: 'view', category: dbProduct.category }, auth.token);
             }
         } catch (e) { console.error(e); }
         finally { setFetchingProduct(false); }
@@ -277,7 +238,7 @@ export default function VendorShopPage() {
     const renderProductItem = (p: any) => (
         <article
             key={p.product_id}
-            onClick={() => handleProductClick(p.product_id)}
+            onClick={(e) => handleProductClick(p.product_id, e)}
             className="bg-white rounded-xl overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
         >
             <div className="relative aspect-square bg-slate-100 relative">
@@ -391,7 +352,7 @@ export default function VendorShopPage() {
                         {groupedByDate.map((group, idx) => (
                             <div key={group.label + idx} id={`date-group-${idx}`} className="">
                                 <div className="flex items-center justify-between mb-3 bg-white px-3 py-2 rounded-lg border border-slate-100 sticky top-12 z-10 transition-all">
-                                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight">{group.label}</h2>
+                                    <h2 className="text-sm font-bold text-slate-800  tracking-tight">{group.label}</h2>
                                     <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">{group.products.length} Products</span>
                                 </div>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -430,6 +391,7 @@ export default function VendorShopPage() {
                 <ProductPreviewModal
                     open={productModalOpen}
                     payload={selectedProductPayload}
+                    origin={clickPos}
                     onClose={() => {
                         setProductModalOpen(false);
                         setSelectedProductPayload(null);
