@@ -116,7 +116,7 @@ export default function VariantEntryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-75 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40" onClick={() => onClose()} />
 
       <div className="relative w-full max-w-2xl bg-white lg:rounded-[0.5rem] md:rounded-[0.5rem] rounded-t-[0.5rem] p-5 z-10 h-[75vh] sm:h-auto flex flex-col">

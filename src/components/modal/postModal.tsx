@@ -386,8 +386,8 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
       return;
     }
     const localGetToken = () => userToken ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
-    const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(localGetToken());
-    if (!ensure) return;
+    const ok = await auth.ensureAccountVerified();
+    if (!ok) return;
 
     const comment = comments.find(c => c.comment_id === commentId);
     if (comment && !comment.liked_by_user) {
@@ -443,8 +443,8 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
       toast.info("Interactions are not allowed in preview mode");
       return;
     }
-    const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
-    if (!ensure) return;
+    const ok = await auth.ensureAccountVerified();
+    if (!ok) return;
     const token = getToken();
     if (!commentText || commentText.trim().length === 0) return;
     setCommentPosting(true);
@@ -499,8 +499,8 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
       toast.info("Interactions are not allowed in preview mode");
       return;
     }
-    const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
-    if (!ensure) return;
+    const ok = await auth.ensureAccountVerified();
+    if (!ok) return;
     
     if (!postLiked) {
       setShowBurst(true);
@@ -538,8 +538,8 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
       toast.info("Interactions are not allowed in preview mode");
       return;
     }
-    const ensure = auth?.ensureLoggedIn ? await auth.ensureLoggedIn() : Boolean(getToken());
-    if (!ensure) return;
+    const ok = await auth.ensureAccountVerified();
+    if (!ok) return;
     const userId = Number(post.user?.id);
     if (!userId) return;
     if (followLoading) return;
@@ -609,7 +609,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
       : undefined;
 
   return (
-    <div role="dialog" aria-modal="true" ref={wrapperRef} className="fixed inset-0 z-[300] flex items-center justify-center px-0 py-0" onMouseDown={onClose}>
+    <div role="dialog" aria-modal="true" ref={wrapperRef} className="fixed inset-0 z-[3500] flex items-center justify-center px-0 py-0" onMouseDown={onClose}>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

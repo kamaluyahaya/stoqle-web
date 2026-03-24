@@ -425,11 +425,9 @@ export default function ProductPreviewModal({
   useEffect(() => {
     if (!open || !payload?.productId) return;
 
-    // Force a reset to the first image (index 0) whenever the modal opens
-    // This ensures we always start with the cover image as requested.
-    // Force a specific start position: 0 (the Cover Image)
-    // We ignore any saved index to satisfy the "start at cover" requirement
     setSelectedIndex(0);
+    if (modalRef.current) modalRef.current.scrollTo(0, 0);
+    if (asideScrollRef.current) asideScrollRef.current.scrollTo(0, 0);
 
     const saved = sessionStorage.getItem(`stoqle_modal_state_${payload.productId}`);
     if (saved) {
@@ -448,8 +446,6 @@ export default function ProductPreviewModal({
       }
     } else {
       setSelectedOptions({});
-      if (modalRef.current) modalRef.current.scrollTo(0, 0);
-      if (asideScrollRef.current) asideScrollRef.current.scrollTo(0, 0);
     }
   }, [open, payload?.productId]);
 
@@ -909,7 +905,14 @@ export default function ProductPreviewModal({
               <div className="flex items-center px-4 h-14 gap-3">
                 <button
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={onClose}
+                  onClick={() => {
+                    const params = new URLSearchParams(window.location.search);
+                    if (params.has('product_id')) {
+                      router.back();
+                    } else {
+                      onClose();
+                    }
+                  }}
                   aria-label="Back"
                   className="h-9 w-9 rounded-full flex items-center justify-center transition-all flex-shrink-0"
                   style={{
@@ -1479,6 +1482,7 @@ export default function ProductPreviewModal({
         origin={cartClickPos}
       />
       <ReviewListModal
+        key="review-list-modal"
         open={isReviewsModalOpen}
         onClose={() => setIsReviewsModalOpen(false)}
         reviews={reviews}
@@ -1493,6 +1497,7 @@ export default function ProductPreviewModal({
       />
 
       <SearchModal
+        key="search-modal"
         isOpen={isSearchOpen}
         onClose={() => {
           setIsSearchOpen(false);
@@ -1507,6 +1512,7 @@ export default function ProductPreviewModal({
       />
 
       <SearchResultsModal
+        key="search-results-modal"
         isOpen={showResultsModal}
         onClose={() => {
           setShowResultsModal(false);

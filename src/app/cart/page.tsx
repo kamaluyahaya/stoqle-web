@@ -14,6 +14,7 @@ import {
     ShoppingBagIcon,
     ArrowLeftIcon,
     ChevronRightIcon,
+    ChevronLeftIcon,
     ShoppingCartIcon,
     CheckIcon
 } from "@heroicons/react/24/outline";
@@ -21,6 +22,7 @@ import { ShoppingCartIcon as ShoppingCartIconSolid } from "@heroicons/react/24/s
 import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import ReelsModal from "@/src/components/product/addProduct/modal/reelsModal";
+import PhoneVerificationModal from "@/src/components/modal/phoneVerificationModal";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
@@ -461,6 +463,7 @@ export default function CartPage() {
     const [reelsModalOpen, setReelsModalOpen] = useState(false);
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
     const [fetchingProduct, setFetchingProduct] = useState(false);
+    const [phoneModalOpen, setPhoneModalOpen] = useState(false);
     const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
     const [likeData, setLikeData] = useState<Record<number, { liked: boolean, count: number }>>({});
     const [editingCartId, setEditingCartId] = useState<number | null>(null);
@@ -934,12 +937,21 @@ export default function CartPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 pb-32">
-            <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+            <header className="sticky top-0 z-[1100] bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                        <ArrowLeftIcon className="w-5 h-5 text-slate-700" />
+                    <button 
+                        onClick={() => {
+                            if (window.history.length > 2) {
+                                router.back();
+                            } else {
+                                router.push('/discover');
+                            }
+                        }} 
+                        className="p-2 hover:bg-slate-100 rounded-full transition-colors -ml-2"
+                    >
+                        <ChevronLeftIcon className="w-6 h-6 text-slate-800 stroke-[2.5]" />
                     </button>
-                    <h1 className="text-xl font-bold text-slate-900">Cart ({items.reduce((acc, i) => acc + (i.quantity || 1), 0)})</h1>
+                    <h1 className="text-xl font-bold text-slate-900">Cart ({items.length})</h1>
                 </div>
             </header>
             <main className="px-4 py-4 space-y-2">
@@ -1032,7 +1044,7 @@ export default function CartPage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-baseline gap-2">
-                                                    <span className="text-base font-bold text-red-600">₦{(item.price ?? 0).toLocaleString()}</span>
+                                                    <span className="text-base font-bold text-red-600">₦{((item.price ?? 0) * (item.quantity || 1)).toLocaleString()}</span>
                                                     {(item.base_price ?? 0) > (item.price ?? 0) && <span className="text-xs text-slate-400 line-through">₦{(item.base_price ?? 0).toLocaleString()}</span>}
                                                 </div>
                                                 <button onClick={() => handleRemoveItem(item.cart_id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
@@ -1174,6 +1186,12 @@ export default function CartPage() {
                                     return;
                                 }
 
+                                // Check phone number verification
+                                if (!user?.phone_no) {
+                                    setPhoneModalOpen(true);
+                                    return;
+                                }
+
                                 // Store IDs in sessionStorage to avoid raw IDs in URL
                                 sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
                                 router.push(`/checkout`);
@@ -1185,6 +1203,18 @@ export default function CartPage() {
                     </div>
                 </div>
             </div>
+            <PhoneVerificationModal 
+                key="phone-verification-modal-cart"
+                isOpen={phoneModalOpen} 
+                onClose={() => setPhoneModalOpen(false)}
+                onSuccess={() => {
+                    setPhoneModalOpen(false);
+                    if (selectedCartIds.length > 0) {
+                        sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
+                        router.push(`/checkout`);
+                    }
+                }}
+            />
         </div>
     );
 }

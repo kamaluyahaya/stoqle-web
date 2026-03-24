@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import React from "react";
 import { useAuth } from "@/src/context/authContext";
 import {
@@ -34,6 +34,7 @@ export default function BottomNav() {
   const auth = useAuth();
   const { unreadCount } = useChat();
   const pathname = usePathname();
+  const router = useRouter(); // add router
   const searchParams = useSearchParams();
 
   const isLoggedIn =
@@ -131,14 +132,12 @@ export default function BottomNav() {
             const active = pathname === it.href;
             const isProtected = it.protected;
 
-            const handleClick = (e: React.MouseEvent) => {
-              if (isProtected && !isLoggedIn) {
+            const handleClick = async (e: React.MouseEvent) => {
+              if (isProtected) {
                 e.preventDefault();
-                if (openLogin) {
-                  openLogin();
-                } else {
-                  // fallback if openLogin not available
-                  window.location.href = "/login";
+                const ok = await auth.ensureAccountVerified();
+                if (ok) {
+                  router.push(it.href);
                 }
               }
             };

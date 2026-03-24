@@ -12,13 +12,18 @@ type AuthContextValue = {
   user: User | null;
   token: string | null;
   loginOpen: boolean;
+  verificationOpen: boolean;
   openLogin: () => Promise<boolean>;
+  openVerification: () => Promise<boolean>;
   ensureLoggedIn: () => Promise<boolean>;
+  ensureAccountVerified: () => Promise<boolean>;
   closeLogin: () => void;
+  closeVerification: () => void;
   // internal: called by LoginModal when login succeeds
   logout: () => Promise<void>;
   isHydrated: boolean;
   _onLoginSuccess: (user: User, token: string) => void;
+  onVerificationSuccess: (user: User) => void;
 };
 
 
@@ -29,9 +34,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [verificationOpen, setVerificationOpen] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const resolverRef = useRef<LoginResolver>(null);
+  const verificationResolverRef = useRef<LoginResolver>(null);
   const mountedRef = useRef(false);
 
 
@@ -86,6 +93,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // open verification and return promise
+  const openVerification = (): Promise<boolean> => {
+    // Both phone and email must exist to skip
+    if (mountedRef.current && user?.phone_no && user?.email) {
+      return Promise.resolve(true);
+    }
+    setVerificationOpen(true);
+    return new Promise((resolve) => {
+      verificationResolverRef.current = { resolve };
+    });
+  };
+ 
+  const closeVerification = () => {
+    setVerificationOpen(false);
+    if (verificationResolverRef.current) {
+      verificationResolverRef.current.resolve(false);
+      verificationResolverRef.current = null;
+    }
+  };
+
   const closeLogin = () => {
     setLoginOpen(false);
     if (resolverRef.current) {
@@ -99,6 +126,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const ensureLoggedIn = async (): Promise<boolean> => {
     if (mountedRef.current && token && user) return true;
     return await openLogin();
+  };
+
+  const ensureAccountVerified = async (): Promise<boolean> => {
+    // first ensure logged in
+    const loggedIn = await ensureLoggedIn();
+    if (!loggedIn) return false;
+ 
+    // then ensure phone and email
+    if (user?.phone_no && user?.email) return true;
+    return await openVerification();
   };
 
   // called by LoginModal after successful verification & token set in localStorage
@@ -122,6 +159,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resolverRef.current.resolve(true);
       resolverRef.current = null;
     }
+ 
+    // Check for verification after successful login
+    if (!u.phone_no || !u.email) {
+      setTimeout(() => {
+        openVerification().then((verified) => {
+           if (verified) {
+              console.log("Account verified after login triggered");
+           }
+        });
+      }, 500); // Small delay to let login modal exit smoothly
+    }
+  };
+
+  const onVerificationSuccess = (verifiedUser: User) => {
+      setUser(verifiedUser);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(verifiedUser));
+      }
+      setVerificationOpen(false);
+      if (verificationResolverRef.current) {
+        verificationResolverRef.current.resolve(true);
+        verificationResolverRef.current = null;
+      }
   };
   const logout = async () => {
     // clear storage FIRST (most important)
@@ -143,13 +203,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         loginOpen,
+        verificationOpen,
         openLogin,
+        openVerification,
         ensureLoggedIn,
+        ensureAccountVerified,
         closeLogin,
+        closeVerification,
         _onLoginSuccess,
-        logout, // ← include this
+        logout,
         isHydrated,
-      }}
+        onVerificationSuccess,
+      } as any}
     >
       {children}
     </AuthContext.Provider>

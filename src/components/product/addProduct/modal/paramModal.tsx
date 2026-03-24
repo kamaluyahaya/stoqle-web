@@ -52,7 +52,7 @@ export default function ParamsModal({ open, initialData, onClose, onSubmit }: Pr
   };
 
   return (
-    <div className="fixed inset-0 z-75 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={() => onClose()} />
 

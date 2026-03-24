@@ -21,6 +21,7 @@ import Swal from "sweetalert2";
 import { estimateDelivery, EstimationResult } from "@/src/lib/deliveryEstimation";
 import { fetchUserAddresses } from "@/src/lib/api/addressApi";
 import { logUserActivity } from "@/src/lib/api/productApi";
+import PhoneVerificationModal from "../../../modal/phoneVerificationModal";
 
 // No need to declare here if we use window.PaystackPop
 
@@ -94,6 +95,7 @@ export default function AddToCartModal({
     const [addressModalOpen, setAddressModalOpen] = useState(false);
     const [internalStoredAddress, setInternalStoredAddress] = useState<any>(null);
     const [fullImage, setFullImage] = useState<string | null>(null);
+    const [phoneModalOpen, setPhoneModalOpen] = useState(false);
     const [variantViewModes, setVariantViewModes] = useState<Record<string, 'gallery' | 'list'>>({});
 
     // Sync state if prop changes or when modal is opened
@@ -742,6 +744,11 @@ export default function AddToCartModal({
 
             if (estimation && !estimation.is_available) {
                 toast.error(estimation.message || "Vendor does not deliver to your location.");
+                return;
+            }
+
+            if (!user?.phone_no) {
+                setPhoneModalOpen(true);
                 return;
             }
 
@@ -1489,7 +1496,7 @@ export default function AddToCartModal({
             />
 
             {/* Full Screen Image Overlay */}
-            <AnimatePresence>
+            <AnimatePresence key="full-image-animation">
                 {fullImage && (
                     <motion.div
                         initial={{ opacity: 0 }}
@@ -1522,6 +1529,17 @@ export default function AddToCartModal({
                     </motion.div>
                 )}
             </AnimatePresence>
+            <PhoneVerificationModal 
+                key="phone-verification-modal-internal"
+                isOpen={phoneModalOpen} 
+                onClose={() => setPhoneModalOpen(false)}
+                onSuccess={() => {
+                    setPhoneModalOpen(false);
+                    // Automatically re-trigger the pay process? 
+                    // Or just let user click "Pay Now" again. 
+                    // Clicking again is safer for UX clarity.
+                }}
+            />
         </AnimatePresence>
     );
 }

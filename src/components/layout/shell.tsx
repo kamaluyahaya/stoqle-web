@@ -8,6 +8,7 @@ import LoginModal from "@/src/components/modal/auth/loginModal";
 import BottomNav from "./bottomNav"; // <-- add this
 import { useAuth } from "@/src/context/authContext";
 import { usePathname } from "next/navigation";
+import AccountVerificationModal from "../modal/accountVerificationModal";
 
 const NAV_HEIGHT = 64;
 const SIDEBAR_WIDTH = 300;
@@ -38,6 +39,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               onClose={() => auth.closeLogin()}
             />
           </div>
+        )}
+        {auth.verificationOpen && (
+          <AccountVerificationModal
+            open={auth.verificationOpen}
+            onClose={auth.closeVerification}
+            onSuccess={auth.onVerificationSuccess}
+          />
         )}
       </div>
     </div>

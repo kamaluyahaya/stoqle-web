@@ -26,9 +26,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                     const uniqueItems = items.filter((item: any, index: number, self: any[]) =>
                         index === self.findIndex((t: any) => t.cart_id === item.cart_id)
                     );
-                    // Calculate total pieces (sum of quantities)
-                    const totalPieces = uniqueItems.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
-                    setCartCount(totalPieces);
+                    // Calculate total unique items
+                    setCartCount(uniqueItems.length);
                 } else {
                     setCartCount(0); // Clear cart if API response is not successful or items are missing
                 }

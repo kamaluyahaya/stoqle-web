@@ -45,7 +45,8 @@ export default function PostComposerTabs({
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { token, user } = useAuth();
+  const auth = useAuth();
+  const { token, user } = auth;
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -133,10 +134,9 @@ export default function PostComposerTabs({
 
   // Submit handlers
   const handlePostSubmit = async (payload: SubmitPayload) => {
-    if (!token) {
-      toast.error("Please login to post");
-      return;
-    }
+    const ok = await auth.ensureAccountVerified();
+    if (!ok) return;
+
     setLoading(true);
     try {
       // Capture current location for the post
@@ -165,7 +165,7 @@ export default function PostComposerTabs({
         formData.append('cover_type', 'video');
       }
 
-      await createSocialPost(formData, token, (progress) => {
+      await createSocialPost(formData, token!, (progress) => {
         setUploadProgress(progress);
       });
       toast.success("Post created successfully!");

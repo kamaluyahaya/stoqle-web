@@ -6,12 +6,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import DefaultInput from "@/src/components/input/default-input-post";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  XMarkIcon, 
-  CheckIcon, 
-  LockOpenIcon, 
-  LockClosedIcon, 
-  UsersIcon 
+import {
+  XMarkIcon,
+  CheckIcon,
+  LockOpenIcon,
+  LockClosedIcon,
+  UsersIcon
 } from "@heroicons/react/24/outline";
 import { getCurrentLocationName, getCachedLocationName } from "@/src/lib/location";
 
@@ -81,7 +81,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   const [posting, setPosting] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
-    const router = useRouter();
+  const router = useRouter();
 
   // derive seed from logged-in user if available (localStorage.user) else random
   const userSeed = useMemo(() => {
@@ -96,7 +96,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
         for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i);
         return Math.abs(h) || Date.now();
       }
-    } catch {}
+    } catch { }
     return Math.floor(Math.random() * 1e9);
   }, [open]);
 
@@ -108,59 +108,59 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
 
   // fallback deterministic generator (keeps previous behaviour)
   const generateFallbackBackgrounds = (seed: number, count = 20) => {
-  const rng = mulberry32(seed);
-  const list: BackgroundConfig[] = [];
-  
-  const emojiSets = [
-    ["✨", "☁️", "🌙"], ["🌸", "🎀", "💖"], ["🔥", "⚡", "🚀"], 
-    ["🎨", "🎭", "🖌️"], ["🌿", "🍃", "🌳"], ["💡", "🧠", "📚"]
-  ];
+    const rng = mulberry32(seed);
+    const list: BackgroundConfig[] = [];
 
-  for (let i = 0; i < count; i++) {
-    const p = palettes[Math.floor(rng() * palettes.length)];
-    const stylePick = rng();
-    
-    let template: BackgroundConfig["template"] = "gradient";
-    let patternType: BackgroundConfig["patternType"] = "horizontal";
-    let emojiBlur = false;
-    let emojis: string[] = [];
+    const emojiSets = [
+      ["✨", "☁️", "🌙"], ["🌸", "🎀", "💖"], ["🔥", "⚡", "🚀"],
+      ["🎨", "🎭", "🖌️"], ["🌿", "🍃", "🌳"], ["💡", "🧠", "📚"]
+    ];
 
-    // Assign Unique Style Profiles
-    if (stylePick > 0.8) {
-      template = "grid"; // Modern graph paper style
-      patternType = "both";
-    } else if (stylePick > 0.6) {
-      template = "diagonal"; // High energy diagonal lines
-      patternType = "diagonal";
-    } else if (stylePick > 0.4) {
-      template = "stripes"; // Notebook/Lined paper style
-      patternType = "horizontal";
-      emojiBlur = true; // Blurred aesthetic emojis
-      emojis = emojiSets[Math.floor(rng() * emojiSets.length)];
-    } else {
-      template = "dots"; // Minimalist dotted background
-      emojis = rng() > 0.5 ? emojiSets[Math.floor(rng() * emojiSets.length)] : [];
+    for (let i = 0; i < count; i++) {
+      const p = palettes[Math.floor(rng() * palettes.length)];
+      const stylePick = rng();
+
+      let template: BackgroundConfig["template"] = "gradient";
+      let patternType: BackgroundConfig["patternType"] = "horizontal";
+      let emojiBlur = false;
+      let emojis: string[] = [];
+
+      // Assign Unique Style Profiles
+      if (stylePick > 0.8) {
+        template = "grid"; // Modern graph paper style
+        patternType = "both";
+      } else if (stylePick > 0.6) {
+        template = "diagonal"; // High energy diagonal lines
+        patternType = "diagonal";
+      } else if (stylePick > 0.4) {
+        template = "stripes"; // Notebook/Lined paper style
+        patternType = "horizontal";
+        emojiBlur = true; // Blurred aesthetic emojis
+        emojis = emojiSets[Math.floor(rng() * emojiSets.length)];
+      } else {
+        template = "dots"; // Minimalist dotted background
+        emojis = rng() > 0.5 ? emojiSets[Math.floor(rng() * emojiSets.length)] : [];
+      }
+
+      const cfg: BackgroundConfig = {
+        seed: Math.floor(rng() * 1e9),
+        template,
+        patternType,
+        startColor: p[0],
+        endColor: p[1] ?? p[0],
+        emojis,
+        emojiBlur,
+        lineSpacing: 20 + Math.floor(rng() * 30),
+        textStyle: {
+          color: p[0] === "#FFFFFF" ? "#1e293b" : "#111827",
+          fontSize: 32,
+          fontWeight: "800"
+        },
+      };
+      list.push(cfg);
     }
-
-    const cfg: BackgroundConfig = {
-      seed: Math.floor(rng() * 1e9),
-      template,
-      patternType,
-      startColor: p[0],
-      endColor: p[1] ?? p[0],
-      emojis,
-      emojiBlur,
-      lineSpacing: 20 + Math.floor(rng() * 30),
-      textStyle: { 
-        color: p[0] === "#FFFFFF" ? "#1e293b" : "#111827", 
-        fontSize: 32, 
-        fontWeight: "800" 
-      },
-    };
-    list.push(cfg);
-  }
-  return list;
-};
+    return list;
+  };
 
   // try to fetch backgrounds from backend (randomized by seed). fallback to generator if fetch fails.
   useEffect(() => {
@@ -307,106 +307,106 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   };
 
   const PreviewCard = ({ cfg, compact = false }: { cfg: BackgroundConfig | null; compact?: boolean }) => {
-  if (!cfg) return null;
+    if (!cfg) return null;
 
-  const { template, startColor, endColor, lineSpacing = 25, emojiBlur, emojis, seed } = cfg;
+    const { template, startColor, endColor, lineSpacing = 25, emojiBlur, emojis, seed } = cfg;
 
-  // 1. Determine Base CSS
-  const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
-  
-  let patternCSS = "";
-  let bgSize = "auto";
+    // 1. Determine Base CSS
+    const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
 
-  // 2. Apply Unique Patterns
-  if (template === "grid") {
-    patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
-    bgSize = `${lineSpacing}px ${lineSpacing}px`;
-  } else if (template === "diagonal") {
-    patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
-  } else if (template === "stripes") {
-    patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
-  } else if (template === "dots") {
-    patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
-    bgSize = `${lineSpacing}px ${lineSpacing}px`;
-  }
+    let patternCSS = "";
+    let bgSize = "auto";
 
-  // 3. Crazy Font Selection Logic
-  const crazyFonts = [
-    "'Courier New', Courier, monospace",
-    "'Brush Script MT', cursive",
-    "Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif",
-    "'Comic Sans MS', 'Comic Sans', cursive",
-    "Georgia, serif",
-    "'Trebuchet MS', sans-serif"
-  ];
-  // Select a font based on the seed so it stays consistent for that background
-  const selectedFont = crazyFonts[(seed || 0) % crazyFonts.length];
+    // 2. Apply Unique Patterns
+    if (template === "grid") {
+      patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    } else if (template === "diagonal") {
+      patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
+    } else if (template === "stripes") {
+      patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
+    } else if (template === "dots") {
+      patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    }
 
-  // 4. Content Alignment Logic
-  const displayLines = text || cfg?.text || "Your unique note style";
-  const isLongText = displayLines.length > 120;
+    // 3. Crazy Font Selection Logic
+    const crazyFonts = [
+      "'Courier New', Courier, monospace",
+      "'Brush Script MT', cursive",
+      "Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif",
+      "'Comic Sans MS', 'Comic Sans', cursive",
+      "Georgia, serif",
+      "'Trebuchet MS', sans-serif"
+    ];
+    // Select a font based on the seed so it stays consistent for that background
+    const selectedFont = crazyFonts[(seed || 0) % crazyFonts.length];
 
-  return (
-    <div
-      className="w-full rounded-2xl overflow-hidden relative flex items-center border border-slate-100 shadow-inner"
-      style={{
-        backgroundColor: startColor,
-        backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
-        backgroundSize: bgSize,
-        // If text is long, we align the container to the start (left)
-        justifyContent: isLongText ? "flex-start" : "center",
-      }}
-    >
-      {/* Layer: Decorative Emojis */}
-      {emojis && emojis.length > 0 && (
-        <div 
-          className="absolute inset-0 flex items-center justify-around opacity-40 pointer-events-none"
-          style={{ filter: emojiBlur ? "blur(12px)" : "none" }}
-        >
-          {emojis.map((emoji, idx) => (
-            <span key={idx} className="text-7xl transform rotate-12 select-none">
-              {emoji}
-            </span>
-          ))}
-        </div>
-      )}
+    // 4. Content Alignment Logic
+    const displayLines = text || cfg?.text || "Your unique note style";
+    const isLongText = displayLines.length > 120;
 
-      {/* Layer: Text Content */}
-      <div 
-        className="relative z-10 w-full p-8 flex flex-col" 
-        style={{ 
-          minHeight: compact ? 220 : 380,
-          // Handle the vertical/horizontal alignment of the container
+    return (
+      <div
+        className="w-full rounded-2xl overflow-hidden relative flex items-center border border-slate-100 shadow-inner"
+        style={{
+          backgroundColor: startColor,
+          backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
+          backgroundSize: bgSize,
+          // If text is long, we align the container to the start (left)
           justifyContent: isLongText ? "flex-start" : "center",
-          alignItems: isLongText ? "flex-start" : "center",
-          textAlign: isLongText ? "left" : "center",
         }}
       >
+        {/* Layer: Decorative Emojis */}
+        {emojis && emojis.length > 0 && (
+          <div
+            className="absolute inset-0 flex items-center justify-around opacity-40 pointer-events-none"
+            style={{ filter: emojiBlur ? "blur(12px)" : "none" }}
+          >
+            {emojis.map((emoji, idx) => (
+              <span key={idx} className="text-7xl transform rotate-12 select-none">
+                {emoji}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Layer: Text Content */}
         <div
-          className="max-w-full break-words"
+          className="relative z-10 w-full p-8 flex flex-col"
           style={{
-            color: cfg?.textStyle?.color ?? "#111827",
-            fontSize: cfg?.textStyle?.fontSize ?? 28,
-            fontWeight: cfg?.textStyle?.fontWeight ?? "800",
-            lineHeight: 1.4, // Increased for readability with new lines
-            fontFamily: selectedFont, // Crazy Font applied here
-            whiteSpace: "pre-wrap", // THIS MAINTAINS THE NEXT LINE / LINE BREAKS
-            textShadow: startColor === "#FFFFFF" ? "none" : "0 2px 10px rgba(0,0,0,0.05)"
+            minHeight: compact ? 220 : 380,
+            // Handle the vertical/horizontal alignment of the container
+            justifyContent: isLongText ? "flex-start" : "center",
+            alignItems: isLongText ? "flex-start" : "center",
+            textAlign: isLongText ? "left" : "center",
           }}
         >
-          {displayLines}
+          <div
+            className="max-w-full break-words"
+            style={{
+              color: cfg?.textStyle?.color ?? "#111827",
+              fontSize: cfg?.textStyle?.fontSize ?? 28,
+              fontWeight: cfg?.textStyle?.fontWeight ?? "800",
+              lineHeight: 1.4, // Increased for readability with new lines
+              fontFamily: selectedFont, // Crazy Font applied here
+              whiteSpace: "pre-wrap", // THIS MAINTAINS THE NEXT LINE / LINE BREAKS
+              textShadow: startColor === "#FFFFFF" ? "none" : "0 2px 10px rgba(0,0,0,0.05)"
+            }}
+          >
+            {displayLines}
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   return (
     <>
       {/* backdrop: dark + slight blur */}
-      <div className="fixed inset-0 z-[200] bg-black/50 " onClick={onClose} />
+      <div className="fixed inset-0 z-[4000] bg-black/50 " onClick={onClose} />
 
-      <div className="fixed inset-0 z-[210] flex items-center justify-center md:p-8">
+      <div className="fixed inset-0 z-[4100] flex items-center justify-center md:p-8">
         <div
           className="w-full h-full md:h-[90vh] md:max-h-[92vh] md:max-w-4xl bg-green-50 rounded-none md:rounded-2xl shadow-xl overflow-hidden flex flex-col"
           role="dialog"
@@ -468,8 +468,8 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                   className="
       w-full
       px-4
-      py-3
-      rounded-xl
+      py-2
+      rounded-full
       bg-red-500
       text-white
       font-medium
@@ -500,55 +500,54 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                     <div className="flex gap-3 items-center">
 
                       {backgrounds.map((b, i) => {
-  const selected = selectedConfig?.seed === b.seed;
-  
-  // Pattern Logic for Thumbnail
-  const baseBg = b.endColor ? `linear-gradient(135deg, ${b.startColor}, ${b.endColor})` : b.startColor;
-  let thumbPattern = "";
-  let thumbSize = "auto";
-  const spacing = (b.lineSpacing || 25) / 4; // Scale down pattern for small thumb
-  const thumbText = truncate(text?.trim() || b.text || b.emojis?.slice(0, 3).join(" ") || b.template || "", 36);
+                        const selected = selectedConfig?.seed === b.seed;
 
-  if (b.template === "grid") {
-    thumbPattern = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
-    thumbSize = `${spacing}px ${spacing}px`;
-  } else if (b.template === "diagonal") {
-    thumbPattern = `repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)`;
-  } else if (b.template === "dots") {
-    thumbPattern = `radial-gradient(rgba(0,0,0,0.1) 1px, transparent 0)`;
-    thumbSize = `6px 6px`;
-  }
+                        // Pattern Logic for Thumbnail
+                        const baseBg = b.endColor ? `linear-gradient(135deg, ${b.startColor}, ${b.endColor})` : b.startColor;
+                        let thumbPattern = "";
+                        let thumbSize = "auto";
+                        const spacing = (b.lineSpacing || 25) / 4; // Scale down pattern for small thumb
+                        const thumbText = truncate(text?.trim() || b.text || b.emojis?.slice(0, 3).join(" ") || b.template || "", 36);
 
-  return (
-    <button
-      key={i}
-      onClick={() => setSelectedConfig(b)}
-      className={`flex-none w-20 h-20 rounded-xl shadow-sm border overflow-hidden transform transition active:scale-95 relative ${
-        selected ? "ring-4 ring-red-400 border-white scale-105 z-10" : "border-slate-200 hover:scale-[1.03]"
-      }`}
-      style={{
-        backgroundColor: b.startColor,
-        backgroundImage: thumbPattern ? `${thumbPattern}, ${baseBg}` : baseBg,
-        backgroundSize: thumbSize,
-      }}
-      aria-pressed={selected}
-    >
-      {/* Mini Emoji Preview */}
-      {b.emojis && b.emojis.length > 0 && (
-        <div 
-          className="absolute inset-0 flex items-center justify-center opacity-40"
-          style={{ filter: b.emojiBlur ? "blur(2px)" : "none" }}
-        >
-          <span className="text-xl transform rotate-12">{b.emojis[0]}</span>
-        </div>
-      )}
-      
-      {/* Indicator for style type (optional hint) */}
-   
-                <div className="text-xs mt-1 text-slate-700 break-words px-1">{thumbText}</div>
-    </button>
-  );
-})}
+                        if (b.template === "grid") {
+                          thumbPattern = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
+                          thumbSize = `${spacing}px ${spacing}px`;
+                        } else if (b.template === "diagonal") {
+                          thumbPattern = `repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)`;
+                        } else if (b.template === "dots") {
+                          thumbPattern = `radial-gradient(rgba(0,0,0,0.1) 1px, transparent 0)`;
+                          thumbSize = `6px 6px`;
+                        }
+
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setSelectedConfig(b)}
+                            className={`flex-none w-20 h-20 rounded-xl shadow-sm border overflow-hidden transform transition active:scale-95 relative ${selected ? "ring-4 ring-red-400 border-white scale-105 z-10" : "border-slate-200 hover:scale-[1.03]"
+                              }`}
+                            style={{
+                              backgroundColor: b.startColor,
+                              backgroundImage: thumbPattern ? `${thumbPattern}, ${baseBg}` : baseBg,
+                              backgroundSize: thumbSize,
+                            }}
+                            aria-pressed={selected}
+                          >
+                            {/* Mini Emoji Preview */}
+                            {b.emojis && b.emojis.length > 0 && (
+                              <div
+                                className="absolute inset-0 flex items-center justify-center opacity-40"
+                                style={{ filter: b.emojiBlur ? "blur(2px)" : "none" }}
+                              >
+                                <span className="text-xl transform rotate-12">{b.emojis[0]}</span>
+                              </div>
+                            )}
+
+                            {/* Indicator for style type (optional hint) */}
+
+                            <div className="text-xs mt-1 text-slate-700 break-words px-1">{thumbText}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

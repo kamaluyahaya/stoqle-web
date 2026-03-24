@@ -3,15 +3,19 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/src/context/authContext";
+import { useCart } from "@/src/context/cartContext";
+import { API_BASE_URL } from "@/src/lib/config";
 
 type MenuProps = {
   label: string;
   description?: string;
-  items?: { id: string; label: string; onClick?: () => void; href?: string }[];
+  items?: { id: string; label: string; onClick?: () => void; href?: string; badge?: number | string }[];
   className?: string;
+  avatar?: string | null;
 };
 
-function HoverMenu({ label, description, items = [], className = "" }: MenuProps) {
+function HoverMenu({ label, description, items = [], className = "", avatar }: MenuProps) {
   const [open, setOpen] = useState(false);
   // type-safe timeout ref
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,9 +58,10 @@ function HoverMenu({ label, description, items = [], className = "" }: MenuProps
         aria-expanded={open}
         onClick={handleToggle}
         onKeyDown={onKeyDown}
-        className="text-sm font-medium text-gray-700 hover:text-black focus:outline-none rounded-full"
+        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-black focus:outline-none rounded-full"
       >
-        {label}
+        {avatar && <img src={avatar} alt="" className="h-6 w-6 rounded-full object-cover border border-gray-100" />}
+        <span>{label}</span>
       </button>
 
       {/* Dropdown */}
@@ -80,9 +85,14 @@ function HoverMenu({ label, description, items = [], className = "" }: MenuProps
                 <Link
                   href={it.href || "#"}
                   onClick={() => setOpen(false)}
-                  className="block px-4 py-2 hover:bg-gray-50 rounded-full cursor-pointer"
+                  className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 rounded-full cursor-pointer"
                 >
-                  {it.label}
+                  <span>{it.label}</span>
+                  {it.badge !== undefined && (it.badge as number) > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                      {it.badge}
+                    </span>
+                  )}
                 </Link>
               </li>
             ))}
@@ -95,9 +105,35 @@ function HoverMenu({ label, description, items = [], className = "" }: MenuProps
 
 export default function RightMenus() {
   const router = useRouter();
+  const { user, isLoggedIn } = useAuth() as any;
+  const { cartCount } = useCart();
+  
+  const firstName = user?.author_name?.split(" ")[0] || user?.full_name?.split(" ")[0] || "Profile";
+  const displayName = user?.business_name || firstName;
+
+  const rawProfileImage = user?.business_logo || user?.profile_pic || user?.avatar || user?.photoURL || null;
+  const formatUrl = (url: string | null) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  };
+  const profileImage = formatUrl(rawProfileImage);
 
   return (
     <div className="flex min-w-[200px] items-center justify-end gap-6">
+      {isLoggedIn && (
+        <HoverMenu
+          label={displayName}
+          avatar={profileImage}
+          items={[
+            { id: "profile-1", label: "Wallet", href: "/profile/wallet" },
+            { id: "profile-2", label: "Order", href: "/profile/orders" },
+            { id: "profile-3", label: "Cart", href: "/cart", badge: cartCount || 0 },
+            { id: "profile-4", label: "My Account", href: "/profile" },
+          ]}
+        />
+      )}
+
       <HoverMenu
         label="Creative Center"
         items={[

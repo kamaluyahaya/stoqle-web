@@ -211,7 +211,13 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
             >
                 <div className="flex items-center gap-1.5">
                     <button 
-                        onClick={() => router.back()}
+                        onClick={() => {
+                            if (window.history.length > 1) {
+                                router.back();
+                            } else {
+                                router.push('/discover');
+                            }
+                        }}
                         className="p-1.5 text-slate-100 transition-colors"
                     >
                         <ChevronLeftIcon className="w-6 h-6" strokeWidth={2.5} />

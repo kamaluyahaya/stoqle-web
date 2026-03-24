@@ -43,6 +43,7 @@ export default function EditProductPage() {
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState<number | "">("");
   const [quantity, setQuantity] = useState<number | "">("");
+  const [businessId, setBusinessId] = useState<string | number>("");
   const [hasVariants, setHasVariants] = useState(false);
 
   const [productImages, setProductImages] = useState<(File | string)[]>([]);
@@ -161,6 +162,7 @@ export default function EditProductPage() {
       setDescription(data.description || "");
       setCategory(data.category_name || (data as any).category?.category_name || data.category || "");
       setPrice(data.price || "");
+      setBusinessId(data.business_id || "");
 
       const baseInv = inventory.find((i: any) => !i.variant_option_id && !i.sku_id);
       setQuantity(baseInv ? baseInv.quantity : (data.quantity || 0));
@@ -623,7 +625,7 @@ export default function EditProductPage() {
       )}
 
       {/* Top Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+      <div className="sticky top-0 z-[1050] bg-white/90 backdrop-blur-md border-b border-slate-200">
         <div className=" px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -641,7 +643,59 @@ export default function EditProductPage() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.open(`/shop/${productId}`, '_blank')}
+              onClick={() => {
+                const payload: PreviewPayload = {
+                  productId: productId ? Number(productId) : undefined,
+                  businessId: businessId ? Number(businessId) : undefined,
+                  title,
+                  description,
+                  category,
+                  price: price === "" ? 0 : Number(price),
+                  quantity: quantity === "" ? 0 : Number(quantity),
+                  hasVariants,
+                  useCombinations,
+                  productImages: productImages.map((img, i) => ({
+                    url: typeof img === "string" ? img : URL.createObjectURL(img),
+                    file: typeof img === "string" ? undefined : img,
+                    name: `Image ${i + 1}`,
+                  })),
+                  productVideo: productVideo ? {
+                    url: typeof productVideo === "string" ? productVideo : URL.createObjectURL(productVideo),
+                    file: typeof productVideo === "string" ? undefined : productVideo,
+                    name: "Product Video"
+                  } : null,
+                  params: params.map(p => ({ key: p.key, value: p.value })),
+                  variantGroups: variantGroups.map(g => ({
+                    id: g.id,
+                    title: g.title,
+                    allowImages: g.allowImages,
+                    entries: g.entries.map(e => ({
+                      id: e.id,
+                      name: e.name,
+                      quantity: e.quantity,
+                      price: e.price,
+                      images: e.images?.map((img, idx) => ({
+                        url: typeof img === "string" ? img : URL.createObjectURL(img),
+                        file: typeof img === "string" ? undefined : img,
+                        name: `Variant Image ${idx + 1}`
+                      })) || []
+                    }))
+                  })),
+                  skus: skus || [],
+                  samePriceForAll,
+                  sharedPrice,
+                  policyOverrides: {
+                    useStoreDefaultReturn,
+                    returnPolicy,
+                    useStoreDefaultShipping,
+                    shippingPolicy,
+                    useStoreDefaultPromotions,
+                    promotions,
+                    saleDiscount,
+                  }
+                };
+                setPreviewPayload(payload);
+              }}
               className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-full transition-all"
             >
               <Eye className="w-4 h-4" /> Preview Live
@@ -1038,7 +1092,7 @@ export default function EditProductPage() {
       {/* Convert to Variant Modal */}
       <AnimatePresence>
         {showConvertToVariantModal && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1090,7 +1144,7 @@ export default function EditProductPage() {
 
                       <button
                         onClick={resetModals}
-                        className="w-full py-3.5 rounded-2xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-all"
+                        className="w-full py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-slate-800 transition-all"
                       >
                         I Understand
                       </button>
@@ -1120,7 +1174,7 @@ export default function EditProductPage() {
                         </button>
                         <button
                           onClick={resetModals}
-                          className="w-full py-3.5 rounded-2xl bg-slate-50 text-slate-500 font-bold text-sm hover:bg-slate-100 transition-all"
+                          className="w-full py-3 rounded-full bg-slate-50 text-slate-500 font-bold text-sm hover:bg-slate-100 transition-all"
                         >
                           Cancel
                         </button>
@@ -1148,7 +1202,7 @@ export default function EditProductPage() {
       {/* Convert to Simple Modal */}
       <AnimatePresence>
         {showConvertToSimpleModal && safetyCheckResult && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1198,7 +1252,7 @@ export default function EditProductPage() {
                         <div className="flex gap-3 mt-8 pb-8">
                           <button
                             onClick={resetModals}
-                            className="w-full py-3.5 rounded-2xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-all font-medium"
+                            className="w-full py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-slate-800 transition-all font-medium"
                           >
                             I Understand
                           </button>
@@ -1280,6 +1334,11 @@ export default function EditProductPage() {
         onClose={() => setOpenManageCategories(false)}
         categories={categories}
         onUpdated={() => loadCategories()}
+      />
+      <PreviewModal
+        open={!!previewPayload}
+        payload={previewPayload}
+        onClose={() => setPreviewPayload(null)}
       />
     </div>
   );

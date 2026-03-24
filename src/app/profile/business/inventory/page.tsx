@@ -87,7 +87,8 @@ interface Adjustment {
 }
 
 export default function SmartInventoryPage() {
-    const { token, user } = useAuth();
+    const auth = useAuth();
+    const { token, user } = auth;
     const router = useRouter();
 
     // State
@@ -281,8 +282,11 @@ export default function SmartInventoryPage() {
                         <RefreshCcw className={`w-5 h-5 text-slate-600 ${refreshing ? 'animate-spin' : ''}`} />
                     </button>
                     <button
-                        onClick={() => router.push('/profile/business/inventory/add-product')}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-red-500 text-white rounded-lg hover:hover:scale-105 transition-all text-xs font-bold shadow-lg "
+                        onClick={async () => {
+                            const ok = await auth.ensureAccountVerified();
+                            if (ok) router.push('/profile/business/inventory/add-product');
+                        }}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-red-500 text-white rounded-full hover:hover:scale-105 transition-all text-xs font-bold "
                     >
                         Add new product
                     </button>
@@ -371,8 +375,7 @@ export default function SmartInventoryPage() {
                                     products.map(product => (
                                         <React.Fragment key={product.product_id}>
                                             <tr
-                                                onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
-                                                className={`${expandedProducts.has(product.product_id) ? 'bg-slate-50/30' : 'hover:bg-slate-50/30'} group transition-colors cursor-pointer`}
+                                                className={`${expandedProducts.has(product.product_id) ? 'bg-slate-50/30' : 'hover:bg-slate-50/30'} group transition-colors`}
                                             >
                                                 {/* Info */}
                                                 <td className="px-6 py-2.5">
@@ -419,7 +422,12 @@ export default function SmartInventoryPage() {
                                                             )}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">{product.name}</p>
+                                                            <p
+                                                                onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
+                                                                className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors line-clamp-1"
+                                                            >
+                                                                {product.name}
+                                                            </p>
                                                             <p className="text-xs text-slate-500">{product.category}</p>
                                                         </div>
                                                     </div>
@@ -664,7 +672,7 @@ export default function SmartInventoryPage() {
                 {/* History Side Drawer */}
                 <AnimatePresence>
                     {historyDrawer.open && (
-                        <div className="fixed inset-0 z-[100] flex justify-end">
+                        <div className="fixed inset-0 z-[1100] flex justify-end">
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -751,7 +759,7 @@ export default function SmartInventoryPage() {
                 {/* Delete/Archive Confirmation Modal */}
                 <AnimatePresence>
                     {deleteModal.open && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div className="fixed inset-0 z-[1110] flex items-center justify-center p-4">
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -864,7 +872,10 @@ function MobileProductCard({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                             <div>
-                                <h4 className="font-black text-slate-900 leading-tight  text-xs tracking-wider line-clamp-2">
+                                <h4
+                                    onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
+                                    className="font-black text-slate-900 leading-tight text-xs tracking-wider line-clamp-2 cursor-pointer hover:text-indigo-600 transition-colors"
+                                >
                                     {product.name}
                                 </h4>
                                 <p className="text-[10px] text-slate-400 font-bold  tracking-[0.15em] mt-1">
@@ -896,14 +907,14 @@ function MobileProductCard({
                                                     className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
                                                 >
                                                     <Edit3 className="w-4 h-4 text-indigo-500" />
-                                                    EDIT DETAILS
+                                                    Edit Details
                                                 </button>
                                                 <button
                                                     onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
                                                     className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
                                                 >
                                                     <Eye className="w-4 h-4 text-emerald-500" />
-                                                    LIVE PREVIEW
+                                                    View in shop
                                                 </button>
                                                 <div className="my-1 border-t border-slate-100 mx-1" />
                                                 <button
@@ -914,7 +925,7 @@ function MobileProductCard({
                                                     className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all"
                                                 >
                                                     <MinusCircle className="w-4 h-4" />
-                                                    DELETE
+                                                    Delete
                                                 </button>
                                             </div>
                                         </motion.div>

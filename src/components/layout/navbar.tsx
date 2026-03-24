@@ -5,6 +5,8 @@ import RightMenus from "../right-menus";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/src/context/authContext"; // adjust path if needed
+import { useCart } from "@/src/context/cartContext";
+import { API_BASE_URL } from "@/src/lib/config";
 import SearchModal from "../modal/SearchModal";
 import SearchResultsModal from "../modal/SearchResultsModal";
 type Props = {
@@ -24,6 +26,7 @@ export default function Navbar({ height }: Props) {
   const menuRef = useRef<HTMLDivElement | null>(null); // ref for click outside
   const router = useRouter();
   const { token, user, openLogin } = useAuth();
+  const { cartCount } = useCart();
   const lastPath = useRef(pathname);
 
   useEffect(() => {
@@ -51,6 +54,42 @@ export default function Navbar({ height }: Props) {
       (user ||
         token)
     );
+
+  const firstName = user?.author_name?.split(" ")[0] || user?.full_name?.split(" ")[0] || "Profile";
+  const displayName = user?.business_name || firstName;
+
+  const rawProfileImage = user?.business_logo || user?.profile_pic || user?.avatar || user?.photoURL || null;
+  const formatUrl = (url: string | null) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  };
+  const profileImage = formatUrl(rawProfileImage);
+
+  const MobileSubmenuRow = ({ label, href, badge }: { label: string; href: string; badge?: number | string }) => (
+    <li>
+      <Link
+        href={href}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
+        onClick={() => {
+          setShowMobileMenu(false);
+          setActiveSubmenu(null);
+        }}
+      >
+        <span className="text-gray-500">{label}</span>
+        <div className="flex items-center gap-2">
+          {badge !== undefined && (badge as number) > 0 && (
+            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+              {badge}
+            </span>
+          )}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
+          </svg>
+        </div>
+      </Link>
+    </li>
+  );
 
   useEffect(() => {
     if (showMobileSearch) {
@@ -124,11 +163,11 @@ export default function Navbar({ height }: Props) {
       />
 
       <header
-        className={`fixed top-0 inset-x-0 z-30 bg-white backdrop-blur-md p-2 ${pathname === "/messages" || pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory")
+        className={`fixed top-0 inset-x-0 bg-white backdrop-blur-md p-2 ${pathname === "/messages" || pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory")
           ? "hidden sm:block"
           : ""
           }`}
-        style={{ height }}
+        style={{ height, zIndex: (showMobileMenu || showMobileSearch) ? 2500 : 1000 }}
       >
         <div className="mx-auto flex h-full items-center px-4 w-full">
           {/* ---------- Desktop & Tablet: Logo & main search ---------- */}
@@ -193,22 +232,35 @@ export default function Navbar({ height }: Props) {
             {/* Hamburger + anchored dropdown */}
             <div className="relative" ref={menuRef}>
               <button
-                className="rounded-full p-2 hover:bg-gray-100"
+                className="rounded-full p-2 hover:bg-gray-100 transition-all duration-300"
                 aria-label="Menu"
                 onClick={() => {
                   setShowMobileMenu((s) => !s);
                   setActiveSubmenu(null);
                 }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                <div className="relative w-5 h-5">
+                   <div 
+                    className={`absolute inset-0 transition-all duration-300 transform ${showMobileMenu ? 'rotate-90 opacity-0' : 'rotate-0 opacity-100'}`}
+                   >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                     </svg>
+                   </div>
+                   <div 
+                    className={`absolute inset-0 transition-all duration-300 transform ${showMobileMenu ? 'rotate-0 opacity-100' : '-rotate-90 opacity-0'}`}
+                   >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                     </svg>
+                   </div>
+                </div>
               </button>
 
               {/* Dropdown container anchored under the hamburger */}
               {showMobileMenu && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-gray-200/60 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50"
+                  className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-gray-200/60 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-[2000]"
                   role="menu"
                   aria-label="Mobile menu"
                 >
@@ -238,6 +290,25 @@ export default function Navbar({ height }: Props) {
                     {!activeSubmenu && (
                       <div>
                         <ul className="flex flex-col gap-1">
+                          {isLoggedIn && (
+                            <li>
+                              <button
+                                className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                                onClick={() => setActiveSubmenu("My Profile")}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {isLoggedIn && profileImage && (
+                                    <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border border-gray-100" />
+                                  )}
+                                  <span className="truncate max-w-[140px]">{displayName}</span>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                            </li>
+                          )}
+
                           <li>
                             <button
                               className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
@@ -326,6 +397,17 @@ export default function Navbar({ height }: Props) {
 
                       </div>
                     )}
+                    {/* Submenu: About Stoqle */}
+                    {activeSubmenu === "My Profile" && (
+                      <ul className="flex flex-col gap-1">
+                        <div className="my-2 border-t border-gray-100" />
+                        <MobileSubmenuRow label="Order" href="/profile/orders" />
+                        <MobileSubmenuRow label="Cart" href="/cart" badge={cartCount || 0} />
+                        <MobileSubmenuRow label="Wallet" href="/profile/wallet" />
+                        <MobileSubmenuRow label="My Account" href="/profile" />
+                      </ul>
+                    )}
+
 
                     {/* Submenu: Creative Center */}
                     {activeSubmenu === "Creative Center" && (

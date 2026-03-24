@@ -19,6 +19,7 @@ import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
 import { useCart } from "@/src/context/cartContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
+import { API_BASE_URL } from "@/src/lib/config";
 
 type Props = {
   navHeight: number;
@@ -40,7 +41,13 @@ export default function Sidebar({ navHeight, width }: Props) {
   const isLoggedIn = !!auth?.user;
 
   const firstName = auth?.user?.author_name?.split(" ")[0] || auth?.user?.full_name?.split(" ")[0] || "Profile";
-  const profileImage = auth?.user?.business_logo || auth?.user?.profile_pic || auth?.user?.avatar || auth?.user?.photoURL || null;
+  const rawProfileImage = auth?.user?.business_logo || auth?.user?.profile_pic || auth?.user?.avatar || auth?.user?.photoURL || null;
+  const formatUrl = (url: string | null) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  };
+  const profileImage = formatUrl(rawProfileImage);
 
   const ProfileIcon = () =>
     isLoggedIn && profileImage ? (
@@ -131,10 +138,11 @@ export default function Sidebar({ navHeight, width }: Props) {
     <li>
       <Link
         href={href}
-        onClick={(e) => {
-          if (requireLogin && !isLoggedIn) {
+        onClick={async (e) => {
+          if (requireLogin) {
             e.preventDefault();
-            auth.openLogin();
+            const ok = await auth.ensureAccountVerified();
+            if (ok) router.push(href);
           }
         }}
         className="w-full flex items-center justify-between rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer group transition-colors"
@@ -152,7 +160,7 @@ export default function Sidebar({ navHeight, width }: Props) {
     </li>
   );
 
-  const SubmenuRow = ({ label, href }: { label: string; href: string }) => (
+  const SubmenuRow = ({ label, href, badge }: { label: string; href: string; badge?: number | string }) => (
     <li>
       <Link
         href={href}
@@ -163,16 +171,16 @@ export default function Sidebar({ navHeight, width }: Props) {
         }}
       >
         <span className="text-gray-500">{label}</span>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-        </svg>
+        <div className="flex items-center gap-2">
+          {badge !== undefined && (badge as number) > 0 && (
+            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+              {badge}
+            </span>
+          )}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
+          </svg>
+        </div>
       </Link>
     </li>
   );
@@ -253,16 +261,29 @@ export default function Sidebar({ navHeight, width }: Props) {
             setShowMenu((s) => !s);
             if (showMenu) setActiveSubmenu(null);
           }}
-          className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-slate-100 w-full"
+          className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-slate-100 w-full transition-all duration-300"
         >
-          <Bars3Icon className="h-5 w-5 text-gray-700" />
+          <div className="relative w-5 h-5">
+            <div className={`absolute inset-0 transition-all duration-300 transform ${showMenu ? 'rotate-90 opacity-0' : 'rotate-0 opacity-100'}`}>
+              {isLoggedIn && profileImage ? (
+                <img src={profileImage} alt="Profile" className="h-5 w-5 rounded-full object-cover" />
+              ) : (
+                <Bars3Icon className="h-5 w-5 text-gray-700" />
+              )}
+            </div>
+            <div className={`absolute inset-0 transition-all duration-300 transform ${showMenu ? 'rotate-0 opacity-100' : '-rotate-90 opacity-0'}`}>
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+               </svg>
+            </div>
+          </div>
           <span className="text-md font-bold text-gray-700">More</span>
         </button>
 
         {showMenu && (
           <div
             ref={menuRef}
-            className="absolute right-0 bottom-full mb-2 w-64 rounded-xl border border-gray-200/60 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-50"
+            className="absolute right-0 bottom-full mb-2 w-64 rounded-xl border border-gray-200/60 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-[2000]"
           >
             <div className="p-2">
               {activeSubmenu && (
@@ -287,69 +308,32 @@ export default function Sidebar({ navHeight, width }: Props) {
               )}
 
               {!activeSubmenu && (
-
                 <ul className="flex flex-col gap-1">
-                  <li>
-                    <button
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                      onClick={() => setActiveSubmenu("About Stoqle")}
-                    >
-                      About Stoqle
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
+                  {isLoggedIn && (
+                    <li>
+                      <button
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                        onClick={() => setActiveSubmenu("My Profile")}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                      onClick={() => setActiveSubmenu("Privacy, Agreement")}
-                    >
-                      Privacy, Agreement
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </li>
-
-
-
-                  <li>
-                    <button
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                      onClick={() => setActiveSubmenu("Help and Customer Service")}
-                    >
-                      Help and Customer Service
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </li>
-
-
-                  <div className="my-2 border-t border-gray-100" />
-
+                        <div className="flex items-center gap-2">
+                           {isLoggedIn && profileImage && (
+                             <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border border-gray-100" />
+                           )}
+                           <span className="truncate max-w-[140px]">{auth?.user?.business_name || firstName}</span>
+                        </div>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4 text-gray-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </li>
+                  )}
                   <li>
                     <button
                       className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
@@ -386,10 +370,73 @@ export default function Sidebar({ navHeight, width }: Props) {
                       </svg>
                     </button>
                   </li>
+                  <div className="my-2 border-t border-gray-100" />
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("Help and Customer Service")}
+                    >
+                      Help and Customer Service
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("Privacy, Agreement")}
+                    >
+                      Privacy, Agreement
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setActiveSubmenu("About Stoqle")}
+                    >
+                      About Stoqle
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </li>
                 </ul>
               )}
 
               {/* Submenus */}
+              {activeSubmenu === "My Profile" && (
+                <ul className="flex flex-col gap-1">
+                  <SubmenuRow label="Wallet" href="/profile/wallet" />
+                  <SubmenuRow label="Order" href="/profile/orders" />
+                  <SubmenuRow label="Cart" href="/cart" badge={cartCount || 0} />
+                  <SubmenuRow label="My Account" href="/profile" />
+                </ul>
+              )}
               {activeSubmenu === "Creative Center" && (
 
                 <ul className="flex flex-col gap-1">
@@ -417,6 +464,7 @@ export default function Sidebar({ navHeight, width }: Props) {
                   <SubmenuRow label="Privacy Policy" href="/legal/privacy" />
                 </ul>
               )}
+
               {activeSubmenu === "About Stoqle" && (
                 <ul className="flex flex-col gap-1">
                   <SubmenuRow label="Our team" href="/about/team" />

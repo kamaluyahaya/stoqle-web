@@ -504,7 +504,8 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, token, isHydrated } = useAuth();
+    const auth = useAuth();
+    const { user, token, isHydrated } = auth;
     const [showLoginModal, setShowLoginModal] = useState(false);
 
     // --- Actionable Orders State ---
@@ -558,10 +559,9 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     const handleLikeClick = React.useCallback(async (e: React.MouseEvent, productId: number, baseCount: number) => {
         e.stopPropagation();
-        if (!user || !token) {
-            setShowLoginModal(true);
-            return;
-        }
+        
+        const ok = await auth.ensureAccountVerified();
+        if (!ok) return;
 
         const current = likeData[productId] || { liked: false, count: baseCount };
         const newLiked = !current.liked;
@@ -573,13 +573,13 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         }));
 
         try {
-            const res = await toggleProductLike(productId, token);
+            const res = await toggleProductLike(productId, token!);
             setLikeData(prev => ({
                 ...prev,
                 [productId]: { liked: res.data.liked, count: res.data.likes_count }
             }));
             if (res.data.liked) {
-                logUserActivity({ product_id: productId, action_type: 'like' }, token);
+                logUserActivity({ product_id: productId, action_type: 'like' }, token!);
             }
         } catch (err) {
             console.error("Like error", err);
@@ -924,7 +924,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
     return (
         <>
             <section className={`min-h-screen transition-colors duration-500 pb-10 ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-slate-50"}`}>
-                <div className={`sticky transition-all duration-300 ${isScrolled ? "top-0 z-[100] translate-y-0" : "top-16 z-20"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"}`}>
+                <div className={`sticky transition-all duration-300 ${isScrolled ? "top-0 z-[1100] translate-y-0" : "top-16 z-20"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"}`}>
                     <div ref={tabsRef} className="flex px-4 py-2.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
                         {CATEGORIES.map((item) => (
                             <button
@@ -1051,7 +1051,8 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                 {
                     modalOpen && selectedProductPayload && (
                         <ProductPreviewModal
-                            open={modalOpen}
+                            key="market-product-preview-modal"
+                            open={modalOpen} 
                             payload={selectedProductPayload}
                             origin={clickPos}
                             onClose={() => {

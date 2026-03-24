@@ -21,6 +21,7 @@ import PinSetupModal from "@/src/components/business/pinSetupModal";
 import { logUserActivity } from "@/src/lib/api/productApi";
 import ImageViewer from "@/src/components/modal/imageViewer";
 import { motion, AnimatePresence } from "framer-motion";
+import PhoneVerificationModal from "@/src/components/modal/phoneVerificationModal";
 
 interface CartItem {
     cart_id: number;
@@ -219,6 +220,7 @@ export default function CheckoutPage() {
 
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerSrc, setViewerSrc] = useState<string | null>(null);
+    const [phoneModalOpen, setPhoneModalOpen] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -302,6 +304,11 @@ export default function CheckoutPage() {
             fetchCart();
             refreshWallet();
             fetchDefaultAddress();
+            
+            // Check phone number
+            if (user && !user.phone_no) {
+                setPhoneModalOpen(true);
+            }
         } else {
             // setTimeout to prevent flash
             const t = setTimeout(() => {
@@ -309,7 +316,7 @@ export default function CheckoutPage() {
             }, 1000);
             return () => clearTimeout(t);
         }
-    }, [token, selectedIds]);
+    }, [token, selectedIds, user?.phone_no]);
 
     const fetchDefaultAddress = async () => {
         if (!token) return;
@@ -492,6 +499,11 @@ export default function CheckoutPage() {
         if (!address) {
             setAddressModalOpen(true);
             toast.info("Please set a delivery address");
+            return;
+        }
+
+        if (!user?.phone_no) {
+            setPhoneModalOpen(true);
             return;
         }
 
@@ -686,7 +698,7 @@ export default function CheckoutPage() {
     if (loading) {
         return (
             <div className="bg-slate-100/70 min-h-screen pb-40">
-                <header className="sticky top-0 z-30 bg-white px-6 py-4 flex items-center gap-4">
+                <header className="sticky top-0 z-[1100] bg-white px-6 py-4 flex items-center gap-4">
                     <div className="w-8 h-8 rounded-full shimmer-bg" />
                     <div className="h-4 w-32 shimmer-bg rounded-md" />
                 </header>
@@ -748,7 +760,7 @@ export default function CheckoutPage() {
                 }}
             />
             {/* Header & Sticky Address Area */}
-            <div className="sticky top-0 z-[35] bg-white ">
+            <div className="sticky top-0 z-[1100] bg-white ">
                 <header className="px-6 py-4 flex items-center gap-4">
                     <button
                         onClick={() => router.back()}
@@ -1048,6 +1060,17 @@ export default function CheckoutPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            <PhoneVerificationModal 
+                isOpen={phoneModalOpen} 
+                onClose={() => {
+                    setPhoneModalOpen(false);
+                    // If they are on checkout and don't have a phone, we might want to prevent staying here
+                    if (!user?.phone_no) router.push("/cart");
+                }}
+                onSuccess={() => {
+                    setPhoneModalOpen(false);
+                }}
+            />
         </div>
     );
 }
