@@ -18,18 +18,31 @@ const isVideoUrl = (u?: string) => !!u && VIDEO_EXT_RE.test(u);
 export const mapApiPost = (p: any): Post => {
   const apiId = p.social_post_id ?? Math.floor(Math.random() * 1e6);
   let src: string | undefined;
-  if (Array.isArray(p.images) && p.images.length > 0) {
-    const cover = p.images.find((i: any) => i.is_cover === 1) ?? p.images[0];
+  let thumbnail: string | undefined;
+  const images = Array.isArray(p.images) ? p.images : [];
+  
+  if (p.cover_type === "video") {
+    const videoFile = images.find((i: any) => isVideoUrl(i.image_url));
+    const coverFile = images.find((i: any) => !!i.is_cover);
+    
+    src = videoFile?.image_url;
+    thumbnail = coverFile?.image_url;
+    
+    // Fallback if no video file found but cover exists
+    if (!src) src = coverFile?.image_url;
+  } else if (images.length > 0) {
+    const cover = images.find((i: any) => !!i.is_cover) ?? images[0];
     src = cover?.image_url;
   }
-  const allMedia = Array.isArray(p.images) && p.images.length > 0
-    ? p.images.map((i: any) => i.image_url)
-    : src ? [src] : [];
 
+  const allMedia = images.length > 0
+    ? images.map((i: any) => i.image_url)
+    : src ? [src] : [];
+  
   if (!src && p.cover_type !== "note") {
     src = NO_IMAGE_PLACEHOLDER;
   }
-  const isVideo = isVideoUrl(src);
+  const isVideo = p.cover_type === "video" || isVideoUrl(src);
   const caption = p.text ?? p.subtitle ?? "";
   const note_caption = p.subtitle ?? "";
   return {
@@ -52,6 +65,7 @@ export const mapApiPost = (p: any): Post => {
     allMedia,
     location: p.location,
     category: p.category,
+    thumbnail: thumbnail,
   };
 };
 

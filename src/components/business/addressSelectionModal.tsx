@@ -34,6 +34,9 @@ const DISABLED_COUNTRIES = [
   "South Africa",
 ];
 
+const ENABLED_STATES = ["Kaduna State"];
+const ENABLED_LGAS = ["Chikun", "Igabi", "Kaduna North", "Kaduna South"];
+
 export default function AddressSelectionModal({
   title = "Address",
   hintText = "Select country, state, and LGA",
@@ -81,14 +84,34 @@ export default function AddressSelectionModal({
 
   const states = useMemo(() => {
     if (!selectedCountry) return [];
-    return Object.keys(hierarchy[selectedCountry] ?? {}).sort((a, b) =>
-      a.localeCompare(b)
-    );
+
+    const allStates = Object.keys(hierarchy[selectedCountry] ?? {});
+
+    // Sort so that ENABLED_STATES are at the top
+    return allStates.sort((a, b) => {
+      const aEnabled = ENABLED_STATES.includes(a);
+      const bEnabled = ENABLED_STATES.includes(b);
+
+      if (aEnabled && !bEnabled) return -1;
+      if (!aEnabled && bEnabled) return 1;
+      return a.localeCompare(b);
+    });
   }, [hierarchy, selectedCountry]);
 
   const lgas = useMemo(() => {
     if (!selectedCountry || !selectedState) return [];
-    return (hierarchy[selectedCountry]?.[selectedState] ?? []).slice().sort();
+
+    const allLgas = (hierarchy[selectedCountry]?.[selectedState] ?? []).slice();
+
+    // Sort so that ENABLED_LGAS are at the top
+    return allLgas.sort((a, b) => {
+      const aEnabled = ENABLED_LGAS.includes(a);
+      const bEnabled = ENABLED_LGAS.includes(b);
+
+      if (aEnabled && !bEnabled) return -1;
+      if (!aEnabled && bEnabled) return 1;
+      return a.localeCompare(b);
+    });
   }, [hierarchy, selectedCountry, selectedState]);
 
   const filteredStates = useMemo(
@@ -109,8 +132,8 @@ export default function AddressSelectionModal({
   const canNext = () => {
     if (level === 0)
       return !!selectedCountry && ENABLED_COUNTRIES.includes(selectedCountry);
-    if (level === 1) return !!selectedState;
-    if (level === 2) return !!selectedLga;
+    if (level === 1) return !!selectedState && ENABLED_STATES.includes(selectedState);
+    if (level === 2) return !!selectedLga && ENABLED_LGAS.includes(selectedLga);
     return false;
   };
 
@@ -124,6 +147,7 @@ export default function AddressSelectionModal({
 
   // immediate commit on LGA tap
   function handleLgaClick(l: string) {
+    if (!ENABLED_LGAS.includes(l)) return; // Protection
     setSelectedLga(l);
     if (selectedCountry && selectedState) {
       const full = `${selectedCountry}, ${selectedState}, ${l}`;
@@ -141,7 +165,7 @@ export default function AddressSelectionModal({
   const ModalContent = () => (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
           {/* backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -163,12 +187,12 @@ export default function AddressSelectionModal({
             <div className="px-4 py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">
+                  <h5 className="text-sm font-semibold text-slate-600">
                     {level === 0 ? "Select Country" : level === 1 ? "Select State" : "Select LGA"}
-                  </h3>
-                  <div className="mt-1 text-sm text-slate-500">
+                  </h5>
+                  {/* <div className="mt-1 text-sm text-slate-500">
                     {level === 0 ? "Choose a country" : level === 1 ? "Choose a state" : "Choose a local government area"}
-                  </div>
+                  </div> */}
                 </div>
                 <button
                   aria-label="Close"
@@ -184,7 +208,7 @@ export default function AddressSelectionModal({
 
             {/* breadcrumb */}
             {level > 0 && (
-              <div className="px-4 py-3 border-b border-slate-200">
+              <div className="px-4 border-slate-200">
                 <div className="flex gap-6 text-sm">
                   <button
                     className="text-left"
@@ -277,20 +301,22 @@ export default function AddressSelectionModal({
                   <div className="px-4 pb-3">
                     <input
                       className="
-                  w-full
-                  rounded-full
-                  bg-gray-100
-                  px-5
-                  py-2
-                  pr-11
-                  text-sm
-                  text-black
-                  caret-red-500
-                  outline-none
-                  transition
-                  focus:ring-1
-                  focus:ring-gray-300
-                "
+                        w-full
+                        rounded-full
+                        bg-gray-100
+                        border
+                        border-slate-300
+                        px-5
+                        py-2
+                        pr-11
+                        text-sm
+                        text-black
+                        caret-red-500
+                        outline-none
+                        transition
+                        focus:ring-1
+                        focus:ring-gray-300
+                      "
                       placeholder="Search state..."
                       value={stateQuery}
                       onChange={(e) => setStateQuery(e.target.value)}
@@ -303,24 +329,31 @@ export default function AddressSelectionModal({
                     ) : (
                       <ul>
                         {filteredStates.map((s) => {
+                          const isEnabled = ENABLED_STATES.includes(s);
                           const isSelected = s === selectedState;
                           return (
                             <li key={s} className="px-4">
                               <button
+                                disabled={!isEnabled}
                                 onClick={() => {
+                                  if (!isEnabled) return;
                                   setSelectedState(s);
                                   setSelectedLga(null);
                                   setLevel(2);
                                   setLgaQuery("");
                                 }}
-                                className="w-full text-left py-3 flex items-center justify-between rounded-xl hover:bg-slate-50"
+                                className={`w-full text-left py-3 flex items-center justify-between rounded-xl ${isEnabled ? "hover:bg-slate-50" : "cursor-not-allowed opacity-60"}`}
                               >
-                                <div className={`text-sm ${isSelected ? "text-red-600 font-semibold" : "text-slate-900"}`}>{s}</div>
-                                {isSelected && (
+                                <div className={`text-sm ${isEnabled ? (isSelected ? "text-red-600 font-semibold" : "text-slate-900") : "text-slate-400"}`}>
+                                  {s}
+                                </div>
+                                {!isEnabled ? (
+                                  <div className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Coming soon</div>
+                                ) : isSelected ? (
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-600" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" />
                                   </svg>
-                                )}
+                                ) : null}
                               </button>
                               <div className="h-px bg-slate-100 my-2" />
                             </li>
@@ -364,19 +397,25 @@ export default function AddressSelectionModal({
                     ) : (
                       <ul>
                         {filteredLgas.map((l) => {
+                          const isEnabled = ENABLED_LGAS.includes(l);
                           const isSelected = l === selectedLga;
                           return (
                             <li key={l} className="px-4">
                               <button
-                                onClick={() => handleLgaClick(l)}
-                                className="w-full text-left py-3 flex items-center justify-between rounded-xl hover:bg-slate-50"
+                                disabled={!isEnabled}
+                                onClick={() => isEnabled && handleLgaClick(l)}
+                                className={`w-full text-left py-3 flex items-center justify-between rounded-xl ${isEnabled ? "hover:bg-slate-50" : "cursor-not-allowed opacity-60"}`}
                               >
-                                <div className={`text-sm ${isSelected ? "text-red-600 font-semibold" : "text-slate-900"}`}>{l}</div>
-                                {isSelected && (
+                                <div className={`text-sm ${isEnabled ? (isSelected ? "text-red-600 font-semibold" : "text-slate-900") : "text-slate-400"}`}>
+                                  {l}
+                                </div>
+                                {!isEnabled ? (
+                                  <div className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Coming Soon</div>
+                                ) : isSelected ? (
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-600" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" />
                                   </svg>
-                                )}
+                                ) : null}
                               </button>
                               <div className="h-px bg-slate-100 my-2" />
                             </li>
@@ -439,7 +478,7 @@ export default function AddressSelectionModal({
             setOpen(true);
             setLevel(0);
           }}
-          className="flex items-center gap-6 bg-white rounded-xl p-4 w-full"
+          className="flex items-center gap-6 bg-white rounded-xl p-2 w-full"
         >
           <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
             {title} {isRequired && <span className="text-red-500">*</span>}

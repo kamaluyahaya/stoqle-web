@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeftIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import DefaultInput from "../../../input/default-input";
-import NumberInput from "../../../input/defaultNumberInput";
+import NumberInput from "../../../input/default-phone-number";
 import AddressSelectionModal from "../../../business/addressSelectionModal";
 import { countries } from "@/src/lib/api/country";
 import { geocodeAddress, arrangeAddressForNigeria } from "@/src/lib/geocoding";
@@ -27,12 +27,92 @@ export default function DeliveryAddressModal({
     initialData,
 }: DeliveryAddressModalProps) {
     const [recipientName, setRecipientName] = useState("");
-    const [contactNo, setContactNo] = useState<number | "">("");
+    const [contactNo, setContactNo] = useState("");
     const [region, setRegion] = useState("");
     const [address, setAddress] = useState("");
     const [isDefault, setIsDefault] = useState(false);
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [showGeocodeWarning, setShowGeocodeWarning] = useState(false);
+
+    // Google Places Suggestions
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    // Load Places Library and fetch suggestions
+    const [isSelecting, setIsSelecting] = useState(false);
+    const [debugStatus, setDebugStatus] = useState<string>("");
+
+    // Management of Session Token for Google Autocomplete (improves reliability and billing efficiency)
+    const [sessionToken, setSessionToken] = useState<any>(null);
+
+    // One-time load of Google Maps Places Library
+    useEffect(() => {
+        if (!open) return;
+        const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+        if (!GOOGLE_MAPS_API_KEY) return;
+
+        const scriptId = "google-maps-geocoding-script";
+        if (!(window as any).google?.maps?.places) {
+            if (!document.getElementById(scriptId)) {
+                const script = document.createElement("script");
+                script.id = scriptId;
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+                script.async = true;
+                document.head.appendChild(script);
+            }
+        }
+    }, [open]);
+
+    // Create session token when modal opens or typing starts
+    useEffect(() => {
+        if (open && (window as any).google?.maps?.places && !sessionToken) {
+            setSessionToken(new (window as any).google.maps.places.AutocompleteSessionToken());
+        }
+    }, [open, sessionToken]);
+
+    useEffect(() => {
+        // Validation check before querying Google Places
+        if (!open || !address || address.length < 3 || isSelecting) {
+            if (!address || address.length < 3) {
+                setSuggestions([]);
+                setShowSuggestions(false);
+                setSessionToken(null);
+            }
+            if (isSelecting) setIsSelecting(false);
+            return;
+        }
+
+        const fetchPredictions = async () => {
+            if (!(window as any).google?.maps?.places) return;
+
+            try {
+                const service = new (window as any).google.maps.places.AutocompleteService();
+                service.getPlacePredictions({
+                    input: address,
+                    sessionToken: sessionToken || undefined,
+                    componentRestrictions: { country: "NG" },
+                }, (predictions: any, status: any) => {
+                    setDebugStatus(status);
+                    if (status === "OK") {
+                        setSuggestions(predictions || []);
+                        setShowSuggestions(!!(predictions && predictions.length > 0));
+                    } else if (status === "ZERO_RESULTS") {
+                        setSuggestions([]);
+                        setShowSuggestions(false);
+                    } else {
+                        console.warn("Places status:", status);
+                        setSuggestions([]);
+                        setShowSuggestions(false);
+                    }
+                });
+            } catch (err) {
+                console.error("Autocomplete exception:", err);
+            }
+        };
+
+        const timeoutId = setTimeout(fetchPredictions, 500);
+        return () => clearTimeout(timeoutId);
+    }, [address, open, isSelecting, sessionToken]);
 
     // Load address from initialData or localStorage on mount
     useEffect(() => {
@@ -40,7 +120,7 @@ export default function DeliveryAddressModal({
 
         if (initialData) {
             setRecipientName(initialData.recipientName || "");
-            setContactNo(initialData.contactNo ? Number(initialData.contactNo) : "");
+            setContactNo(initialData.contactNo || "");
             setRegion(initialData.region || "");
             setAddress(initialData.address || "");
             setIsDefault(initialData.isDefault || false);
@@ -80,14 +160,14 @@ export default function DeliveryAddressModal({
                     if (contact.tel && contact.tel.length > 0) {
                         // Strip non-digits and try to set as number
                         const digits = contact.tel[0].replace(/\D/g, "");
-                        setContactNo(digits ? Number(digits) : "");
+                        setContactNo(digits || "");
                     }
                 }
             } catch (err) {
                 console.error("Contacts picker error:", err);
             }
         } else {
-            alert("Contact picking is not supported on this browser. Please enter manually.");
+            toast.info("Contact picking is not supported on this browser. Please enter manually.");
         }
     };
 
@@ -167,8 +247,29 @@ export default function DeliveryAddressModal({
     };
 
     const handleSave = async () => {
-        if (!recipientName || !contactNo || !region || !address) {
-            alert("Please fill all required fields");
+        if (!recipientName) {
+            toast.error("Recipient name is required");
+            return;
+        }
+        if (recipientName.trim().length <= 2) {
+            toast.error("Recipient name must be more than 2 characters");
+            return;
+        }
+        if (!contactNo) {
+            toast.error("Contact number is required");
+            return;
+        }
+        const phoneStr = String(contactNo).trim();
+        if (phoneStr.length < 10 || phoneStr.length > 11) {
+            toast.error("Contact number must be between 10 and 11 digits");
+            return;
+        }
+        if (!region) {
+            toast.error("Region (State, LGA) is required");
+            return;
+        }
+        if (!address) {
+            toast.error("Detailed address is required");
             return;
         }
 
@@ -227,7 +328,7 @@ export default function DeliveryAddressModal({
                         </div>
 
                         {/* Body */}
-                        <div className="flex-1 overflow-y-auto p-5 pb-20 space-y-4">
+                        <div className="flex-1 overflow-y-auto p-5 pb-20 space-y-2">
                             {/* Recipient Name with Contact Picker */}
                             <DefaultInput
                                 label="Recipient"
@@ -236,13 +337,6 @@ export default function DeliveryAddressModal({
                                 placeholder="Full Name"
                                 required
                             />
-                            <button
-                                onClick={handlePickContact}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition shadow-sm"
-                                title="Pick from contacts"
-                            >
-                                <UserCircleIcon className="w-5 h-5" />
-                            </button>
 
                             {/* Contact Number */}
                             <NumberInput
@@ -251,6 +345,7 @@ export default function DeliveryAddressModal({
                                 onChange={setContactNo}
                                 placeholder="080 000 0000"
                                 required
+                                maxLength={11}
                             />
 
                             {/* Region Selection */}
@@ -264,17 +359,90 @@ export default function DeliveryAddressModal({
                             />
                             <div className="border-b border-slate-200"></div>
 
-                            {/* Detailed Address */}
-                            <DefaultInput
-                                label="Address"
-                                value={address}
-                                onChange={setAddress}
-                                placeholder="Street, Building, Apartment No"
-                                required
-                            />
+                             {/* Detailed Address */}
+                             <div className="relative z-[20015]">
+                                <DefaultInput
+                                    label="Address"
+                                    value={address}
+                                    onChange={(val) => {
+                                        setAddress(val);
+                                    }}
+                                    placeholder="Street, Building, Apartment No"
+                                    required
+                                />
+
+                                {/* Suggestions Dropdown */}
+                                <AnimatePresence>
+                                    {showSuggestions && suggestions.length > 0 && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0 }}
+                                            className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-[20020] max-h-64 overflow-y-auto"
+                                        >
+                                            {suggestions.map((p: any) => (
+                                                <button
+                                                    key={p.place_id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsSelecting(true);
+                                                        setAddress(p.description);
+                                                        setSuggestions([]);
+                                                        setShowSuggestions(false);
+                                                    }}
+                                                    className="w-full text-left px-5 py-4 hover:bg-slate-50 border-b border-slate-50 last:border-b-0 transition flex flex-col gap-0.5"
+                                                >
+                                                    <div className="text-sm text-slate-900 font-bold truncate">
+                                                        {p.structured_formatting?.main_text || p.description}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 truncate font-medium">
+                                                        {p.structured_formatting?.secondary_text || p.description}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            
+                                            {/* Google Attribution */}
+                                            <div className="p-3 bg-slate-50/50 flex justify-end">
+                                               <img src="https://maps.gstatic.com/mapfiles/api-3/images/powered-by-google-on-white3.png" alt="Powered by Google" className="h-3 opacity-50" />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                             </div>
+
+                            {/* Status Indicator (Searching) */}
+                            {(address.length >= 3 && !isSelecting) && (
+                                <div className="px-4 py-2 flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                        {(suggestions.length === 0 && !showSuggestions) ? (
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                                        ) : (
+                                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                                        )}
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                            {suggestions.length > 0 ? `${suggestions.length} Suggestions Found` : "Searching Map..."}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Diagnostic Info (Debugging) */}
+                                    <div className="text-[9px] text-slate-300 font-mono flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <span>Status: <span className="text-slate-500 uppercase">{debugStatus || "Idle"}</span></span>
+                                            <span>•</span>
+                                            <span>Library: <span className={!!(window as any).google?.maps?.places ? "text-green-500" : "text-amber-500"}>
+                                                {!!(window as any).google?.maps?.places ? "Ready" : "Waiting"}
+                                            </span></span>
+                                        </div>
+                                        <div className="truncate max-w-[200px]">
+                                            <span className="text-slate-400">Query: </span>
+                                            <span className="text-slate-500">[{address}]</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Default Toggle */}
-                            <div className="flex items-center justify-between bg-white rounded-2xl  border-slate-100">
+                            <div className="flex items-center justify-between bg-white rounded-2xl  border-slate-100 pt-4">
                                 <div className="flex flex-col">
                                     <span className="text-sm font-bold text-slate-800">Set as Default Address</span>
                                     <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Use for all future orders</span>
@@ -302,7 +470,7 @@ export default function DeliveryAddressModal({
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
-                                        <span>Verifying Address...</span>
+                                        <span>Verifying...</span>
                                     </>
                                 ) : "Save and Use"}
                             </button>

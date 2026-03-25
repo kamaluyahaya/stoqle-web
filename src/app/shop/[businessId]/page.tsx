@@ -105,7 +105,7 @@ export default function VendorShopPage() {
 
     const handleProductClick = async (productId: number, arg2?: string | boolean | React.MouseEvent, e?: React.MouseEvent) => {
         if (fetchingProduct) return;
-        
+
         let actualEvent: React.MouseEvent | undefined;
         let replaceUrl = false;
 
@@ -171,8 +171,8 @@ export default function VendorShopPage() {
         // Apply Search Filter First
         if (searchTerm.trim() !== "") {
             const lowTerm = searchTerm.toLowerCase();
-            list = list.filter(p => 
-                (p.product_name?.toLowerCase().includes(lowTerm)) || 
+            list = list.filter(p =>
+                (p.product_name?.toLowerCase().includes(lowTerm)) ||
                 (p.description?.toLowerCase().includes(lowTerm)) ||
                 (p.category?.toLowerCase().includes(lowTerm))
             );
@@ -239,7 +239,7 @@ export default function VendorShopPage() {
         <article
             key={p.product_id}
             onClick={(e) => handleProductClick(p.product_id, e)}
-            className="bg-white rounded-xl overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
+            className="bg-white rounded-[0.5rem] overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
         >
             <div className="relative aspect-square bg-slate-100 relative">
                 <Image
@@ -249,11 +249,11 @@ export default function VendorShopPage() {
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
-                {p.total_quantity !== undefined && Number(p.total_quantity) <= 4 && Number(p.total_quantity) > 0 && (
+                {/* {p.total_quantity !== undefined && Number(p.total_quantity) <= 4 && Number(p.total_quantity) > 0 && (
                     <div className="absolute top-2 left-2 bg-red-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-full z-10">
                         Low Stock
                     </div>
-                )}
+                )} */}
                 {p.product_video && (
                     <div className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full">
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z" /></svg>
@@ -276,7 +276,7 @@ export default function VendorShopPage() {
                 onSearchChange={setSearchTerm}
             />
 
-            <main className="px-4 relative bg-white rounded-2xl p-4 -mt-6 z-10">
+            <main className="px-4 relative bg-white rounded-[0.5rem] p-4 -mt-6 z-10">
 
                 {/* HOMEPAGE CONTENT */}
                 {activeNav === "Home" && (

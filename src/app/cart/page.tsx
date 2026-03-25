@@ -1186,12 +1186,6 @@ export default function CartPage() {
                                     return;
                                 }
 
-                                // Check phone number verification
-                                if (!user?.phone_no) {
-                                    setPhoneModalOpen(true);
-                                    return;
-                                }
-
                                 // Store IDs in sessionStorage to avoid raw IDs in URL
                                 sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
                                 router.push(`/checkout`);

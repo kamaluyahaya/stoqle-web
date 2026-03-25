@@ -183,183 +183,200 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
     }
   };
 
-  if (!open) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[30000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="w-full max-w-md rounded-[0.5rem] bg-gray-900 border border-slate-700/50 shadow-2xl overflow-hidden relative"
+      {open && (
+        <div
+          className="fixed inset-0 z-[30000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={onClose}
         >
-          {/* Header */}
-          <div className="px-6 py-4 flex items-center justify-between border-b border-white/5">
-            {step === "otp" ? (
-              <button
-                onClick={() => setStep("input")}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                title="Back"
-              >
-                <IoChevronBackOutline size={20} className="text-white" />
-              </button>
-            ) : (
-              <div className="w-9" />
-            )}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+            className="w-full max-w-md rounded-[0.5rem] bg-gray-900 border border-slate-700/50 shadow-2xl overflow-hidden relative"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 flex items-center justify-between ">
+              {step === "otp" ? (
+                <button
+                  onClick={() => setStep("input")}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                  title="Back"
+                >
+                  <IoChevronBackOutline size={20} className="text-white" />
+                </button>
+              ) : (
+                <div className="w-9" />
+              )}
 
-            <div className="flex flex-col items-center">
-              <h2 className="text-sm font-bold text-white tracking-tight">
-                {step === "input"
-                  ? (verifyType === "phone" ? "Verify Mobile Number" : "Verify Email Address")
-                  : "Enter Verification Code"
-                }
-              </h2>
-              <div className="flex gap-1 mt-1">
-                <div className={`h-1 w-8 rounded-full ${verifyType === "phone" ? "bg-red-500" : "bg-slate-700"}`} />
-                <div className={`h-1 w-8 rounded-full ${verifyType === "email" ? "bg-red-500" : "bg-slate-700"}`} />
+              <div className="flex flex-col items-center">
+                <h2 className="text-sm font-bold text-white tracking-tight">
+                  {step === "input"
+                    ? (verifyType === "phone" ? "Verify Mobile Number" : "Verify Email Address")
+                    : "Enter Verification Code"
+                  }
+                </h2>
+                <div className="flex gap-1 mt-1">
+                  <div className={`h-1 w-8 rounded-full ${verifyType === "phone" ? "bg-red-500" : "bg-slate-700"}`} />
+                  <div className={`h-1 w-8 rounded-full ${verifyType === "email" ? "bg-red-500" : "bg-slate-700"}`} />
+                </div>
               </div>
+
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                title="Close"
+              >
+                <IoCloseOutline size={24} className="text-white" />
+              </button>
             </div>
 
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              title="Close"
-            >
-              <IoCloseOutline size={24} className="text-white" />
-            </button>
-          </div>
+            <div className="p-8">
+              <AnimatePresence mode="wait">
+                {step === "input" ? (
+                  <motion.div
+                    key="input-step"
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 20, opacity: 0 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex flex-col items-center gap-4 mb-4">
 
-          <div className="p-8">
-            <AnimatePresence mode="wait">
-              {step === "input" ? (
-                <motion.div
-                  key="input-step"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: 20, opacity: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="flex flex-col items-center gap-4 mb-2">
-                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
-                      {verifyType === "phone" ? <IoCallOutline size={32} /> : <IoMailOutline size={32} />}
+                      <p className="text-slate-400 text-sm text-center px-4">
+                        {verifyType === "phone"
+                          ? "Add your phone number to continue with your stoqle journey."
+                          : "Add your email address to continue with your stoqle journey."
+                        }
+                      </p>
                     </div>
-                    <p className="text-slate-400 text-sm text-center px-4">
-                      {verifyType === "phone"
-                        ? "Confirm your phone number to receive a 6-digit verification code."
-                        : "Enter your email address to receive a secure verification code."
-                      }
-                    </p>
-                  </div>
 
-                  <form onSubmit={handleSendOtp} className="space-y-6">
-                    {verifyType === "phone" ? (
-                      <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
-                        <span className="text-lg font-bold text-white shrink-0 tracking-tight pl-1">+234</span>
-                        <div className="flex-1">
-                          <NumberInput
-                            label=""
-                            value={phone}
-                            onChange={(val) => setPhone(val)}
-                            placeholder="Phone Number"
+                    <form onSubmit={handleSendOtp} className="space-y-6">
+                      {verifyType === "phone" ? (
+                        <div className="flex items-center gap-3 p-2 border-b border-slate-600">
+                          <div className="flex items-center gap-2 flex-1">
+                            <span className="text-lg font-bold text-white shrink-0 tracking-tight">+234</span>
+                            <div className="flex-1">
+                              <NumberInput
+                                label=""
+                                value={phone}
+                                onChange={(val) => setPhone(val)}
+                                placeholder="Enter your phone number"
+                                required
+                                variant="compact"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        // <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
+                        //   <span className="text-lg font-bold text-white shrink-0 tracking-tight pl-1">+234</span>
+                        //   <div className="flex-1">
+                        //     <NumberInput
+                        //       label=""
+                        //       value={phone}
+                        //       onChange={(val) => setPhone(val)}
+                        //       placeholder="Phone Number"
+                        //       required
+                        //       variant="compact"
+                        //     />
+                        //   </div>
+                        // </div>
+                      ) : (
+                        <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
+                          <IoMailOutline className="text-slate-400 ml-1" size={20} />
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="Email Address"
+                            className="flex-1 bg-transparent border-none outline-none text-white font-medium placeholder:text-slate-500"
                             required
-                            variant="compact"
+                            autoFocus
                           />
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
-                        <IoMailOutline className="text-slate-400 ml-1" size={20} />
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="Email Address"
-                          className="flex-1 bg-transparent border-none outline-none text-white font-medium placeholder:text-slate-500"
-                          required
-                          autoFocus
-                        />
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={loading || (verifyType === "phone" ? !phone : !email)}
-                      className="w-full bg-red-500 text-white py-3 rounded-full font-bold transition-all hover:bg-red-600 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-red-500/20"
-                    >
-                      {loading ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        "Get Code"
                       )}
-                    </button>
 
-                  </form>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="otp-step"
-                  initial={{ x: 20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -20, opacity: 0 }}
-                >
-                  <p className="text-slate-400 text-sm mb-10 text-center">
-                    We've sent a code to <br />
-                    <span className="text-white font-bold mt-1 inline-block">
-                      {verifyType === "phone" ? `+234 ${phone}` : email}
-                    </span>
-                  </p>
-
-                  <div className="flex justify-between gap-2 mb-10">
-                    {otp.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={(el) => { otpInputs.current[idx] = el; }}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(idx, e)}
-                        onPaste={idx === 0 ? handlePaste : undefined}
-                        className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold bg-white/5 border-white/10 text-white focus:bg-white/10 focus:border-red-500 border-2 rounded-xl transition-all outline-none"
-                        autoFocus={idx === 0}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="text-center space-y-4">
-                    {cooldown > 0 ? (
-                      <p className="text-slate-500 text-xs">
-                        Didn't get the code? Resend in <span className="font-bold text-slate-300">{cooldown}s</span>
-                      </p>
-                    ) : (
                       <button
-                        onClick={handleSendOtp}
-                        className="text-red-500 text-xs font-bold hover:text-red-400 transition-colors uppercase tracking-widest"
+                        type="submit"
+                        disabled={loading || (verifyType === "phone" ? !phone : !email)}
+                        className="w-full bg-red-500 text-white py-3 rounded-full font-bold transition-all hover:bg-red-600 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-red-500/20"
                       >
-                        Resend New Code
+                        {loading ? (
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          "Get Code"
+                        )}
                       </button>
-                    )}
-                  </div>
 
-                  {loading && (
-                    <div className="mt-8 flex justify-center">
-                      <div className="w-6 h-6 border-2 border-white/20 border-t-red-500 rounded-full animate-spin" />
+                    </form>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="otp-step"
+                    initial={{ x: 20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: -20, opacity: 0 }}
+                  >
+                    <p className="text-slate-400 text-sm mb-10 text-center">
+                      We've sent a code to <br />
+                      <span className="text-white font-bold mt-1 inline-block">
+                        {verifyType === "phone" ? `+234 ${phone}` : email}
+                      </span>
+                    </p>
+
+                    <div className="flex justify-between gap-2 mb-10">
+                      {otp.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={(el) => { otpInputs.current[idx] = el; }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(idx, e)}
+                          onPaste={idx === 0 ? handlePaste : undefined}
+                          className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold bg-white/5 border-white/10 text-white focus:bg-white/10 focus:border-red-500 border-2 rounded-xl transition-all outline-none"
+                          autoFocus={idx === 0}
+                        />
+                      ))}
                     </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
 
-          <div className="px-8 pb-8 text-center">
-            <p className="text-[10px] text-slate-600 leading-relaxed max-w-[240px] mx-auto">
-              Stoole uses two-factor verification to ensure your account security and prevent unauthorized access.
-            </p>
-          </div>
-        </motion.div>
-      </div>
+                    <div className="text-center space-y-4">
+                      {cooldown > 0 ? (
+                        <p className="text-slate-500 text-xs">
+                          Didn't get the code? Resend in <span className="font-bold text-slate-300">{cooldown}s</span>
+                        </p>
+                      ) : (
+                        <button
+                          onClick={handleSendOtp}
+                          className="text-red-500 text-xs font-bold hover:text-red-400 transition-colors uppercase tracking-widest"
+                        >
+                          Resend New Code
+                        </button>
+                      )}
+                    </div>
+
+                    {loading && (
+                      <div className="mt-8 flex justify-center">
+                        <div className="w-6 h-6 border-2 border-white/20 border-t-red-500 rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="px-8 pb-8 text-center">
+              <p className="text-[10px] text-slate-600 leading-relaxed max-w-[240px] mx-auto">
+                Stoole uses two-factor verification to ensure your account security and prevent unauthorized access.
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 }

@@ -21,4 +21,5 @@ export type Post = {
   allMedia?: string[];
   location?: string | null;
   category?: string;
+  thumbnail?: string;
 };

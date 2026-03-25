@@ -50,29 +50,35 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   <Toaster
                     position="top-center"
                     theme="dark"
+                    icons={{
+                      success: null,
+                      info: null,
+                      warning: null,
+                      error: null,
+                      loading: null,
+                    }}
                     toastOptions={{
-                      className: "toast-blink",
                       style: {
-                        borderRadius: "9999px",
-                        padding: "0.5rem 1.4rem",
-                        fontSize: "0.875rem",
-                        textAlign: "center",
-                        justifyContent: "center",
-                        backgroundColor: "rgba(0,0,0,0.85)", // centered dark bg
+                        borderRadius: "99px",
+                        padding: "0.6rem 1.25rem",
+                        fontSize: "0.750rem",
+                        fontWeight: "500",
+                        backgroundColor: "rgba(0, 0, 0, 0.85)",
                         color: "#fff",
-                        backdropFilter: "blur(8px)",
-                        boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+                        backdropFilter: "blur(4px)",
                         border: "none",
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
                         width: "max-content",
-                        pointerEvents: "none", // don't block center clicks
+                        maxWidth: "90vw",
+                        margin: "0 auto",
                       },
                     }}
                     style={{
-                      textAlign: "center",
                       top: "50%",
-                      left: "var(--toaster-left, 80%)",
-                      transform: "translate(-50%, -30%)",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
                       position: "fixed",
+                      pointerEvents: "none",
                     }}
                   />
 

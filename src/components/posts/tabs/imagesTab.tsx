@@ -48,34 +48,36 @@ export default function ImagesTab({
   const slides = imagePreviews.map(src => ({ src }));
   return (
     <div className="space-y-6">
-      <div
-        className="relative group p-10 rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
-      >
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handleImageChange}
-          className="sr-only"
-          id="images-upload"
-        />
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleImageChange}
+        className="sr-only"
+        id="images-upload"
+      />
 
-        <label htmlFor="images-upload" className="cursor-pointer flex flex-col items-center justify-center text-center w-full relative z-10">
-          <div className="mb-4 relative">
-            <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full scale-150 group-hover:bg-red-500/30 transition-all" />
-            <div className="relative inline-flex items-center justify-center rounded-2xl h-16 w-16 bg-white shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-              <CloudArrowUpIcon className="w-8 h-8 text-red-500" />
+      {imagePreviews.length === 0 && (
+        <div
+          className="relative group p-10 rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
+        >
+          <label htmlFor="images-upload" className="cursor-pointer flex flex-col items-center justify-center text-center w-full relative z-10">
+            <div className="mb-4 relative">
+              <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full scale-150 group-hover:bg-red-500/30 transition-all" />
+              <div className="relative inline-flex items-center justify-center rounded-2xl h-16 w-16 bg-white shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+                <CloudArrowUpIcon className="w-8 h-8 text-red-500" />
+              </div>
             </div>
-          </div>
 
-          <h3 className="text-base text-slate-900 mb-1">Choose from gallery</h3>
+            <h3 className="text-base text-slate-900 mb-1">Choose from gallery</h3>
 
-          <div className="mt-4 flex gap-3">
-            <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">Max 5 Photos</span>
-            <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">High Quality</span>
-          </div>
-        </label>
-      </div>
+            <div className="mt-4 flex gap-3">
+              <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400  ">Max 5 Photos</span>
+              <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 ">High Quality</span>
+            </div>
+          </label>
+        </div>
+      )}
 
       {imagePreviews.length > 0 && (
         <div className="space-y-4">
@@ -119,31 +121,6 @@ export default function ImagesTab({
                   <XMarkIcon className="w-4 h-4" />
                 </button>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPreviewPost({
-                      id: "preview-" + i,
-                      src: src,
-                      allMedia: imagePreviews,
-                      isVideo: false,
-                      caption: "Post Preview",
-                      user: {
-                        name: user?.full_name || user?.name || "Guest User",
-                        avatar: user?.profile_pic || user?.avatar || "https://via.placeholder.com/150",
-                        id: user?.user_id || user?.id || 0
-                      },
-                      liked: false,
-                      likeCount: 0,
-                      rawCreatedAt: new Date().toISOString()
-                    });
-                  }}
-                  className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-md shadow-xl transition-all hover:bg-slate-900 hover:text-white flex z-20 text-white"
-                  title="Preview Mode"
-                >
-                  <EyeIcon className="w-4 h-4" />
-                </button>
-
                 <div
                   onClick={() => {
                     setLightboxIndex(i);
@@ -151,10 +128,23 @@ export default function ImagesTab({
                   }}
                   className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors flex items-center justify-center"
                 />
-
-
               </Reorder.Item>
             ))}
+
+            {/* Add More Placeholder */}
+            {imagePreviews.length > 0 && imagePreviews.length < 5 && (
+              <label
+                htmlFor="images-upload"
+                className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-300 cursor-pointer aspect-square group/add"
+              >
+                <div className="flex flex-col items-center gap-1.5 p-2 text-center">
+                  <div className="p-2 rounded-xl bg-white shadow-sm border border-slate-100 group-hover/add:scale-110 group-hover/add:rotate-3 transition-all duration-300">
+                    <PhotoIcon className="w-5 h-5 text-red-500" />
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 group-hover/add:text-red-500 uppercase tracking-tight">Add More</span>
+                </div>
+              </label>
+            )}
           </Reorder.Group>
         </div>
       )}
@@ -173,7 +163,7 @@ export default function ImagesTab({
         <PostModal
           post={previewPost}
           onClose={() => setPreviewPost(null)}
-          onToggleLike={() => {}}
+          onToggleLike={() => { }}
           isPreview={true}
         />
       )}

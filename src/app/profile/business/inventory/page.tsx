@@ -39,6 +39,9 @@ import { useAuth } from "@/src/context/authContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { PreviewPayload } from "@/src/types/product";
+import PreviewModal from "@/src/components/product/addProduct/modal/previewModal";
+import { fetchProductById } from "@/src/lib/api/productApi";
 
 // --- Types ---
 interface InventoryItem {
@@ -107,6 +110,8 @@ export default function SmartInventoryPage() {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [activeMenu, setActiveMenu] = useState<number | null>(null);
     const [deleteModal, setDeleteModal] = useState<{ open: boolean; item: InventoryItem | null; safety: any | null; loading: boolean }>({ open: false, item: null, safety: null, loading: false });
+    const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
+    const [loadingPreview, setLoadingPreview] = useState<number | null>(null);
 
     // Stats
     const stats = useMemo(() => {
@@ -240,6 +245,60 @@ export default function SmartInventoryPage() {
         } catch (err: any) {
             toast.error(err.body?.message || "Action failed");
             setDeleteModal(prev => ({ ...prev, loading: false }));
+        }
+    };
+    
+    const openProductPreview = async (productId: number) => {
+        setLoadingPreview(productId);
+        try {
+            const res = await fetchProductById(productId, token);
+            const data = res.data?.product || res.data || res;
+
+            const payload: PreviewPayload = {
+                productId: data.product_id,
+                businessId: data.business_id,
+                title: data.title,
+                description: data.description,
+                category: data.category_name || data.category,
+                price: data.price,
+                quantity: data.quantity,
+                hasVariants: Boolean(data.has_variants),
+                useCombinations: Boolean(data.use_combinations),
+                productImages: (data.media || []).filter((m: any) => m.type === 'image' || !m.type).map((m: any, i: number) => ({
+                    url: m.url || m,
+                    name: `Image ${i + 1}`
+                })),
+                productVideo: data.media?.find((m: any) => m.type === 'video')?.url ? {
+                    url: data.media.find((m: any) => m.type === 'video').url,
+                    name: "Product Video"
+                } : null,
+                params: data.params || [],
+                variantGroups: (data.variant_groups || data.variants_structure || []).map((g: any) => ({
+                    id: String(g.group_id || g.id),
+                    title: g.title,
+                    allowImages: !!g.allow_images,
+                    entries: (g.options || g.entries || []).map((o: any) => ({
+                        id: String(o.option_id || o.id),
+                        name: o.name,
+                        quantity: o.quantity || o.initial_quantity || 0,
+                        price: o.price,
+                        images: o.media?.map((m: any) => ({ url: m.url })) || []
+                    }))
+                })),
+                skus: (data.skus || []).map((s: any) => ({
+                    ...s,
+                    id: String(s.sku_id || s.id),
+                    variantOptionIds: s.variant_option_ids ? (typeof s.variant_option_ids === 'string' ? JSON.parse(s.variant_option_ids) : s.variant_option_ids).map(String) : []
+                })),
+                samePriceForAll: Boolean(data.same_price_for_all),
+                sharedPrice: data.shared_price,
+                policyOverrides: data.policy_overrides
+            };
+            setPreviewPayload(payload);
+        } catch (err) {
+            toast.error("Failed to load product preview");
+        } finally {
+            setLoadingPreview(null);
         }
     };
 
@@ -423,10 +482,11 @@ export default function SmartInventoryPage() {
                                                         </div>
                                                         <div>
                                                             <p
-                                                                onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
-                                                                className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors line-clamp-1"
+                                                                onClick={() => openProductPreview(product.product_id)}
+                                                                className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors line-clamp-1 flex items-center gap-2"
                                                             >
                                                                 {product.name}
+                                                                {loadingPreview === product.product_id && <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />}
                                                             </p>
                                                             <p className="text-xs text-slate-500">{product.category}</p>
                                                         </div>
@@ -664,6 +724,8 @@ export default function SmartInventoryPage() {
                                 startEdit={startEdit}
                                 handleDeleteClick={handleDeleteClick}
                                 router={router}
+                                onPreview={openProductPreview}
+                                loadingPreview={loadingPreview}
                             />
                         ))
                     )}
@@ -833,12 +895,16 @@ export default function SmartInventoryPage() {
                         </div>
                     )}
                 </AnimatePresence>
+                
+                <PreviewModal
+                    open={!!previewPayload}
+                    payload={previewPayload}
+                    onClose={() => setPreviewPayload(null)}
+                />
             </div>
         </div>
     );
 }
-
-// --- Sub-components ---
 
 function MobileProductCard({
     product,
@@ -855,14 +921,19 @@ function MobileProductCard({
     cancelEdit,
     startEdit,
     handleDeleteClick,
-    router
+    router,
+    onPreview,
+    loadingPreview
 }: any) {
     return (
         <div className={`bg-white rounded-2xl border ${expanded ? 'border-indigo-200 ring-2 ring-indigo-50' : 'border-slate-200 shadow-sm'} overflow-hidden transition-all duration-300 `}>
             <div className="p-4 space-y-4">
                 {/* Header: Info & Menu */}
                 <div className="flex items-start gap-4">
-                    <div className="w-20 h-20 rounded-xl bg-slate-50 overflow-hidden border border-slate-100 shrink-0 ">
+                    <div 
+                        className="w-20 h-20 rounded-xl bg-slate-50 overflow-hidden border border-slate-100 shrink-0 cursor-pointer"
+                        onClick={() => onPreview(product.product_id)}
+                    >
                         <img
                             src={product.image_url || "/placeholder.png"}
                             className="w-full h-full object-cover"
@@ -871,12 +942,13 @@ function MobileProductCard({
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                            <div>
+                            <div className="flex-1">
                                 <h4
-                                    onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
-                                    className="font-black text-slate-900 leading-tight text-xs tracking-wider line-clamp-2 cursor-pointer hover:text-indigo-600 transition-colors"
+                                    onClick={() => onPreview(product.product_id)}
+                                    className="font-black text-slate-900 leading-tight text-xs tracking-wider line-clamp-2 cursor-pointer hover:text-indigo-600 transition-colors flex items-center gap-2"
                                 >
                                     {product.name}
+                                    {loadingPreview === product.product_id && <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />}
                                 </h4>
                                 <p className="text-[10px] text-slate-400 font-bold  tracking-[0.15em] mt-1">
                                     {product.category}
@@ -1075,7 +1147,7 @@ function MobileProductCard({
 
 // --- Sub-components (StatCard, etc) ---
 
-function StatCard({ label, value, icon, color, alert }: { label: string; value: number; icon: any; color: string; alert?: boolean }) {
+const StatCard = ({ label, value, icon, color, alert }: { label: string; value: number | string; icon: any; color: string; alert?: boolean }) => {
     const colors: Record<string, string> = {
         indigo: "bg-indigo-50 text-indigo-600",
         amber: "bg-amber-100 text-amber-700",

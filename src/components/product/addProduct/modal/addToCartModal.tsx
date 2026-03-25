@@ -389,7 +389,7 @@ export default function AddToCartModal({
         if (!payload || !payload.useCombinations || !payload.skus) return null;
         const selectedIds = Object.values(selectedOptions).map(String);
         return payload.skus.find((s) =>
-            s.variantOptionIds.every((id) => selectedIds.includes(String(id)))
+            (s.variantOptionIds || []).every((id) => selectedIds.includes(String(id)))
         );
     }, [payload?.useCombinations, payload?.skus, selectedOptions]);
 

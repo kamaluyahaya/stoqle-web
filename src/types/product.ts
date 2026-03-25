@@ -64,6 +64,7 @@ export type ProductDraft = {
   productVideo: File | string | null;
   skus: ProductSku[];
   useCombinations: boolean;
+  lastAutoSave?: string;
   // Policy Overrides
   policyOverrides?: {
     useStoreDefaultReturn: boolean;

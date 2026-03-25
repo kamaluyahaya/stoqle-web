@@ -15,6 +15,8 @@ import { io } from "socket.io-client";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toggleSocialPostLike } from "@/src/lib/api/social";
 import { toast } from "sonner";
+const NO_IMAGE_PLACEHOLDER = "assets/images/post-icons.png"; // fallback post image
+const DEFAULT_AVATAR = "/assets/images/post-icons.png";
 
 type Props = { postCount?: number };
 
@@ -43,94 +45,88 @@ function LikeBurst() {
     </div>
   );
 }
-
 const PostCard = React.memo(({
   post,
-  index = 0,
   openPostWithUrl,
   toggleLike,
-  user,
-  setShowLoginModal,
-  router,
   getNoteStyles,
-  isRestored = false,
-  isCarousel = false
+  setFullImageUrl,
+  router
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
 
-  const entryVariants = {
-    initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
-    animate: { opacity: 1, scale: 1, y: 0 },
-  };
-
   return (
     <article
-      onClick={(e) => openPostWithUrl(post, e)}
-      className={`group flex flex-col rounded-[0.8rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden hover:shadow-md ${isCarousel ? 'w-48 shrink-0' : 'w-full'}`}
+      onClick={() => openPostWithUrl(post)}
+      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
-      <div className={`relative w-full bg-slate-100 overflow-hidden post-media ${isCarousel ? 'h-56' : 'min-h-[200px]'}`}>
-        <motion.div
-          initial={entryVariants.initial}
-          animate={entryVariants.animate}
-          className="w-full h-full"
-        >
-          {post.isVideo && (
-            <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
-                <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-              </svg>
-            </div>
-          )}
+      <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+        {post.isVideo && (
+          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
+              <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+            </svg>
+          </div>
+        )}
 
-          {post.coverType === "note" && !post.src ? (
-            <div
-              className={`w-full ${isCarousel ? 'h-full' : 'h-[250px] sm:h-[300px]'} flex items-center justify-center p-6 relative overflow-hidden`}
-              style={getNoteStyles(post.noteConfig)}
-            >
-              <div className="text-center relative z-10">
-                <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
-                  {post.noteConfig?.text ?? post.caption ?? "Note"}
-                </p>
-              </div>
+        {post.coverType === "note" && !post.src ? (
+          <div
+            className="w-full  h-[250px] sm:h-[300px]  flex items-center justify-center p-6 relative overflow-hidden"
+            style={getNoteStyles(post.noteConfig)}
+          >
+            {(() => {
+              const cfg = typeof post.noteConfig === "string" ? JSON.parse(post.noteConfig) : post.noteConfig;
+              if (cfg?.emojis?.length > 0) {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
+                    {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
+                      <span key={idx} className="text-4xl transform rotate-12">
+                        {emoji}
+                      </span>
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            <div className="text-center relative z-10">
+              <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
+                {post.noteConfig?.text ?? post.caption ?? "Note"}
+              </p>
             </div>
-          ) : post.isVideo && !isCarousel ? (
-            <div className={`relative w-full aspect-[4/5] bg-slate-100 overflow-hidden`}>
-              <video
-                src={post.src}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                autoPlay muted loop playsInline preload="auto"
-              />
-            </div>
-          ) : (
-            <div className={`relative w-full ${isCarousel ? 'h-full' : 'aspect-[4/5]'} bg-slate-50 overflow-hidden`}>
-              <style jsx global>{`
-                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-              `}</style>
-              <Image
-                src={post.src ? encodeURI(post.src) : "https://via.placeholder.com/800x600?text=No+Image"}
-                alt={post.caption || "Post image"}
-                fill
-                sizes={isCarousel ? "200px" : "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"}
-                className="object-cover transition-opacity duration-1000 group-hover:scale-105"
-                onLoadingComplete={(img) => { img.style.animation = "fadeIn 1s ease-in-out forwards"; }}
-                style={{ opacity: 0 }}
-              />
-            </div>
-          )}
-        </motion.div>
+          </div>
+        ) : (
+          <img
+            src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
+            alt={post.caption}
+            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
+          />
+        )}
       </div>
 
-      <div className="p-2.5">
-        <p className="text-[11px] text-slate-800 line-clamp-1 leading-snug font-semibold mb-2">
+      <div className="p-3">
+        <p className="text-sm text-slate-800 line-clamp-2 leading-snug font-semibold mb-3">
           {post.coverType === "note" && !post.src ? post.note_caption : post.caption}
         </p>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 min-w-0">
-            <div className="h-4 w-4 rounded-full overflow-hidden shrink-0 relative border border-slate-200">
-              <Image src={encodeURI(post.user.avatar)} fill sizes="16px" className="object-cover" alt={post.user.name} />
+            <div
+              className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/user/profile/${post.user.id}`);
+              }}
+            >
+              <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
             </div>
-            <span className="truncate text-[10px] font-medium text-slate-500 capitalize">
+            <span
+              className="truncate text-[11px] font-semibold text-slate-400 max-w-[120px] capitalize cursor-pointer hover:text-slate-900 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/user/profile/${post.user.id}`);
+              }}
+            >
               {post.user.name}
             </span>
           </div>
@@ -139,9 +135,7 @@ const PostCard = React.memo(({
             className="flex items-center gap-1 cursor-pointer relative"
             onClick={(e) => {
               e.stopPropagation();
-              if (post.liked) {
-                // if unliking, just toggle
-              } else {
+              if (!post.liked) {
                 setShowBurst(true);
                 setTimeout(() => setShowBurst(false), 800);
               }
@@ -150,7 +144,7 @@ const PostCard = React.memo(({
           >
             {showBurst && <LikeBurst />}
             <div className="relative w-4 h-4 flex items-center justify-center">
-              <AnimatePresence mode="wait">
+              <AnimatePresence>
                 <motion.div
                   key={post.liked ? "liked" : "unliked"}
                   initial={{ scale: 0.5, opacity: 0 }}
@@ -165,7 +159,7 @@ const PostCard = React.memo(({
               {post.liked && (
                 <motion.div
                   initial={{ scale: 1, opacity: 1 }}
-                  animate={{ scale: [1, 2, 1], opacity: [1, 0.4, 0] }}
+                  animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                   transition={{ duration: 0.6 }}
                   className="absolute text-red-500 pointer-events-none"
                 >
@@ -179,6 +173,8 @@ const PostCard = React.memo(({
       </div>
     </article>
   );
+}, (prev, next) => {
+  return prev.post.id === next.post.id && prev.post.liked === next.post.liked && prev.post.likeCount === next.post.likeCount;
 });
 
 const PostCarousel = ({ title, icon: Icon, posts, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles }: any) => {
@@ -496,16 +492,37 @@ export default function Discover({ postCount = 100 }: Props) {
     }
   };
 
+
+
   const getNoteStyles = (config: any) => {
-    if (!config) return { background: "#f8fafc" };
-    let cfg = typeof config === "string" ? JSON.parse(config) : config;
-    const { startColor, endColor } = cfg;
+    if (!config) return { background: "#f1f5f9" };
+    let cfg = config;
+    if (typeof config === "string") {
+      try { cfg = JSON.parse(config); } catch (e) { return { background: "#f1f5f9" }; }
+    }
+    const { template, startColor, endColor, lineSpacing = 25 } = cfg;
+    const baseBg = endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor;
+    let patternCSS = "";
+    let bgSize = "auto";
+    if (template === "grid") {
+      patternCSS = `linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    } else if (template === "diagonal") {
+      patternCSS = `repeating-linear-gradient(45deg, transparent, transparent ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing}px, rgba(255,255,255,0.2) ${lineSpacing * 2}px)`;
+    } else if (template === "stripes") {
+      patternCSS = `repeating-linear-gradient(0deg, transparent, transparent ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing}px, rgba(0,0,0,0.03) ${lineSpacing + 1}px)`;
+    } else if (template === "dots") {
+      patternCSS = `radial-gradient(rgba(0,0,0,0.1) 1.5px, transparent 0)`;
+      bgSize = `${lineSpacing}px ${lineSpacing}px`;
+    }
     return {
-      background: endColor ? `linear-gradient(135deg, ${startColor}, ${endColor})` : startColor,
-      color: cfg.textStyle?.color ?? "#1e293b",
-      fontSize: "14px",
-      fontWeight: "700",
-    } as React.CSSProperties;
+      backgroundColor: startColor,
+      backgroundImage: patternCSS ? `${patternCSS}, ${baseBg}` : baseBg,
+      backgroundSize: bgSize,
+      color: cfg.textStyle?.color ?? "#111827",
+      fontSize: `${(cfg.textStyle?.fontSize ?? 28) * 0.6}px`,
+      fontWeight: cfg.textStyle?.fontWeight ?? "800",
+    };
   };
 
   return (

@@ -304,11 +304,6 @@ export default function CheckoutPage() {
             fetchCart();
             refreshWallet();
             fetchDefaultAddress();
-            
-            // Check phone number
-            if (user && !user.phone_no) {
-                setPhoneModalOpen(true);
-            }
         } else {
             // setTimeout to prevent flash
             const t = setTimeout(() => {
@@ -1062,13 +1057,10 @@ export default function CheckoutPage() {
             </AnimatePresence>
             <PhoneVerificationModal 
                 isOpen={phoneModalOpen} 
-                onClose={() => {
-                    setPhoneModalOpen(false);
-                    // If they are on checkout and don't have a phone, we might want to prevent staying here
-                    if (!user?.phone_no) router.push("/cart");
-                }}
+                onClose={() => setPhoneModalOpen(false)}
                 onSuccess={() => {
                     setPhoneModalOpen(false);
+                    // The handlePlaceOrder logic will see the updated user status or can be re-called manually
                 }}
             />
         </div>

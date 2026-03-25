@@ -60,6 +60,23 @@ const nextConfig: NextConfig = {
   },
   turbopack: {},
   // Enable compress if not already handled by custom server, although next.js handles it by default
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "require-corp",
+          },
+        ],
+      },
+    ];
+  },
   compress: true,
 };
 

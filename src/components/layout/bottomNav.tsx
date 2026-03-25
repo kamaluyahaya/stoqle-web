@@ -135,7 +135,7 @@ export default function BottomNav() {
             const handleClick = async (e: React.MouseEvent) => {
               if (isProtected) {
                 e.preventDefault();
-                const ok = await auth.ensureAccountVerified();
+                const ok = await auth.ensureLoggedIn();
                 if (ok) {
                   router.push(it.href);
                 }

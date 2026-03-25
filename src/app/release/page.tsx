@@ -18,6 +18,8 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import DefaultInput from "@/src/components/input/default-input-post";
 import { getCurrentLocationName, getCachedLocationName } from "@/src/lib/location";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
 export default function PostComposerTabs({
   onSubmit,
@@ -42,6 +44,7 @@ export default function PostComposerTabs({
 
   // video
   const [video, setVideo] = useState<File | null>(null);
+  const [videoThumbnail, setVideoThumbnail] = useState<Blob | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -49,9 +52,25 @@ export default function PostComposerTabs({
   const { token, user } = auth;
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isTrimming, setIsTrimming] = useState(false);
+  const [trimmingProgress, setTrimmingProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  
+  const ffmpegRef = useRef<any>(null);
+
+  const loadFFmpeg = async () => {
+    if (ffmpegRef.current) return ffmpegRef.current;
+    const ffmpeg = new FFmpeg();
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    ffmpegRef.current = ffmpeg;
+    return ffmpeg;
+  };
 
   // keyboard navigation (tabs)
   useEffect(() => {
@@ -121,15 +140,99 @@ export default function PostComposerTabs({
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files && e.target.files[0] ? e.target.files[0] : null;
     if (!f) return;
-    // optional: validate video size/type here
-    setVideo(f);
-    if (videoInputRef.current) videoInputRef.current.value = "";
+
+    // We'll accept all videos, but we'll inform the user if it's longer than 3 minutes
+    // and the preview/published post will only play/show the first 3 minutes.
+    const tempVideo = document.createElement("video");
+    tempVideo.preload = "metadata";
+    const objectUrl = URL.createObjectURL(f);
+
+    tempVideo.onloadedmetadata = () => {
+      // Step 1: Seek to 2 seconds for a good frame (thumbnail)
+      tempVideo.currentTime = 2;
+    };
+
+    let thumbnailCaptured = false;
+    tempVideo.onseeked = () => {
+      if (thumbnailCaptured) return;
+      thumbnailCaptured = true;
+
+      // Extract frame
+      const canvas = document.createElement("canvas");
+      canvas.width = tempVideo.videoWidth;
+      canvas.height = tempVideo.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) setVideoThumbnail(blob);
+        }, "image/jpeg", 0.82);
+      }
+
+      const duration = tempVideo.duration;
+      if (duration > 60) { // 1 minute = 60 seconds
+        setIsTrimming(true);
+        setTrimmingProgress(10); // Start progress
+        
+        const processVideo = async () => {
+          try {
+            const ffmpeg = await loadFFmpeg();
+            setTrimmingProgress(30);
+            
+            const inputName = 'input.mp4';
+            const outputName = 'output.mp4';
+            
+            await ffmpeg.writeFile(inputName, await fetchFile(f));
+            setTrimmingProgress(50);
+            
+            // Perform lossless cut: first 60 seconds
+            await ffmpeg.exec(['-i', inputName, '-t', '60', '-c', 'copy', outputName]);
+            setTrimmingProgress(80);
+            
+            const data = await ffmpeg.readFile(outputName);
+            const trimmedBlob = new Blob([(data as any).buffer], { type: 'video/mp4' });
+            const trimmedFile = new File([trimmedBlob], "trimmed_reel.mp4", { type: 'video/mp4' });
+            
+            setVideo(trimmedFile);
+            setTrimmingProgress(100);
+            toast.success("Reel optimized and cut to 1 min!");
+            
+            // Cleanup
+            await ffmpeg.deleteFile(inputName);
+            await ffmpeg.deleteFile(outputName);
+          } catch (err) {
+            console.error("FFmpeg error:", err);
+            toast.error("Failed to slice video instantly. Falling back...");
+            // Non-destructive fallback (keep original or use old recorder)
+            setVideo(f);
+          } finally {
+            setIsTrimming(false);
+            URL.revokeObjectURL(objectUrl);
+          }
+        };
+
+        processVideo();
+      } else {
+        setVideo(f);
+        URL.revokeObjectURL(objectUrl);
+      }
+      
+      if (videoInputRef.current) videoInputRef.current.value = "";
+    };
+
+    tempVideo.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      toast.error("Failed to process video file.");
+    };
+
+    tempVideo.src = objectUrl;
   };
 
   const clearAll = () => {
     setNoteText("");
     setImages([]);
     setVideo(null);
+    setVideoThumbnail(null);
   };
 
   // Submit handlers
@@ -159,6 +262,8 @@ export default function PostComposerTabs({
         }
       } else if (payload.type === 'video') {
         if (payload.video) formData.append('images', payload.video);
+        if (videoThumbnail) formData.append('images', videoThumbnail, 'thumbnail.jpg');
+        
         formData.append('text', payload.text || '');
         formData.append('subtitle', (payload as any).subtitle || '');
         formData.append('privacy', (payload as any).privacy || 'public');
@@ -332,6 +437,38 @@ export default function PostComposerTabs({
           }}
         />
       )}
+
+      {/* Trimming Overlay */}
+      {isTrimming && (
+        <div className="fixed inset-0 z-[100000] bg-slate-900/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center overscroll-none">
+          <div className="relative w-32 h-32 mb-8">
+            <div className="absolute inset-0 rounded-full border-4 border-slate-800" />
+            <motion.div
+              className="absolute inset-0 rounded-full border-4 border-t-red-500"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center font-bold text-2xl text-white">
+              {Math.min(99, Math.round(trimmingProgress))}%
+            </div>
+          </div>
+          
+          <h2 className="text-2xl font-bold text-white mb-3">Optimizing Your Reel</h2>
+          <p className="text-slate-400 max-w-sm leading-relaxed text-sm">
+            We're trimming your video to the first 1 minute to keep your followers engaged. 
+            Please stay on this page.
+          </p>
+
+          <div className="mt-10 w-full max-w-xs h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]" 
+              initial={{ width: 0 }}
+              animate={{ width: `${trimmingProgress}%` }}
+              transition={{ type: "spring", damping: 25, stiffness: 50 }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -369,6 +506,45 @@ function VideoPreviewModal({
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [previewPost, setPreviewPost] = useState<any>(null);
   const { user } = useAuth();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.classList.add("overflow-hidden");
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, []);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      const maxD = 180;
+      const current = videoRef.current.currentTime;
+
+      if (current >= maxD) {
+        videoRef.current.currentTime = 0;
+        setProgress(0);
+      } else {
+        const duration = Math.min(videoRef.current.duration, maxD);
+        if (duration > 0) {
+          setProgress((current / duration) * 100);
+        }
+      }
+    }
+  };
 
   const submit = async () => {
     onSubmitPayload({
@@ -402,9 +578,105 @@ function VideoPreviewModal({
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 p-4">
-          {/* Video Preview */}
-          <div className="relative rounded-2xl overflow-hidden bg-black aspect-video shadow-lg group">
-            <video src={videoPreview} controls className="w-full h-full object-contain" />
+          {/* Video Preview with Phone Decoration */}
+          <div className="flex justify-center py-4 bg-slate-50 rounded-2xl">
+            <div className="relative w-[240px] h-[480px] bg-slate-900 rounded-[3rem] border-[8px] border-slate-900 shadow-2xl overflow-hidden group">
+              {/* Notch */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-slate-900 rounded-b-2xl z-20" />
+
+              {/* Video Content */}
+              <div
+                className="w-full h-full cursor-pointer relative"
+                onClick={togglePlay}
+              >
+                <video
+                  ref={videoRef}
+                  src={videoPreview}
+                  className="w-full h-full object-cover"
+                  loop
+                  playsInline
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onTimeUpdate={handleTimeUpdate}
+                />
+
+                {/* Progress Bar */}
+                <div className="absolute bottom-[2px] left-0 w-full h-[1.5px] bg-white/20 z-30">
+                  <div 
+                    className="h-full bg-white transition-all duration-100 ease-linear shadow-[0_0_4px_rgba(255,255,255,0.8)]"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+
+                {/* Play Overlay */}
+                <AnimatePresence>
+                  {!isPlaying && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      className="absolute inset-0 flex items-center justify-center bg-black/20"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                        <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Social Overlays */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col justify-end p-4 pb-8 bg-gradient-to-t from-black/60 via-transparent to-transparent">
+                  {/* Right side icons */}
+                  <div className="absolute right-2 bottom-12 flex flex-col items-center gap-4 text-white">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
+                      </div>
+                      <span className="text-[8px] font-bold">0</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" /></svg>
+                      </div>
+                      <span className="text-[8px] font-bold">0</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="w-8 h-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" /></svg>
+                      </div>
+                      <span className="text-[8px] font-bold">0</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom info */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full border border-white overflow-hidden bg-slate-200">
+                        {user?.profile_pic ? (
+                          <img src={user.profile_pic} className="w-full h-full object-cover" alt="user" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-red-500 text-white font-bold text-[8px]">
+                            {user?.full_name?.[0] || 'S'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-white text-[9px] font-black shadow-sm truncate max-w-[80px]">{user?.business_name || user?.full_name || user?.username || 'user'}</span>
+                      </div>
+                      <button className="px-2 py-0.5 bg-red-500 rounded-full text-[7px] font-black text-white ml-1">Follow</button>
+                    </div>
+                    <p className="text-white text-[8px] font-medium line-clamp-2 max-w-[80%] drop-shadow-md">
+                      {text || 'Thinking of a catchy title...'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* iOS Style Bottom Bar */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-20 h-1 bg-white/50 rounded-full" />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-5">
@@ -555,7 +827,7 @@ function VideoPreviewModal({
           <button
             onClick={submit}
             disabled={isLoading}
-            className="flex-1 py-3 rounded-full bg-red-500 text-white text-sm hover:bg-red-600 shadow-xl shadow-red-200 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-full bg-red-500 text-white text-sm hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isLoading ? "Publishing..." : "Publish Post"}
           </button>
@@ -617,6 +889,14 @@ function ImagePreviewModal({
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [previewPost, setPreviewPost] = useState<any>(null);
   const { user } = useAuth();
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.classList.add("overflow-hidden");
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, []);
 
   // Close modal if all images are removed
   useEffect(() => {
@@ -1032,6 +1312,7 @@ function ImagePreviewModal({
           isPreview={true}
         />
       )}
+
     </div>
   );
 }

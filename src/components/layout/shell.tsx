@@ -31,7 +31,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </React.Suspense>
 
       {/* 🔥 MODAL LAYER (always on top) */}
-      <div className="fixed inset-0 z-[9999] pointer-events-none">
+      <div className="fixed inset-0 z-[99999] pointer-events-none">
         {auth.loginOpen && (
           <div className="pointer-events-auto">
             <LoginModal
@@ -41,11 +41,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
         )}
         {auth.verificationOpen && (
-          <AccountVerificationModal
-            open={auth.verificationOpen}
-            onClose={auth.closeVerification}
-            onSuccess={auth.onVerificationSuccess}
-          />
+          <div className="pointer-events-auto">
+            <AccountVerificationModal
+              open={auth.verificationOpen}
+              onClose={auth.closeVerification}
+              onSuccess={auth.onVerificationSuccess}
+            />
+          </div>
         )}
       </div>
     </div>

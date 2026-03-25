@@ -49,6 +49,9 @@ export default function EditProductPage() {
   const [productImages, setProductImages] = useState<(File | string)[]>([]);
   const [productVideo, setProductVideo] = useState<File | string | null>(null);
 
+  const [businessName, setBusinessName] = useState("");
+  const [businessLogo, setBusinessLogo] = useState("");
+
   const [params, setParams] = useState<ParamKV[]>([]);
   const {
     variantGroups,
@@ -70,7 +73,7 @@ export default function EditProductPage() {
     );
 
     if (hasDependency) {
-      toast.error("Cannot remove this variant type because it has active orders, reserved stock, or historical sales.");
+      toast.error("Cannot remove this variant type — it’s linked to existing orders.");
       return;
     }
 
@@ -82,7 +85,7 @@ export default function EditProductPage() {
     const entry = group?.entries.find(e => e.id === entryId);
 
     if (entry && ((entry.reservedQuantity || 0) > 0 || (entry.soldCount || 0) > 0)) {
-      toast.error("Cannot remove this variant because it has existing orders, reserved stock, or active sales.");
+      toast.error("Cannot remove this variant option—it has existing orders.");
       return;
     }
 
@@ -98,7 +101,7 @@ export default function EditProductPage() {
   useEffect(() => {
     if (useCombinations && variantGroups.length < 2) {
       setUseCombinations(false);
-      toast.error("Advanced Combination Logic disabled: Requires at least 2 variant groups.");
+      toast.error("Requires at least 2 variant groups.");
     }
   }, [variantGroups.length, useCombinations]);
 
@@ -312,6 +315,20 @@ export default function EditProductPage() {
     }
   }, [token]);
 
+  const loadBusinessSettings = useCallback(async () => {
+    if (!token) return;
+    try {
+      const biz = await fetchBusinessMe(token);
+      const bizData = biz?.data?.business ?? biz?.business ?? biz;
+      if (bizData) {
+        setBusinessName(bizData.business_name || bizData.name || "Vendor");
+        setBusinessLogo(bizData.logo || bizData.business_logo || "");
+      }
+    } catch (e) {
+      console.error("Failed to load business settings", e);
+    }
+  }, [token]);
+
   // Sync SKUs with Variant Groups (Calculates the names)
   useEffect(() => {
     if (!hasVariants) return;
@@ -369,7 +386,8 @@ export default function EditProductPage() {
   useEffect(() => {
     loadProduct();
     loadCategories();
-  }, [loadProduct, loadCategories]);
+    loadBusinessSettings();
+  }, [loadProduct, loadCategories, loadBusinessSettings]);
 
   // --- Handlers ---
   const handleModalSubmit = (entryData: Omit<VariantEntry, "id">) => {
@@ -493,7 +511,7 @@ export default function EditProductPage() {
         form.append("quantity", String(quantity));
       } else {
         // --- Variant Structure Validation ---
-        if (variantGroups.length === 0) return toast.error("Please add at least one variant group (e.g. 'Size' or 'Color').");
+        if (variantGroups.length === 0) return toast.error("Requires at least 2 variant groups..");
         for (const g of variantGroups) {
           if (!g.title.trim()) return toast.error("Please provide a title for all variant groups.");
           if (g.entries.length === 0) return toast.error(`Please add at least one option to the group: ${g.title}`);
@@ -525,6 +543,15 @@ export default function EditProductPage() {
       const newImages = productImages.filter(i => typeof i !== "string") as File[];
 
       form.append("existing_images", JSON.stringify(existingImages));
+
+      // Send the full order of images (URLs for existing, placeholders for new files)
+      const fullImageOrder = productImages.map((img) => {
+        if (typeof img === "string") return img;
+        const index = newImages.indexOf(img);
+        return `file:${index}`;
+      });
+      form.append("full_image_order", JSON.stringify(fullImageOrder));
+
       newImages.forEach(f => form.append("files", f));
 
       if (productVideo) {
@@ -918,7 +945,7 @@ export default function EditProductPage() {
                             checked={useCombinations}
                             onChange={(e) => {
                               if (e.target.checked && variantGroups.length < 2) {
-                                toast.info("Add more variant groups (e.g. Size and Color) to use advanced combination logic.");
+                                toast.info("Requires at least 2 variant groups.");
                                 return;
                               }
                               setUseCombinations(e.target.checked);
@@ -1024,7 +1051,9 @@ export default function EditProductPage() {
                     productImages={productImages}
                     setProductImages={setProductImages}
                     productVideo={productVideo}
-                    setProductVideo={setProductVideo}
+                    setProductVideo={setProductVideo as any}
+                    businessName={businessName}
+                    businessLogo={businessLogo}
                   />
                   <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
                     <p className="text-[11px] font-bold text-blue-700 flex items-center gap-2">
@@ -1236,9 +1265,9 @@ export default function EditProductPage() {
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Blocking Orders ({safetyCheckResult.activeOrders?.length || 0})</p>
                           <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
                             {safetyCheckResult.activeOrders?.map((ord: any) => (
-                              <div key={ord.order_id} className="p-3 flex items-center justify-between">
+                              <div key={ord.id} className="p-3 flex items-center justify-between">
                                 <div className="flex flex-col">
-                                  <span className="text-[11px] font-bold text-slate-700">Order #{ord.order_id}</span>
+                                  <span className="text-[11px] font-bold text-slate-700">Order #{ord.id}</span>
                                   <span className="text-[9px] text-slate-400 font-medium">{ord.created_at ? new Date(ord.created_at).toLocaleDateString() : 'N/A'}</span>
                                 </div>
                                 <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold capitalize ${ord.status === 'processing' ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-600'}`}>

@@ -42,6 +42,7 @@ type Post = {
   apiId?: number;
   allMedia?: string[];
   location?: string | null;
+  thumbnail?: string;
 };
 
 type Props = { postCount?: number };
@@ -62,18 +63,26 @@ const DEFAULT_BG = "/assets/images/background.png";      // fallback background
 const mapApiPost = (p: any): Post => {
   const apiId = p.social_post_id ?? Math.floor(Math.random() * 1e6);
   let src: string | undefined = undefined;
+  let thumbnail: string | undefined = undefined;
+  const images = Array.isArray(p.images) ? p.images : [];
 
-  if (Array.isArray(p.images) && p.images.length > 0) {
-    const cover = p.images.find((i: any) => i.is_cover === 1) ?? p.images[0];
+  if (p.cover_type === "video") {
+    const videoFile = images.find((i: any) => isVideoUrl(i.image_url));
+    const coverFile = images.find((i: any) => !!i.is_cover);
+    src = videoFile?.image_url;
+    thumbnail = coverFile?.image_url;
+    if (!src) src = coverFile?.image_url;
+  } else if (images.length > 0) {
+    const cover = images.find((i: any) => !!i.is_cover) ?? images[0];
     src = cover?.image_url;
   }
 
-  const allMedia = Array.isArray(p.images) && p.images.length > 0
-    ? p.images.map((i: any) => i.image_url)
+  const allMedia = images.length > 0
+    ? images.map((i: any) => i.image_url)
     : src ? [src] : [];
 
-  const isVideo = isVideoUrl(src);
-  const isImage = isImageUrl(src);
+  const isVideo = p.cover_type === "video" || isVideoUrl(src);
+  const isImage = !isVideo && isImageUrl(src);
   const caption = p.text ?? p.subtitle ?? "";
   const note_caption = p.subtitle ?? "";
 
@@ -97,6 +106,7 @@ const mapApiPost = (p: any): Post => {
     rawCreatedAt: p.created_at,
     allMedia,
     location: p.location,
+    thumbnail,
   };
 };
 
@@ -125,115 +135,62 @@ function LikeBurst() {
     </div>
   );
 }
-
 const PostCard = React.memo(({
   post,
-  index = 0,
   openPostWithUrl,
   toggleLike,
   getNoteStyles,
-  isRestored = false
+  setFullImageUrl
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
-
-  // Animation variants
-  const entryVariants = {
-    initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
-    animate: { opacity: 1, scale: 1, y: 0 },
-    transition: isRestored ? { duration: 0 } : {
-      duration: 0.9,
-      delay: Math.min(index * 0.1, 1.2),
-      ease: [0.21, 1.11, 0.81, 0.99] as any
-    }
-  };
 
   return (
     <article
       onClick={() => openPostWithUrl(post)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
-      style={{
-        willChange: "transform, opacity",
-        contentVisibility: "auto",
-        containIntrinsicSize: "auto 400px"
-      }}
     >
-      <div className="relative w-full bg-slate-100 overflow-hidden post-media min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[350px]">
-        <motion.div
-          initial={entryVariants.initial}
-          animate={entryVariants.animate}
-          transition={entryVariants.transition}
-          className="w-full h-full"
-        >
-          {post.isVideo && (
-            <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
-                <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-              </svg>
-            </div>
-          )}
-
-          {post.coverType === "note" && !post.src ? (
-            <div
-              className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
-              style={getNoteStyles(post.noteConfig)}
-            >
-              {(() => {
-                const cfg = typeof post.noteConfig === "string" ? JSON.parse(post.noteConfig) : post.noteConfig;
-                if (cfg?.emojis?.length > 0) {
-                  return (
-                    <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
-                      {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
-                        <span key={idx} className="text-4xl transform rotate-12">
-                          {emoji}
-                        </span>
-                      ))}
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-              <div className="text-center relative z-10">
-                <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
-                  {post.noteConfig?.text ?? post.caption ?? "Note"}
-                </p>
-              </div>
-            </div>
-          ) : post.isVideo ? (
-            <video
-              src={post.src}
-              className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
-              muted
-              loop
-              playsInline
-            />
-          ) : (
-            <div className="relative w-full aspect-[4/5] bg-slate-50 overflow-hidden">
-              <style jsx global>{`
-              @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-              }
-            `}</style>
-              <img
-                src={post.src || NO_IMAGE_PLACEHOLDER}
-                alt={post.caption}
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
-                onLoad={(e) => {
-                  (e.target as HTMLImageElement).style.animation = "fadeIn 0.6s ease-in-out forwards";
-                }}
-                style={{ opacity: 0 }}
-              />
-            </div>
-          )}
-        </motion.div>
-
-        {/* Placeholder frame indicator */}
-        <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
-          <div className="flex flex-col items-center gap-2 opacity-20">
-            <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-            <span className="text-[10px] font-bold  text-slate-400 ">Opening...</span>
+      <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+        {post.isVideo && (
+          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
+              <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+            </svg>
           </div>
-        </div>
+        )}
+
+        {post.coverType === "note" && !post.src ? (
+          <div
+            className="w-full  h-[250px] sm:h-[300px]  flex items-center justify-center p-6 relative overflow-hidden"
+            style={getNoteStyles(post.noteConfig)}
+          >
+            {(() => {
+              const cfg = typeof post.noteConfig === "string" ? JSON.parse(post.noteConfig) : post.noteConfig;
+              if (cfg?.emojis?.length > 0) {
+                return (
+                  <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
+                    {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
+                      <span key={idx} className="text-4xl transform rotate-12">
+                        {emoji}
+                      </span>
+                    ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            <div className="text-center relative z-10">
+              <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
+                {post.noteConfig?.text ?? post.caption ?? "Note"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <img
+            src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
+            alt={post.caption}
+            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
+          />
+        )}
       </div>
 
       <div className="p-3">
@@ -243,7 +200,10 @@ const PostCard = React.memo(({
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 min-w-0">
-            <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+            <div
+              className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
+              onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar); }}
+            >
               <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
             </div>
             <span className="truncate text-[11px] font-semibold text-slate-400 max-w-[120px] capitalize">
@@ -276,7 +236,6 @@ const PostCard = React.memo(({
                   {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
                 </motion.div>
               </AnimatePresence>
-
               {post.liked && (
                 <motion.div
                   initial={{ scale: 1, opacity: 1 }}
@@ -298,6 +257,7 @@ const PostCard = React.memo(({
   return prev.post.id === next.post.id && prev.post.liked === next.post.liked && prev.post.likeCount === next.post.likeCount;
 });
 PostCard.displayName = "PostCard";
+
 
 const ProductCard = React.memo(({
   p,
@@ -1163,12 +1123,12 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         document.documentElement.style.setProperty('--navbar-height', `${navbar.offsetHeight}px`);
       }
     };
-    
+
     updateNavbarHeight();
     window.addEventListener("resize", updateNavbarHeight);
     // Also update on scroll in case navbar has transition
     window.addEventListener("scroll", updateNavbarHeight, { passive: true });
-    
+
     return () => {
       window.removeEventListener("resize", updateNavbarHeight);
       window.removeEventListener("scroll", updateNavbarHeight);
@@ -1208,9 +1168,9 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
 
   const TabsBar = (
-    <div 
-      ref={tabsWrapperRef} 
-      className="bg-white p-3 flex justify-center sticky z-50 border-b border-slate-100" 
+    <div
+      ref={tabsWrapperRef}
+      className="bg-white p-3 flex justify-center sticky z-50 border-b border-slate-100"
       style={{ top: `${navbarHeight}px` }}
     >
       <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto no-scrollbar">

@@ -44,9 +44,17 @@ export default function VideoPlayer({
       setLoading(false);
       setDuration(video.duration || 0);
     };
-    const onMetadata = () => setDuration(video.duration || 0);
+    const onMetadata = () => setDuration(Math.min(video.duration || 0, 180));
     const onTime = () => {
-      if (!seeking) setCurrent(video.currentTime);
+      if (!seeking) {
+        const maxD = 180;
+        if (video.currentTime >= maxD) {
+          video.currentTime = 0;
+          setCurrent(0);
+        } else {
+          setCurrent(video.currentTime);
+        }
+      }
     };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);

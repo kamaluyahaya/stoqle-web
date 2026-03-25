@@ -19,7 +19,7 @@ import { FaHeart, FaRegHeart, FaPaperPlane } from "react-icons/fa";
 import { io } from "socket.io-client";
 
 type User = { name: string; avatar?: string; id?: number | string; };
-type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; allMedia?: string[]; location?: string | null; };
+type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; allMedia?: string[]; location?: string | null; thumbnail?: string; };
 type APIComment = { comment_id: number; post_id: number; user_id: number; comment_content: string; location?: string | null; comment_at: string; is_author: number; is_first_comment: number; author_name: string; author_pic?: string; likes_count: number; author_liked?: boolean; followers_count?: number; posts_count?: number; liked_by_user?: boolean; parent_id?: number | null; };
 
 type Props = {
@@ -186,12 +186,11 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
   }, [post.id, post.src]);
 
   useEffect(() => {
-    const original = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.classList.add("overflow-hidden");
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = original;
+      document.body.classList.remove("overflow-hidden");
       document.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
@@ -703,7 +702,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
             </div>
           ) : post.isVideo ? (
             <div className="w-full h-full flex items-center justify-center">
-              <VideoPlayer src={post.src} className="w-full h-full object-contain" />
+              <VideoPlayer src={post.src} poster={post.thumbnail} className="w-full h-full object-contain" />
             </div>
           ) : (
             <div className="relative w-full h-full flex items-center justify-center overflow-hidden">

@@ -4,6 +4,7 @@
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/src/context/authContext";
 import DefaultInput from "@/src/components/input/default-input-post";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -81,6 +82,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   const [posting, setPosting] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const { user, token, ensureAccountVerified } = useAuth();
   const router = useRouter();
 
   // derive seed from logged-in user if available (localStorage.user) else random
@@ -228,6 +230,18 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
     };
   }, [userSeed, open]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
+    }
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) {
       // reset internal state when closed
@@ -254,6 +268,10 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   };
 
   const handlePost = async () => {
+    // 1. Ensure verified before any backend interaction
+    const isVerified = await ensureAccountVerified();
+    if (!isVerified) return; // verification failed or was cancelled
+
     try {
       setPosting(true);
       const base = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
@@ -273,8 +291,6 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
         cover_type: "note",
         location: location || null,
       };
-
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") || localStorage.getItem("auth") : null;
 
       const res = await fetch(`${base.replace(/\/$/, "")}/api/social/`, {
         method: "POST",
@@ -606,7 +622,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                       {visibility === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
                       {visibility === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
                       {visibility === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-red-600">
+                      <span className="text-[10px] font-black  text-slate-500 group-hover:text-red-600">
                         {visibility === "public" ? "Public" : visibility === "private" ? "Private" : "Friends Only"}
                       </span>
                     </button>
@@ -616,48 +632,65 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                 {/* Visibility Select Modal */}
                 <AnimatePresence>
                   {isPrivacyModalOpen && (
-                    <div className="absolute inset-0 z-[100] flex items-end">
+                    <div className="fixed inset-0 z-[5000] flex items-end justify-center">
                       <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={() => setIsPrivacyModalOpen(false)}
-                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                       />
                       <motion.div
                         initial={{ y: "100%" }}
                         animate={{ y: 0 }}
                         exit={{ y: "100%" }}
-                        className="relative w-full bg-white rounded-t-3xl shadow-2xl p-6 space-y-4"
+                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                        className="relative w-full max-w-xl bg-white rounded-t-[0.5rem] shadow-2xl p-8 space-y-6 pb-12"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Visibility</h3>
-                          <button onClick={() => setIsPrivacyModalOpen(false)}>
-                            <XMarkIcon className="w-4 h-4 text-slate-400" />
+                          <h3 className="text-xs font-black text-slate-400">Visibility</h3>
+                          <button
+                            onClick={() => setIsPrivacyModalOpen(false)}
+                            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                          >
+                            <XMarkIcon className="w-5 h-5 text-slate-400" />
                           </button>
                         </div>
 
-                        {[
-                          { id: "public", label: "Public", icon: LockOpenIcon },
-                          { id: "private", label: "Private", icon: LockClosedIcon },
-                          { id: "friends", label: "Visible to Friends only", icon: UsersIcon },
-                        ].map((opt) => (
-                          <button
-                            key={opt.id}
-                            onClick={() => {
-                              setVisibility(opt.id as any);
-                              setIsPrivacyModalOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${visibility === opt.id ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                              }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <opt.icon className="w-5 h-5" />
-                              <span className="text-sm font-bold">{opt.label}</span>
-                            </div>
-                            {visibility === opt.id && <CheckIcon className="w-4 h-4" />}
-                          </button>
-                        ))}
+                        <div className="space-y-3">
+                          {[
+                            { id: "public", label: "Public", desc: "Anyone on Stoqle can see this", icon: LockOpenIcon },
+                            { id: "private", label: "Private", desc: "Only you can see this", icon: LockClosedIcon },
+                            { id: "friends", label: "Friends Only", desc: "Only your friends can see this", icon: UsersIcon },
+                          ].map((opt) => (
+                            <button
+                              key={opt.id}
+                              onClick={() => {
+                                setVisibility(opt.id as any);
+                                setIsPrivacyModalOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between p-3 rounded-[0.5rem] transition-all border-2 ${visibility === opt.id
+                                ? "bg-red-50 border-red-100 text-red-600 shadow-sm"
+                                : "bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100"
+                                }`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-2xl ${visibility === opt.id ? "bg-white shadow-sm" : "bg-white/50"}`}>
+                                  <opt.icon className="w-6 h-6" />
+                                </div>
+                                <div className="text-left">
+                                  <span className="text-sm font-bold block">{opt.label}</span>
+                                  <span className="text-[10px] opacity-60 font-medium block mt-0.5">{opt.desc}</span>
+                                </div>
+                              </div>
+                              {visibility === opt.id && (
+                                <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                                  <CheckIcon className="w-4 h-4 text-white stroke-[3]" />
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
                       </motion.div>
                     </div>
                   )}
@@ -666,8 +699,8 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                 {/* Footer */}
                 <div className="mt-4 flex flex-col gap-3 ">
                   {/* Action row */}
-                  <div className="flex items-center justify-between pt-1">
-                    <button onClick={goBack} className="px-4 py-2 rounded-md bg-slate-100 text-slate-800">
+                  <div className="flex items-center justify-between pt-1 gap-3">
+                    <button onClick={goBack} className="px-4 py-2 rounded-full bg-slate-300 text-slate-800">
                       Back
                     </button>
 
@@ -676,7 +709,8 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                       disabled={posting}
                       className="
           px-4 py-2
-          rounded-md
+          rounded-full
+          w-full
           bg-red-500
           hover:bg-red-600
           text-white

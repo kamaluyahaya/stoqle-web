@@ -141,7 +141,7 @@ export default function Sidebar({ navHeight, width }: Props) {
         onClick={async (e) => {
           if (requireLogin) {
             e.preventDefault();
-            const ok = await auth.ensureAccountVerified();
+            const ok = await auth.ensureLoggedIn();
             if (ok) router.push(href);
           }
         }}
@@ -272,9 +272,9 @@ export default function Sidebar({ navHeight, width }: Props) {
               )}
             </div>
             <div className={`absolute inset-0 transition-all duration-300 transform ${showMenu ? 'rotate-0 opacity-100' : '-rotate-90 opacity-0'}`}>
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-               </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </div>
           </div>
           <span className="text-md font-bold text-gray-700">More</span>
@@ -316,10 +316,10 @@ export default function Sidebar({ navHeight, width }: Props) {
                         onClick={() => setActiveSubmenu("My Profile")}
                       >
                         <div className="flex items-center gap-2">
-                           {isLoggedIn && profileImage && (
-                             <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border border-gray-100" />
-                           )}
-                           <span className="truncate max-w-[140px]">{auth?.user?.business_name || firstName}</span>
+                          {isLoggedIn && profileImage && (
+                            <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border border-gray-100" />
+                          )}
+                          <span className="truncate max-w-[140px]">{auth?.user?.business_name || firstName}</span>
                         </div>
                         <svg
                           xmlns="http://www.w3.org/2000/svg"

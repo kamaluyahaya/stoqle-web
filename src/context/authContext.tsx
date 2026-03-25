@@ -159,17 +159,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resolverRef.current.resolve(true);
       resolverRef.current = null;
     }
- 
-    // Check for verification after successful login
-    if (!u.phone_no || !u.email) {
-      setTimeout(() => {
-        openVerification().then((verified) => {
-           if (verified) {
-              console.log("Account verified after login triggered");
-           }
-        });
-      }, 500); // Small delay to let login modal exit smoothly
-    }
   };
 
   const onVerificationSuccess = (verifiedUser: User) => {

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import DefaultInput from "@/src/components/input/default-input";
@@ -26,7 +26,10 @@ import AddCategoryModal from "@/src/components/product/addProduct/modal/category
 import ManageCategoriesModal from "@/src/components/product/addProduct/modal/manageCategory";
 import VariantSkuSection from "@/src/components/product/addProduct/variantSkuSection";
 import ProductPolicySettings from "@/src/components/product/addProduct/productPolicySettings";
-import { ArrowLeft, ChevronLeft, Eye, Save, Globe, Package, Settings, ShieldCheck, Tag, Info, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, Eye, Save, Globe, Package, Settings, ShieldCheck, Tag, Info, ChevronRight, X } from "lucide-react";
+import { useAuth } from "@/src/context/authContext";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
 
 /* ===========================
@@ -34,6 +37,7 @@ import { ArrowLeft, ChevronLeft, Eye, Save, Globe, Package, Settings, ShieldChec
    =========================== */
 export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: FormData | any) => void }) {
   const router = useRouter();
+  const auth = useAuth();
   // --- product basics + media/state (unchanged) ---
 
   const [title, setTitle] = useState("");
@@ -45,6 +49,97 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
 
   const [productImages, setProductImages] = useState<(File | string)[]>([]);
   const [productVideo, setProductVideo] = useState<File | string | null>(null);
+  const [videoThumbnail, setVideoThumbnail] = useState<Blob | null>(null);
+  const [isTrimming, setIsTrimming] = useState(false);
+  const [trimmingProgress, setTrimmingProgress] = useState(0);
+  const ffmpegRef = useRef<any>(null);
+
+  const [businessName, setBusinessName] = useState("");
+  const [businessLogo, setBusinessLogo] = useState("");
+
+  const loadFFmpeg = async () => {
+    if (ffmpegRef.current) return ffmpegRef.current;
+    const ffmpeg = new FFmpeg();
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    ffmpegRef.current = ffmpeg;
+    return ffmpeg;
+  };
+
+  const handleVideoProcess = async (file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    const tempVideo = document.createElement("video");
+    tempVideo.preload = "metadata";
+
+    tempVideo.onloadedmetadata = () => {
+      tempVideo.currentTime = 2.5; // Grab thumbnail at 2.5s
+    };
+
+    let thumbnailCaptured = false;
+    tempVideo.onseeked = async () => {
+      if (thumbnailCaptured) return;
+      thumbnailCaptured = true;
+
+      // 1. Capture Thumbnail
+      const canvas = document.createElement("canvas");
+      canvas.width = tempVideo.videoWidth;
+      canvas.height = tempVideo.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) setVideoThumbnail(blob);
+        }, "image/jpeg", 0.8);
+      }
+
+      const duration = tempVideo.duration;
+      // 2. Perform Trimming if > 90 seconds
+      if (duration > 90) {
+        setIsTrimming(true);
+        setTrimmingProgress(10);
+        try {
+          const ffmpeg = await loadFFmpeg();
+          setTrimmingProgress(30);
+          const inputName = 'input.mp4';
+          const outputName = 'output.mp4';
+          await ffmpeg.writeFile(inputName, await fetchFile(file));
+          setTrimmingProgress(50);
+          // 1 minute 30 seconds = 90
+          await ffmpeg.exec(['-i', inputName, '-t', '90', '-c', 'copy', outputName]);
+          setTrimmingProgress(80);
+          const data = await ffmpeg.readFile(outputName);
+          const trimmedBlob = new Blob([(data as any).buffer], { type: 'video/mp4' });
+          const trimmedFile = new File([trimmedBlob], "trimmed_product.mp4", { type: 'video/mp4' });
+          setProductVideo(trimmedFile);
+          toast.success("Video optimized and trimmed to 1:30!");
+          await ffmpeg.deleteFile(inputName);
+          await ffmpeg.deleteFile(outputName);
+        } catch (err) {
+          console.error("FFmpeg error:", err);
+          toast.error("Trimming failed, using original video.");
+          setProductVideo(file);
+        } finally {
+          setIsTrimming(false);
+          setTrimmingProgress(100);
+          URL.revokeObjectURL(objectUrl);
+        }
+      } else {
+        setProductVideo(file);
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+
+    tempVideo.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      toast.error("Could not process video file.");
+    };
+
+    tempVideo.src = objectUrl;
+  };
+
   const [openManageCategories, setOpenManageCategories] = useState(false);
 
 
@@ -212,6 +307,11 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
     if (!token) return;
     try {
       const biz = await fetchBusinessMe(token);
+      const bizData = biz?.data?.business ?? biz?.business ?? biz;
+      if (bizData) {
+        setBusinessName(bizData.business_name || bizData.name || "Vendor");
+        setBusinessLogo(bizData.logo || bizData.business_logo || "");
+      }
       const policyResponse = biz?.data?.policy ?? biz?.policy;
       if (policyResponse) {
         setStorePolicy(policyResponse);
@@ -284,12 +384,12 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
   const [draftsModalOpen, setDraftsModalOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
-  // Mark as dirty when any main field changes (except only category)
+  // Mark as dirty when any main field changes (including video/thumbnail)
   useEffect(() => {
-    if (title || description || price !== "" || quantity !== "" || productImages.length > 0 || variantGroups.length > 0 || params.length > 0) {
+    if (title || description || price !== "" || quantity !== "" || productImages.length > 0 || productVideo || videoThumbnail || variantGroups.length > 0 || params.length > 0) {
       setIsDirty(true);
     }
-  }, [title, description, price, quantity, productImages, variantGroups, params]);
+  }, [title, description, price, quantity, productImages, productVideo, videoThumbnail, variantGroups, params]);
 
   // Navigation guard
   useEffect(() => {
@@ -319,6 +419,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
       productVideo,
       skus,
       useCombinations,
+      lastAutoSave: isAuto ? new Date().toISOString() : undefined,
       policyOverrides: {
         useStoreDefaultReturn,
         returnPolicy,
@@ -329,6 +430,11 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
         saleDiscount,
       },
     };
+
+    // Ensure we have a placeholder title for nameless drafts
+    if (!draftData.title || draftData.title.trim() === "") {
+        draftData.title = `Untitled Draft (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+    }
     try {
       const id = await saveDraft(draftData, currentDraftId || undefined);
       setCurrentDraftId(id);
@@ -339,15 +445,6 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
       if (!isAuto) toast("Failed to save draft");
     }
   }, [title, description, category, price, quantity, hasVariants, variantGroups, params, samePriceForAll, sharedPrice, productImages, productVideo, saveDraft, currentDraftId]);
-
-  // Auto-save every 30 seconds if dirty
-  useEffect(() => {
-    if (!isDirty) return;
-    const timer = setTimeout(() => {
-      handleSaveDraft(true);
-    }, 30000);
-    return () => clearTimeout(timer);
-  }, [isDirty, handleSaveDraft]);
 
   const handleLoadDraft = (draft: ProductDraft) => {
     setTitle(draft.title || "");
@@ -617,6 +714,9 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
     if (title.trim().length < 3) return toast("Product name must be at least 3 characters.");
     if (!category.trim()) return toast("Please choose or add a category.");
     if (productImages.length === 0) return toast("Please upload at least one product image.");
+    
+    const ok = await auth.ensureAccountVerified();
+    if (!ok) return;
 
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) {
@@ -687,7 +787,12 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
       productImages.forEach((f) => {
         if (typeof f !== "string") form.append("files", f);
       });
-      if (productVideo && typeof productVideo !== "string") form.append("product_video", productVideo);
+      if (productVideo && typeof productVideo !== "string") {
+        form.append("product_video", productVideo);
+        if (videoThumbnail) {
+          form.append("files", new File([videoThumbnail], "video_thumb.jpg", { type: "image/jpeg" }));
+        }
+      }
 
       let variantsPayload: any[] = [];
       if (hasVariants) {
@@ -1236,6 +1341,9 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                     setProductImages={setProductImages as any}
                     productVideo={productVideo}
                     setProductVideo={setProductVideo as any}
+                    onProcessVideo={handleVideoProcess}
+                    businessName={businessName}
+                    businessLogo={businessLogo}
                   />
                   <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
                     <p className="text-[11px] font-bold text-blue-700 flex items-center gap-2 uppercase tracking-tight">
@@ -1334,6 +1442,43 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
         onSelect={handleLoadDraft}
         onDelete={deleteDraft}
       />
+      {/* Trimming Overlay */}
+      <AnimatePresence>
+        {isTrimming && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+          >
+            <div className="w-full max-w-md">
+              <div className="relative mb-8">
+                <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full scale-150 animate-pulse" />
+                <div className="relative h-24 w-24 mx-auto rounded-3xl bg-white shadow-2xl flex items-center justify-center">
+                  <div className="h-12 w-12 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+                </div>
+              </div>
+              
+              <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Optimizing Video</h2>
+              <p className="text-slate-400 text-sm font-medium mb-8">Trimming to 1:30 and generating thumbnail...</p>
+              
+              <div className="space-y-3">
+                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-red-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${trimmingProgress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  <span>Processing wasm</span>
+                  <span>{trimmingProgress}%</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
