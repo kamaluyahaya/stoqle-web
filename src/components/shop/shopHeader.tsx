@@ -195,7 +195,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
 
     return (
         <div className="w-full bg-white">
-            {/* STICKY APP BAR (Mobile Only) */}
+            {/* STICKY APP BAR (All Screens) */}
             <motion.div 
                 initial={false}
                 animate={{
@@ -203,10 +203,10 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                     backdropFilter: scrolled ? "blur(12px)" : "blur(0px)",
                     boxShadow: scrolled ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
-                className={`md:hidden fixed top-0 inset-x-0 z-[100] px-4 flex items-center justify-between ${
+                className={`fixed top-0 left-0 lg:left-[300px] right-0 z-[100] px-4 flex items-center justify-between transition-[left] duration-300 ${
                     scrolled 
-                        ? "pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-2" 
-                        : "pt-[calc(env(safe-area-inset-top,0px)+10px)] pb-3"
+                        ? "pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-2 h-14" 
+                        : "pt-[calc(env(safe-area-inset-top,0px)+10px)] pb-3 h-16"
                 }`}
             >
                 <div className="flex items-center gap-1.5">
@@ -218,7 +218,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                                 router.push('/discover');
                             }
                         }}
-                        className="p-1.5 text-slate-100 transition-colors"
+                        className="p-1.5 text-slate-100 transition-colors lg:hidden"
                     >
                         <ChevronLeftIcon className="w-6 h-6" strokeWidth={2.5} />
                     </button>

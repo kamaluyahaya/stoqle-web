@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/src/context/authContext"; // adjust path
 import { useCart } from "@/src/context/cartContext";
 import LoginModal from "../../../components/modal/auth/loginModal"; // adjust path if needed
@@ -14,10 +14,13 @@ import PinSetupModal from "../../business/pinSetupModal";
 import TransferModal from "../../business/transferModal";
 import WithdrawModal from "../../business/withdrawModal";
 import { useWallet } from "@/src/context/walletContext";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { EyeIcon, EyeSlashIcon, ArrowLeftIcon, UserPlusIcon, CheckIcon, EllipsisHorizontalIcon, ChevronLeftIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { motion, AnimatePresence } from "framer-motion";
 
 
 import ImageViewer from "../../../components/modal/imageViewer";
+import { CameraIcon } from "@heroicons/react/24/solid";
+import ProfileCropperModal from "../../../components/modal/profileCropperModal";
 
 type HeaderProps = {
   profileApi: any | null;
@@ -25,12 +28,15 @@ type HeaderProps = {
   onLogout?: () => void;
   onSocialClick?: (tab: "friends" | "followers" | "following" | "recommend" | "liked") => void;
   onVisitShop?: () => void;
+  onFollowToggle?: (following: boolean) => void;
 };
 
 const DEFAULT_AVATAR = "/assets/images/favio.png";
 
-export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop }: HeaderProps) {
+export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop, onFollowToggle }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isOtherUserProfileRoute = pathname?.startsWith('/user/profile/');
   const auth = (useAuth?.() ?? null) as any;
   const { cartCount } = useCart();
   const currentUser = auth?.user ?? null;
@@ -61,6 +67,17 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   const [paymentAccountJson, setPaymentAccountJson] = useState<string>("");
 
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [showMiniHeader, setShowMiniHeader] = useState(false);
+  const [showMiniLogo, setShowMiniLogo] = useState(false);
+  const [dominantColor, setDominantColor] = useState("rgba(255, 255, 255, 1)");
+
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [localProfilePic, setLocalProfilePic] = useState<string | null>(null);
+
+  const [cropperImage, setCropperImage] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+
 
   const [hideBalance, setHideBalance] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -79,6 +96,23 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   const profileUserId = Number(profileApi?.user?.user_id ?? profileApi?.user?.id ?? profileApi?.user_id ?? 0);
   const isOwner = Boolean(currentUser && Number(currentUser.user_id ?? currentUser.id) === profileUserId);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      // MiniHeader logic (Mobile logic sync)
+      if (!isOwner || isOtherUserProfileRoute) {
+        setShowMiniHeader(window.scrollY > 0);
+        setShowMiniLogo(window.scrollY > 150);
+      }
+    };
+    // Initial check on mount
+    if (!isOwner || isOtherUserProfileRoute) {
+      setShowMiniHeader(window.scrollY > 0);
+      setShowMiniLogo(window.scrollY > 150);
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isOwner, isOtherUserProfileRoute]);
 
   useEffect(() => {
     if (!profileUserId) return;
@@ -229,6 +263,38 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     };
   }, [open]);
 
+  const profilePic = profileApi?.business?.business_logo ?? profileApi?.user?.profile_pic ?? DEFAULT_AVATAR;
+
+  // Extract dominant color from profile picture
+  useEffect(() => {
+    if (!profilePic) return;
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = profilePic;
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+        canvas.width = 1;
+        canvas.height = 1;
+        ctx.drawImage(img, 0, 0, 1, 1);
+        const pixelData = ctx.getImageData(0, 0, 1, 1).data;
+        const [r, g, b] = pixelData;
+
+        // Use a slightly opaque version of the dominant color
+        setDominantColor(`rgba(${r}, ${g}, ${b}, 1)`);
+      } catch (e) {
+        console.warn("Color extraction failed:", e);
+        setDominantColor("rgba(255, 255, 255, 1)");
+      }
+    };
+    img.onerror = () => {
+      setDominantColor("rgba(255, 255, 255, 1)");
+    };
+  }, [profilePic]);
+
 
   const handleNavigate = (href: string) => {
     setOpen(false);
@@ -289,6 +355,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           const c = Number(json.data.followersCount ?? json.data.followers_count);
           if (Number.isFinite(c)) setFollowersCount(c);
         }
+        onFollowToggle?.(true);
       }
     } catch (err) {
       setIsFollowing(false);
@@ -328,6 +395,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           const c = Number(json.data.followersCount ?? json.data.followers_count);
           if (Number.isFinite(c)) setFollowersCount(c);
         }
+        onFollowToggle?.(false);
       }
     } catch (err) {
       setIsFollowing(true);
@@ -402,6 +470,66 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     }
   };
 
+  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropperImage(reader.result as string);
+      setShowCropper(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    if (!token) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    setUploadingProfile(true);
+    toast.info("Updating profile...", { duration: 2000 });
+
+    const formData = new FormData();
+    formData.append("profile_pic", croppedBlob, "profile.jpg");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/profile/profile-pic`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || "Failed to update profile pic");
+
+      const newPicUrl = json.data?.user?.profile_pic || json.data?.profile_pic;
+
+      // Update global context
+      if (auth?.onVerificationSuccess) {
+        const updatedUser = { ...currentUser, profile_pic: newPicUrl };
+        auth.onVerificationSuccess(updatedUser);
+      }
+
+      toast.success("Profile updated!");
+      setLocalProfilePic(newPicUrl);
+
+      // Auto-close the full screen as requested
+      setFullImageUrl(null);
+    } catch (err: any) {
+      console.error("Profile upload error:", err);
+      toast.error(err.message || "Failed to upload image");
+      setLocalProfilePic(null);
+    } finally {
+      setUploadingProfile(false);
+      setShowCropper(false);
+      setCropperImage(null);
+    }
+  };
+
   // Report handler (for non-owner) kept for report functionality
   const reportUser = () => {
     if (!token) {
@@ -412,7 +540,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     router.push(`/report/user/${profileUserId}`);
   };
 
-  const MoreMenu = () => (
+  const MoreMenu = ({ color }: { color?: string }) => (
     <div className="relative inline-block text-left">
       <button
         ref={buttonRef}
@@ -422,13 +550,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         }}
         aria-haspopup="true"
         aria-expanded={open}
-        className="p-2 rounded-full hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
+        className="p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
         title="More"
       >
-        <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="5" cy="12" r="2" />
+        <svg className={`w-5 h-5 ${color || (showMiniHeader ? 'text-white' : 'text-slate-800')}`} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="12" cy="5" r="2" />
           <circle cx="12" cy="12" r="2" />
-          <circle cx="19" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
         </svg>
       </button>
 
@@ -584,17 +712,97 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   );
 
   return (
-    <>
+    <div className="relative">
+      {/* Immersive Navbar (Back & More always visible; Logo & Follow animate on scroll) */}
+      {(!isOwner || isOtherUserProfileRoute) && (
+        <motion.div
+          initial={false}
+          animate={{
+            backgroundColor: showMiniHeader ? dominantColor : "rgba(255,255,255,0)",
+          }}
+          transition={{ duration: 0.3 }}
+          className="fixed top-0 left-0 lg:left-[300px] right-0 z-[100] h-14 flex lg:hidden items-center px-4 transition-[left] duration-300"
+        >
+          {/* Left part: Back button (Always visible on mobile/tablet) */}
+          <div className="flex-1 flex justify-start min-w-0 lg:hidden focus:outline-none">
+            <button
+              onClick={() => router.back()}
+              className={`p-2 -ml-2 transition-colors duration-300 ${showMiniHeader ? 'text-white' : 'text-slate-800'} hover:opacity-70`}
+            >
+              <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
+            </button>
+          </div>
+
+          {/* Divider for Desktop centering (Hidden where Back button exists) */}
+          <div className="hidden lg:flex flex-1" />
+
+          {/* Middle part: Logo (Slides UP from bottom past 150px) */}
+          <div className="flex-none flex justify-center h-full items-center overflow-hidden">
+            <AnimatePresence>
+              {showMiniLogo && (
+                <motion.div
+                  key="logo"
+                  initial={{ y: 40, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 40, opacity: 0 }}
+                  transition={{ type: "spring", damping: 20, stiffness: 200 }}
+                  className="flex items-center justify-center"
+                >
+                  <img
+                    src={profilePic}
+                    className="w-8 h-8 rounded-full object-cover border border-white/20"
+                    alt=""
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Right part: Actions (Follow animates on scroll, More is always visible) */}
+          <div className="flex-1 flex justify-end items-center gap-1 min-w-0">
+            <AnimatePresence>
+              {showMiniLogo && !isOwner && (
+                <motion.div
+                  initial={{ x: 20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: 20, opacity: 0 }}
+                  className="flex items-center"
+                >
+                  {!isFollowing ? (
+                    <button
+                      onClick={followUser}
+                      className="bg-red-500 text-white px-5 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all shadow-md"
+                    >
+                      Follow
+                    </button>
+                  ) : (
+                    <button
+                      onClick={unfollowUser}
+                      className="bg-white/10 backdrop-blur-md text-white px-5 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all"
+                    >
+                      Following
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className={`transition-colors duration-300 ${showMiniHeader ? 'text-white' : 'text-slate-800'}`}>
+              <MoreMenu />
+            </div>
+          </div>
+        </motion.div>
+      )}
 
 
       <div className="rounded-2xl overflow-visible bg-white mb-6">
-        <div className="max-w-4xl mx-auto mt-12 px-4">
+        <div className="max-w-4xl mx-auto mt-20 px-4">
           {/* Mobile */}
           <div className="md:hidden">
             <div className="flex items-center gap-3">
               <div
-                className="flex-none cursor-pointer active:scale-95 transition-transform"
+                className="group relative flex-none cursor-pointer active:scale-95 transition-transform"
                 onClick={() => setFullImageUrl(
+                  localProfilePic ??
                   profileApi?.business?.business_logo ??
                   profileApi?.business?.logo ??
                   profileApi?.user?.profile_pic ??
@@ -604,6 +812,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               >
                 <img
                   src={
+                    localProfilePic ??
                     profileApi?.business?.business_logo ??
                     profileApi?.business?.logo ??
                     profileApi?.user?.profile_pic ??
@@ -611,12 +820,24 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     DEFAULT_AVATAR
                   }
                   alt={displayName ?? "Profile"}
-                  className="h-20 w-20 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200"
+                  className={`h-20 w-20 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200 ${uploadingProfile ? "opacity-50" : ""}`}
                 />
+
+                {isOwner && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full pointer-events-none">
+                    <CameraIcon className="w-5 h-5 text-white/90" />
+                  </div>
+                )}
+
+                {isOwner && (
+                  <div className="absolute bottom-0 right-0 bg-rose-500 rounded-full p-0.5 border border-white shadow-sm transition-transform group-hover:scale-110">
+                    <PlusIcon className="w-2.5 h-2.5 text-white stroke-[4px]" />
+                  </div>
+                )}
               </div>
 
-              <div className="flex-1">
-                <h2 className="lg:-mt-10 sm:-mt-5 font-semibold text-slate-900 leading-tight" style={{ fontSize: "clamp(1rem, 2.2vw, 1.25rem)" }}>
+              <div className="flex-1 min-w-0">
+                <h2 className="lg:-mt-10 sm:-mt-5 font-semibold text-slate-900 leading-tight truncate" style={{ fontSize: "clamp(1rem, 2.2vw, 1.25rem)" }}>
                   {displayName}
                 </h2>
                 {profileApi?.business?.previous_business_name && (
@@ -781,7 +1002,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         )}
                       </>
                     )}
-                    <MoreMenu />
+                    <MoreMenu color="text-slate-800" />
                   </div>
                 </div>
               </div>
@@ -791,8 +1012,9 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           {/* Desktop Layout */}
           <div className="hidden md:flex md:items-start md:gap-6">
             <div
-              className="flex-none cursor-pointer active:scale-95 transition-transform"
+              className="group relative flex-none cursor-pointer active:scale-95 transition-transform"
               onClick={() => setFullImageUrl(
+                localProfilePic ??
                 profileApi?.business?.business_logo ??
                 profileApi?.business?.logo ??
                 profileApi?.user?.profile_pic ??
@@ -802,6 +1024,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
             >
               <img
                 src={
+                  localProfilePic ??
                   profileApi?.business?.business_logo ??
                   profileApi?.business?.logo ??
                   profileApi?.user?.profile_pic ??
@@ -809,8 +1032,20 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   DEFAULT_AVATAR
                 }
                 alt={displayName ?? "Profile"}
-                className="h-44 w-44 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200"
+                className={`h-44 w-44 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200 ${uploadingProfile ? "opacity-50" : ""}`}
               />
+
+              {isOwner && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full pointer-events-none">
+                  <CameraIcon className="w-10 h-10 text-white/90" />
+                </div>
+              )}
+
+              {isOwner && (
+                <div className="absolute bottom-4 right-4 bg-rose-500 rounded-full p-1.5 border-2 border-white shadow-md transition-transform group-hover:scale-110">
+                  <PlusIcon className="w-3.5 h-3.5 text-white stroke-[3px]" />
+                </div>
+              )}
             </div>
 
             <div className="flex-1 min-w-0">
@@ -965,7 +1200,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   )}
                 </>
               )}
-              <MoreMenu />
+              {isOwner && <MoreMenu color="text-slate-800" />}
             </div>
           </div>
         </div>
@@ -1018,11 +1253,30 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         role={profileApi?.is_business_owner ? "vendor" : "user"}
       />
 
+      {isOwner && (
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept="image/*"
+          onChange={handleProfilePicChange}
+        />
+      )}
+
+      <ProfileCropperModal
+        isOpen={showCropper}
+        image={cropperImage}
+        onClose={() => setShowCropper(false)}
+        onCropComplete={handleCropComplete}
+      />
+
       <ImageViewer
         src={fullImageUrl}
         onClose={() => setFullImageUrl(null)}
         profileUserId={profileApi?.user?.user_id ?? profileApi?.business?.user_id}
+        onUpdateProfile={() => fileInputRef.current?.click()}
       />
-    </>
+    </div>
   );
+
 }

@@ -142,7 +142,13 @@ export default function Sidebar({ navHeight, width }: Props) {
           if (requireLogin) {
             e.preventDefault();
             const ok = await auth.ensureLoggedIn();
-            if (ok) router.push(href);
+            if (ok) {
+              if (label === "Release") {
+                window.dispatchEvent(new CustomEvent("showReleaseModal"));
+              } else {
+                router.push(href);
+              }
+            }
           }
         }}
         className="w-full flex items-center justify-between rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer group transition-colors"

@@ -22,6 +22,7 @@ import { estimateDelivery, EstimationResult } from "@/src/lib/deliveryEstimation
 import { fetchUserAddresses } from "@/src/lib/api/addressApi";
 import { logUserActivity } from "@/src/lib/api/productApi";
 import PhoneVerificationModal from "../../../modal/phoneVerificationModal";
+import AccountVerificationModal from "../../../modal/accountVerificationModal";
 
 // No need to declare here if we use window.PaystackPop
 
@@ -135,7 +136,10 @@ export default function AddToCartModal({
         }
     }, [open, payload]);
 
-    const switchToBuyMode = () => {
+    const switchToBuyMode = async () => {
+        const loggedIn = await ensureLoggedIn();
+        if (!loggedIn) return;
+
         // Ensure all required variant groups have a selection before switching
         if (payload?.variantGroups && payload.variantGroups.length > 0) {
             for (const group of payload.variantGroups) {
@@ -235,7 +239,8 @@ export default function AddToCartModal({
     }, [estimation, effectiveShippingPolicies]);
 
     const [loading, setLoading] = useState(false);
-    const { user, token } = useAuth();
+    const { user, token, ensureLoggedIn, _onLoginSuccess } = useAuth() as any;
+    const [accountModalOpen, setAccountModalOpen] = useState(false);
     const router = useRouter();
     const isOwner = useMemo(() => {
         if (!user || !payload) return false;
@@ -688,6 +693,10 @@ export default function AddToCartModal({
     const handleConfirmClick = async () => {
         if (!payload) return;
 
+        // Ensure user is logged in
+        const loggedIn = await ensureLoggedIn();
+        if (!loggedIn) return;
+
         // Check internet connection
         if (!navigator.onLine) {
             Swal.fire({
@@ -754,10 +763,9 @@ export default function AddToCartModal({
 
             if (paymentMethod === "paystack") {
                 if (!user?.email) {
-                    toast.error("Please login to proceed with payment");
+                    setAccountModalOpen(true);
                     return;
                 }
-
                 try {
                     setIsPaying(true);
                     const amount = price * quantity;
@@ -1493,6 +1501,15 @@ export default function AddToCartModal({
                 onClose={() => setAddressModalOpen(false)}
                 onSave={handleAddressSave}
                 initialData={activeAddress}
+            />
+
+            <AccountVerificationModal 
+                open={accountModalOpen} 
+                onClose={() => setAccountModalOpen(false)}
+                onSuccess={(updatedUser: any) => {
+                    setAccountModalOpen(false);
+                    _onLoginSuccess(updatedUser, token!);
+                }}
             />
 
             {/* Full Screen Image Overlay */}

@@ -14,9 +14,10 @@ type Props = {
     currentIndex?: number;
     onIndexChange?: (index: number) => void;
     direction?: number;
+    onUpdateProfile?: () => void;
 };
 
-export default function ImageViewer({ src, onClose, profileUserId, mediaList = [], currentIndex = 0, onIndexChange, direction = 0 }: Props) {
+export default function ImageViewer({ src, onClose, profileUserId, mediaList = [], currentIndex = 0, onIndexChange, direction = 0, onUpdateProfile }: Props) {
     const { user } = useAuth();
     const [liked, setLiked] = useState(false);
     const [likeCount, setLikeCount] = useState(0);
@@ -213,7 +214,18 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                             </div>
 
                             {isOwnProfile && (
-                                <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Your Profile Statistics</p>
+                                <div className="flex flex-col items-center gap-3">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onUpdateProfile?.();
+                                        }}
+                                        className="bg-white text-black px-8 py-2.5 rounded-full font-bold text-sm hover:bg-gray-100 active:scale-95 transition-all shadow-xl"
+                                    >
+                                        Change Profile
+                                    </button>
+                                    <p className="text-white/20 text-[10px] uppercase tracking-widest font-bold">Your Profile Statistics</p>
+                                </div>
                             )}
                         </motion.div>
                     )}

@@ -73,10 +73,12 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
   );
 
   useEffect(() => {
-    if (searchQuery.length > 0 && view === "initial") {
+    if (searchQuery.length >= 2 && view === "initial") {
+      setIsSuggesting(true);
       debouncedSuggest(searchQuery);
     } else {
       setSuggestions([]);
+      setIsSuggesting(false);
     }
   }, [searchQuery, view, debouncedSuggest]);
 

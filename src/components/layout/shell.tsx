@@ -9,6 +9,8 @@ import BottomNav from "./bottomNav"; // <-- add this
 import { useAuth } from "@/src/context/authContext";
 import { usePathname } from "next/navigation";
 import AccountVerificationModal from "../modal/accountVerificationModal";
+import ReleaseSelectionModal from "../modal/social/ReleaseSelectionModal";
+import GlobalPostComposer from "../posts/GlobalPostComposer";
 
 const NAV_HEIGHT = 64;
 const SIDEBAR_WIDTH = 300;
@@ -17,18 +19,29 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const pathname = usePathname();
 
+  const isOtherUserProfile = pathname?.startsWith('/user/profile/');
+  const isShopPage = pathname?.startsWith('/shop/');
+  const isEditProfile = pathname === '/profile/edit';
+  const shouldHideGlobalNav = isOtherUserProfile || isShopPage || isEditProfile;
+
   return (
     <div className=" bg-white relative">
-      <Navbar height={NAV_HEIGHT} />
+      {!shouldHideGlobalNav && <Navbar height={NAV_HEIGHT} />}
+      
+      {/* If it's the edit profile or other user profile page, show navbar on large screens only */}
+      {(isEditProfile || isOtherUserProfile) && <div className="hidden lg:block"><Navbar height={NAV_HEIGHT} /></div>}
+
       <Sidebar navHeight={NAV_HEIGHT} width={SIDEBAR_WIDTH} />
 
-      <main className={`${(pathname === '/messages' || pathname?.startsWith('/shop') || pathname === '/profile/business/customer-order' || pathname?.startsWith('/profile/business/inventory')) ? 'pt-0 sm:pt-16' : 'pt-16'} lg:ml-[300px] transition-all duration-300`}>
+      <main className={`${(shouldHideGlobalNav) ? 'pt-0 lg:pt-16' : 'pt-16'} lg:ml-[300px] transition-all duration-300`}>
         {children}
       </main>
 
-      <React.Suspense fallback={null}>
-        <BottomNav />
-      </React.Suspense>
+      {!shouldHideGlobalNav && (
+        <React.Suspense fallback={null}>
+          <BottomNav />
+        </React.Suspense>
+      )}
 
       {/* 🔥 MODAL LAYER (always on top) */}
       <div className="fixed inset-0 z-[99999] pointer-events-none">
@@ -49,7 +62,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             />
           </div>
         )}
+        <React.Suspense fallback={null}>
+          <GlobalPostComposer />
+        </React.Suspense>
       </div>
+
+      <ReleaseSelectionModal />
     </div>
   );
 }

@@ -61,3 +61,17 @@ export async function updateCategory(category_id: number, payload: { category_na
   if (!res.ok) throw new Error(body?.message || `Failed to update category (${res.status})`);
   return body as Category;
 }
+
+/**
+ * Fetch global business categories from the database.
+ */
+export async function fetchBusinessCategories(): Promise<{id: number, name: string, description?: string}[]> {
+  const res = await fetch(`${API_BASE_URL}/api/meta/business-categories`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message || `Failed to fetch business categories (${res.status})`);
+  }
+  const body = await res.json();
+  // Standard response shape { ok, data } or [Array]
+  return body.data || body;
+}

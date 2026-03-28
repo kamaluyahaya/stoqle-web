@@ -21,7 +21,7 @@ import PinSetupModal from "@/src/components/business/pinSetupModal";
 import { logUserActivity } from "@/src/lib/api/productApi";
 import ImageViewer from "@/src/components/modal/imageViewer";
 import { motion, AnimatePresence } from "framer-motion";
-import PhoneVerificationModal from "@/src/components/modal/phoneVerificationModal";
+import AccountVerificationModal from "@/src/components/modal/accountVerificationModal";
 
 interface CartItem {
     cart_id: number;
@@ -189,7 +189,7 @@ function ProductPromoIndicator({ promotion }: { promotion: any }) {
 export default function CheckoutPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, token } = useAuth();
+    const { user, token, ensureLoggedIn, isHydrated, _onLoginSuccess } = useAuth();
 
     const [items, setItems] = useState<CartItem[]>([]);
     const [selectedIds, setSelectedIds] = useState<number[]>(() => {
@@ -220,7 +220,7 @@ export default function CheckoutPage() {
 
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerSrc, setViewerSrc] = useState<string | null>(null);
-    const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+    const [accountModalOpen, setAccountModalOpen] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -300,18 +300,23 @@ export default function CheckoutPage() {
     };
 
     useEffect(() => {
-        if (token) {
-            fetchCart();
-            refreshWallet();
-            fetchDefaultAddress();
-        } else {
-            // setTimeout to prevent flash
-            const t = setTimeout(() => {
-                if (!token) router.push("/cart");
-            }, 1000);
-            return () => clearTimeout(t);
-        }
-    }, [token, selectedIds, user?.phone_no]);
+        if (!isHydrated) return;
+
+        const checkAuth = async () => {
+            if (token) {
+                fetchCart();
+                refreshWallet();
+                fetchDefaultAddress();
+            } else {
+                const loggedIn = await ensureLoggedIn();
+                if (!loggedIn) {
+                    router.push("/cart");
+                }
+            }
+        };
+
+        checkAuth();
+    }, [token, isHydrated, selectedIds, user?.phone_no]);
 
     const fetchDefaultAddress = async () => {
         if (!token) return;
@@ -497,16 +502,12 @@ export default function CheckoutPage() {
             return;
         }
 
-        if (!user?.phone_no) {
-            setPhoneModalOpen(true);
+        if (!user?.phone_no || !user?.email) {
+            setAccountModalOpen(true);
             return;
         }
 
         if (paymentMethod === "paystack") {
-            if (!user?.email) {
-                toast.error("Please login to proceed");
-                return;
-            }
 
             const unreachableVendor = groupedItems.find(g =>
                 g.shipments.some(s => s.estimation && !s.estimation.is_available)
@@ -1055,12 +1056,12 @@ export default function CheckoutPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
-            <PhoneVerificationModal 
-                isOpen={phoneModalOpen} 
-                onClose={() => setPhoneModalOpen(false)}
-                onSuccess={() => {
-                    setPhoneModalOpen(false);
-                    // The handlePlaceOrder logic will see the updated user status or can be re-called manually
+            <AccountVerificationModal 
+                open={accountModalOpen} 
+                onClose={() => setAccountModalOpen(false)}
+                onSuccess={(updatedUser) => {
+                    setAccountModalOpen(false);
+                    _onLoginSuccess(updatedUser, token!);
                 }}
             />
         </div>

@@ -24,6 +24,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
 
   const handleTimeUpdate = () => {
     if (!videoElementRef.current) return;
@@ -177,12 +178,18 @@ export default function ProductMedia({ productImages, setProductImages, productV
                 autoPlay
                 loop
                 playsInline
+                onLoadedMetadata={(e) => {
+                   const v = e.currentTarget;
+                   setVideoAspectRatio(v.videoWidth / v.videoHeight);
+                }}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
                 onTimeUpdate={handleTimeUpdate}
                 onClick={(e) => {
                     e.stopPropagation();
                     togglePlayback();
                 }}
-                className="w-full h-full object-cover relative z-10"
+                className={`w-full h-full relative z-10 ${videoAspectRatio && videoAspectRatio < 0.8 ? "object-cover" : "object-contain"}`}
               />
 
               {/* Central Play Icon when Paused */}
@@ -194,7 +201,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
                         exit={{ opacity: 0, scale: 0.5 }}
                         className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
                     >
-                        <Play className="w-16 h-16 text-white drop-shadow-2xl fill-white" />
+                        <Play className="w-12 h-12 text-white/90 drop-shadow-2xl fill-white/80" />
                     </motion.div>
                 )}
               </AnimatePresence>

@@ -6,11 +6,13 @@ export const DISCOVERY_CACHE = {
   hasMore: true,
   category: "Recommend",
   scrollPos: 0,
-  lastFetchedAt: 0
+  lastFetchedAt: 0,
+  personalized: false
 };
 
 export const MARKET_CACHE = {
   products: [] as any[],
+  categories: [] as string[],
   page: 0,
   hasMore: true,
   category: "For you",

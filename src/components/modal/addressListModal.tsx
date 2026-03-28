@@ -91,7 +91,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-lg bg-white rounded shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+                    className="relative w-full max-w-lg bg-white rounded-[0.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
                 >
                     <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-900">My Addresses</h3>
@@ -176,7 +176,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                 setEditingAddress(null);
                                 setShowAddModal(true);
                             }}
-                            className="w-full py-2 rounded-full bg-red-500 hover:bg-slate-800 text-white font-bold transition flex items-center justify-center gap-2"
+                            className="w-full py-3 rounded-full bg-red-500 hover:bg-slate-800 text-white font-bold transition flex items-center justify-center gap-2"
                         >
                             <PlusIcon className="w-5 h-5" />
                             <span>Add New Address</span>

@@ -9,7 +9,8 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/src/lib/config";
 import DefaultSelect from "../input/default-select";
 import AddressSelectionModal from "./addressSelectionModal";
-import { categories, countries } from "@/src/lib/api/country";
+import { countries } from "@/src/lib/api/country";
+import { fetchBusinessCategories } from "@/src/lib/api/categoryApi";
 import CategorySelectionModal from "../input/default-select";
 
 type StoreType = "individual" | "enterprise" | null;
@@ -35,10 +36,28 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
   const [submitting, setSubmitting] = useState(false);
   const [showGeocodeWarning, setShowGeocodeWarning] = useState(false);
   const [pendingCoords, setPendingCoords] = useState<{ latitude: number, longitude: number } | null>(null);
+  const [businessCategories, setBusinessCategories] = useState<string[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
 
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => firstFocusRef.current?.focus(), []);
+
+  // Fetch global business categories from DB
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoadingCategories(true);
+        const data = await fetchBusinessCategories();
+        setBusinessCategories(data.map(c => c.name));
+      } catch (err) {
+        console.error("Failed to load business categories", err);
+      } finally {
+        setLoadingCategories(false);
+      }
+    }
+    load();
+  }, []);
 
   // create + cleanup object URL when ninFile changes
   useEffect(() => {
@@ -452,10 +471,10 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
                         />
                         <CategorySelectionModal
                           title="Select category"
-                          options={categories}
+                          options={businessCategories.length > 0 ? businessCategories : ["Electronics", "Fashion", "Groceries", "Home", "Beauty", "Toys"]}
                           value={category}
                           onSelected={(v) => setCategory(v)}
-                          hintText="Choose a category"
+                          hintText={loadingCategories ? "Loading categories..." : "Choose a category"}
                           isRequired
                           triggerLabel="Category"
                         />

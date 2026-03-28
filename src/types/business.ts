@@ -125,4 +125,6 @@ export type Business = {
   created_at?: string | null;
   updated_at?: string | null;
   policy?: BusinessPolicy | null;
+  suspension_reason?: string | null;
+  suspended_at?: string | null;
 };

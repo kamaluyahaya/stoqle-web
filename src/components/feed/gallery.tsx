@@ -16,6 +16,8 @@ type Post = {
   noteConfig?: any;
   rawCreatedAt?: string;
   apiId?: number;
+  status?: string;
+  mediaType?: string;
 };
 
 type Props = { postCount?: number };
@@ -53,6 +55,8 @@ const mapApiPost = (p: any): Post => {
     coverType: p.cover_type,
     noteConfig: p.config,
     rawCreatedAt: p.created_at,
+    status: p.status,
+    mediaType: p.media_type,
   };
 };
 
@@ -307,6 +311,15 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-slate-900 ml-0.5">
                       <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
                     </svg>
+                  </div>
+                )}
+                
+                {post.status === 'processing' && (
+                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                    <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin mb-2" />
+                    <span className="text-[10px] font-bold text-white px-2 text-center drop-shadow-md">
+                      Processing your video...
+                    </span>
                   </div>
                 )}
 

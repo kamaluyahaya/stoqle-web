@@ -255,6 +255,11 @@ export function useEditBusinessProfile({
       case KEYS.shopProfile: setShopProfile(val); break;
       default: break;
     }
+
+    // Auto-sync in background after a tiny delay to ensure state/storage are ready
+    setTimeout(() => {
+      saveProfile();
+    }, 100);
   }
 
   async function saveProfile() {
@@ -264,7 +269,9 @@ export function useEditBusinessProfile({
     // read staged edits (so we send the latest staged edits)
     const staged = await loadLocalPrefs();
 
-    // build payload using staged fields if present, else use current state
+    // read fresh dirty keys from storage (not potentially stale state)
+    const currentDirty = getDirtyKeys();
+
     const shippingVal = staged.shipping ?? shipping;
     const refundsVal = staged.refunds ?? refunds;
     const paymentVal = staged.payment ?? payment;
@@ -298,7 +305,7 @@ export function useEditBusinessProfile({
 
     // Only include promotion if user staged/edited it
     const promotionObj =
-      dirtyKeys.includes(KEYS.promo) && promoParsed
+      currentDirty.includes(KEYS.promo) && promoParsed
         ? (() => {
           // Normalize to a single object
           if (Array.isArray(promoParsed)) return promoParsed[0] ?? null;
@@ -312,7 +319,7 @@ export function useEditBusinessProfile({
         : null;
 
     // Only include promotions if user staged/edited them
-    const promotionsPayload = dirtyKeys.includes(KEYS.promo)
+    const promotionsPayload = currentDirty.includes(KEYS.promo)
       ? (() => {
         if (!promoParsed) return [];
         if (Array.isArray(promoParsed)) return promoParsed;
@@ -351,7 +358,7 @@ export function useEditBusinessProfile({
     const discountParsed = safeParse(discountVal);
 
     // Only include discount if user staged/edited it
-    const discountObj = dirtyKeys.includes(KEYS.discount) && discountParsed
+    const discountObj = currentDirty.includes(KEYS.discount) && discountParsed
       ? (() => {
         if (Array.isArray(discountParsed.discounts) && discountParsed.discounts.length > 0) return discountParsed.discounts[0];
         if (Array.isArray(discountParsed) && discountParsed.length > 0) return discountParsed[0];
@@ -361,7 +368,7 @@ export function useEditBusinessProfile({
       })()
       : null;
 
-    const discountsPayload = dirtyKeys.includes(KEYS.discount)
+    const discountsPayload = currentDirty.includes(KEYS.discount)
       ? (discountObj
         ? [{
           type: discountObj.type ?? discountObj.name ?? "Vendor Discount",
@@ -372,7 +379,7 @@ export function useEditBusinessProfile({
 
 
     // Only include shipping if it was staged/edited
-    const shippingPayload = dirtyKeys.includes(KEYS.shipping)
+    const shippingPayload = currentDirty.includes(KEYS.shipping)
       ? {
         delivery_notice: shippingObj.delivery_notice ?? shippingObj.deliveryNotice ?? (typeof shippingParsed === "string" ? shippingParsed : undefined),
         shipping_duration: shippingDuration,
@@ -425,11 +432,25 @@ export function useEditBusinessProfile({
 
     const cleaned = pruneNulls(payload) ?? {};
 
+    let latestPolicy: any = null;
+
     try {
-      if (!apiBase) {
-        await new Promise((r) => setTimeout(r, 800));
-        console.debug("Mock send policy:", cleaned);
-      } else {
+      if (currentDirty.length === 0) {
+        setIsSyncing(false);
+        return;
+      }
+
+      // 1) General policies hit the /api/business/:id/policy endpoint
+      if (
+        currentDirty.includes(KEYS.shipping) ||
+        currentDirty.includes(KEYS.refunds) ||
+        currentDirty.includes(KEYS.payment) ||
+        currentDirty.includes(KEYS.customerService) ||
+        currentDirty.includes(KEYS.address) ||
+        currentDirty.includes(KEYS.market) ||
+        currentDirty.includes(KEYS.promo) ||
+        currentDirty.includes(KEYS.discount)
+      ) {
         const res = await fetch(`${apiBase.replace(/\/$/, "")}/api/business/${encodeURIComponent(String(bizId))}/policy`, {
           method: "POST",
           headers: {
@@ -440,19 +461,27 @@ export function useEditBusinessProfile({
         });
 
         if (!res.ok) {
-          let payload: any = null;
+          let errorPayload: any = null;
           try {
-            payload = await res.json();
+            errorPayload = await res.json();
           } catch { }
 
           throw new ApiError(
-            payload?.message || `Server returned ${res.status}`,
-            payload?.code,
+            errorPayload?.message || `Server returned ${res.status}`,
+            errorPayload?.code,
             res.status,
-            payload
+            errorPayload
           );
+        } else {
+          // On success, try to use the response body as the latest policy
+          try {
+            const json = await res.json();
+            latestPolicy = json.policy || json.data?.policy || json; 
+          } catch (e) {
+            console.warn("Failed to parse policy response, falling back to fetchLatestPolicyFromApi:", e);
+            latestPolicy = await fetchLatestPolicyFromApi(bizId);
+          }
         }
-
       }
 
       // on success: clear staging cache and dirty markers
@@ -463,7 +492,7 @@ export function useEditBusinessProfile({
       refreshDirtyKeys();
 
       // fetch latest authoritative policy and map into state
-      const latestPolicy = apiBase ? await fetchLatestPolicyFromApi(bizId) : businessPolicy;
+      // const latestPolicy = apiBase ? await fetchLatestPolicyFromApi(bizId) : businessPolicy; // This line is now handled above
       if (latestPolicy) {
         const mapped = mapPolicyToPrefs(latestPolicy);
         safeSet(setShipping, mapped[KEYS.shipping] ?? "");
@@ -489,7 +518,7 @@ export function useEditBusinessProfile({
       }
 
       // 5) If shop profile is dirty, hit the business update endpoint
-      if (dirtyKeys.includes(KEYS.shopProfile)) {
+      if (currentDirty.includes(KEYS.shopProfile)) {
         const spData = safeParse(staged.shopProfile || shopProfile);
         if (spData) {
           // Note: If we have files to upload, the caller usually passes a FormData.

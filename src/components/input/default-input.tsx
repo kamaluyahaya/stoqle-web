@@ -8,6 +8,7 @@ type DefaultInputProps = {
   required?: boolean;
   maxLength?: number;
   disabled?: boolean;
+  type?: string;
 };
 
 export default function DefaultInput({
@@ -18,8 +19,9 @@ export default function DefaultInput({
   required = false,
   maxLength,
   disabled = false,
+  type = "text",
 }: DefaultInputProps) {
-  const [charCount, setCharCount] = useState(value.length || 0);
+  const [charCount, setCharCount] = useState(value?.length || 0);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
@@ -39,6 +41,7 @@ export default function DefaultInput({
 
       {/* Input */}
       <input
+        type={type}
         value={value}
         onChange={handleChange}
         placeholder={placeholder}

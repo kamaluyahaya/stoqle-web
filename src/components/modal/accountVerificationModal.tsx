@@ -32,6 +32,10 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
   const otpInputs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Reset state when modal opens
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState("");
+
   useEffect(() => {
     if (open) {
       if (!user?.phone_no) {
@@ -42,8 +46,43 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
       setStep("input");
       setOtp(["", "", "", "", "", ""]);
       setLoading(false);
+      setIsAvailable(null);
+      setAvailabilityError("");
     }
   }, [open, user]);
+
+  // Debounced availability check
+  useEffect(() => {
+    if (step !== "input" || !open) return;
+    
+    const value = verifyType === "phone" ? phone : email;
+    if (!value || (verifyType === "phone" && String(value).length < 7)) {
+      setIsAvailable(null);
+      setAvailabilityError("");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingAvailability(true);
+      try {
+        const query = verifyType === "phone" ? `phone_no=%2B234${phone}` : `email=${email}`;
+        const res = await fetch(`${API_BASE_URL}/api/auth/check-availability?${query}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setIsAvailable(data.data.available);
+          setAvailabilityError(data.data.available ? "" : data.message);
+        }
+      } catch (err) {
+        console.error("Availability check failed", err);
+      } finally {
+        setCheckingAvailability(false);
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [phone, email, verifyType, step, open, token]);
 
   // Timer for resend cooldown
   useEffect(() => {
@@ -67,6 +106,11 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
         toast.error("Please enter a valid email address");
         return;
       }
+    }
+
+    if (isAvailable === false) {
+      toast.error(availabilityError || "This " + verifyType + " is already taken.");
+      return;
     }
 
     setLoading(true);
@@ -132,6 +176,40 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
         const nextIdx = Math.min(pastedData.length, 5);
         otpInputs.current[nextIdx]?.focus();
       }
+    }
+  };
+
+  const handleSkipVerification = async () => {
+    if (verifyType !== "email") return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/user/${user?.user_id}/email`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Email added! You can verify it later.");
+        const updatedUser = { ...user, email };
+        onSuccess(updatedUser);
+      } else {
+        toast.error(data.message || "Failed to update email");
+      }
+    } catch (err) {
+      toast.error("Connection error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -255,52 +333,63 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
 
                     <form onSubmit={handleSendOtp} className="space-y-6">
                       {verifyType === "phone" ? (
-                        <div className="flex items-center gap-3 p-2 border-b border-slate-600">
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="text-lg font-bold text-white shrink-0 tracking-tight">+234</span>
-                            <div className="flex-1">
-                              <NumberInput
-                                label=""
-                                value={phone}
-                                onChange={(val) => setPhone(val)}
-                                placeholder="Enter your phone number"
-                                required
-                                variant="compact"
-                              />
+                        <>
+                          <div className="flex items-center gap-3 p-2 border-b border-slate-600">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-lg font-bold text-white shrink-0 tracking-tight">+234</span>
+                              <div className="flex-1">
+                                <NumberInput
+                                  label=""
+                                  value={phone}
+                                  onChange={(val: any) => {
+                                    setPhone(val);
+                                    setIsAvailable(null);
+                                    setAvailabilityError("");
+                                  }}
+                                  placeholder="Enter your phone number"
+                                  required
+                                  variant="compact"
+                                />
+                              </div>
+                              {checkingAvailability && <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full mr-1" />}
+                              {isAvailable === true && <span className="text-emerald-500 text-sm">✓</span>}
+                              {isAvailable === false && <span className="text-red-500 text-sm">✕</span>}
                             </div>
                           </div>
-                        </div>
-                        // <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
-                        //   <span className="text-lg font-bold text-white shrink-0 tracking-tight pl-1">+234</span>
-                        //   <div className="flex-1">
-                        //     <NumberInput
-                        //       label=""
-                        //       value={phone}
-                        //       onChange={(val) => setPhone(val)}
-                        //       placeholder="Phone Number"
-                        //       required
-                        //       variant="compact"
-                        //     />
-                        //   </div>
-                        // </div>
+                          {isAvailable === false && (
+                            <p className="text-[10px] text-red-500 font-bold -mt-4 pl-1">{availabilityError}</p>
+                          )}
+                        </>
                       ) : (
-                        <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
-                          <IoMailOutline className="text-slate-400 ml-1" size={20} />
-                          <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="Email Address"
-                            className="flex-1 bg-transparent border-none outline-none text-white font-medium placeholder:text-slate-500"
-                            required
-                            autoFocus
-                          />
-                        </div>
+                        <>
+                          <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
+                            <IoMailOutline className="text-slate-400 ml-1" size={20} />
+                            <input
+                              type="email"
+                              value={email}
+                              onChange={(e) => {
+                                setEmail(e.target.value);
+                                setIsAvailable(null);
+                                setAvailabilityError("");
+                              }}
+                              placeholder="Email Address"
+                              className="flex-1 bg-transparent border-none outline-none text-white font-medium placeholder:text-slate-500"
+                              required
+                              autoFocus
+                            />
+                            {checkingAvailability && <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full" />}
+                            {isAvailable === true && <span className="text-emerald-500 text-sm">✓</span>}
+                            {isAvailable === false && <span className="text-red-500 text-sm">✕</span>}
+                          </div>
+                          {isAvailable === false && (
+                            <p className="text-[10px] text-red-500 font-bold -mt-4 pl-1">{availabilityError}</p>
+                          )}
+                        </>
                       )}
 
                       <button
                         type="submit"
-                        disabled={loading || (verifyType === "phone" ? !phone : !email)}
+                        disabled={loading || checkingAvailability || isAvailable === false || (verifyType === "phone" ? !phone : !email)}
                         className="w-full bg-red-500 text-white py-3 rounded-full font-bold transition-all hover:bg-red-600 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-red-500/20"
                       >
                         {loading ? (
@@ -309,6 +398,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                           "Get Code"
                         )}
                       </button>
+
 
                     </form>
                   </motion.div>
@@ -358,6 +448,19 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                         </button>
                       )}
                     </div>
+
+                    {verifyType === "email" && (
+                      <div className="mt-6">
+                        <button
+                          type="button"
+                          onClick={handleSkipVerification}
+                          disabled={loading}
+                          className="w-full bg-transparent border border-slate-700 text-slate-300 py-3 rounded-full font-bold transition-all hover:bg-white/5 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-xs tracking-widest"
+                        >
+                          Skip this for later
+                        </button>
+                      </div>
+                    )}
 
                     {loading && (
                       <div className="mt-8 flex justify-center">

@@ -439,6 +439,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                                         <ReelItem
                                             product={p}
                                             isActive={i === activeVideoIndex}
+                                            shouldPreload={i === activeVideoIndex + 1 || i === activeVideoIndex + 2}
                                             onBuyClick={(e: React.MouseEvent) => handleProductBuyClick(p.product_id, e)}
                                             onVendorClick={() => handleVendorClick(p.business_id)}
                                             onLikeClick={() => handleLikeClick(p.product_id)}
@@ -548,9 +549,12 @@ function MarqueeLane({ items, speed, reverse = false }: { items: any[], speed: n
     );
 }
 
+import VideoPlayer from "@/src/components/posts/videoPlayer";
+
 function ReelItem({
     product,
     isActive,
+    shouldPreload,
     onBuyClick,
     onVendorClick,
     onLikeClick,
@@ -558,7 +562,6 @@ function ReelItem({
     isGlobalMuted,
     setIsGlobalMuted
 }: any) {
-    const videoRef = useRef<HTMLVideoElement>(null);
     const [isPlaying, setIsPlaying] = useState(true);
     const [showBurst, setShowBurst] = useState(false);
     const [params, setParams] = useState<{ key: string; value: string }[]>(product.params || []);
@@ -577,85 +580,39 @@ function ReelItem({
         }
     }, [isActive, product.product_id, params.length]);
 
-    // Track active state in a ref to only trigger restart when actually switching slides
-    const wasActive = useRef(false);
-
-    // Dynamic Mute/Unmute without restart
-    useEffect(() => {
-        if (videoRef.current) {
-            videoRef.current.muted = isGlobalMuted;
-        }
-    }, [isGlobalMuted]);
-
-    // Playback/Stop logic
-    useEffect(() => {
-        if (!videoRef.current) return;
-
-        if (isActive) {
-            if (!wasActive.current) {
-                videoRef.current.currentTime = 0;
-                const playPromise = videoRef.current.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(() => {
-                        if (videoRef.current) {
-                            videoRef.current.muted = true;
-                            videoRef.current.play().catch(() => setIsPlaying(false));
-                        }
-                    });
-                }
-            } else if (videoRef.current.paused && isPlaying) {
-                videoRef.current.play().catch(() => { });
-            }
-            setIsPlaying(true);
-        } else {
-            videoRef.current.pause();
-            setIsPlaying(false);
-        }
-
-        wasActive.current = isActive;
-    }, [isActive]);
-
-    const togglePlay = () => {
-        if (!videoRef.current) return;
-        if (isPlaying) videoRef.current.pause();
-        else videoRef.current.play();
-        setIsPlaying(!isPlaying);
-    };
-
-    const toggleMute = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setIsGlobalMuted(!isGlobalMuted);
-    };
-
     const videoUrl = product.product_video ? formatUrl(product.product_video) : '';
 
     return (
-        <div className="w-full h-full relative" onClick={togglePlay}>
+        <div className="w-full h-full relative">
             <ProductTicker product={product} params={params} />
-            {videoUrl ? (
-                <video
-                    ref={videoRef}
+            
+            {videoUrl && (isActive || shouldPreload) ? (
+                <VideoPlayer
                     src={videoUrl}
-                    className="w-full h-full object-cover"
-                    playsInline
-                    loop={true}
-                    muted={isGlobalMuted}
                     poster={product.first_image ? formatUrl(product.first_image) : undefined}
+                    autoplay={isActive}
+                    loop={true}
+                    isMuted={isGlobalMuted}
+                    className="w-full h-full"
                 />
+            ) : videoUrl ? (
+                <div className="w-full h-full bg-slate-900 group relative">
+                    {product.first_image && (
+                         <img src={formatUrl(product.first_image)} alt="" className="w-full h-full object-cover opacity-50 blur-sm" />
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                         <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                    </div>
+                </div>
             ) : (
                 <div className="w-full h-full flex items-center justify-center text-slate-500 bg-slate-800">Video unavailable</div>
             )}
 
-            {!isPlaying && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-10">
-                    <div className="w-16 h-16 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm text-white/80 pl-1">
-                        <FaPlay size={24} />
-                    </div>
-                </div>
-            )}
-
             <button
-                onClick={toggleMute}
+                onClick={(e) => {
+                     e.stopPropagation();
+                     setIsGlobalMuted(!isGlobalMuted);
+                }}
                 className="absolute top-6 right-6 z-20 bg-black/40 backdrop-blur-md p-3 rounded-full text-white hover:bg-black/60 transition"
             >
                 {isGlobalMuted ? <FaVolumeMute size={16} /> : <FaVolumeUp size={16} />}

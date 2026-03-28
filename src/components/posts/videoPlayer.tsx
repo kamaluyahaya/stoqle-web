@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Hls from "hls.js";
 
 type VideoPlayerProps = {
   src?: string | null;
@@ -8,6 +10,8 @@ type VideoPlayerProps = {
   className?: string; // container classes (tailwind)
   playsInline?: boolean;
   mutedByDefault?: boolean; // what the UI shows as initial mute preference (but we may start muted to allow autoplay)
+  isMuted?: boolean; // external control for mute state
+  videoClassName?: string; // class for the video element itself
   onError?: (err?: any) => void;
   autoplay?: boolean;
   loop?: boolean;
@@ -19,60 +23,133 @@ export default function VideoPlayer({
   className = "w-full h-full",
   playsInline = true,
   mutedByDefault = true,
+  isMuted,
+  videoClassName = "",
   onError,
   autoplay = true,
   loop = true,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(mutedByDefault);
+  const [muted, setMuted] = useState(isMuted ?? mutedByDefault);
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
+  const [bufferProgress, setBufferProgress] = useState(0);
   const [isUserInteracted, setIsUserInteracted] = useState(false);
   const [seeking, setSeeking] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
 
-  // Attach core video event listeners
+  // External mute control
+  useEffect(() => {
+    if (isMuted !== undefined) {
+        setMuted(isMuted);
+        if (videoRef.current) videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
+
+  // Buffer management
+  const updateBuffer = () => {
+    const v = videoRef.current;
+    if (!v || !v.buffered.length) return;
+    try {
+        const bufferedEnd = v.buffered.end(v.buffered.length - 1);
+        const d = v.duration || 1;
+        setBufferProgress((bufferedEnd / d) * 100);
+    } catch {}
+  };
+
+  // Attach core video event listeners and HLS initialization
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !src) return;
+
+    // Cleanup Hls if exists
+    if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+    }
+
+    const isHls = src.toLowerCase().includes(".m3u8");
+
+    if (isHls && Hls.isSupported()) {
+        const hls = new Hls({
+            capLevelToPlayerSize: true,
+            autoStartLoad: true,
+            maxBufferLength: 20, // Buffer 20s ahead for progressive playback
+            enableWorker: true
+        });
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        hlsRef.current = hls;
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            if (autoplay) video.play().catch(() => {});
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+                switch(data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                        hls.startLoad();
+                        break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                        hls.recoverMediaError();
+                        break;
+                    default:
+                        setError("Video streaming unavailable");
+                        hls.destroy();
+                        break;
+                }
+            }
+        });
+    } else {
+        // Fallback for native browsers (iOS Safari supports HLS naturally, or simple MP4)
+        video.src = src;
+    }
 
     const onLoaded = () => {
       setLoading(false);
       setDuration(video.duration || 0);
     };
-    const onMetadata = () => setDuration(Math.min(video.duration || 0, 180));
+    const onMetadata = () => {
+        setDuration(Math.min(video.duration || 0, 180));
+        if (video.videoWidth && video.videoHeight) {
+            setAspectRatio(video.videoWidth / video.videoHeight);
+        }
+    };
     const onTime = () => {
       if (!seeking) {
+        const d = video.duration || 0;
         const maxD = 180;
-        if (video.currentTime >= maxD) {
+        if (video.currentTime >= maxD && d > maxD) {
           video.currentTime = 0;
           setCurrent(0);
         } else {
           setCurrent(video.currentTime);
         }
       }
+      updateBuffer();
     };
+    const onProgress = () => updateBuffer();
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onErr = () => {
-  console.warn("Video temporary error, retrying...");
-  setLoading(false);
-
-  const video = videoRef.current;
-  if (!video) return;
-
-  // soft retry after a short delay
-  setTimeout(() => {
-    try {
-      video.load();
-      video.play().catch(() => {});
-    } catch {}
-  }, 1500);
-};
+        console.warn("Video temporary error, retrying...");
+        setLoading(false);
+        const v = videoRef.current;
+        if (!v) return;
+        setTimeout(() => {
+            try {
+                v.load();
+                v.play().catch(() => {});
+            } catch {}
+        }, 1500);
+    };
 
     const onEnded = async () => {
       if (loop) {
@@ -89,6 +166,7 @@ export default function VideoPlayer({
     video.addEventListener("loadeddata", onLoaded);
     video.addEventListener("loadedmetadata", onMetadata);
     video.addEventListener("timeupdate", onTime);
+    video.addEventListener("progress", onProgress);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     video.addEventListener("error", onErr);
@@ -100,10 +178,15 @@ export default function VideoPlayer({
       video.removeEventListener("loadeddata", onLoaded);
       video.removeEventListener("loadedmetadata", onMetadata);
       video.removeEventListener("timeupdate", onTime);
+      video.removeEventListener("progress", onProgress);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("error", onErr);
       video.removeEventListener("ended", onEnded);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, loop, seeking]);
@@ -118,11 +201,16 @@ export default function VideoPlayer({
       // To maximize chance of autoplay success, start muted (even if user prefers sound)
       // We'll unmute later on first user interaction.
       try {
-        video.muted = true;
-        setMuted(true);
+        const shouldBeMuted = isMuted !== undefined ? isMuted : true;
+        video.muted = shouldBeMuted;
+        if (isMuted === undefined) setMuted(true);
+
         if (autoplay) {
           await video.play();
           setPlaying(true);
+        } else {
+          video.pause();
+          setPlaying(false);
         }
       } catch (err) {
         // autoplay blocked — OK, wait for user interaction
@@ -131,7 +219,7 @@ export default function VideoPlayer({
     };
 
     tryAutoplay();
-  }, [src, autoplay]);
+  }, [src, autoplay, isMuted]);
 
   // First user interaction handler: unmute and play with sound
   useEffect(() => {
@@ -145,10 +233,14 @@ export default function VideoPlayer({
       // If user prefers unmuted (mutedByDefault === false), unmute; otherwise keep current preference
       try {
         // Unmute only if the user has not chosen muted via the UI
-        video.muted = false;
-        setMuted(false);
-        await video.play();
-        setPlaying(true);
+        if (isMuted === undefined) {
+            video.muted = false;
+            setMuted(false);
+        }
+        if (autoplay) {
+            await video.play();
+            setPlaying(true);
+        }
       } catch {
         // maybe still blocked, ignore
       }
@@ -224,7 +316,8 @@ export default function VideoPlayer({
 
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
+      className={`relative overflow-hidden group ${className}`}
+      style={aspectRatio ? { aspectRatio: String(aspectRatio) } : {}}
       onClick={() => {
         // clicking the container toggles play/pause
         togglePlay();
@@ -266,8 +359,8 @@ export default function VideoPlayer({
         poster={poster ?? undefined}
         playsInline={playsInline}
         muted={muted}
-        preload="metadata"
-        className="w-full h-full object-contain bg-black"
+        preload="auto"
+        className={`w-full h-full bg-black ${videoClassName || (aspectRatio && aspectRatio < 0.8 ? "object-cover" : "object-contain")}`}
       />
 
       {/* Big play overlay when paused */}
@@ -286,12 +379,62 @@ export default function VideoPlayer({
         </button>
       )}
 
+      {/* Visual Progress Line (TikTok Style) */}
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10 z-[45] group/progress pointer-events-none">
+          {/* Buffer Bar */}
+          <div 
+            className="absolute inset-y-0 left-0 bg-white/30 transition-all duration-300"
+            style={{ width: `${bufferProgress}%` }}
+          />
+          {/* Current Progress bar */}
+          <div 
+            className="absolute inset-y-0 left-0 bg-red-500 transition-all duration-100 ease-linear shadow-[0_0_8px_rgba(239,68,68,0.6)] z-10" 
+            style={{ width: `${(current / Math.max(duration, 0.001)) * 100}%` }} 
+          />
+      </div>
+
       <div
-        className="absolute left-3 right-3 bottom-1 z-40 flex items-center gap-3 bg-black/20 rounded-xl p-2 "
+        className="absolute left-3 right-3 bottom-4 z-40 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         onClick={stopPropagation}
       >
-        {/* Progress bar */}
-        <div className="flex-1 px-2">
+        <div className="flex items-center gap-3">
+            {/* Mute/unmute Toggle (Visible only when muted or on hover) */}
+            <AnimatePresence>
+                {muted && (
+                    <motion.button
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        onClick={toggleMute}
+                        className="rounded-full p-2.5 bg-black/40 backdrop-blur-md border border-white/20 text-white shadow-xl hover:bg-black/60 transition-all active:scale-95"
+                        title="Unmute"
+                    >
+                        <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M11 5L6 9H2v6h4l5 4V5z" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M23 9l-6 6m0-6l6 6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </motion.button>
+                )}
+            </AnimatePresence>
+
+            {/* Time labels (Miniaturized) */}
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-[10px] font-black text-white/90 tabular-nums">
+                <span>{formatTime(current)}</span>
+                <span className="opacity-40">/</span>
+                <span>{formatTime(duration)}</span>
+            </div>
+        </div>
+
+        {/* Fullscreen icon - only show on hover */}
+        <button onClick={requestFullScreen} className="rounded-full p-2 bg-black/20 backdrop-blur-md border border-white/10 text-white shadow-sm hover:bg-black/40 transition-all active:scale-90" title="Fullscreen">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M7 14H5v5h5v-2H7v-3zM19 10h-2V7h-3V5h5v5zM7 10h3V7h2V5H5v5h2zM19 14v3h-3v2h5v-5h-2z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Invisible Seek Bar (full width at bottom) */}
+      <div className="absolute bottom-0 left-0 right-0 h-6 z-50 flex items-end px-0" onClick={stopPropagation}>
           <input
             type="range"
             min={0}
@@ -303,40 +446,9 @@ export default function VideoPlayer({
             onTouchStart={onSeekStart}
             onMouseUp={(e) => onSeekEnd(Number((e.target as HTMLInputElement).value))}
             onTouchEnd={(e) => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-            className="w-full h-2 "
+            className="w-full h-1.5 cursor-pointer opacity-0 hover:opacity-10 transition-opacity bg-transparent accent-red-500 appearance-none"
             aria-label="Seek"
           />
-          <div className="text-xs text-white/80 mt-1 flex justify-between">
-            <span>{formatTime(current)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
-
-        {/* Mute/unmute */}
-        <button
-          onClick={toggleMute}
-          className="rounded-full p-2 bg-white/90 shadow-sm"
-          title={muted ? "Unmute" : "Mute"}
-        >
-          {muted ? (
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 9v6h4l5 5V4L9 9H5z" />
-            </svg>
-            
-          ) : (
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5 9v6h4l5 5V4L9 9H5z" />
-              <path d="M16.5 12a4.5 4.5 0 00-1-2.9l1.4-1.4A6.5 6.5 0 0118.5 12c0 1.8-.8 3.4-2 4.5l-1.4-1.4c.7-.7 1.4-1.7 1.4-2.9z" />
-            </svg>
-          )}
-        </button>
-
-        {/* Fullscreen */}
-        <button onClick={requestFullScreen} className="rounded-full p-2 bg-white/90 shadow-sm" title="Fullscreen">
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M7 14H5v5h5v-2H7v-3zM19 10h-2V7h-3V5h5v5zM7 10h3V7h2V5H5v5h2zM19 14v3h-3v2h5v-5h-2z" stroke="currentColor" />
-          </svg>
-        </button>
       </div>
     </div>
   );

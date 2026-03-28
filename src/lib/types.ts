@@ -18,8 +18,11 @@ export type Post = {
   coverType?: string;
   noteConfig?: any;
   rawCreatedAt?: string;
-  allMedia?: string[];
+  allMedia?: { url: string; id: any }[];
   location?: string | null;
   category?: string;
+  isPinned?: boolean;
+  pinnedAt?: string;
+  status?: string;
   thumbnail?: string;
 };

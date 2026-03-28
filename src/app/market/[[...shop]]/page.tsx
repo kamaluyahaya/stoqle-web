@@ -421,8 +421,8 @@ const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, h
         const updateColumns = () => {
             const w = window.innerWidth;
             if (w < 700) setColumns(2);
-            else if (w < 1210) setColumns(3);
-            else if (w < 1430) setColumns(4);
+            else if (w < 1350) setColumns(3);
+            else if (w < 1650) setColumns(4);
             else setColumns(5);
         };
         updateColumns();
@@ -510,7 +510,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     // --- Actionable Orders State ---
     const [actionableData, setActionableData] = useState<{ vendorPendingCount: number, customerDeliveredCount: number } | null>(null);
-    const [fetchedCategories, setFetchedCategories] = useState<string[]>([]);
+    const [fetchedCategories, setFetchedCategories] = useState<string[]>(MARKET_CACHE.categories);
     const [isScrolled, setIsScrolled] = useState(false);
 
     useEffect(() => {
@@ -526,11 +526,38 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
     }, []);
 
     useEffect(() => {
+        // 1. Try Memory Cache
+        if (MARKET_CACHE.categories.length > 0) {
+            setFetchedCategories(MARKET_CACHE.categories);
+            return;
+        }
+
+        // 2. Try LocalStorage Cache (Persists across refreshes)
+        const cached = localStorage.getItem("stoqle_business_categories");
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached);
+                const filtered = (parsed || []).filter((c: any) => c !== "Trending");
+                if (filtered.length > 0) {
+                    setFetchedCategories(filtered);
+                    MARKET_CACHE.categories = filtered;
+                }
+            } catch (err) {
+                console.error("Failed to parse cached categories", err);
+            }
+        }
+
+        // 3. Fetch from Database
         fetchBusinessCategories()
             .then(res => {
-                if (res?.success) {
-                    const cats = res.data.map((c: any) => c.category_name);
-                    setFetchedCategories(["For you", "Trending", ...cats]);
+                if (res?.status === "success" || res?.success || res?.ok) {
+                    const data = res.data || res;
+                    const cats = data.map((c: any) => c.name);
+                    const finalCats = ["For you", "PARTNERS", ...cats];
+
+                    setFetchedCategories(finalCats);
+                    MARKET_CACHE.categories = finalCats;
+                    localStorage.setItem("stoqle_business_categories", JSON.stringify(finalCats));
                 }
             })
             .catch(console.error);
@@ -559,7 +586,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     const handleLikeClick = React.useCallback(async (e: React.MouseEvent, productId: number, baseCount: number) => {
         e.stopPropagation();
-        
+
         const ok = await auth.ensureAccountVerified();
         if (!ok) return;
 
@@ -593,20 +620,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
     // We could fetch actual categories or just have common ones
     const CATEGORIES = useMemo(
-        () => fetchedCategories.length > 0 ? fetchedCategories : [
-            "For you",
-            "PARTNERS",
-            "Fashion",
-            "Sports",
-            "Home",
-            "Beauty",
-            "Food",
-            "Crafts",
-            "Tech",
-            "Fresh",
-            "Toys",
-            "Kids",
-        ],
+        () => fetchedCategories.length > 0 ? fetchedCategories : ["For you", "PARTNERS"],
         [fetchedCategories]
     );
 
@@ -620,10 +634,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         try {
             let nextProducts: ProductFeedItem[] = [];
 
-            if (activeCategory === "Trending") {
-                const res = await fetchTrendingProducts(LIMIT, pageNum * LIMIT);
-                nextProducts = res?.data || [];
-            } else if (activeCategory === "PARTNERS") {
+            if (activeCategory === "PARTNERS") {
                 const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true);
                 nextProducts = res?.data || [];
             } else {
@@ -649,9 +660,9 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                     const media = p.media || [];
                     const imgs = media.filter((m: any) => m.type === "image");
                     const coverRef = p.first_image || p.image_url;
-                    
+
                     // Robust cover detection: check is_cover flag OR matching URL
-                    const foundCover = imgs.find((m: any) => 
+                    const foundCover = imgs.find((m: any) =>
                         m.is_cover === 1 || (coverRef && m.url && m.url.includes(coverRef))
                     ) || imgs[0];
 
@@ -1052,7 +1063,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                     modalOpen && selectedProductPayload && (
                         <ProductPreviewModal
                             key="market-product-preview-modal"
-                            open={modalOpen} 
+                            open={modalOpen}
                             payload={selectedProductPayload}
                             origin={clickPos}
                             onClose={() => {

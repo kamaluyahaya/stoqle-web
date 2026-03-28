@@ -36,8 +36,8 @@ export const mapApiPost = (p: any): Post => {
   }
 
   const allMedia = images.length > 0
-    ? images.map((i: any) => i.image_url)
-    : src ? [src] : [];
+    ? images.map((i: any) => ({ url: i.image_url, id: i.social_post_image_id || i.post_image_id || i.id }))
+    : src ? [{ url: src, id: p.cover_id || null }] : [];
   
   if (!src && p.cover_type !== "note") {
     src = NO_IMAGE_PLACEHOLDER;
@@ -66,6 +66,7 @@ export const mapApiPost = (p: any): Post => {
     location: p.location,
     category: p.category,
     thumbnail: thumbnail,
+    status: p.status,
   };
 };
 

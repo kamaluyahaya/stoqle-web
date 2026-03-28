@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import React from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/src/context/authContext";
 import {
   HomeIcon,
@@ -36,13 +36,13 @@ export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter(); // add router
   const searchParams = useSearchParams();
+  const [showReleaseModal, setShowReleaseModal] = useState(false);
 
   const isLoggedIn =
     !!(auth && (auth.user || (auth as any).token || (auth as any).isAuthenticated || (auth as any).loggedIn));
 
   const { openLogin } = auth as any;
 
-  // if (!isLoggedIn) return null;
   if (
     pathname === "/cart" || 
     pathname === "/checkout" || 
@@ -53,6 +53,7 @@ export default function BottomNav() {
     pathname?.startsWith("/products/new") ||
     pathname === "/profile/orders" ||
     pathname?.startsWith("/profile/business/inventory") ||
+    pathname === "/release" ||
     pathname?.includes("/track/")
   ) return null;
 
@@ -85,9 +86,10 @@ export default function BottomNav() {
       id: "release",
       title: "Release",
       href: "/release",
-      iconOutline: <PlusIcon className="w-5 h-5" aria-hidden />,
-      iconSolid: <PlusIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
+      iconOutline: <PlusIcon className="w-6 h-6 text-white" strokeWidth={3} aria-hidden />,
+      iconSolid: <PlusIconSolid className="w-6 h-6 text-white" aria-hidden />,
       protected: true,
+      isSpecial: true,
     },
     {
       id: "message",
@@ -117,58 +119,66 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav
-      aria-label="Primary"
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/95 border-t border-slate-100 backdrop-blur"
-      style={{
-        // respect notch/safe-area
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
-    >
-      <div className="max-w-[900px] mx-auto px-3">
-        {/* compact row: icons only on small screens, icon + label inline on md */}
-        <div className="flex items-center justify-between gap-1 pt-1 pb-0.5">
-          {items.map((it) => {
-            const active = pathname === it.href;
-            const isProtected = it.protected;
+    <>
+      <nav
+        aria-label="Primary"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/95 border-t border-slate-100 backdrop-blur"
+        style={{
+          // respect notch/safe-area
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        <div className="max-w-[900px] mx-auto px-3">
+          <div className="flex items-center justify-between gap-1 pt-0.5 pb-0">
+            {items.map((it) => {
+              const active = pathname === it.href;
+              const isProtected = it.protected;
+              const isRelease = it.id === "release";
 
-            const handleClick = async (e: React.MouseEvent) => {
-              if (isProtected) {
+              const handleClick = async (e: React.MouseEvent) => {
                 e.preventDefault();
-                const ok = await auth.ensureLoggedIn();
-                if (ok) {
-                  router.push(it.href);
+                if (isProtected) {
+                  const ok = await auth.ensureLoggedIn();
+                  if (!ok) return;
                 }
-              }
-            };
 
-            return (
-              <Link
-                key={it.id}
-                href={it.href}
-                onClick={handleClick}
-                className={`flex-1 min-w-0 flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 px-1 py-1 rounded-lg transition
-                  ${active ? "text-red-500" : "text-slate-500 hover:text-slate-900"}`}
-                aria-current={active ? "page" : undefined}
-                aria-label={it.title}
-              >
-                <div className="relative flex items-center justify-center bg-transparent mt-0 mb-0">
-                  {active ? it.iconSolid : it.iconOutline}
-                  {isLoggedIn && it.badge ? (
-                    <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white ring-1 ring-white">
-                      {it.badge > 99 ? "99+" : it.badge}
+                if (isRelease) {
+                  window.dispatchEvent(new CustomEvent("showReleaseModal"));
+                  return;
+                }
+
+                router.push(it.href);
+              };
+
+              return (
+                <button
+                  key={it.id}
+                  onClick={handleClick}
+                  className={`flex-1 min-w-0 flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 px-1 py-0.5 rounded-lg transition
+                    ${active ? "text-red-500" : "text-slate-500 hover:text-slate-900"}`}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={it.title}
+                >
+                  <div className={`relative flex items-center justify-center transition-all ${isRelease ? "bg-red-500 rounded-[0.5rem] p-1 px-4 shadow-lg shadow-red-200 active:scale-95" : "bg-transparent mt-0 mb-0"}`}>
+                    {active ? it.iconSolid : it.iconOutline}
+                    {isLoggedIn && it.badge ? (
+                      <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white ring-1 ring-white">
+                        {it.badge > 99 ? "99+" : it.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                  
+                  {!isRelease && (
+                    <span className={`text-[9px] sm:text-[10px] md:text-sm md:inline-block whitespace-nowrap mt-0.5 md:mt-0 ${active ? "font-bold text-red-500" : "font-medium"}`}>
+                      {it.title}
                     </span>
-                  ) : null}
-                </div>
-                
-                <span className={`text-[9px] sm:text-[10px] md:text-sm md:inline-block whitespace-nowrap mt-0.5 md:mt-0 ${active ? "font-bold text-red-500" : "font-medium"}`}>
-                  {it.title}
-                </span>
-              </Link>
-            );
-          })}
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }

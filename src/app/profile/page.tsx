@@ -4,10 +4,13 @@
 import React, { useEffect, useMemo, useLayoutEffect, useState, useRef } from "react";
 import PostModal from "../../components/modal/postModal";
 import SocialModal from "../../components/modal/socialModal";
+import { toast } from "sonner";
+import Swal from "sweetalert2";
 import { useAuth } from "@/src/context/authContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../../components/feed/profile/header";
 import CreateNoteModal from "../../components/notes/createNoteModal";
+import EditPostModal from "../../components/modal/editPostModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
 import { toggleSocialPostLike } from "@/src/lib/api/social";
@@ -15,9 +18,10 @@ import ProductPreviewModal from "@/src/components/product/addProduct/modal/previ
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { API_BASE_URL } from "@/src/lib/config";
-import { FaHeart, FaRegHeart } from "react-icons/fa";
+import { FaHeart, FaRegHeart, FaEllipsisV, FaEdit, FaTrash, FaShareAlt, FaThumbtack } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { PROFILE_CACHE } from "@/src/lib/cache";
+import { io } from "socket.io-client";
 
 
 type ApiPost = any;
@@ -40,9 +44,12 @@ type Post = {
   noteConfig?: any;
   rawCreatedAt?: string;
   apiId?: number;
-  allMedia?: string[];
+  allMedia?: { url: string; id: any }[];
   location?: string | null;
   thumbnail?: string;
+  isPinned?: boolean;
+  pinnedAt?: string;
+  status?: string;
 };
 
 type Props = { postCount?: number };
@@ -78,8 +85,8 @@ const mapApiPost = (p: any): Post => {
   }
 
   const allMedia = images.length > 0
-    ? images.map((i: any) => i.image_url)
-    : src ? [src] : [];
+    ? images.map((i: any) => ({ url: i.image_url, id: i.social_post_image_id || i.post_image_id || i.id }))
+    : src ? [{ url: src, id: p.cover_id }] : [];
 
   const isVideo = p.cover_type === "video" || isVideoUrl(src);
   const isImage = !isVideo && isImageUrl(src);
@@ -107,8 +114,38 @@ const mapApiPost = (p: any): Post => {
     allMedia,
     location: p.location,
     thumbnail,
+    isPinned: Boolean(p.is_pinned),
+    pinnedAt: p.pinned_at,
+    status: p.status,
   };
 };
+
+function getRelativeTime(dateString: string | Date | undefined) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "Just now";
+
+  const m = Math.floor(diffInSeconds / 60);
+  if (m < 60) return `${m}${m === 1 ? "min" : "mins"} ago`;
+
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}${h === 1 ? "hr" : "hrs"} ago`;
+
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}${d === 1 ? "day" : "days"} ago`;
+
+  const w = Math.floor(d / 7);
+  if (d < 30) return `${w}${w === 1 ? " week" : " weeks"} ago`;
+
+  const mo = Math.floor(d / 30);
+  if (d < 365) return `${mo}${mo === 1 ? " month" : " months"} ago`;
+
+  const y = Math.floor(d / 365);
+  return `${y}${y === 1 ? " year" : " years"} ago`;
+}
 
 function LikeBurst() {
   const particles = Array.from({ length: 12 });
@@ -140,9 +177,25 @@ const PostCard = React.memo(({
   openPostWithUrl,
   toggleLike,
   getNoteStyles,
-  setFullImageUrl
+  setFullImageUrl,
+  onEdit,
+  onPin,
+  onShare,
+  onDelete
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <article
@@ -150,6 +203,12 @@ const PostCard = React.memo(({
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+        {post.isPinned && (
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+            <span className="text-[10px] font-bold">Pinned</span>
+          </div>
+        )}
+
         {post.isVideo && (
           <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
@@ -158,9 +217,18 @@ const PostCard = React.memo(({
           </div>
         )}
 
+        {post.status === 'processing' && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[3px]">
+            <div className="w-9 h-9 rounded-full border-[3px] border-white/20 border-t-white animate-spin mb-2" />
+            <span className="text-[11px] font-bold text-white px-3 text-center drop-shadow-md leading-tight">
+              Processing your video...
+            </span>
+          </div>
+        )}
+
         {post.coverType === "note" && !post.src ? (
           <div
-            className="w-full  h-[250px] sm:h-[300px]  flex items-center justify-center p-6 relative overflow-hidden"
+            className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
             style={getNoteStyles(post.noteConfig)}
           >
             {(() => {
@@ -185,11 +253,13 @@ const PostCard = React.memo(({
             </div>
           </div>
         ) : (
-          <img
-            src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
-            alt={post.caption}
-            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
-          />
+          <div className="relative w-full aspect-[4/5] overflow-hidden bg-slate-100">
+            <img
+              src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
+              alt={post.caption}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            />
+          </div>
         )}
       </div>
 
@@ -200,61 +270,114 @@ const PostCard = React.memo(({
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 min-w-0">
-            <div
-              className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
-              onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar); }}
-            >
-              <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
-            </div>
-            <span className="truncate text-[11px] font-semibold text-slate-400 max-w-[120px] capitalize">
-              {post.user.name}
+            <span className="truncate text-[11px] font-semibold text-slate-400 capitalize">
+              {getRelativeTime(post.rawCreatedAt)}
             </span>
           </div>
 
-          <div
-            className="flex items-center gap-1 cursor-pointer relative"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!post.liked) {
-                setShowBurst(true);
-                setTimeout(() => setShowBurst(false), 800);
-              }
-              toggleLike(post.id);
-            }}
-          >
-            {showBurst && <LikeBurst />}
-            <div className="relative w-4 h-4 flex items-center justify-center">
-              <AnimatePresence>
-                <motion.div
-                  key={post.liked ? "liked" : "unliked"}
-                  initial={{ scale: 0.5, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.5, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
-                >
-                  {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
-                </motion.div>
-              </AnimatePresence>
-              {post.liked && (
-                <motion.div
-                  initial={{ scale: 1, opacity: 1 }}
-                  animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
-                  transition={{ duration: 0.6 }}
-                  className="absolute text-red-500 pointer-events-none"
-                >
-                  <FaHeart size={14} />
-                </motion.div>
-              )}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center gap-1 cursor-pointer relative"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!post.liked) {
+                  setShowBurst(true);
+                  setTimeout(() => setShowBurst(false), 800);
+                }
+                toggleLike(post.id);
+              }}
+            >
+              {showBurst && <LikeBurst />}
+              <div className="relative w-4 h-4 flex items-center justify-center">
+                <AnimatePresence>
+                  <motion.div
+                    key={post.liked ? "liked" : "unliked"}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                    className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
+                  >
+                    {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
+                  </motion.div>
+                </AnimatePresence>
+                {post.liked && (
+                  <motion.div
+                    initial={{ scale: 1, opacity: 1 }}
+                    animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
+                    transition={{ duration: 0.6 }}
+                    className="absolute text-red-500 pointer-events-none"
+                  >
+                    <FaHeart size={14} />
+                  </motion.div>
+                )}
+              </div>
+              <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
             </div>
-            <span className={`text-xs font-bold ${post.liked ? "text-rose-500" : "text-slate-400"}`}>{post.likeCount}</span>
+
+            <div className="relative" ref={menuRef}>
+              <button
+                className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(!menuOpen);
+                }}
+              >
+                <FaEllipsisV className="text-sm" />
+              </button>
+
+              <AnimatePresence>
+                {menuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    className="absolute right-0 bottom-full mb-2 w-32 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50 overflow-hidden"
+                  >
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit?.(post); }}
+                      className="w-full px-4 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <FaEdit className="text-slate-400" /> Edit post
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onPin?.(post); }}
+                      className="w-full px-4 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <FaThumbtack className={post.isPinned ? "text-red-500" : "text-slate-400"} />
+                      {post.isPinned ? "Unpin" : "Pin post"}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onShare?.(post); }}
+                      className="w-full px-4 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <FaShareAlt className="text-slate-400" /> Share
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete?.(post); }}
+                      className="w-full px-4 py-2 text-left text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-50"
+                    >
+                      <FaTrash className="text-red-400" /> Delete
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
     </article>
   );
 }, (prev, next) => {
-  return prev.post.id === next.post.id && prev.post.liked === next.post.liked && prev.post.likeCount === next.post.likeCount;
+  return prev.post.id === next.post.id &&
+    prev.post.liked === next.post.liked &&
+    prev.post.likeCount === next.post.likeCount &&
+    prev.post.isPinned === next.post.isPinned &&
+    prev.post.caption === next.post.caption &&
+    prev.post.src === next.post.src &&
+    prev.post.thumbnail === next.post.thumbnail &&
+    prev.post.status === next.post.status &&
+    prev.post.note_caption === next.post.note_caption;
 });
 PostCard.displayName = "PostCard";
 
@@ -269,9 +392,24 @@ const ProductCard = React.memo(({
   likeCount,
   fetchingProduct,
   isProductOwner = false,
-  isRestored = false
+  isRestored = false,
+  onPin,
+  onShare
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const isPromoActive = !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
 
   // Animation variants
@@ -290,13 +428,13 @@ const ProductCard = React.memo(({
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
-      style={{
-        willChange: "transform, opacity",
-        contentVisibility: "auto",
-        containIntrinsicSize: "auto 400px"
-      }}
     >
-      <div className="relative w-full bg-slate-100 overflow-hidden post-media min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px]">
+      <div className="relative w-full bg-slate-100 overflow-hidden post-media">
+        {p.isPinned && (
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+            <span className="text-[10px] font-bold">Pinned</span>
+          </div>
+        )}
         <motion.div
           initial={entryVariants.initial}
           animate={entryVariants.animate}
@@ -310,10 +448,10 @@ const ProductCard = React.memo(({
               muted
               loop
               playsInline
-              className="w-full h-auto min-h-[250px] max-h-[300px] object-cover transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             />
           ) : (
-            <div className="relative w-full aspect-[4/5] bg-slate-50 overflow-hidden">
+            <div className="relative w-full h-full bg-slate-50 overflow-hidden">
               <style jsx global>{`
                             @keyframes fadeIn {
                                 from { opacity: 0; }
@@ -323,7 +461,7 @@ const ProductCard = React.memo(({
               <img
                 src={formatUrl(p.first_image)}
                 alt={p.title}
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
+                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110"
                 onLoad={(e) => {
                   (e.target as HTMLImageElement).style.animation = "fadeIn 0.6s ease-in-out forwards";
                 }}
@@ -396,6 +534,43 @@ const ProductCard = React.memo(({
             </div>
             <span className="text-[10px] font-semibold text-slate-600 ml-0.5">{likeCount}</span>
           </div>
+
+          <div className="relative" ref={menuRef}>
+            <button
+              className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(!menuOpen);
+              }}
+            >
+              <FaEllipsisV className="text-xs" />
+            </button>
+
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  className="absolute right-0 bottom-full mb-2 w-32 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-50 overflow-hidden"
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onPin?.(p); }}
+                    className="w-full px-4 py-2 text-left text-[11px] text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <FaThumbtack className={p.isPinned ? "text-red-500" : "text-slate-400"} />
+                    {p.isPinned ? "Unpin" : "Pin product"}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onShare?.(p); }}
+                    className="w-full px-4 py-2 text-left text-[11px] text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <FaShareAlt className="text-slate-400" /> Share
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
         <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>
           {p.title}
@@ -426,21 +601,38 @@ const ProductCard = React.memo(({
 });
 ProductCard.displayName = "ProductCard";
 
-const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, formatUrl, handleProductClick, handleLikeClick, likeData, fetchingProductId, isRestored }: any) => {
+const MasonryGrid = ({
+  items,
+  type,
+  openPostWithUrl,
+  toggleLike,
+  getNoteStyles,
+  formatUrl,
+  handleProductClick,
+  handleLikeClick,
+  likeData,
+  fetchingProductId,
+  isRestored,
+  onDelete,
+  onShare,
+  onPin,
+  onEdit
+}: any) => {
   const [columns, setColumns] = useState(5);
 
   useEffect(() => {
     const updateColumns = () => {
       const w = window.innerWidth;
       if (w < 700) setColumns(2);
-      else if (w < 1210) setColumns(3);
-      else if (w < 1430) setColumns(4);
+      else if (w < 1350) setColumns(3);
+      else if (w < 1650) setColumns(4);
       else setColumns(5);
     };
     updateColumns();
     window.addEventListener('resize', updateColumns);
     return () => window.removeEventListener('resize', updateColumns);
   }, []);
+
 
   const columnData = useMemo(() => {
     const data = Array.from({ length: columns }, () => [] as any[]);
@@ -472,10 +664,14 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
                     toggleLike={toggleLike}
                     getNoteStyles={getNoteStyles}
                     isRestored={isRestored}
+                    onDelete={onDelete}
+                    onShare={onShare}
+                    onPin={onPin}
+                    onEdit={onEdit}
                   />
                 );
               } else {
-                const ld = likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 };
+                const ld = (likeData && item.product_id) ? likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 } : { liked: !!item.isLiked, count: item.likes_count || 0 };
                 return (
                   <ProductCard
                     key={item.product_id}
@@ -511,6 +707,11 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [postsError, setPostsError] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
+  const [editPostOpen, setEditPostOpen] = useState(false);
+  const [postToEdit, setPostToEdit] = useState<Post | null>(null);
+  const [navbarHeight, setNavbarHeight] = useState(0);
+  const tabsWrapperRef = useRef<HTMLDivElement>(null);
+  const tabsInnerRef = useRef<HTMLDivElement>(null);
 
   // Products state
   const [vendorProducts, setVendorProducts] = useState<any[]>(PROFILE_CACHE.vendorProducts);
@@ -526,6 +727,86 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
   const [likedItems, setLikedItems] = useState<any[]>([]);
   const [likedLoading, setLikedLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // On mount: check sessionStorage for a pending post and inject it optimistically
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('pending_post');
+      if (!raw) return;
+      sessionStorage.removeItem('pending_post');
+      const apiPost = JSON.parse(raw);
+      const mapped = mapApiPost(apiPost);
+      setMediaPosts(prev => {
+        if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+        return [mapped, ...prev];
+      });
+      // Update cache too
+      PROFILE_CACHE.mediaPosts = [mapped, ...PROFILE_CACHE.mediaPosts].filter(
+        (p, i, arr) => arr.findIndex(x => String(x.id) === String(p.id)) === i
+      );
+    } catch (_) { }
+    // Run once on mount only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen for post-created event, inject optimistically or trigger re-fetch
+  useEffect(() => {
+    const handlePostCreated = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const apiPost = customEvt.detail;
+      if (!apiPost?.social_post_id) {
+        setRefreshKey(prev => prev + 1);
+        return;
+      }
+      const mapped = mapApiPost(apiPost);
+      setMediaPosts(prev => {
+        if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+        return [mapped, ...prev];
+      });
+    };
+    window.addEventListener("post-created", handlePostCreated);
+    return () => window.removeEventListener("post-created", handlePostCreated);
+  }, []);
+
+  // (socket effect moved below auth declaration)
+
+  const sortedMediaPosts = useMemo(() => {
+    return [...mediaPosts].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      if (a.isPinned && b.isPinned) {
+        return new Date(b.pinnedAt || b.rawCreatedAt || 0).getTime() - new Date(a.pinnedAt || a.rawCreatedAt || 0).getTime();
+      }
+      return new Date(b.rawCreatedAt || 0).getTime() - new Date(a.rawCreatedAt || 0).getTime();
+    });
+  }, [mediaPosts]);
+
+  const sortedNotePosts = useMemo(() => {
+    return [...notePosts].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      if (a.isPinned && b.isPinned) {
+        return new Date(b.pinnedAt || b.rawCreatedAt || 0).getTime() - new Date(a.pinnedAt || a.rawCreatedAt || 0).getTime();
+      }
+      return new Date(b.rawCreatedAt || 0).getTime() - new Date(a.rawCreatedAt || 0).getTime();
+    });
+  }, [notePosts]);
+
+  const sortedLikedItems = useMemo(() => {
+    return [...likedItems].sort((a, b) => {
+      const pinA = !!a.isPinned;
+      const pinB = !!b.isPinned;
+      if (pinA && !pinB) return -1;
+      if (!pinA && pinB) return 1;
+      if (pinA && pinB) {
+        return new Date(b.pinnedAt || b.rawCreatedAt || 0).getTime() - new Date(a.pinnedAt || a.rawCreatedAt || 0).getTime();
+      }
+      const dateA = new Date(a.liked_at || a.rawCreatedAt || 0).getTime();
+      const dateB = new Date(b.liked_at || b.rawCreatedAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [likedItems]);
 
   const formatUrl = (url: string) => {
     if (!url) return NO_IMAGE_PLACEHOLDER;
@@ -537,14 +818,64 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Real-time socket: listen for post_updated events (e.g. processing -> ready)
+  const socketUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const userId = auth?.user?.user_id || auth?.user?.id;
+    if (!userId) return;
+    const userIdStr = String(userId);
+    if (socketUserIdRef.current === userIdStr) return;
+    socketUserIdRef.current = userIdStr;
+
+    const socket = io(API_BASE_URL, {
+      query: { userId: userIdStr },
+      transports: ['websocket', 'polling'],
+    });
+
+    socket.on('connect', () => {
+      console.log(`[Profile] Socket connected for user ${userIdStr}`);
+    });
+
+    socket.on("post_updated", (updatedPost: any) => {
+      console.log("[Profile] post_updated received:", updatedPost?.social_post_id, 'status:', updatedPost?.status);
+      if (!updatedPost?.social_post_id) return;
+      const updated = mapApiPost(updatedPost);
+
+      const updateFn = (prev: Post[]) => prev.map(p =>
+        String(p.id) === String(updatedPost.social_post_id)
+          ? { ...p, ...updated }
+          : p
+      );
+      setMediaPosts(updateFn);
+      setNotePosts(updateFn);
+      setLikedItems((prev: any[]) => prev.map(p =>
+        String(p.id) === String(updatedPost.social_post_id)
+          ? { ...p, ...updated }
+          : p
+      ));
+
+      // Also update cache
+      PROFILE_CACHE.mediaPosts = PROFILE_CACHE.mediaPosts.map(p =>
+        String(p.id) === String(updatedPost.social_post_id) ? { ...p, ...updated } : p
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+      socketUserIdRef.current = null;
+    };
+  }, [auth?.user?.user_id, auth?.user?.id]);
+
   // Tabs state & animation
   const [activeTabIndex, setActiveTabIndex] = useState(PROFILE_CACHE.activeTabIndex);
   const tabs = useMemo(() => {
     const base = ["Posts", "Notes"];
-    if (profileApi?.is_business_owner) base.push("Products");
+    if (profileApi?.is_business_owner && profileApi?.business?.business_status === 'active') {
+      base.push("Products");
+    }
     base.push("Liked");
     return base;
-  }, [profileApi?.is_business_owner]);
+  }, [profileApi?.is_business_owner, profileApi?.business?.business_status]);
 
   useEffect(() => {
     const tabName = searchParams.get("tab");
@@ -764,7 +1095,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [postCount]);
+  }, [postCount, refreshKey]);
 
   // try open from URL on mount
   useEffect(() => {
@@ -1061,6 +1392,94 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [activeTabIndex, tabs.length]);
 
+  const handleDeletePost = async (post: Post) => {
+    const result = await Swal.fire({
+      title: "Delete Post?",
+      text: "This post will be removed from your feed.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, delete it",
+      background: "#ffffff",
+      color: "#0f172a",
+      backdrop: `rgba(15, 23, 42, 0.4)`,
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100',
+        confirmButton: 'rounded-full px-6 py-2 font-bold',
+        cancelButton: 'rounded-full px-6 py-2 font-bold'
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    // 🚀 Instantly remove from UI (Optimistic UI)
+    const backupMedia = [...mediaPosts];
+    const backupNotes = [...notePosts];
+    const backupLiked = [...likedItems];
+
+    setMediaPosts(prev => prev.filter(p => p.id !== post.id));
+    setNotePosts(prev => prev.filter(p => p.id !== post.id));
+    setLikedItems(prev => prev.filter(p => p.id !== post.id));
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/social/${post.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      toast.success("Post deleted");
+    } catch (err) {
+      console.error("Delete failed", err);
+      // Revert if failed
+      setMediaPosts(backupMedia);
+      setNotePosts(backupNotes);
+      setLikedItems(backupLiked);
+      toast.error("Failed to delete post");
+    }
+  };
+
+  const handleEditPost = (post: Post) => {
+    setPostToEdit(post);
+    setEditPostOpen(true);
+  };
+
+  const handlePinPost = async (post: Post) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/social/${post.id}/pin`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const nextPinned = json.data?.is_pinned ?? json.is_pinned;
+        const pinnedAt = json.data?.pinned_at ?? json.pinned_at ?? new Date().toISOString();
+        setMediaPosts(prev => prev.map(p => p.id === post.id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        setNotePosts(prev => prev.map(p => p.id === post.id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        setLikedItems(prev => prev.map(p => (p.id === post.id || p.apiId === post.id) ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        toast.success(nextPinned ? "Post pinned" : "Post unpinned");
+      }
+    } catch (err) {
+      console.error("Pin failed", err);
+    }
+  };
+
+  const handleSharePost = (post: Post) => {
+    const postUrl = `${window.location.origin}/profile?post=${post.id}`;
+    if (navigator.share) {
+      navigator.share({
+        title: "Check out this post on Stoqle",
+        text: post.caption,
+        url: postUrl
+      }).catch(() => { });
+    } else {
+      navigator.clipboard.writeText(postUrl);
+      alert("Link copied to clipboard!");
+    }
+  };
+
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchEndX.current = null;
@@ -1108,9 +1527,6 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     return user?.full_name ?? user?.name ?? "---";
   }, [profileApi]);
 
-  const tabsWrapperRef = useRef<HTMLDivElement | null>(null);
-  const tabsInnerRef = useRef<HTMLDivElement | null>(null);
-  const [navbarHeight, setNavbarHeight] = useState(0);
 
   const findNavbar = () =>
     document.querySelector("header, [role='banner'], .main-navbar") as HTMLElement | null;
@@ -1170,7 +1586,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className="bg-white p-3 flex justify-center sticky z-50 border-b border-slate-100"
+      className="bg-white p-3 flex justify-center sticky z-50 border-slate-100"
       style={{ top: `${navbarHeight}px` }}
     >
       <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -1189,10 +1605,10 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
   const TabPanes = (
     <div className="relative overflow-hidden w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-      <div className="flex transition-transform duration-450 ease-in-out" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
+      <div className="flex transition-transform duration-450 ease-in-out items-start" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
 
         {/* Posts pane */}
-        <div style={{ width: `${100 / tabs.length}%` }}>
+        <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Posts" ? "auto" : "0", overflow: "hidden" }}>
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : mediaPosts.length === 0 ? (
@@ -1204,19 +1620,23 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           ) : (
             <div className="p-2 sm:p-4 post-grid-container">
               <MasonryGrid
-                items={mediaPosts}
+                items={sortedMediaPosts}
                 type="post"
                 openPostWithUrl={openPostWithUrl}
                 toggleLike={toggleLike}
                 getNoteStyles={getNoteStyles}
                 isRestored={isRestoring}
+                onDelete={handleDeletePost}
+                onShare={handleSharePost}
+                onPin={handlePinPost}
+                onEdit={handleEditPost}
               />
             </div>
           )}
         </div>
 
         {/* Notes pane */}
-        <div style={{ width: `${100 / tabs.length}%` }}>
+        <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Notes" ? "auto" : "0", overflow: "hidden" }}>
           <div className="flex justify-end p-4 pr-6">
 
           </div>
@@ -1239,20 +1659,24 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           ) : (
             <div className="p-2 sm:p-4 post-grid-container">
               <MasonryGrid
-                items={notePosts}
+                items={sortedNotePosts}
                 type="note"
                 openPostWithUrl={openPostWithUrl}
                 toggleLike={toggleLike}
                 getNoteStyles={getNoteStyles}
                 isRestored={isRestoring}
+                onDelete={handleDeletePost}
+                onShare={handleSharePost}
+                onPin={handlePinPost}
+                onEdit={handleEditPost}
               />
             </div>
           )}
         </div>
 
         {/* Products pane */}
-        {profileApi?.is_business_owner && (
-          <div style={{ width: `${100 / tabs.length}%` }}>
+        {profileApi?.is_business_owner && profileApi?.business?.business_status === 'active' && (
+          <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Products" ? "auto" : "0", overflow: "hidden" }}>
             {productsLoading ? (
               <ShimmerGrid count={10} />
             ) : vendorProducts.length === 0 ? (
@@ -1280,7 +1704,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         )}
 
         {/* Liked Items pane */}
-        <div style={{ width: `${100 / tabs.length}%` }}>
+        <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Liked" ? "auto" : "0", overflow: "hidden" }}>
           {likedLoading ? (
             <ShimmerGrid count={10} />
           ) : likedItems.length === 0 ? (
@@ -1291,7 +1715,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           ) : (
             <div className="p-2 sm:p-4 post-grid-container pb-12">
               <MasonryGrid
-                items={likedItems}
+                items={sortedLikedItems}
                 type="liked"
                 openPostWithUrl={openPostWithUrl}
                 toggleLike={toggleLike}
@@ -1302,6 +1726,10 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                 handleLikeClick={handleProductLike}
                 likeData={productLikeData}
                 fetchingProductId={fetchingProductId}
+                onDelete={handleDeletePost}
+                onShare={handleSharePost}
+                onPin={handlePinPost}
+                onEdit={handleEditPost}
               />
             </div>
           )}
@@ -1358,6 +1786,34 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           const mapped = mapApiPost(newPost);
           setNotePosts((prev) => [mapped, ...prev]);
           setCreateNoteOpen(false);
+        }}
+      />
+
+      <EditPostModal
+        open={editPostOpen}
+        post={postToEdit}
+        onClose={() => {
+          setEditPostOpen(false);
+          setPostToEdit(null);
+        }}
+        onUpdated={(updated) => {
+          const updateLocal = (p: any) => {
+            if (p.id !== updated.id && p.apiId !== updated.id) return p;
+            return {
+              ...p,
+              ...updated,
+              // sync all possible caption fields to ensure instant reflection
+              text: updated.caption,
+              subtitle: updated.subtitle,
+              caption: updated.caption || updated.subtitle,
+              note_caption: updated.subtitle || updated.caption,
+              // For videos, keep the existing thumbnail unless updated explicitly
+              thumbnail: p.isVideo ? p.thumbnail : (updated.src || p.thumbnail)
+            };
+          };
+          setMediaPosts(prev => prev.map(updateLocal));
+          setNotePosts(prev => prev.map(updateLocal));
+          setLikedItems(prev => prev.map(updateLocal));
         }}
       />
 

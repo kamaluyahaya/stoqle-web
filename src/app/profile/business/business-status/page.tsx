@@ -159,118 +159,151 @@ export default function BusinessStatusPage() {
   };
 
   return (
-    <div className="">
-      {/* Header */}
+    <div className=" px-4">
+      {/* Pending Status Section */}
       {status === "pending" && (
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm  border-slate-100">
-          {/* Header */}
-          <div className="flex flex-col items-center text-center">
+        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+          <div className="relative h-64 bg-slate-50 flex items-center justify-center p-8">
             <img
-              src="/avatars/pending.jpg"
-              alt="Business under review"
-              className="w-36 h-36 object-contain mb-4 opacity-80"
+              src="/business_pending_review.png"
+              alt="Verification Pending"
+              className="h-full object-contain mix-blend-multiply"
             />
-
-            <h2 className="text-lg sm:text-sm font-semibold text-slate-900">
-              Business details submitted successfully
-            </h2>
-
-            <p className="mt-3 max-w-md text-sm sm:text-base text-slate-600 leading-relaxed">
-              Your business information has been received and is currently under review.
-              This process usually takes <strong>2–4 hours</strong>.
-              You’ll be notified once verification is complete.
-            </p>
+            <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase animate-pulse">
+              Under Review
+            </div>
           </div>
 
-          {/* Divider */}
-          <div className="my-6 h-px bg-slate-100" />
+          <div className="p-8">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold text-slate-900 mb-3">Verification in Progress</h1>
+              <p className="text-slate-500 leading-relaxed max-w-md mx-auto">
+                We've received your business details and our team is currently reviewing them.
+                Typically, this takes <span className="text-slate-900 font-semibold">2–4 hours</span>.
+              </p>
+            </div>
 
-          {/* Business summary */}
-          <div className="flex gap-4 items-start">
-            {/* Logo */}
-            {business?.logo ? (
-              <img
-                src={business.logo}
-                alt={`${business.business_name} logo`}
-                className="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0"
-              />
-            ) : (
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-slate-100 border border-slate-200 text-slate-500 shrink-0">
-                <FaStore size={18} />
+            <div className="bg-slate-50 rounded-2xl p-6 mb-8 flex items-center gap-5 border border-slate-100">
+              <div className="h-16 w-16 bg-white rounded-xl shadow-sm border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                {business?.logo ? (
+                  <img src={business.logo} alt="Logo" className="h-full w-full object-cover" />
+                ) : (
+                  <FaStore className="text-slate-300 w-8 h-8" />
+                )}
               </div>
-            )}
-
-            {/* Business content */}
-            <div className="flex-1 min-w-0">
-              {/* Business name & Status — SAME LINE */}
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug break-words">
-                  {business?.business_name}
-                </h3>
-                <span
-                  className={`text-xs font-semibold px-2 py-1 rounded-full capitalize
-            ${business?.business_status === "active"
-                      ? "bg-green-100 text-green-700"
-                      : business?.business_status === "pending"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-red-100 text-red-700"
-                    }
-          `}
-                >
-                  {business?.business_status}
-                </span>
-              </div>
-
-              {/* Details under name */}
-              <div className="mt-1 space-y-1">
-                <p className="text-sm text-slate-600 leading-snug">
-                  {formatAddress(business?.business_address)}
-                </p>
-
-                <div className="pt-1">
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                    {business?.business_category || "Business category"}
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-slate-900 truncate">{business?.business_name || "New Business"}</h3>
+                <p className="text-sm text-slate-500 truncate">{formatAddress(business?.business_address)}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded uppercase tracking-tighter">
+                    {business?.business_category || "General"}
+                  </span>
+                  <span className="text-[10px] font-medium text-slate-400 italic">
+                    Submitted {business?.created_at ? formatDate(business.created_at) : ""}
                   </span>
                 </div>
               </div>
             </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push("/market")}
+                className="w-full py-3 bg-red-500 text-white rounded-full  hover:bg-slate-800 transition-all active:scale-[0.98]"
+              >
+                Go to Market
+              </button>
+              <p className="text-center text-xs text-slate-400">
+                You'll receive a notification and email once approved.
+              </p>
+            </div>
           </div>
-
-
-
-          {/* Date */}
-          <div className="text-xs text-slate-400 whitespace-nowrap">
-            Submitted on{" "}
-            {business?.created_at ? formatDate(business.created_at) : "—"}
-          </div>
-
-          <button onClick={() => router.push("/market")} className="rounded-lg bg-rose-500 px-4 py-2 flex justify-center text-white font-medium">Discover product</button>
         </div>
       )}
 
+      {/* Suspended Status Section */}
+      {status === "suspended" && (
+        <div className="bg-white rounded-3xl shadow-xl shadow-rose-200/30 border border-rose-50 overflow-hidden">
+          <div className="relative h-64 bg-rose-50 flex items-center justify-center p-8">
+            <img
+              src="/business_suspended_violation.png"
+              alt="Account Suspended"
+              className="h-full object-contain"
+            />
+            <div className="absolute top-4 right-4 bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase">
+              Action Required
+            </div>
+          </div>
 
-      {status === "active" && <EditBusinessProfileWithBusinessInfo apiBase={process.env.NEXT_PUBLIC_API_URL} business={business} businessPolicy={businessPolicy} wallet={wallet} pendingOrdersCount={pendingOrdersCount} customerDeliveredCount={customerDeliveredCount} />}
-
-
-      {status === "rejected" && (
-        <>
-          <div className="rounded-2xl bg-yellow-50 border border-yellow-200 mb-6 overflow-hidden">
-            <div className="marquee-box">
-              <p className="marquee-text">
-                ⚠️ The uploaded document(s) were rejected. Please provide a valid document so we can continue verification. Common causes: low-quality image, missing fields, expired document, or wrong document type.
+          <div className="p-8">
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-bold text-slate-900 mb-3 text-rose-600">Account Suspended</h1>
+              <p className="text-slate-500 leading-relaxed max-w-md mx-auto">
+                Your business access has been restricted due to a violation of our community guidelines or terms of service.
               </p>
             </div>
 
+            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-5 mb-8">
+              <h4 className="text-sm font-bold text-rose-900 mb-2 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                Why was my account suspended?
+              </h4>
+              <p className="text-sm text-rose-700 leading-relaxed">
+                {business?.suspension_reason || "Suspicious activity or repeated violations were detected on your account. Please review our safety guidelines for more information."}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => router.push("/support")}
+                className="w-full py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all active:scale-[0.98]"
+              >
+                Contact Support / Appeal
+              </button>
+              <button
+                onClick={() => router.push("/")}
+                className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold hover:bg-slate-50 transition-all"
+              >
+                Return to Dashboard
+              </button>
+            </div>
           </div>
-
-
-          {/* Render OpenStorePage underneath so user can re-open/update store details */}
-          <OpenStorePage />
-        </>
+        </div>
       )}
 
+      {/* Active Status Header */}
+      {status === "active" && (
+        <div className="mb-0">
+          <EditBusinessProfileWithBusinessInfo
+            apiBase={process.env.NEXT_PUBLIC_API_URL}
+            business={business}
+            businessPolicy={businessPolicy}
+            wallet={wallet}
+            pendingOrdersCount={pendingOrdersCount}
+            customerDeliveredCount={customerDeliveredCount}
+          />
+        </div>
+      )}
 
+      {status === "rejected" && (
+        <div className="space-y-6">
+          <div className="bg-amber-50 border-y sm:border border-amber-200 sm:rounded-2xl p-4 flex gap-4">
+            <div className="shrink-0 text-amber-500 mt-1">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-900">Document Requirements Not Met</h3>
+              <p className="text-sm text-amber-700 mt-1 leading-relaxed">
+                Your submitted documents were rejected. Please update your business details with valid registration files.
+              </p>
+            </div>
+          </div>
+          <OpenStorePage />
+        </div>
+      )}
     </div>
   );
 }

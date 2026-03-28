@@ -39,14 +39,14 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
 
     // Prefer processed snapshot data if available
     const snap = item.snapshot_data || safeParse(item.product_snapshot);
-    
+
     const returnPolicy = safeParse(snap?.policies?.return || item.return_policy);
     const rawPromos = safeParse(snap?.policies?.promotions || item.promotions_snapshot || item.promotion_snapshot || item.promotions_snapshort);
     const rawDiscounts = safeParse(snap?.policies?.discounts || item.discounts_snapshot || item.discount_snapshot || item.discounts_snapshort);
 
     const promotions = Array.isArray(rawPromos) ? rawPromos : (rawPromos ? [rawPromos] : []);
     const discounts = Array.isArray(rawDiscounts) ? rawDiscounts : (rawDiscounts ? [rawDiscounts] : []);
-    
+
     const finalUnitPrice = snap?.pricing?.resolved || item.unit_price;
     const originalPrice = snap?.pricing?.original || item.original_unit_price || item.unit_price;
 
@@ -56,7 +56,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
     return (
         <AnimatePresence mode="wait">
             {open && (
-                <div className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                <div className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center p-0 sm:p-4">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -69,7 +69,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: "100%" }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="relative bg-white w-full sm:max-w-md h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-2xl flex flex-col overflow-hidden border border-slate-100 shadow-2xl"
+                        className="relative bg-white w-full sm:max-w-md h-[85vh] sm:h-auto sm:max-h-[90vh] rounded-t-[0.5rem] sm:rounded-[0.5rem] flex flex-col overflow-hidden border border-slate-100 shadow-2xl"
                     >
                         {/* Header */}
                         <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-gradient-to-r from-rose-50/50 to-white">

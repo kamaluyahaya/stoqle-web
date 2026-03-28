@@ -15,6 +15,7 @@ import ProductPreviewModal from "@/src/components/product/addProduct/modal/previ
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { API_BASE_URL } from "@/src/lib/config";
+import { io } from "socket.io-client";
 import SocialModal from "../../modal/socialModal";
 
 
@@ -37,6 +38,8 @@ type Post = {
   rawCreatedAt?: string;
   apiId?: number;
   thumbnail?: string;
+  isPinned?: boolean;
+  status?: string;
 };
 
 type Props = { postCount?: number; userId?: string | number }; // <--- new userId prop
@@ -97,6 +100,8 @@ const mapApiPost = (p: any): Post => {
     noteConfig: p.config,
     rawCreatedAt: p.created_at,
     thumbnail,
+    isPinned: Boolean(p.is_pinned),
+    status: p.status,
   };
 };
 
@@ -141,11 +146,26 @@ const PostCard = React.memo(({
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+        {post.isPinned && (
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+            <span className="text-[10px] font-bold">Pinned</span>
+          </div>
+        )}
+
         {post.isVideo && (
           <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
               <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
             </svg>
+          </div>
+        )}
+
+        {post.status === 'processing' && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
+            <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin mb-2" />
+            <span className="text-[10px] font-bold text-white px-2 text-center drop-shadow-md">
+              Processing your video...
+            </span>
           </div>
         )}
 
@@ -245,7 +265,10 @@ const PostCard = React.memo(({
     </article>
   );
 }, (prev, next) => {
-  return prev.post.id === next.post.id && prev.post.liked === next.post.liked && prev.post.likeCount === next.post.likeCount;
+  return prev.post.id === next.post.id &&
+    prev.post.liked === next.post.liked &&
+    prev.post.likeCount === next.post.likeCount &&
+    prev.post.isPinned === next.post.isPinned;
 });
 PostCard.displayName = "PostCard";
 
@@ -275,7 +298,7 @@ const ProductCard = React.memo(({
             muted
             loop
             playsInline
-            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <img
@@ -372,8 +395,8 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
     const updateColumns = () => {
       const w = window.innerWidth;
       if (w < 700) setColumns(2);
-      else if (w < 1210) setColumns(3);
-      else if (w < 1430) setColumns(4);
+      else if (w < 1350) setColumns(3);
+      else if (w < 1650) setColumns(4);
       else setColumns(5);
     };
     updateColumns();
@@ -448,6 +471,14 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [socialModalOpen, setSocialModalOpen] = useState(false);
   const [activeSocialTab, setActiveSocialTab] = useState<"friends" | "followers" | "following" | "recommend" | "liked">("followers");
+  const [navbarHeight, setNavbarHeight] = useState(0);
+  const tabsWrapperRef = useRef<HTMLDivElement>(null);
+  const tabsInnerRef = useRef<HTMLDivElement>(null);
+  const [showFollowSuggestion, setShowFollowSuggestion] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const suggestionTriggered = useRef(false);
+  const scrollTracker = useRef(0);
+  const [isMiniHeaderVisible, setIsMiniHeaderVisible] = useState(false);
 
   const [likedItems, setLikedItems] = useState<any[]>([]);
   const [likedLoading, setLikedLoading] = useState(false);
@@ -460,18 +491,155 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
   const auth = useAuth();
   const router = useRouter();
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+
   const viewUserId = userId ? String(userId) : "me";
   const currentUserId = auth?.user?.user_id ? String(auth.user.user_id) : null;
   const isOwner = viewUserId === "me" || (currentUserId && viewUserId === currentUserId);
 
+  useEffect(() => {
+    // Only reset scroll if we are already scrolled past the content area
+    const timer = setTimeout(() => {
+      if (tabsWrapperRef.current) {
+        const contentTop = tabsWrapperRef.current.offsetTop - (navbarHeight || 56);
+
+        // If current scroll is further down than the tabs top, snap back to tabs top
+        // This avoids jumping when user is still at the top of the profile
+        if (window.scrollY > contentTop) {
+          window.scrollTo({
+            top: contentTop,
+            behavior: "instant" as any
+          });
+        }
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [activeTabIndex, navbarHeight]);
+
+  // On mount, check sessionStorage for a pending post (just submitted by this user)
+  // and prepend it optimistically so the loader shows immediately.
+  useEffect(() => {
+    if (!isOwner) return;
+    try {
+      const raw = sessionStorage.getItem('pending_post');
+      if (!raw) return;
+      sessionStorage.removeItem('pending_post');
+      const apiPost = JSON.parse(raw);
+      const mapped = mapApiPost(apiPost);
+      // Only inject if it's not already in the list (race condition guard)
+      setMediaPosts(prev => {
+        if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+        return [mapped, ...prev];
+      });
+      if (mapped.coverType === 'note') {
+        setNotePosts(prev => {
+          if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+          return [mapped, ...prev];
+        });
+      }
+    } catch (_) { }
+    // Only run once after mount - we deliberately exclude refreshKey etc.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner]);
+
+  // Listen for post-created event from other tabs / same page navigations
+  useEffect(() => {
+    const handlePostCreated = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const apiPost = customEvt.detail;
+      if (!apiPost || !isOwner) {
+        // Fallback: trigger a full re-fetch
+        setRefreshKey(prev => prev + 1);
+        return;
+      }
+      const mapped = mapApiPost(apiPost);
+      setMediaPosts(prev => {
+        if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+        return [mapped, ...prev];
+      });
+    };
+    window.addEventListener("post-created", handlePostCreated);
+    return () => window.removeEventListener("post-created", handlePostCreated);
+  }, [isOwner]);
+
+  // Handle real-time post updates via socket
+  const socketUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const userId = auth?.user?.user_id || auth?.user?.id;
+    if (!userId) return;
+    const userIdStr = String(userId);
+
+    // Avoid reconnecting on every render if userId hasn't changed
+    if (socketUserIdRef.current === userIdStr) return;
+    socketUserIdRef.current = userIdStr;
+
+    const socket = io(API_BASE_URL, {
+      query: { userId: userIdStr },
+      transports: ['websocket', 'polling'],
+    });
+
+    socket.on('connect', () => {
+      console.log(`[UserHeader] Socket connected for user ${userIdStr}`);
+    });
+
+    socket.on("post_updated", (updatedPost: any) => {
+      console.log("[UserHeader] post_updated received:", updatedPost?.social_post_id, 'status:', updatedPost?.status);
+      if (!updatedPost?.social_post_id) return;
+
+      const updated = mapApiPost(updatedPost);
+      const updateFn = (prev: Post[]) => prev.map(p =>
+        String(p.id) === String(updatedPost.social_post_id)
+          ? { ...p, ...updated }
+          : p
+      );
+
+      setMediaPosts(updateFn);
+      setNotePosts(updateFn);
+      setLikedItems((prev: any[]) => prev.map(p =>
+        String(p.id) === String(updatedPost.social_post_id)
+          ? { ...p, ...updated }
+          : p
+      ));
+    });
+
+    return () => {
+      socket.disconnect();
+      socketUserIdRef.current = null;
+    };
+  }, [auth?.user?.user_id, auth?.user?.id]);
+
+  // Scroll listener for Follow Suggestion & MiniHeader
+  useEffect(() => {
+    const handleScroll = () => {
+      // Suggestion logic
+      if (!isOwner && !isFollowing && !suggestionTriggered.current) {
+        if (window.scrollY > 400 && !suggestionTriggered.current) {
+          suggestionTriggered.current = true;
+          setShowFollowSuggestion(true);
+          setTimeout(() => setShowFollowSuggestion(false), 6000);
+        }
+      }
+
+      // MiniHeader logic (Mobile logic sync)
+      if (!isOwner) {
+        setIsMiniHeaderVisible(window.scrollY > 0);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isOwner, isFollowing]);
+
   const tabs = useMemo(() => {
     const base = ["Notes", "Posts"];
-    if (profileApi?.is_business_owner) base.push("Products");
+    if (profileApi?.is_business_owner && profileApi?.business?.business_status === 'active') {
+      base.push("Products");
+    }
     if (isOwner) base.push("Liked");
     return base;
-  }, [profileApi?.is_business_owner, isOwner]);
+  }, [profileApi?.is_business_owner, profileApi?.business?.business_status, isOwner]);
 
   const pushedRef = useRef(false);
   const touchStartX = useRef<number | null>(null);
@@ -509,8 +677,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           stats: d?.stats ?? null,
           recent_followers: d?.recent_followers ?? [],
           is_business_owner: Boolean(d?.is_business_owner),
+          is_following: Boolean(d?.is_following || d?.is_followed_by_me),
         };
         setProfileApi(normalized);
+        setIsFollowing(normalized.is_following);
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to fetch profile:", err);
@@ -525,7 +695,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [viewUserId]);
+  }, [viewUserId, refreshKey]);
 
   // fetch liked items if owner selects "Liked" tab
   useEffect(() => {
@@ -599,7 +769,30 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       }
     };
     loadVendorProducts();
-  }, [profileApi]);
+  }, [profileApi, viewUserId]);
+
+  const handleFollow = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    setIsFollowing(true);
+    setShowFollowSuggestion(false);
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/follow/${viewUserId}/follow`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!resp.ok) throw new Error("Follow failed");
+    } catch (err) {
+      setIsFollowing(false);
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -632,10 +825,18 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
         if (cancelled) return;
         const mapped = apiPosts.map((p) => mapApiPost(p));
+
+        // Sort mapped posts by isPinned first
+        const sorted = mapped.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return new Date(b.rawCreatedAt || 0).getTime() - new Date(a.rawCreatedAt || 0).getTime();
+        });
+
         const media: Post[] = [];
         const notes: Post[] = [];
 
-        for (const m of mapped) {
+        for (const m of sorted) {
           if (m.coverType === "note") {
             notes.push(m);
             continue;
@@ -663,7 +864,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [viewUserId, postCount]);
+  }, [viewUserId, postCount, refreshKey]);
 
   useEffect(() => {
     const tryOpenFromUrl = async () => {
@@ -892,50 +1093,20 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     return user?.full_name ?? user?.name ?? "---";
   }, [profileApi]);
 
-  const tabsWrapperRef = useRef<HTMLDivElement | null>(null);
-  const tabsInnerRef = useRef<HTMLDivElement | null>(null);
-  const tabsPlaceholderRef = useRef<HTMLDivElement | null>(null);
-  const [stickyStyle, setStickyStyle] = useState<React.CSSProperties | undefined>(undefined);
-  const tabsInitialTopRef = useRef<number | null>(null);
-
-  const findNavbar = () =>
-    document.querySelector("header, [role='banner'], .main-navbar") as HTMLElement | null;
-
-  const updateStickyState = () => {
-    const el = tabsWrapperRef.current;
-    const initialTop = tabsInitialTopRef.current;
-    if (!el || initialTop === null) return;
-
-    const navbar = findNavbar();
-    const navbarHeight = navbar ? navbar.offsetHeight : 0;
-    const shouldStick = window.scrollY + navbarHeight >= initialTop + STICKY_BUFFER;
-
-    if (shouldStick) {
-      const rect = el.getBoundingClientRect();
-      setStickyStyle({
-        position: "fixed",
-        top: `${navbarHeight}px`,
-        left: `${rect.left}px`,
-        width: `${rect.width}px`,
-        zIndex: 60,
-      });
-      if (tabsPlaceholderRef.current) tabsPlaceholderRef.current.style.height = `${rect.height}px`;
-    } else {
-      setStickyStyle(undefined);
-      if (tabsPlaceholderRef.current) tabsPlaceholderRef.current.style.height = "0px";
-    }
-  };
-
   useLayoutEffect(() => {
-    const el = tabsWrapperRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    tabsInitialTopRef.current = rect.top + window.scrollY;
-    window.addEventListener("scroll", updateStickyState, { passive: true });
-    window.addEventListener("resize", updateStickyState);
+    const updateNavbarHeight = () => {
+      const navbar = document.querySelector("header, [role='banner'], .main-navbar") as HTMLElement | null;
+      if (navbar) {
+        setNavbarHeight(navbar.offsetHeight);
+        document.documentElement.style.setProperty('--navbar-height', `${navbar.offsetHeight}px`);
+      }
+    };
+    updateNavbarHeight();
+    window.addEventListener("resize", updateNavbarHeight);
+    window.addEventListener("scroll", updateNavbarHeight, { passive: true });
     return () => {
-      window.removeEventListener("scroll", updateStickyState);
-      window.removeEventListener("resize", updateStickyState);
+      window.removeEventListener("resize", updateNavbarHeight);
+      window.removeEventListener("scroll", updateNavbarHeight);
     };
   }, []);
 
@@ -971,30 +1142,31 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   };
 
   const TabsBar = (
-    <>
-      <div ref={tabsPlaceholderRef} style={{ height: 0, transition: "height 160ms ease" }} />
-      <div ref={tabsWrapperRef} className="bg-white p-3 flex justify-center" style={stickyStyle}>
-        <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto">
-          {tabs.map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setActiveTabIndex(i)}
-              className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+    <div
+      ref={tabsWrapperRef}
+      className={`bg-white p-3 flex justify-center sticky z-50 border-slate-100`}
+      style={{ top: isMiniHeaderVisible ? "56px" : `${navbarHeight}px` }}
+    >
+      <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto">
+        {tabs.map((t, i) => (
+          <button
+            key={t}
+            onClick={() => setActiveTabIndex(i)}
+            className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
-    </>
+    </div>
   );
 
   const TabPanes = (
     <div className="relative overflow-hidden w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-      <div className="flex transition-transform duration-450 ease-in-out" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
+      <div className="flex transition-transform duration-450 ease-in-out items-start" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
 
         {/* Notes pane */}
-        <div style={{ width: `${100 / tabs.length}%` }}>
+        <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Notes" ? "auto" : "0", overflow: "hidden" }}>
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : notePosts.length === 0 ? (
@@ -1017,7 +1189,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         </div>
 
         {/* Posts pane */}
-        <div style={{ width: `${100 / tabs.length}%` }}>
+        <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Posts" ? "auto" : "0", overflow: "hidden" }}>
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : mediaPosts.length === 0 ? (
@@ -1049,8 +1221,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         </div>
 
         {/* Products pane */}
-        {profileApi?.is_business_owner && (
-          <div style={{ width: `${100 / tabs.length}%` }}>
+        {profileApi?.is_business_owner && profileApi?.business?.business_status === 'active' && (
+          <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Products" ? "auto" : "0", overflow: "hidden" }}>
             {productsLoading ? (
               <ShimmerGrid count={10} />
             ) : vendorProducts.length === 0 ? (
@@ -1084,8 +1256,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         )}
 
         {/* Liked Items pane */}
-        {isOwner && (
-          <div style={{ width: `${100 / tabs.length}%` }}>
+        {isOwner && tabs.includes("Liked") && (
+          <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Liked" ? "auto" : "0", overflow: "hidden" }}>
             {likedLoading ? (
               <ShimmerGrid count={10} />
             ) : likedItems.length === 0 ? (
@@ -1126,6 +1298,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             router.push(`/shop/${profileApi.business.business_id || profileApi.business.id}`);
           }
         }}
+        onFollowToggle={(val) => setIsFollowing(val)}
         onSocialClick={(tab) => {
           if (tab === "liked") {
             const idx = tabs.indexOf("Liked");
@@ -1153,17 +1326,59 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           onProductClick={handleProductClick}
         />
       )}
-
       {fullImageUrl && <ImageViewer src={fullImageUrl} onClose={() => setFullImageUrl(null)} />}
 
-      {profileApi?.user && (
+      {socialModalOpen && (
         <SocialModal
           isOpen={socialModalOpen}
           onClose={() => setSocialModalOpen(false)}
-          userId={profileApi.user.user_id || profileApi.user.id}
+          userId={viewUserId}
           initialTab={activeSocialTab === "liked" ? "followers" : activeSocialTab as any}
         />
       )}
+
+      {/* Follow Suggestion Popup */}
+      <AnimatePresence>
+        {showFollowSuggestion && !isFollowing && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-6 left-4 right-4 z-[100] bg-white rounded-[0.5rem] border border-slate-100 p-3 flex items-center gap-3"
+          >
+            {/* Left: Info */}
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="h-10 w-10 rounded-full overflow-hidden border border-slate-100 shrink-0">
+                <img
+                  src={
+                    profileApi?.business?.business_logo ??
+                    profileApi?.business?.logo ??
+                    profileApi?.user?.profile_pic ??
+                    profileApi?.user?.avatar ??
+                    DEFAULT_AVATAR
+                  }
+                  className="w-full h-full object-cover"
+                  alt={displayName}
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-slate-900 truncate">{displayName}</p>
+                <p className="text-[12px] text-slate-500 truncate">How about following me?</p>
+              </div>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <button
+                onClick={handleFollow}
+                className="bg-red-500 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm whitespace-nowrap"
+              >
+                Follow
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -13,7 +13,7 @@ import Image from "next/image";
 import { FaHeart, FaRegHeart, FaChevronRight, FaCompass, FaUsers, FaHistory } from "react-icons/fa";
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "@/src/lib/config";
-import { toggleSocialPostLike } from "@/src/lib/api/social";
+import { toggleSocialPostLike, mapApiPost } from "@/src/lib/api/social";
 import { toast } from "sonner";
 const NO_IMAGE_PLACEHOLDER = "assets/images/post-icons.png"; // fallback post image
 const DEFAULT_AVATAR = "/assets/images/post-icons.png";
@@ -55,12 +55,23 @@ const PostCard = React.memo(({
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
 
+  // Animation variants
+  const entryVariants = {
+    initial: { opacity: 0, scale: 0.95, y: 15 },
+    animate: { opacity: 1, scale: 1, y: 0 },
+    transition: {
+      duration: 0.9,
+      delay: Math.min((post.originalIndex || 0) * 0.1, 1.2),
+      ease: [0.21, 1.11, 0.81, 0.99] as any
+    }
+  };
+
   return (
     <article
       onClick={() => openPostWithUrl(post)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
-      <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+      <div className="relative w-full overflow-hidden post-media">
         {post.isVideo && (
           <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
@@ -69,39 +80,73 @@ const PostCard = React.memo(({
           </div>
         )}
 
-        {post.coverType === "note" && !post.src ? (
-          <div
-            className="w-full  h-[250px] sm:h-[300px]  flex items-center justify-center p-6 relative overflow-hidden"
-            style={getNoteStyles(post.noteConfig)}
-          >
-            {(() => {
-              const cfg = typeof post.noteConfig === "string" ? JSON.parse(post.noteConfig) : post.noteConfig;
-              if (cfg?.emojis?.length > 0) {
-                return (
-                  <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
-                    {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
-                      <span key={idx} className="text-4xl transform rotate-12">
-                        {emoji}
-                      </span>
-                    ))}
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            <div className="text-center relative z-10">
-              <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
-                {post.noteConfig?.text ?? post.caption ?? "Note"}
-              </p>
+        <motion.div
+          initial={entryVariants.initial}
+          animate={entryVariants.animate}
+          transition={entryVariants.transition}
+          className="w-full h-full"
+        >
+          {post.coverType === "note" && !post.src ? (
+            <div
+              className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+              style={getNoteStyles(post.noteConfig)}
+            >
+              <style jsx>{`
+                @keyframes fadeIn {
+                  from { opacity: 0; }
+                  to { opacity: 1; }
+                }
+              `}</style>
+              {(() => {
+                const cfg = typeof post.noteConfig === "string" ? JSON.parse(post.noteConfig) : post.noteConfig;
+                if (cfg?.emojis?.length > 0) {
+                  return (
+                    <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
+                      {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => (
+                        <span key={idx} className="text-4xl transform rotate-12">
+                          {emoji}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              <div className="text-center relative z-10">
+                <p className="line-clamp-4 px-2" style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}>
+                  {post.noteConfig?.text ?? post.caption ?? "Note"}
+                </p>
+              </div>
             </div>
+          ) : (
+            <div className="relative w-full aspect-[4/5] overflow-hidden bg-slate-50">
+              <style jsx global>{`
+                @keyframes fadeIn {
+                  from { opacity: 0; }
+                  to { opacity: 1; }
+                }
+              `}</style>
+              <img
+                src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
+                alt={post.caption}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                loading="lazy"
+                onLoad={(e) => {
+                  (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
+                }}
+                style={{ opacity: 0 }}
+              />
+            </div>
+          )}
+        </motion.div>
+
+        {/* Placeholder frame indicator */}
+        <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
+          <div className="flex flex-col items-center gap-2 opacity-20">
+            <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+            <span className="text-[10px] font-bold text-slate-400">Opening...</span>
           </div>
-        ) : (
-          <img
-            src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
-            alt={post.caption}
-            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
-          />
-        )}
+        </div>
       </div>
 
       <div className="p-3">
@@ -220,8 +265,8 @@ const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginMod
     const updateColumns = () => {
       const w = window.innerWidth;
       if (w < 700) setColumns(2);
-      else if (w < 1210) setColumns(3);
-      else if (w < 1530) setColumns(4);
+      else if (w < 1350) setColumns(3);
+      else if (w < 1650) setColumns(4);
       else setColumns(5);
     };
     updateColumns();
@@ -238,10 +283,13 @@ const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginMod
   }, [items, columns]);
 
   return (
-    <div className="flex gap-2 sm:gap-4 items-start w-full">
+    <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
       {columnData.map((colItems, colIdx) => (
+
+
         <div key={colIdx} className="flex-1 flex flex-col gap-2 sm:gap-4 min-w-0">
           {colItems.map((post: any, itemIdx: number) => (
+
             <PostCard
               key={post.id}
               post={post}
@@ -277,9 +325,16 @@ export default function Discover({ postCount = 100 }: Props) {
   const [offset, setOffset] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const router = useRouter();
-  const { user, token, ensureLoggedIn } = useAuth();
+  const { user, token, ensureLoggedIn, isHydrated } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const handleRefresh = () => setRefreshKey(prev => prev + 1);
+    window.addEventListener("post-created", handleRefresh);
+    return () => window.removeEventListener("post-created", handleRefresh);
+  }, []);
   const BATCH_SIZE = 20;
 
   const pushedRef = useRef(false);
@@ -302,6 +357,20 @@ export default function Discover({ postCount = 100 }: Props) {
   );
 
   useEffect(() => {
+    if (!isHydrated) return; // Algorithm: Wait for hydration
+
+    // Algorithm: Cache & Personalization Check
+    if (DISCOVERY_CACHE.posts.length > 0 && DISCOVERY_CACHE.category === activeCategory) {
+      const needsPersonalization = token && !DISCOVERY_CACHE.personalized && activeCategory === "Recommend";
+      if (!needsPersonalization) {
+        setLoading(false);
+        setPosts(DISCOVERY_CACHE.posts);
+        setOffset(DISCOVERY_CACHE.offset);
+        setHasMore(DISCOVERY_CACHE.hasMore);
+        return;
+      }
+    }
+
     let cancelled = false;
     const controller = new AbortController();
 
@@ -310,6 +379,7 @@ export default function Discover({ postCount = 100 }: Props) {
       setError(null);
       setOffset(0);
       setHasMore(true);
+
       try {
         if (activeCategory === "Recommend") {
           const { forYou, trending, following, similar } = await fetchDiscoverFeed({
@@ -320,13 +390,21 @@ export default function Discover({ postCount = 100 }: Props) {
           });
 
           if (!cancelled) {
-            setPosts(forYou.map((p: any, i: number) => ({ ...p, originalIndex: i })));
+            const mapped = forYou.map((p: any, i: number) => ({ ...p, originalIndex: i }));
+            setPosts(mapped);
             setSections({ trending, following, similar });
-            setOffset(forYou.length);
-            setHasMore(forYou.length >= BATCH_SIZE);
+            setOffset(mapped.length);
+            setHasMore(mapped.length >= BATCH_SIZE);
+
+            // Update cache
+            DISCOVERY_CACHE.posts = mapped;
+            DISCOVERY_CACHE.offset = mapped.length;
+            DISCOVERY_CACHE.hasMore = mapped.length >= BATCH_SIZE;
+            DISCOVERY_CACHE.category = activeCategory;
+            DISCOVERY_CACHE.personalized = !!token;
 
             // Prefetch
-            const allMedia = [...forYou, ...trending].slice(0, 10).map(p => p.src).filter(Boolean) as string[];
+            const allMedia = [...mapped, ...trending].slice(0, 10).map(p => p.src).filter(Boolean) as string[];
             prefetchMediaConservative(allMedia).catch(() => { });
           }
         } else {
@@ -339,11 +417,20 @@ export default function Discover({ postCount = 100 }: Props) {
           });
 
           if (!cancelled) {
-            setPosts(mapped.map((p, i) => ({ ...p, originalIndex: i })));
+            const processed = mapped.map((p, i) => ({ ...p, originalIndex: i }));
+            setPosts(processed);
             setSections({ trending: [], following: [], similar: [] });
-            setOffset(mapped.length);
-            setHasMore(mapped.length >= BATCH_SIZE);
-            prefetchMediaConservative(mapped.slice(0, 8).map(p => p.src).filter(Boolean) as string[]).catch(() => { });
+            setOffset(processed.length);
+            setHasMore(processed.length >= BATCH_SIZE);
+
+            // Update cache
+            DISCOVERY_CACHE.posts = processed;
+            DISCOVERY_CACHE.offset = processed.length;
+            DISCOVERY_CACHE.hasMore = processed.length >= BATCH_SIZE;
+            DISCOVERY_CACHE.category = activeCategory;
+            DISCOVERY_CACHE.personalized = !!token;
+
+            prefetchMediaConservative(processed.slice(0, 8).map(p => p.src).filter(Boolean) as string[]).catch(() => { });
           }
         }
       } catch (err: any) {
@@ -359,14 +446,28 @@ export default function Discover({ postCount = 100 }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [activeCategory, token]);
+  }, [activeCategory, token, isHydrated, refreshKey]);
 
   // Real-time synchronization
   useEffect(() => {
-    const socket = io(API_BASE_URL);
+    const socket = io(API_BASE_URL, {
+      query: { userId: user?.user_id || user?.id }
+    });
 
     socket.on("connect", () => {
-      console.log("Discovery Socket connected");
+      console.log("Discovery Socket connected", user?.user_id || user?.id);
+    });
+
+    socket.on("post_updated", (updatedPost) => {
+      console.log("Post updated socket event received:", updatedPost.social_post_id);
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (String(p.id) === String(updatedPost.social_post_id)) {
+            return { ...p, ...mapApiPost(updatedPost) };
+          }
+          return p;
+        })
+      );
     });
 
     socket.on("post:like", (data) => {

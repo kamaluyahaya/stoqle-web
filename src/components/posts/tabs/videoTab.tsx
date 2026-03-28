@@ -26,6 +26,7 @@ export default function VideoTab({
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -61,7 +62,7 @@ export default function VideoTab({
         <div className="flex flex-col items-center justify-center">
           {!videoPreview ? (
             <div
-              className="relative group p-10 rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden w-full h-[400px]"
+              className="relative group  rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden w-full h-[250px]"
             >
               <input
                 id="video-upload"
@@ -79,12 +80,11 @@ export default function VideoTab({
                   </div>
                 </div>
 
-                <h3 className="text-base font-black text-slate-900 mb-1">Video Studio</h3>
-                <p className="text-sm text-slate-500 font-medium">Click to select or drag a video file here</p>
+                <h3 className="text-base text-slate-900 mb-1">Video Studio</h3>
 
                 <div className="mt-4 flex gap-3">
-                  <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">MP4 / MOV</span>
-                  <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">Max 3 Mins</span>
+                  <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 shadow-sm">MP4 / MOV</span>
+                  <span className="px-3 py-1 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400 shadow-sm">Max 3 Mins</span>
                 </div>
               </label>
             </div>
@@ -103,12 +103,16 @@ export default function VideoTab({
                   <video
                     ref={videoRef}
                     src={videoPreview}
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full ${videoAspectRatio && videoAspectRatio < 0.8 ? "object-cover" : "object-contain"}`}
                     loop
                     playsInline
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onTimeUpdate={handleTimeUpdate}
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget;
+                      setVideoAspectRatio(v.videoWidth / v.videoHeight);
+                    }}
                   />
 
                   {/* Progress Bar */}
@@ -121,9 +125,9 @@ export default function VideoTab({
 
                   {/* Play Overlay */}
                   {!isPlaying && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity">
-                      <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white scale-110">
-                        <PlayIcon className="w-6 h-6 fill-current" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition-opacity">
+                      <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white/90 scale-100">
+                        <PlayIcon className="w-5 h-5 fill-current" />
                       </div>
                     </div>
                   )}
@@ -244,7 +248,7 @@ export default function VideoTab({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="p-5 rounded-3xl bg-white border border-slate-100">
           <div className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Resolution</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">Recommended 720p or 1080p for best quality.</p>
@@ -253,7 +257,7 @@ export default function VideoTab({
           <div className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Duration</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">Maximum 3 minutes for high-impact reels.</p>
         </div>
-      </div>
+      </div> */}
 
       {previewPost && (
         <PostModal

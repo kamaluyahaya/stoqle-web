@@ -204,33 +204,15 @@ export default function EditBusinessProfile({
               </div>
             )}
           </div>
-          <div className="mt-3 text-center">
+          <div className="mt-2 text-center">
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <div className="font-semibold text-slate-900 text-lg truncate">{displayName}</div>
-              <div className="text-xs font-semibold px-2 py-1 rounded-full capitalize bg-emerald-50 text-emerald-700">
+              {/* <div className="font-semibold text-slate-900 text-lg truncate">{displayName}</div> */}
+              Business Status: <div className="text-xs font-semibold px-2 py-1 rounded-full capitalize bg-emerald-50 text-emerald-700">
                 {business?.business_status}
               </div>
             </div>
-            <div className="text-slate-700 text-sm flex flex-col sm:flex-row sm:justify-center sm:gap-1 break-words mt-1">
-              <span className="whitespace-normal">{business?.phone ?? business?.business_email}</span>
-              <span className="hidden sm:inline">,</span>
-              <span className="whitespace-normal">{formatAddress(business?.business_address)}</span>
-            </div>
 
             <div className="mt-4 flex flex-col items-center">
-              <div className="text-2xl font-bold text-slate-900">
-                {localWallet?.currency || '₦'} {Number(localWallet?.available_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div className="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">Available Balance</div>
-
-              {Number(localWallet?.pending_balance || 0) > 0 && (
-                <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-full border border-amber-100">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-[10px] font-bold text-amber-700 uppercase">
-                    Pending: {localWallet?.currency || '₦'} {Number(localWallet?.pending_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -440,24 +422,23 @@ export default function EditBusinessProfile({
           </div>
         </div>
 
-        <div className="pb-10 mb-10">
-          <button
-            className={`w-full px-4 py-3 rounded-full font-semibold transition ${!hasAnyFilledField || isSyncing ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-rose-500 text-white hover:bg-rose-600"}`}
-            onClick={async () => { await saveProfile(); }}
-            disabled={!hasAnyFilledField || isSyncing}
-          >
-            {isSyncing ? "Syncing..." : "Submit"}
-          </button>
-        </div>
+        {isSyncing && (
+          <div className="pb-10 mb-10 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100 shadow-sm">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Background Syncing...
+            </div>
+          </div>
+        )}
       </div>
 
       {
-        (isLoading || isSyncing) && (
+        isLoading && (
           <div className="fixed inset-0 z-40 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/30" />
             <div className="relative bg-white rounded-xl p-6 shadow">
               <div className="animate-spin h-8 w-8 border-4 border-rose-400 border-t-transparent rounded-full" />
-              <div className="mt-3 text-sm text-slate-700">{isSyncing ? "Syncing…" : "Loading…"}</div>
+              <div className="mt-3 text-sm text-slate-700">Loading…</div>
             </div>
           </div>
         )

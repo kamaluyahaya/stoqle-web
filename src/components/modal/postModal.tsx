@@ -19,7 +19,7 @@ import { FaHeart, FaRegHeart, FaPaperPlane } from "react-icons/fa";
 import { io } from "socket.io-client";
 
 type User = { name: string; avatar?: string; id?: number | string; };
-type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; allMedia?: string[]; location?: string | null; thumbnail?: string; };
+type Post = { id: number | string; src?: string; isVideo?: boolean; caption?: string; note_caption?: string; user: User; liked: boolean; likeCount: number; coverType?: string; noteConfig?: any; rawCreatedAt?: string; allMedia?: { url: string; id: any }[]; location?: string | null; thumbnail?: string; status?: string; final_video_url?: string; };
 type APIComment = { comment_id: number; post_id: number; user_id: number; comment_content: string; location?: string | null; comment_at: string; is_author: number; is_first_comment: number; author_name: string; author_pic?: string; likes_count: number; author_liked?: boolean; followers_count?: number; posts_count?: number; liked_by_user?: boolean; parent_id?: number | null; };
 
 type Props = {
@@ -93,7 +93,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
   const router = useRouter();
 
   const [computedWidth, setComputedWidth] = useState<number | null>(null);
-  const [isLargeScreen, setIsLargeScreen] = useState<boolean>(typeof window !== "undefined" ? window.innerWidth >= 1024 : false);
+  const [isLargeScreen, setIsLargeScreen] = useState<boolean>(typeof window !== "undefined" ? window.innerWidth >= 768 : false);
 
   // UI state (kept as your original)
   const [postLiked, setPostLiked] = useState<boolean>(Boolean(post.liked));
@@ -112,11 +112,11 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
             social_post_id: Number(post.id),
             action_type: "view",
             watch_time: seconds
-          }, userToken || undefined).catch(() => {});
+          }, userToken || undefined).catch(() => { });
         });
       }
     };
-  }, [post.id, userToken]);  const [isFollowing, setIsFollowing] = useState<boolean>(false);
+  }, [post.id, userToken]); const [isFollowing, setIsFollowing] = useState<boolean>(false);
   const [followLoading, setFollowLoading] = useState<boolean>(false);
   const [showBurst, setShowBurst] = useState(false);
 
@@ -133,14 +133,24 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
     socket.on("post:like", (data) => {
       if (String(data.postId) === String(post.id)) {
         setPostLikeCount(data.likes_count);
-        
-        // If the update was triggered by the current user, sync the liked status
+
         const currentUserId = auth?.user?.user_id || auth?.user?.id;
         if (data.liked_by && String(data.liked_by) === String(currentUserId)) {
           setPostLiked(true);
         } else if (data.unliked_by && String(data.unliked_by) === String(currentUserId)) {
           setPostLiked(false);
         }
+      }
+    });
+
+    socket.on("post_updated", (updatedPost: any) => {
+      if (String(updatedPost.social_post_id) === String(post.id)) {
+        // We notify the user that processing is complete
+        toast.success("Reel is ready!");
+        // We can either reload the page or update the local post state if we have it
+        // Since props are immutable, we might need a local state copy or rely on parent update.
+        // For now, let's trigger a window event or just refresh to reveal final content.
+        window.dispatchEvent(new CustomEvent('re-fetch-posts'));
       }
     });
 
@@ -161,14 +171,50 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
   const [viewerProfileUserId, setViewerProfileUserId] = useState<string | number | undefined>(undefined);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(() => {
     if (post.allMedia && post.allMedia.length > 0 && post.src) {
-      const idx = post.allMedia.indexOf(post.src);
+      const idx = post.allMedia.findIndex(m => m.url === post.src);
       return idx >= 0 ? idx : 0;
     }
     return 0;
   });
   const [swipeDirection, setSwipeDirection] = useState(0);
 
-  const mediaList = post.allMedia && post.allMedia.length > 0 ? post.allMedia : (post.src ? [post.src] : []);
+  // REELS MODE (Mobile Video)
+  const isMobileReels = !isLargeScreen && post.isVideo;
+  const [reelsList, setReelsList] = useState<Post[]>([post]);
+  const [currentReelIndex, setCurrentReelIndex] = useState(0);
+  const [reelsLoading, setReelsLoading] = useState(false);
+
+  // Fetch recommendations for reels
+  useEffect(() => {
+    if (isMobileReels && reelsList.length === 1) {
+      const loadReels = async () => {
+        setReelsLoading(true);
+        try {
+          const { fetchSocialPosts } = await import("@/src/lib/api/social");
+          const recs = await fetchSocialPosts({ limit: 10, token: getToken() });
+
+          setReelsList(prev => {
+            // Deduplicate by ID to prevent "duplicate key" errors
+            const combined = [...prev, ...recs];
+            const seen = new Set();
+            return combined.filter(item => {
+              const id = String(item.id);
+              if (seen.has(id)) return false;
+              seen.add(id);
+              return true;
+            });
+          });
+        } catch (e) {
+          console.error("Failed to load reels recommendations", e);
+        } finally {
+          reelsLoading && setReelsLoading(false);
+        }
+      };
+      loadReels();
+    }
+  }, [isMobileReels, post.id]);
+
+  const mediaList = post.allMedia && post.allMedia.length > 0 ? post.allMedia.map(m => m.url) : (post.src ? [post.src] : []);
 
   const currentUserId = auth?.user?.user_id || auth?.user?.id;
   const postAuthorId = post.user?.id;
@@ -178,7 +224,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
 
   useEffect(() => {
     if (post.allMedia && post.allMedia.length > 0 && post.src) {
-      const idx = post.allMedia.indexOf(post.src);
+      const idx = post.allMedia.findIndex(m => m.url === post.src);
       setCurrentMediaIndex(idx >= 0 ? idx : 0);
     } else {
       setCurrentMediaIndex(0);
@@ -335,7 +381,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
   // EFFECT B: recompute on resize (uses the mediaRef which points to left media)
   useEffect(() => {
     const handleResize = () => {
-      const large = window.innerWidth >= 1024;
+      const large = window.innerWidth >= 768;
       setIsLargeScreen(large);
       const el = mediaRef.current as any;
       if (!large) {
@@ -500,7 +546,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
     }
     const ok = await auth.ensureAccountVerified();
     if (!ok) return;
-    
+
     if (!postLiked) {
       setShowBurst(true);
       setTimeout(() => setShowBurst(false), 800);
@@ -608,7 +654,7 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
       : undefined;
 
   return (
-    <div role="dialog" aria-modal="true" ref={wrapperRef} className="fixed inset-0 z-[3500] flex items-center justify-center px-0 py-0" onMouseDown={onClose}>
+    <div role="dialog" aria-modal="true" ref={wrapperRef} className="fixed inset-0 z-[9999] flex items-center justify-center px-0 py-0" onMouseDown={onClose}>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -632,631 +678,748 @@ export default function PostModal({ post, onClose, onToggleLike, userToken, isPr
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.3 }}
         transition={{ type: "spring", damping: 30, stiffness: 300 }}
-        className="relative z-10 w-full h-full bg-white flex flex-col overflow-y-auto lg:flex lg:flex-row lg:overflow-hidden lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] lg:rounded-2xl shadow-2xl"
+        className="relative z-10 w-full h-full bg-white flex flex-col overflow-y-auto md:flex md:flex-row md:overflow-hidden md:w-[96vw] md:max-w-[1100px] md:h-[94vh] md:rounded-2xl shadow-2xl"
       >
-        {/* MOBILE HEADER */}
-        <header className="lg:hidden sticky top-0 z-30 h-16 flex items-center justify-between px-6 p-5 bg-white/95 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={onClose} aria-label="Close" className="h-9 w-9 flex items-center justify-center" title="Close">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-slate-700"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
-            </button>
-            <div className="flex items-center gap-3 min-w-0">
-              <Link
-                href={`/user/profile/${post.user.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex-shrink-0 active:scale-95 transition-transform"
-              >
-                <img
-                  src={post.user.avatar}
-                  alt={post.user.name}
-                  className="h-10 w-10 rounded-full object-cover"
-                />
-              </Link>
-              <div className="min-w-0">
+        {/* MOBILE HEADER - Only show if not in immersive Reels mode AND on small screens */}
+        {!isMobileReels && (
+          <header className="md:hidden sticky top-0 z-30 h-16 flex items-center justify-between px-6 p-5 bg-white/95 backdrop-blur">
+            <div className="flex items-center gap-2">
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={onClose} aria-label="Close" className="h-9 w-9 flex items-center justify-center" title="Close">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-slate-700"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+              </button>
+              <div className="flex items-center gap-3 min-w-0">
                 <Link
                   href={`/user/profile/${post.user.id}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-sm text-black font-semibold truncate hover:text-red-500 transition-colors block"
+                  className="flex-shrink-0 active:scale-95 transition-transform"
                 >
-                  {post.user.name}
+                  <img
+                    src={post.user.avatar}
+                    alt={post.user.name}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
                 </Link>
-                {post.location && (
-                  <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium truncate">
-                    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                    </svg>
-                    <span>{post.location}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {!isPostOwner && !isFollowing && (
-            <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-shadow bg-red-500 text-white">
-              Follow
-            </button>
-          )}
-        </header>
-
-        {/* LEFT: media */}
-        {/* NOTE: we attach leftMediaRef here so our effects look only inside this container */}
-        <div ref={leftMediaRef} className="flex-1 flex items-center justify-center min-h-[300px] lg:min-h-0 border-r border-slate-200 relative group/media bg-slate-50">
-          {post.coverType === "note" && !post.src ? (
-            <div className="w-full h-full flex items-center justify-center p-6 border border-slate-200 relative" style={getNoteStyles(post.noteConfig)}>
-              {(() => {
-                const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
-                if (cfg?.emojis?.length > 0) {
-                  return (
-                    <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
-                      {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>)}
-                    </div>
-                  );
-                }
-              })()}
-
-              <div className="text-center relative z-10">
-                <p className="line-clamp-4 px-2" style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}>{post.noteConfig?.text ?? post.caption ?? "Note"}</p>
-              </div>
-            </div>
-          ) : post.isVideo ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <VideoPlayer src={post.src} poster={post.thumbnail} className="w-full h-full object-contain" />
-            </div>
-          ) : (
-            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-              <AnimatePresence initial={false} custom={swipeDirection} mode="popLayout">
-                <motion.img
-                  key={currentMediaIndex}
-                  src={mediaList[currentMediaIndex] ?? NO_IMAGE_PLACEHOLDER}
-                  alt={post.caption}
-                  custom={swipeDirection}
-                  variants={{
-                    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
-                    center: { x: 0, opacity: 1 },
-                    exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 })
-                  }}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  drag="x"
-                  dragConstraints={{ left: 0, right: 0 }}
-                  dragElastic={0.6}
-                  onDragEnd={(e, info) => {
-                    const swipeThreshold = 50;
-                    if (info.offset.x < -swipeThreshold) {
-                      setSwipeDirection(1);
-                      setCurrentMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
-                    } else if (info.offset.x > swipeThreshold) {
-                      setSwipeDirection(-1);
-                      setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
-                    }
-                  }}
-                  onTap={() => {
-                    setViewerProfileUserId(undefined);
-                    setFullImageUrl(mediaList[currentMediaIndex]);
-                  }}
-                  className="w-full h-full object-contain cursor-zoom-in active:cursor-grabbing touch-none"
-                />
-              </AnimatePresence>
-
-              {mediaList.length > 1 && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSwipeDirection(-1);
-                      setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
-                    }}
-                    className="absolute left-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all opacity-0 group-hover/media:opacity-100 backdrop-blur-sm z-20"
+                <div className="min-w-0">
+                  <Link
+                    href={`/user/profile/${post.user.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-sm text-black font-semibold truncate hover:text-red-500 transition-colors block"
                   >
-                    <ChevronLeftIcon className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSwipeDirection(1);
-                      setCurrentMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
-                    }}
-                    className="absolute right-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all opacity-0 group-hover/media:opacity-100 backdrop-blur-sm z-20"
-                  >
-                    <ChevronRightIcon className="w-6 h-6" />
-                  </button>
-
-                  <div className="absolute bottom-4 left-0 right-0 flex items-center justify-between px-6 z-20 pointer-events-none">
-                    <div className="flex-1" /> {/* Spacer */}
-
-                    <div className="flex gap-1.5 px-3 py-1.5 pointer-events-auto">
-                      {mediaList.map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentMediaIndex ? "bg-red-500 scale-125" : "bg-white/40 shadow-sm"
-                            }`}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="flex-1 flex justify-end">
-                      {/* Counter Badge */}
-                      <div className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md text-[10px] font-black text-white/90 tracking-widest shadow-lg border border-white/10 pointer-events-auto">
-                        {currentMediaIndex + 1} / {mediaList.length}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT: details + comments */}
-        <div className="flex flex-col min-h-0 lg:w-[400px] w-full relative">
-          {/* HEADER for lg */}
-          <div className="flex items-center justify-between gap-4 p-4 lg:p-5 flex-shrink-0 border-b lg:border-b-0 border-slate-200 hidden lg:flex">
-            <div className="flex items-center gap-3 min-w-0">
-              <img
-                src={post.user.avatar}
-                alt={post.user.name}
-                className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-sm flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-                onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar || null); setViewerProfileUserId(post.user.id); }}
-              />
-              <div className="min-w-0">
-                <div className="text-base font-semibold text-slate-900 truncate">{post.user.name}</div>
-              </div>
-            </div>
-
-            {!isPostOwner && !isFollowing && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFollowAuthor();
-                }}
-                disabled={followLoading}
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-red-500 text-white hover:bg-red-600"
-              >
-                Follow
-              </button>
-            )}
-          </div>
-
-          <div className=" lg:overflow-auto">
-            <div className="p-5 lg:p-6">
-              {post.coverType === "note" && !post.src ? (
-                <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
-              ) : (
-                <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
-              )}
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <span>{formatDate(post.rawCreatedAt)}</span>
-                {post.location && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[8px] opacity-40">•</span>
-                    <div className="flex items-center gap-0.5 text-[10px] sm:text-[11px] font-medium text-slate-500">
-                      <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    {post.user.name}
+                  </Link>
+                  {post.location && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium truncate">
+                      <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                       </svg>
                       <span>{post.location}</span>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="border-b border-slate-200" />
-            {/* Comments area */}
-            <div className="space-y-3 p-5 lg:p-6 mb-15">
-              <div className="flex items-center justify-between text-slate-400 mb-4">
-                <span>Total Comments</span>
-                <span className="font-medium">{comments.length}</span>
-              </div>
+            {!isPostOwner && !isFollowing && (
+              <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-shadow bg-red-500 text-white">
+                Follow
+              </button>
+            )}
+          </header>
+        )}
 
-              {loadingComments ? (
-                <div className="flex items-center justify-center gap-2 py-6">
-                  <svg className="h-5 w-5 animate-spin text-slate-700" viewBox="0 0 24 24" style={{ animationDuration: "0.5s" }}>
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" className="opacity-40" fill="none" />
-                    <path fill="currentColor" className="opacity-90" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
-                  </svg>
-                  <span className="text-xs font-medium text-slate-700">Loading...</span>
-                </div>
-              ) : commentsError ? (
-                <div className="text-xs text-red-500">{commentsError}</div>
-              ) : comments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 gap-2">
-                  <img src="/assets/images/message-icons.png" alt="No comments" className="w-30 opacity-50" />
-                  <div className="text-xs text-slate-400 text-center">No comments yet — be the first.</div>
-                </div>
-              ) : (
-                (() => {
-                  const mainComments = comments.filter(c => !c.parent_id);
-                  const replies = comments.filter(c => c.parent_id);
+        {isMobileReels ? (
+          /* FULLSCREEN REELS VIEW (MOBILE) */
+          <div className="flex-1 overflow-y-auto snap-y snap-mandatory scroll-smooth no-scrollbar" onScroll={(e) => {
+            const h = e.currentTarget.clientHeight;
+            const top = e.currentTarget.scrollTop;
+            const idx = Math.round(top / h);
+            if (idx !== currentReelIndex) setCurrentReelIndex(idx);
+          }}>
+            {reelsList.map((rp, idx) => (
+              <div key={rp.id + "-" + idx} className="w-full h-full snap-start relative bg-black shrink-0 flex items-center justify-center">
+                <VideoPlayer
+                  src={rp.src}
+                  poster={rp.thumbnail}
+                  autoplay={idx === currentReelIndex}
+                  className="w-full h-auto max-h-full"
+                  videoClassName="object-contain"
+                />
 
-                  return mainComments.map((c) => {
-                    const parentReplies = replies.filter(r => r.parent_id === c.comment_id);
-                    const isExpanded = expandedParents.includes(c.comment_id);
-                    const visibleReplies = isExpanded ? parentReplies : parentReplies.slice(0, 2);
+                {/* Reels Close Trigger (Absolute Top Right) */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onClose(); }}
+                  className="absolute top-6 right-6 z-50 w-10 h-10 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white active:scale-95 transition-transform"
+                >
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 6l12 12M6 18L18 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
 
-                    return (
-                      <div key={c.comment_id} className="space-y-4 relative">
-                        {/* Continuous vertical line for the whole thread if there are replies */}
-                        {parentReplies.length > 0 && (
-                          <div className="absolute left-[18px] top-9 bottom-0 w-[1.2px] bg-slate-100 z-0" />
-                        )}
-
-                        {/* Parent Comment */}
-                        <div className="flex items-start gap-4 relative z-10">
-                          <Link
-                            href={`/user/profile/${c.user_id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex-shrink-0 active:scale-95 transition-transform"
-                          >
-                            <img
-                              src={c.author_pic ?? `https://i.pravatar.cc/40?u=${c.author_name}-${c.comment_id}`}
-                              alt={c.author_name}
-                              className="h-9 w-9 rounded-full object-cover bg-white"
-                            />
-                          </Link>
-
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Link
-                                href={`/user/profile/${c.user_id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-sm font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
-                              >
-                                {c.author_name}
-                              </Link>
-                              {c.is_author === 1 && (
-                                <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
-                              )}
-                            </div>
-
-                            <div className="mt-1 text-sm text-slate-600 mb-1">{c.comment_content}</div>
-
-                            <div className="flex items-center gap-3 text-[11px] text-slate-400 relative w-full">
-                              <span>{formatDate(c.comment_at)}</span>
-
-                              {c.location && (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[8px] opacity-40">•</span>
-                                  <div className="flex items-center gap-0.5 font-medium text-slate-400">
-                                    <span>{c.location}</span>
-                                  </div>
-                                </div>
-                              )}
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReplyingTo(c);
-                                  setIsCommenting(true);
-                                  setCommentText("");
-                                }}
-                                className="font-bold hover:text-slate-600 transition-colors"
-                              >
-                                Reply
-                              </button>
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleLikeComment(c.comment_id);
-                                }}
-                                className={`ml-auto flex items-center gap-1.5 font-medium transition-colors relative ${c.liked_by_user ? "text-rose-500" : "text-slate-400 hover:text-slate-500"}`}
-                                aria-pressed={c.liked_by_user}
-                              >
-                                <div className="relative flex items-center justify-center">
-                                  {burstingCommentId === c.comment_id && <LikeBurst />}
-                                  <AnimatePresence mode="wait">
-                                    <motion.div
-                                      key={c.liked_by_user ? "liked" : "unliked"}
-                                      initial={{ scale: 0.7, opacity: 0 }}
-                                      animate={{ scale: 1, opacity: 1 }}
-                                      exit={{ scale: 0.7, opacity: 0 }}
-                                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                                    >
-                                      {c.liked_by_user ? (
-                                        <FaHeart className="h-3.5 w-3.5" />
-                                      ) : (
-                                        <FaRegHeart className="h-3.5 w-3.5" />
-                                      )}
-                                    </motion.div>
-                                  </AnimatePresence>
-
-                                  {c.liked_by_user && burstingCommentId === c.comment_id && (
-                                    <motion.div
-                                      initial={{ scale: 1, opacity: 1 }}
-                                      animate={{ scale: [1, 2, 1], opacity: [1, 0, 0] }}
-                                      transition={{ duration: 0.5 }}
-                                      className="absolute text-rose-500 pointer-events-none"
-                                    >
-                                      <FaHeart className="h-3.5 w-3.5 fill-current" />
-                                    </motion.div>
-                                  )}
-                                </div>
-                                <span className="min-w-[12px]">{c.likes_count}</span>
-                              </button>
-                            </div>
-
-                            {/* Tags under the metadata row */}
-                            {c.is_first_comment === 1 && (
-                              <div className="mt-2">
-                                <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100">First to Comment</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Replies Container */}
-                        {parentReplies.length > 0 && (
-                          <div className="ml-[18px] relative">
-                            <div className="pl-6 space-y-4">
-                              {visibleReplies.map((r, i) => {
-                                const isAbsolutelyLast = (i === visibleReplies.length - 1) && (parentReplies.length <= 2);
-                                return (
-                                <div key={r.comment_id} className="flex items-start gap-3 relative">
-                                  {/* Curved connector */}
-                                  <div className="absolute -left-6 top-0 w-6 h-[14px] border-l-[1.2px] border-b-[1.2px] border-slate-100 rounded-bl-[12px] z-[2]" />
-                                  
-                                  {/* Masking line below if this is the last element in the entire thread */}
-                                  {isAbsolutelyLast && (
-                                    <div className="absolute -left-[28px] top-[14px] bottom-[-40px] w-5 bg-white z-[1]" />
-                                  )}
-
-                                  <Link
-                                    href={`/user/profile/${r.user_id}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="flex-shrink-0 active:scale-95 transition-transform z-10"
-                                  >
-                                    <img
-                                      src={r.author_pic ?? `https://i.pravatar.cc/40?u=${r.author_name}-${r.comment_id}`}
-                                      alt={r.author_name}
-                                      className="h-7 w-7 rounded-full object-cover bg-white"
-                                    />
-                                  </Link>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <Link
-                                        href={`/user/profile/${r.user_id}`}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="text-xs font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
-                                      >
-                                        {r.author_name}
-                                      </Link>
-                                      {r.is_author === 1 && (
-                                        <span className="text-[9px] inline-flex items-center px-1 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
-                                      )}
-                                    </div>
-
-                                    <div className="mt-0.5 text-xs text-slate-600 mb-1">{r.comment_content}</div>
-
-                                    <div className="flex items-center gap-3 text-[10px] text-slate-400 relative w-full">
-                                      <span>{formatDate(r.comment_at)}</span>
-
-                                      {r.location && (
-                                        <div className="flex items-center gap-1">
-                                          <span className="text-[8px] opacity-40">•</span>
-                                          <div className="flex items-center gap-0.5 font-medium text-slate-400">
-                                            <span>{r.location}</span>
-                                          </div>
-                                        </div>
-                                      )}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          toggleLikeComment(r.comment_id);
-                                        }}
-                                        className={`ml-auto flex items-center gap-1.5 font-medium transition-colors relative ${r.liked_by_user ? "text-rose-500" : "text-slate-400 hover:text-slate-500"}`}
-                                      >
-                                        <div className="relative flex items-center justify-center">
-                                          {burstingCommentId === r.comment_id && <LikeBurst />}
-                                          <AnimatePresence mode="wait">
-                                            <motion.div
-                                              key={r.liked_by_user ? "liked" : "unliked"}
-                                              initial={{ scale: 0.7, opacity: 0 }}
-                                              animate={{ scale: 1, opacity: 1 }}
-                                              exit={{ scale: 0.7, opacity: 0 }}
-                                              transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                                            >
-                                              {r.liked_by_user ? (
-                                                <FaHeart className="h-3 w-3" />
-                                              ) : (
-                                                <FaRegHeart className="h-3 w-3" />
-                                              )}
-                                            </motion.div>
-                                          </AnimatePresence>
-
-                                          {r.liked_by_user && burstingCommentId === r.comment_id && (
-                                            <motion.div
-                                              initial={{ scale: 1, opacity: 1 }}
-                                              animate={{ scale: [1, 2, 1], opacity: [1, 0, 0] }}
-                                              transition={{ duration: 0.5 }}
-                                              className="absolute text-rose-500 pointer-events-none"
-                                            >
-                                              <FaHeart className="h-3 w-3 fill-current" />
-                                            </motion.div>
-                                          )}
-                                        </div>
-                                        <span className="min-w-[10px]">{r.likes_count}</span>
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                              })}
-                            </div>
-
-                            {/* Folding Actions */}
-                            {parentReplies.length > 2 && (
-                              <div className="pl-6 mt-2 mb-2">
-                                <div className="relative flex items-center">
-                                  {/* Curved connector up to the toggle button */}
-                                  <div className="absolute -left-6 top-[-4px] w-6 h-[18px] border-l-[1.2px] border-b-[1.2px] border-slate-100 rounded-bl-[12px] z-[2]" />
-                                  
-                                  {/* Masking line below since this is the last piece of thread */}
-                                  <div className="absolute -left-8 top-[14px] w-8 h-[200px] bg-white z-[1]" />
-
-                                {!isExpanded ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedParents(prev => [...prev, c.comment_id]);
-                                    }}
-                                    className="text-[10px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
-                                  >
-                                    View {parentReplies.length - 2} more replies
-                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-current transform rotate-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedParents(prev => prev.filter(id => id !== c.comment_id));
-                                    }}
-                                    className="text-[10px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
-                                  >
-                                    Hide replies
-                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-current transform rotate-180 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-                                  </button>
-                                )}
-                                </div>
-                              </div>
-                            )}
+                {/* Reels Overlays (Left side info) */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col justify-end p-6 pb-20 bg-gradient-to-t from-black/60 via-transparent to-transparent">
+                  <div className="space-y-3 pointer-events-auto">
+                    <div className="flex items-center gap-3">
+                      <Link href={`/user/profile/${rp.user.id}`} className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800">
+                        <img src={rp.user.avatar} className="w-full h-full object-cover" alt="author" />
+                      </Link>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-black text-white shadow-sm">{rp.user.name}</span>
+                        {rp.location && (
+                          <div className="flex items-center gap-1 text-[10px] text-white/70 font-medium">
+                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            {rp.location}
                           </div>
                         )}
                       </div>
-                    );
-                  });
-                })()
-              )}
-
-              <div className="text-center text-slate-300 font-Medium mt- mb-10">-THE END-</div>
-            </div>
-          </div>
-
-          {!isPreview && (
-            <div className="lg:absolute fixed left-0 w-full bg-white border-t border-slate-200 z-50 p-4 bottom-0 lg:p-4">
-              {replyingTo && (
-                <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-t-lg border-x border-t border-slate-100 -mt-2 mb-2 text-xs">
-                  <span className="text-slate-500">
-                    Replying to <span className="font-semibold text-slate-700">{replyingTo.author_name}</span>
-                  </span>
-                  <button
-                    onClick={() => { setReplyingTo(null); if (!commentText) setIsCommenting(false); }}
-                    className="text-slate-400 hover:text-red-500"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M6 18L18 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  </button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} className="px-3 py-1 bg-red-500 rounded-full text-[10px] font-black text-white ml-2">Follow</button>
+                    </div>
+                    <p className="text-white text-sm font-medium line-clamp-2 drop-shadow-lg max-w-[80%]">
+                      {rp.caption || rp.note_caption}
+                    </p>
+                  </div>
                 </div>
-              )}
-              {isCommenting ? (
-                <div className="space-y-3">
-                  <input
-                    autoFocus
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleAddComment();
-                        setIsCommenting(false);
-                      }
-                    }}
-                    placeholder="Say something..."
-                    className="w-full rounded-full bg-gray-100 px-3 py-3 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-gray-300"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  />
 
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsCommenting(false);
-                        setCommentText("");
-                      }}
-                      className="px-4 py-2 rounded-full text-sm text-slate-600 hover:bg-slate-100"
-                    >
-                      Cancel
+                {/* Reels Actions (Right side icons) */}
+                <div className="absolute right-4 bottom-24 flex flex-col items-center gap-6 text-white pointer-events-auto">
+                  <div className="flex flex-col items-center gap-1">
+                    <button onClick={handleToggleLike} className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white active:scale-125 transition-transform">
+                      {postLiked ? <FaHeart className="w-6 h-6 text-red-500" /> : <FaRegHeart className="w-6 h-6" />}
                     </button>
+                    <span className="text-[10px] font-black">{postLikeCount}</span>
+                  </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddComment();
-                        setIsCommenting(false);
-                      }}
-                      disabled={commentPosting}
-                      className="px-5 py-2 rounded-full bg-red-600 text-white text-sm font-medium shadow-sm hover:brightness-95"
-                    >
-                      {commentPosting ? "Sending..." : "Send"}
+                  <div className="flex flex-col items-center gap-1">
+                    <button className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white">
+                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" /></svg>
                     </button>
+                    <span className="text-[10px] font-black">{comments.length}</span>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1">
+                    <button className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white">
+                      <FaPaperPlane className="w-5 h-5" />
+                    </button>
+                    <span className="text-[10px] font-black">Share</span>
+                  </div>
+                </div>
+
+                {/* Reels Comment Input / Placeholder at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-full px-5 py-3 pointer-events-auto active:bg-white/15 transition-colors">
+                    <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
+                      <img src={auth?.user?.profile_pic || auth?.user?.avatar || "https://via.placeholder.com/40"} className="w-full h-full object-cover" alt="me" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Add a comment..."
+                      className="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder:text-white/60"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
+                    />
+                    <button onClick={handleAddComment} className="text-red-500 font-black text-xs px-2">Post</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* STANDARD VIEW (IMAGES OR DESKTOP VIDEO) */
+          <>
+            {/* LEFT: media side of the standard modal layout */}
+            <div ref={leftMediaRef} className="md:flex-1 min-w-0 w-full flex items-center justify-center min-h-[300px] md:min-h-0 border-r border-slate-200 relative group/media bg-slate-50">
+              {post.coverType === "note" && !post.src ? (
+                <div className="w-full h-full flex items-center justify-center p-6 border border-slate-200 relative" style={getNoteStyles(post.noteConfig)}>
+                  {(() => {
+                    const cfg = typeof post.noteConfig === 'string' ? JSON.parse(post.noteConfig) : post.noteConfig;
+                    if (cfg?.emojis?.length > 0) {
+                      return (
+                        <div className="absolute inset-0 flex items-center justify-around opacity-30 pointer-events-none" style={{ filter: cfg.emojiBlur ? "blur(4px)" : "none" }}>
+                          {cfg.emojis.slice(0, 3).map((emoji: string, idx: number) => <span key={idx} className="text-4xl transform rotate-12">{emoji}</span>)}
+                        </div>
+                      );
+                    }
+                  })()}
+
+                  <div className="text-center relative z-10">
+                    <p className="line-clamp-4 px-2" style={{ color: 'inherit', fontSize: 'inherit', fontWeight: 'inherit' }}>{post.noteConfig?.text ?? post.caption ?? "Note"}</p>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+                  {/* Processing Overlay */}
+                  {post.status === 'processing' && (
+                    <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-md text-white border-r">
+                      <div className="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin mb-4" />
+                      <h3 className="text-lg font-black mb-1">Post Studio</h3>
+                      <p className="text-sm text-white/70 font-bold px-10 text-center leading-relaxed">
+                        Optimizing and merging your media into a single high-quality reel... Please stay on this page.
+                      </p>
+                    </div>
+                  )}
+
+                  {post.isVideo ? (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-50">
+                      <VideoPlayer
+                        src={post.final_video_url || post.src}
+                        poster={post.thumbnail}
+                        className="w-full h-full"
+                        videoClassName="object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      <AnimatePresence initial={false} custom={swipeDirection} mode="popLayout">
+                        <motion.img
+                          key={currentMediaIndex}
+                          src={mediaList[currentMediaIndex] ?? NO_IMAGE_PLACEHOLDER}
+                          alt={post.caption}
+                          custom={swipeDirection}
+                          variants={{
+                            enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
+                            center: { x: 0, opacity: 1 },
+                            exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 })
+                          }}
+                          initial="enter"
+                          animate="center"
+                          exit="exit"
+                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                          drag="x"
+                          dragConstraints={{ left: 0, right: 0 }}
+                          dragElastic={0.6}
+                          onDragEnd={(e, info) => {
+                            const swipeThreshold = 50;
+                            if (info.offset.x < -swipeThreshold) {
+                              setSwipeDirection(1);
+                              setCurrentMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
+                            } else if (info.offset.x > swipeThreshold) {
+                              setSwipeDirection(-1);
+                              setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
+                            }
+                          }}
+                          onTap={() => {
+                            setViewerProfileUserId(undefined);
+                            setFullImageUrl(mediaList[currentMediaIndex]);
+                          }}
+                          className="w-full h-full object-contain cursor-zoom-in active:cursor-grabbing touch-none"
+                        />
+                      </AnimatePresence>
+
+                      {mediaList.length > 1 && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSwipeDirection(-1);
+                              setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : mediaList.length - 1));
+                            }}
+                            className="absolute left-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all opacity-0 group-hover/media:opacity-100 backdrop-blur-sm z-20"
+                          >
+                            <ChevronLeftIcon className="w-6 h-6" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSwipeDirection(1);
+                              setCurrentMediaIndex((prev) => (prev < mediaList.length - 1 ? prev + 1 : 0));
+                            }}
+                            className="absolute right-4 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-all opacity-0 group-hover/media:opacity-100 backdrop-blur-sm z-20"
+                          >
+                            <ChevronRightIcon className="w-6 h-6" />
+                          </button>
+
+                          <div className="absolute bottom-4 left-0 right-0 flex items-center justify-between px-6 z-20 pointer-events-none">
+                            <div className="flex-1" /> {/* Spacer */}
+                            <div className="flex gap-1.5 px-3 py-1.5 pointer-events-auto">
+                              {mediaList.map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentMediaIndex ? "bg-red-500 scale-125" : "bg-white/40 shadow-sm"
+                                    }`}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex-1 flex justify-end">
+                              <div className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md text-[10px] font-black text-white/90 tracking-widest shadow-lg border border-white/10 pointer-events-auto">
+                                {currentMediaIndex + 1} / {mediaList.length}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT Panel Side (details + comments) for standard layout */}
+            <div className="flex flex-col min-h-0 md:w-[400px] md:shrink-0 w-full relative">
+              {/* HEADER for md+ screens */}
+              <div className="flex items-center justify-between gap-4 p-4 md:p-5 flex-shrink-0 border-b md:border-b-0 border-slate-200 hidden md:flex">
+                <div className="flex items-center gap-3 min-w-0">
+                  <img
+                    src={post.user.avatar}
+                    alt={post.user.name}
+                    className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-sm flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+                    onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar || null); setViewerProfileUserId(post.user.id); }}
+                  />
+                  <div className="min-w-0">
+                    <div className="text-base font-semibold text-slate-900 truncate">{post.user.name}</div>
+                  </div>
+                </div>
+
+                {!isPostOwner && !isFollowing && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsCommenting(true);
+                      toggleFollowAuthor();
                     }}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-full text-sm text-slate-600"
+                    disabled={followLoading}
+                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all bg-red-500 text-white hover:bg-red-600"
                   >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8-1.11 0-2.173-.113-3.168-.322L3 20l1.322-5.832C3.937 13.755 3 12.007 3 10c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <span className="text-xs">Say something</span>
+                    Follow
                   </button>
+                )}
+              </div>
 
-                  <div className="ml-auto flex items-center gap-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleLike();
-                      }}
-                      aria-pressed={postLiked}
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition relative ${postLiked ? "text-rose-500" : "text-slate-600 hover:bg-slate-50"}`}
-                    >
-                      {showBurst && <LikeBurst />}
-                      <div className="relative flex items-center justify-center">
-                        <AnimatePresence mode="wait">
-                          <motion.div
-                            key={postLiked ? "liked" : "unliked"}
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.5, opacity: 0 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                          >
-                            {postLiked ? <FaHeart className="w-5 h-5" /> : <FaRegHeart className="w-5 h-5" />}
-                          </motion.div>
-                        </AnimatePresence>
-                        {postLiked && (
-                          <motion.div
-                            initial={{ scale: 1, opacity: 1 }}
-                            animate={{ scale: [1, 2, 1], opacity: [1, 0.4, 0] }}
-                            transition={{ duration: 0.6 }}
-                            className="absolute text-rose-500 pointer-events-none"
-                          >
-                            <FaHeart size={20} />
-                          </motion.div>
-                        )}
+              <div className=" lg:overflow-auto">
+                <div className="p-5 lg:p-6">
+                  {post.coverType === "note" && !post.src ? (
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.note_caption}</p>
+                  ) : (
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{post.caption}</p>
+                  )}
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>{formatDate(post.rawCreatedAt)}</span>
+                    {post.location && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[8px] opacity-40">•</span>
+                        <div className="flex items-center gap-0.5 text-[10px] sm:text-[11px] font-medium text-slate-500">
+                          <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                          </svg>
+                          <span>{post.location}</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-bold">{postLikeCount}</span>
-                    </button>
-
-                    <button onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-slate-600">
-                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 8a3 3 0 10-6 0v4a3 3 0 006 0V8z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5A8.25 8.25 0 116 16.5" />
-                      </svg>
-                    </button>
+                    )}
                   </div>
+                </div>
+
+                <div className="border-b border-slate-200" />
+                {/* Comments area */}
+                <div className="space-y-3 p-5 lg:p-6 mb-15">
+                  <div className="flex items-center justify-between text-slate-400 mb-4">
+                    <span>Total Comments</span>
+                    <span className="font-medium">{comments.length}</span>
+                  </div>
+
+                  {loadingComments ? (
+                    <div className="flex items-center justify-center gap-2 py-6">
+                      <svg className="h-5 w-5 animate-spin text-slate-700" viewBox="0 0 24 24" style={{ animationDuration: "0.5s" }}>
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" className="opacity-40" fill="none" />
+                        <path fill="currentColor" className="opacity-90" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
+                      </svg>
+                      <span className="text-xs font-medium text-slate-700">Loading...</span>
+                    </div>
+                  ) : commentsError ? (
+                    <div className="text-xs text-red-500">{commentsError}</div>
+                  ) : comments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2">
+                      <img src="/assets/images/message-icons.png" alt="No comments" className="w-30 opacity-50" />
+                      <div className="text-xs text-slate-400 text-center">No comments yet — be the first.</div>
+                    </div>
+                  ) : (
+                    (() => {
+                      const mainComments = comments.filter(c => !c.parent_id);
+                      const replies = comments.filter(c => c.parent_id);
+
+                      return mainComments.map((c) => {
+                        const parentReplies = replies.filter(r => r.parent_id === c.comment_id);
+                        const isExpanded = expandedParents.includes(c.comment_id);
+                        const visibleReplies = isExpanded ? parentReplies : parentReplies.slice(0, 2);
+
+                        return (
+                          <div key={c.comment_id} className="space-y-4 relative">
+                            {/* Continuous vertical line for the whole thread if there are replies */}
+                            {parentReplies.length > 0 && (
+                              <div className="absolute left-[18px] top-9 bottom-0 w-[1.2px] bg-slate-100 z-0" />
+                            )}
+
+                            {/* Parent Comment */}
+                            <div className="flex items-start gap-4 relative z-10">
+                              <Link
+                                href={`/user/profile/${c.user_id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-shrink-0 active:scale-95 transition-transform"
+                              >
+                                <img
+                                  src={c.author_pic ?? `https://i.pravatar.cc/40?u=${c.author_name}-${c.comment_id}`}
+                                  alt={c.author_name}
+                                  className="h-9 w-9 rounded-full object-cover bg-white"
+                                />
+                              </Link>
+
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Link
+                                    href={`/user/profile/${c.user_id}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-sm font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
+                                  >
+                                    {c.author_name}
+                                  </Link>
+                                  {c.is_author === 1 && (
+                                    <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
+                                  )}
+                                </div>
+
+                                <div className="mt-1 text-sm text-slate-600 mb-1">{c.comment_content}</div>
+
+                                <div className="flex items-center gap-3 text-[11px] text-slate-400 relative w-full">
+                                  <span>{formatDate(c.comment_at)}</span>
+
+                                  {c.location && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[8px] opacity-40">•</span>
+                                      <div className="flex items-center gap-0.5 font-medium text-slate-400">
+                                        <span>{c.location}</span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setReplyingTo(c);
+                                      setIsCommenting(true);
+                                      setCommentText("");
+                                    }}
+                                    className="font-bold hover:text-slate-600 transition-colors"
+                                  >
+                                    Reply
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleLikeComment(c.comment_id);
+                                    }}
+                                    className={`ml-auto flex items-center gap-1.5 font-medium transition-colors relative ${c.liked_by_user ? "text-rose-500" : "text-slate-400 hover:text-slate-500"}`}
+                                    aria-pressed={c.liked_by_user}
+                                  >
+                                    <div className="relative flex items-center justify-center">
+                                      {burstingCommentId === c.comment_id && <LikeBurst />}
+                                      <AnimatePresence mode="wait">
+                                        <motion.div
+                                          key={c.liked_by_user ? "liked" : "unliked"}
+                                          initial={{ scale: 0.7, opacity: 0 }}
+                                          animate={{ scale: 1, opacity: 1 }}
+                                          exit={{ scale: 0.7, opacity: 0 }}
+                                          transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                                        >
+                                          {c.liked_by_user ? (
+                                            <FaHeart className="h-3.5 w-3.5" />
+                                          ) : (
+                                            <FaRegHeart className="h-3.5 w-3.5" />
+                                          )}
+                                        </motion.div>
+                                      </AnimatePresence>
+
+                                      {c.liked_by_user && burstingCommentId === c.comment_id && (
+                                        <motion.div
+                                          initial={{ scale: 1, opacity: 1 }}
+                                          animate={{ scale: [1, 2, 1], opacity: [1, 0, 0] }}
+                                          transition={{ duration: 0.5 }}
+                                          className="absolute text-rose-500 pointer-events-none"
+                                        >
+                                          <FaHeart className="h-3.5 w-3.5 fill-current" />
+                                        </motion.div>
+                                      )}
+                                    </div>
+                                    <span className="min-w-[12px]">{c.likes_count}</span>
+                                  </button>
+                                </div>
+
+                                {/* Tags under the metadata row */}
+                                {c.is_first_comment === 1 && (
+                                  <div className="mt-2">
+                                    <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100">First to Comment</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Replies Container */}
+                            {parentReplies.length > 0 && (
+                              <div className="ml-[18px] relative">
+                                <div className="pl-6 space-y-4">
+                                  {visibleReplies.map((r, i) => {
+                                    const isAbsolutelyLast = (i === visibleReplies.length - 1) && (parentReplies.length <= 2);
+                                    return (
+                                      <div key={r.comment_id} className="flex items-start gap-3 relative">
+                                        {/* Curved connector */}
+                                        <div className="absolute -left-6 top-0 w-6 h-[14px] border-l-[1.2px] border-b-[1.2px] border-slate-100 rounded-bl-[12px] z-[2]" />
+
+                                        {/* Masking line below if this is the last element in the entire thread */}
+                                        {isAbsolutelyLast && (
+                                          <div className="absolute -left-[28px] top-[14px] bottom-[-40px] w-5 bg-white z-[1]" />
+                                        )}
+
+                                        <Link
+                                          href={`/user/profile/${r.user_id}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="flex-shrink-0 active:scale-95 transition-transform z-10"
+                                        >
+                                          <img
+                                            src={r.author_pic ?? `https://i.pravatar.cc/40?u=${r.author_name}-${r.comment_id}`}
+                                            alt={r.author_name}
+                                            className="h-7 w-7 rounded-full object-cover bg-white"
+                                          />
+                                        </Link>
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <Link
+                                              href={`/user/profile/${r.user_id}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="text-xs font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
+                                            >
+                                              {r.author_name}
+                                            </Link>
+                                            {r.is_author === 1 && (
+                                              <span className="text-[9px] inline-flex items-center px-1 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
+                                            )}
+                                          </div>
+
+                                          <div className="mt-0.5 text-xs text-slate-600 mb-1">{r.comment_content}</div>
+
+                                          <div className="flex items-center gap-3 text-[10px] text-slate-400 relative w-full">
+                                            <span>{formatDate(r.comment_at)}</span>
+
+                                            {r.location && (
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-[8px] opacity-40">•</span>
+                                                <div className="flex items-center gap-0.5 font-medium text-slate-400">
+                                                  <span>{r.location}</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleLikeComment(r.comment_id);
+                                              }}
+                                              className={`ml-auto flex items-center gap-1.5 font-medium transition-colors relative ${r.liked_by_user ? "text-rose-500" : "text-slate-400 hover:text-slate-500"}`}
+                                            >
+                                              <div className="relative flex items-center justify-center">
+                                                {burstingCommentId === r.comment_id && <LikeBurst />}
+                                                <AnimatePresence mode="wait">
+                                                  <motion.div
+                                                    key={r.liked_by_user ? "liked" : "unliked"}
+                                                    initial={{ scale: 0.7, opacity: 0 }}
+                                                    animate={{ scale: 1, opacity: 1 }}
+                                                    exit={{ scale: 0.7, opacity: 0 }}
+                                                    transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                                                  >
+                                                    {r.liked_by_user ? (
+                                                      <FaHeart className="h-3 w-3" />
+                                                    ) : (
+                                                      <FaRegHeart className="h-3 w-3" />
+                                                    )}
+                                                  </motion.div>
+                                                </AnimatePresence>
+
+                                                {r.liked_by_user && burstingCommentId === r.comment_id && (
+                                                  <motion.div
+                                                    initial={{ scale: 1, opacity: 1 }}
+                                                    animate={{ scale: [1, 2, 1], opacity: [1, 0, 0] }}
+                                                    transition={{ duration: 0.5 }}
+                                                    className="absolute text-rose-500 pointer-events-none"
+                                                  >
+                                                    <FaHeart className="h-3 w-3 fill-current" />
+                                                  </motion.div>
+                                                )}
+                                              </div>
+                                              <span className="min-w-[10px]">{r.likes_count}</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Folding Actions */}
+                                {parentReplies.length > 2 && (
+                                  <div className="pl-6 mt-2 mb-2">
+                                    <div className="relative flex items-center">
+                                      {/* Curved connector up to the toggle button */}
+                                      <div className="absolute -left-6 top-[-4px] w-6 h-[18px] border-l-[1.2px] border-b-[1.2px] border-slate-100 rounded-bl-[12px] z-[2]" />
+
+                                      {/* Masking line below since this is the last piece of thread */}
+                                      <div className="absolute -left-8 top-[14px] w-8 h-[200px] bg-white z-[1]" />
+
+                                      {!isExpanded ? (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedParents(prev => [...prev, c.comment_id]);
+                                          }}
+                                          className="text-[10px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
+                                        >
+                                          View {parentReplies.length - 2} more replies
+                                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-current transform rotate-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedParents(prev => prev.filter(id => id !== c.comment_id));
+                                          }}
+                                          className="text-[10px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
+                                        >
+                                          Hide replies
+                                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-current transform rotate-180 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()
+                  )}
+
+                  <div className="text-center text-slate-300 font-Medium mt- mb-10">-THE END-</div>
+                </div>
+              </div>
+
+              {!isPreview && (
+                <div className="md:absolute fixed left-0 w-full bg-white border-t border-slate-200 z-50 p-4 bottom-0 md:p-4">
+                  {replyingTo && (
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-t-lg border-x border-t border-slate-100 -mt-2 mb-2 text-xs">
+                      <span className="text-slate-500">
+                        Replying to <span className="font-semibold text-slate-700">{replyingTo.author_name}</span>
+                      </span>
+                      <button
+                        onClick={() => { setReplyingTo(null); if (!commentText) setIsCommenting(false); }}
+                        className="text-slate-400 hover:text-red-500"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M6 18L18 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      </button>
+                    </div>
+                  )}
+                  {isCommenting ? (
+                    <div className="space-y-3">
+                      <input
+                        autoFocus
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleAddComment();
+                            setIsCommenting(false);
+                          }
+                        }}
+                        placeholder="Say something..."
+                        className="w-full rounded-full bg-gray-100 px-3 py-3 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-gray-300"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsCommenting(false);
+                            setCommentText("");
+                          }}
+                          className="px-4 py-2 rounded-full text-sm text-slate-600 hover:bg-slate-100"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddComment();
+                            setIsCommenting(false);
+                          }}
+                          disabled={commentPosting}
+                          className="px-5 py-2 rounded-full bg-red-600 text-white text-sm font-medium shadow-sm hover:brightness-95"
+                        >
+                          {commentPosting ? "Sending..." : "Send"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsCommenting(true);
+                        }}
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-full text-sm text-slate-600"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8-1.11 0-2.173-.113-3.168-.322L3 20l1.322-5.832C3.937 13.755 3 12.007 3 10c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span className="text-xs">Say something</span>
+                      </button>
+
+                      <div className="ml-auto flex items-center gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleLike();
+                          }}
+                          aria-pressed={postLiked}
+                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition relative ${postLiked ? "text-rose-500" : "text-slate-600 hover:bg-slate-50"}`}
+                        >
+                          {showBurst && <LikeBurst />}
+                          <div className="relative flex items-center justify-center">
+                            <AnimatePresence mode="wait">
+                              <motion.div
+                                key={postLiked ? "liked" : "unliked"}
+                                initial={{ scale: 0.5, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.5, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                              >
+                                {postLiked ? <FaHeart className="w-5 h-5" /> : <FaRegHeart className="w-5 h-5" />}
+                              </motion.div>
+                            </AnimatePresence>
+                            {postLiked && (
+                              <motion.div
+                                initial={{ scale: 1, opacity: 1 }}
+                                animate={{ scale: [1, 2, 1], opacity: [1, 0.4, 0] }}
+                                transition={{ duration: 0.6 }}
+                                className="absolute text-rose-500 pointer-events-none"
+                              >
+                                <FaHeart size={20} />
+                              </motion.div>
+                            )}
+                          </div>
+                          <span className="text-xs font-bold">{postLikeCount}</span>
+                        </button>
+
+                        <button onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 px-3 py-2 text-sm text-slate-600">
+                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 8a3 3 0 10-6 0v4a3 3 0 006 0V8z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5A8.25 8.25 0 116 16.5" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </motion.div>
       <ImageViewer
         src={fullImageUrl ? (viewerProfileUserId ? fullImageUrl : mediaList[currentMediaIndex]) : null}

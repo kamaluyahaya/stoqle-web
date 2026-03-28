@@ -223,7 +223,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
           setServerUser(data?.data?.user ?? null);
           setStep("profile");
         } else {
-          // logged in: save token + user and redirect to dashboard
+          // logged in: save token + user and stay on page
           const token = data?.data?.token;
           const user = data?.data?.user;
           if (token && user) {
@@ -231,8 +231,8 @@ export default function LoginModal({ isOpen, onClose }: Props) {
             // NEW: Capture location on login
             getCurrentLocationName();
           }
+          // The modal will be closed by auth._onLoginSuccess or by onClose
           onClose();
-          window.location.href = "/discover";
         }
       }, 1000); // 1s delay for animation
     } catch (e: any) {
@@ -293,9 +293,8 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         // NEW: Capture location on register completion
         getCurrentLocationName();
       }
-      // close modal and optionally redirect
+      // close modal
       onClose();
-      router.push("/discover");
     } catch (e: any) {
       toast.error("Network error. Try again.");
       setError("Network error. Try again.");
@@ -343,7 +342,6 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         auth._onLoginSuccess(user, token);
         getCurrentLocationName();
         onClose();
-        window.location.href = "/discover";
       }
     } catch (e: any) {
       if (e?.code === "auth/popup-closed-by-user") {
@@ -510,6 +508,21 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                                   verifyOtp(finalOtpString);
                                }, 100);
                             }
+                          }
+                        }
+                      }}
+                      onPaste={(e) => {
+                        if (isVerified) return;
+                        const pastedData = e.clipboardData.getData("text").replace(/[^0-9]/g, "");
+                        if (pastedData.length >= 6) {
+                          const newOtp = pastedData.slice(0, 6).split("");
+                          if (newOtp.length === 6) {
+                            setOtpArray(newOtp);
+                            setError(null);
+                            // auto verify
+                            setTimeout(() => {
+                              verifyOtp(newOtp.join(""));
+                            }, 200);
                           }
                         }
                       }}

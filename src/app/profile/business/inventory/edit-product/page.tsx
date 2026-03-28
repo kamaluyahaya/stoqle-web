@@ -777,7 +777,7 @@ export default function EditProductPage() {
                     value={category}
                     onSelected={setCategory}
                     isRequired
-                    triggerLabel="Select Category"
+                    triggerLabel="Category"
                   />
                 </div>
 

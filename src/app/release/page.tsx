@@ -11,8 +11,8 @@ import { useAuth } from "@/src/context/authContext";
 import { createSocialPost } from "@/src/lib/api/social";
 import { toast } from "sonner";
 import { AnimatePresence } from "framer-motion";
-import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon, GlobeAmericasIcon, LockClosedIcon, PhotoIcon, VideoCameraIcon, PencilSquareIcon, TrashIcon, CheckIcon, EyeIcon, LockOpenIcon, UsersIcon } from "@heroicons/react/24/outline";
-import { useRouter } from "next/navigation";
+import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon, GlobeAmericasIcon, LockClosedIcon, PhotoIcon, VideoCameraIcon, PencilSquareIcon, TrashIcon, CheckIcon, EyeIcon, LockOpenIcon, UsersIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { useRouter, useSearchParams } from "next/navigation";
 import PostModal from "@/src/components/modal/postModal";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
@@ -20,6 +20,7 @@ import DefaultInput from "@/src/components/input/default-input-post";
 import { getCurrentLocationName, getCachedLocationName } from "@/src/lib/location";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import CameraModal from "@/src/components/common/CameraModal";
 
 export default function PostComposerTabs({
   onSubmit,
@@ -51,13 +52,16 @@ export default function PostComposerTabs({
   const auth = useAuth();
   const { token, user } = auth;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [isTrimming, setIsTrimming] = useState(false);
   const [trimmingProgress, setTrimmingProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
-  
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [imageModalStep, setImageModalStep] = useState(0);
+
   const ffmpegRef = useRef<any>(null);
 
   const loadFFmpeg = async () => {
@@ -81,6 +85,27 @@ export default function PostComposerTabs({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [tabs.length]);
+
+  // Handle type search param
+  useEffect(() => {
+    const type = searchParams.get("type");
+    if (!type) return;
+
+    if (type === "camera") {
+      setActive(1); // Images Tab
+      setIsCameraOpen(true);
+      router.replace("/release", { scroll: false });
+    } else if (type === "album") {
+      setActive(1); // Images Tab
+      setTimeout(() => {
+        document.getElementById("images-upload")?.click();
+      }, 500);
+      router.replace("/release", { scroll: false });
+    } else if (type === "text") {
+      setActive(0); // Text Tab
+      router.replace("/release", { scroll: false });
+    }
+  }, [searchParams, router]);
 
   // image previews (createObjectURL + revoke on cleanup)
   useEffect(() => {
@@ -173,30 +198,30 @@ export default function PostComposerTabs({
       if (duration > 60) { // 1 minute = 60 seconds
         setIsTrimming(true);
         setTrimmingProgress(10); // Start progress
-        
+
         const processVideo = async () => {
           try {
             const ffmpeg = await loadFFmpeg();
             setTrimmingProgress(30);
-            
+
             const inputName = 'input.mp4';
             const outputName = 'output.mp4';
-            
+
             await ffmpeg.writeFile(inputName, await fetchFile(f));
             setTrimmingProgress(50);
-            
+
             // Perform lossless cut: first 60 seconds
             await ffmpeg.exec(['-i', inputName, '-t', '60', '-c', 'copy', outputName]);
             setTrimmingProgress(80);
-            
+
             const data = await ffmpeg.readFile(outputName);
             const trimmedBlob = new Blob([(data as any).buffer], { type: 'video/mp4' });
             const trimmedFile = new File([trimmedBlob], "trimmed_reel.mp4", { type: 'video/mp4' });
-            
+
             setVideo(trimmedFile);
             setTrimmingProgress(100);
             toast.success("Reel optimized and cut to 1 min!");
-            
+
             // Cleanup
             await ffmpeg.deleteFile(inputName);
             await ffmpeg.deleteFile(outputName);
@@ -216,7 +241,7 @@ export default function PostComposerTabs({
         setVideo(f);
         URL.revokeObjectURL(objectUrl);
       }
-      
+
       if (videoInputRef.current) videoInputRef.current.value = "";
     };
 
@@ -263,19 +288,43 @@ export default function PostComposerTabs({
       } else if (payload.type === 'video') {
         if (payload.video) formData.append('images', payload.video);
         if (videoThumbnail) formData.append('images', videoThumbnail, 'thumbnail.jpg');
-        
+
+        formData.append('text', payload.text || '');
+        formData.append('subtitle', (payload as any).subtitle || '');
+        formData.append('privacy', (payload as any).privacy || 'public');
+        formData.append('cover_type', 'video');
+      } else if (payload.type === 'mixed') {
+        // mixed images+video
         formData.append('text', payload.text || '');
         formData.append('subtitle', (payload as any).subtitle || '');
         formData.append('privacy', (payload as any).privacy || 'public');
         formData.append('cover_type', 'video');
       }
 
-      await createSocialPost(formData, token!, (progress) => {
+      const result: any = await createSocialPost(formData, token!, (progress) => {
         setUploadProgress(progress);
       });
+
       toast.success("Post created successfully!");
+
+      // Store the returned post so the profile page can show it immediately (with processing state)
+      const createdPost = result?.data?.post || result?.post;
+      if (createdPost) {
+        try {
+          sessionStorage.setItem('pending_post', JSON.stringify(createdPost));
+        } catch (_) {}
+      }
+
+      window.dispatchEvent(new CustomEvent('post-created', { detail: createdPost }));
       clearAll();
-      router.push("/discover");
+
+      // Navigate to own profile > Posts tab so the user sees the processing post
+      const userId = user?.user_id || user?.id;
+      if (userId) {
+        router.push(`/profile?tab=Posts`);
+      } else {
+        router.push("/discover");
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to create post");
@@ -300,6 +349,7 @@ export default function PostComposerTabs({
       alert("Please select at least one image.");
       return;
     }
+    setImageModalStep(0);
     setIsImageModalOpen(true);
   };
 
@@ -323,12 +373,12 @@ export default function PostComposerTabs({
       <div className="bg-white  border border-slate-100 overflow-hidden">
         {/* Header */}
         <div className="px-8 pt-8 pb-4">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Share your experience</h1>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Share your experience</h1>
         </div>
 
         {/* Custom Tabs */}
         <div className="px-6">
-          <div className="flex bg-slate-100/80  gap-1">
+          <div className="flex bg-slate-100/80  gap-1 rounded-[0.5rem]">
             {tabs.map((t, i) => {
               const isActive = i === active;
               const Icon = i === 1 ? PhotoIcon : i === 2 ? VideoCameraIcon : PencilSquareIcon;
@@ -336,7 +386,7 @@ export default function PostComposerTabs({
                 <button
                   key={t}
                   onClick={() => setActive(i)}
-                  className={`flex-1 relative flex items-center justify-center gap-2 py-3  text-sm font-bold transition-all duration-300
+                  className={`flex-1 relative flex items-center justify-center gap-2 py-3  text-sm transition-all duration-300 
                     ${isActive ? "text-red-500 bg-white ring-1 ring-black/5" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"}
                   `}
                 >
@@ -407,6 +457,7 @@ export default function PostComposerTabs({
           imageFiles={images}
           imagePreviews={imagePreviews}
           onClose={() => setIsImageModalOpen(false)}
+           initialStep={imageModalStep}
           onPosted={() => {
             setIsImageModalOpen(false);
             setImages([]);
@@ -452,22 +503,34 @@ export default function PostComposerTabs({
               {Math.min(99, Math.round(trimmingProgress))}%
             </div>
           </div>
-          
+
           <h2 className="text-2xl font-bold text-white mb-3">Optimizing Your Reel</h2>
           <p className="text-slate-400 max-w-sm leading-relaxed text-sm">
-            We're trimming your video to the first 1 minute to keep your followers engaged. 
+            We're trimming your video to the first 1 minute to keep your followers engaged.
             Please stay on this page.
           </p>
 
           <div className="mt-10 w-full max-w-xs h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]" 
+            <motion.div
+              className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"
               initial={{ width: 0 }}
               animate={{ width: `${trimmingProgress}%` }}
               transition={{ type: "spring", damping: 25, stiffness: 50 }}
             />
           </div>
         </div>
+      )}
+
+      {isCameraOpen && (
+        <CameraModal
+          onCapture={(file) => {
+            setImages((prev) => [...prev, file]);
+            setIsCameraOpen(false);
+            setImageModalStep(0); // Show image preview gallery first
+            setIsImageModalOpen(true);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+        />
       )}
     </div>
   );
@@ -509,12 +572,22 @@ function VideoPreviewModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null); // Added streamRef
 
   // Lock body scroll when modal is open
   useEffect(() => {
     document.body.classList.add("overflow-hidden");
     return () => {
       document.body.classList.remove("overflow-hidden");
+      // Cleanup media stream if it was used (e.g., for camera input)
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     };
   }, []);
 
@@ -592,17 +665,21 @@ function VideoPreviewModal({
                 <video
                   ref={videoRef}
                   src={videoPreview}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full ${videoAspectRatio && videoAspectRatio < 0.8 ? "object-cover" : "object-contain"}`}
                   loop
                   playsInline
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget;
+                    setVideoAspectRatio(v.videoWidth / v.videoHeight);
+                  }}
                 />
 
                 {/* Progress Bar */}
                 <div className="absolute bottom-[2px] left-0 w-full h-[1.5px] bg-white/20 z-30">
-                  <div 
+                  <div
                     className="h-full bg-white transition-all duration-100 ease-linear shadow-[0_0_4px_rgba(255,255,255,0.8)]"
                     style={{ width: `${progress}%` }}
                   />
@@ -615,10 +692,10 @@ function VideoPreviewModal({
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.5 }}
-                      className="absolute inset-0 flex items-center justify-center bg-black/20"
+                      className="absolute inset-0 flex items-center justify-center bg-black/10"
                     >
-                      <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
-                        <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+                      <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white/90">
+                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                           <path d="M8 5v14l11-7z" />
                         </svg>
                       </div>
@@ -862,15 +939,12 @@ function ImagePreviewModal({
   setImages,
   isLoading = false,
   uploadProgress = 0,
+  initialStep = 0,
 }: {
   imageFiles: File[];
   imagePreviews: string[];
   onClose: () => void;
   onPosted: () => void;
-  removeImageAt: (idx: number) => void;
-  setImages: (images: File[]) => void;
-  isLoading?: boolean;
-  uploadProgress?: number;
   onSubmitPayload: (payload: {
     type: "images";
     images: File[];
@@ -878,8 +952,13 @@ function ImagePreviewModal({
     subtitle?: string;
     privacy?: "public" | "private" | "friends";
   }) => void;
+  removeImageAt: (index: number) => void;
+  setImages: (f: File[]) => void;
+  isLoading?: boolean;
+  uploadProgress?: number;
+  initialStep?: number;
 }) {
-  const [step, setStep] = useState<0 | 1>(0);
+  const [step, setStep] = useState(initialStep);
   const [index, setIndex] = useState(0);
   const [text, setText] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -889,6 +968,26 @@ function ImagePreviewModal({
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [previewPost, setPreviewPost] = useState<any>(null);
   const { user } = useAuth();
+
+  const handleAddMore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxAllowed = 5 - imageFiles.length;
+    
+    if (maxAllowed <= 0) {
+      toast.error("Maximum 5 images allowed");
+      return;
+    }
+
+    if (files.length > 0) {
+      const newlyAdded = files.slice(0, maxAllowed);
+      if (files.length > maxAllowed) {
+        toast.info(`Only ${maxAllowed} more images were added (max 5)`);
+      }
+      setImages([...imageFiles, ...newlyAdded]);
+    }
+    // Reset input
+    e.target.value = "";
+  };
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -900,9 +999,10 @@ function ImagePreviewModal({
 
   // Close modal if all images are removed
   useEffect(() => {
-    if (imagePreviews.length === 0) onClose();
-    if (index >= imagePreviews.length) setIndex(Math.max(0, imagePreviews.length - 1));
-  }, [imagePreviews.length, index, onClose]);
+    // Only close if we definitely have no files, ignoring the brief moment while previews generate
+    if (imageFiles.length === 0) onClose();
+    if (index >= imageFiles.length) setIndex(Math.max(0, imageFiles.length - 1));
+  }, [imageFiles.length, index, onClose]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -947,7 +1047,7 @@ function ImagePreviewModal({
           </div>
           <div className="w-10">
             {step === 0 && (
-              <h2 className="text-sm text-slate-900 absolute left-1/2 -translate-x-1/2">Post Preview</h2>
+              <h2 className="text-sm text-slate-900 absolute left-1/2 -translate-x-1/2">Post Previewssss</h2>
             )}
           </div>
 
@@ -1045,6 +1145,14 @@ function ImagePreviewModal({
                       </button>
                     </div>
                   ))}
+                  {imageFiles.length < 5 && (
+                    <button
+                      onClick={() => document.getElementById("add-more-input")?.click()}
+                      className="relative w-16 h-16 rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all flex-shrink-0 my-2"
+                    >
+                      <PlusIcon className="w-6 h-6" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-4">
@@ -1089,6 +1197,14 @@ function ImagePreviewModal({
                         </button>
                       </div>
                     ))}
+                    {imageFiles.length < 5 && (
+                      <button
+                        onClick={() => document.getElementById("add-more-input")?.click()}
+                        className="relative w-18 h-18 mt-7 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all flex-shrink-0"
+                      >
+                        <PlusIcon className="w-7 h-7" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1248,6 +1364,14 @@ function ImagePreviewModal({
               </div>
             </div>
           )}
+          <input
+            id="add-more-input"
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleAddMore}
+          />
         </div>
       </motion.div>
 
@@ -1312,7 +1436,6 @@ function ImagePreviewModal({
           isPreview={true}
         />
       )}
-
     </div>
   );
 }

@@ -56,10 +56,18 @@ export default function ImagesTab({
         className="sr-only"
         id="images-upload"
       />
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleImageChange}
+        className="sr-only"
+        id="camera-upload"
+      />
 
       {imagePreviews.length === 0 && (
         <div
-          className="relative group p-10 rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
+          className="relative group p-10 rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
         >
           <label htmlFor="images-upload" className="cursor-pointer flex flex-col items-center justify-center text-center w-full relative z-10">
             <div className="mb-4 relative">
@@ -104,7 +112,7 @@ export default function ImagesTab({
               <Reorder.Item
                 key={src}
                 value={src}
-                className="relative group/thumb rounded-2xl overflow-hidden bg-slate-100 aspect-square ring-1 ring-slate-100 shadow-sm cursor-grab active:cursor-grabbing"
+                className="relative group/thumb rounded-[0.5rem] overflow-hidden bg-slate-100 aspect-square ring-1 ring-slate-100 shadow-sm cursor-grab active:cursor-grabbing"
               >
                 <img
                   src={src}
@@ -141,7 +149,7 @@ export default function ImagesTab({
                   <div className="p-2 rounded-xl bg-white shadow-sm border border-slate-100 group-hover/add:scale-110 group-hover/add:rotate-3 transition-all duration-300">
                     <PhotoIcon className="w-5 h-5 text-red-500" />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 group-hover/add:text-red-500 uppercase tracking-tight">Add More</span>
+                  <span className="text-[9px] text-slate-400 group-hover/add:text-red-500">Add More</span>
                 </div>
               </label>
             )}
@@ -172,7 +180,7 @@ export default function ImagesTab({
         <button
           onClick={submitImages}
           disabled={images.length === 0}
-          className={`w-full py-3 rounded-3xl text-sm font-black  tracking-[0.1em] shadow-xl transition-all duration-300 flex items-center justify-center gap-3
+          className={`w-full py-3 rounded-3xl text-sm transition-all duration-300 flex items-center justify-center gap-3
             ${images.length === 0
               ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
               : "bg-red-500 text-white hover:bg-red-600 shadow-red-200 hover:scale-[1.02] active:scale-95"
