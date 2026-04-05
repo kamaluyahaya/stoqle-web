@@ -23,6 +23,9 @@ interface WalletContextType {
     isLoading: boolean;
     refreshWallet: () => Promise<void>;
     updateBalance: (newBalance: number) => void;
+    isWalletOpen: boolean;
+    openWallet: () => void;
+    closeWallet: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -124,8 +127,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         };
     }, [token, user?.user_id, user?.id, refreshWallet]);
 
+    const [isWalletOpen, setIsWalletOpen] = useState(false);
+    const openWallet = useCallback(() => setIsWalletOpen(true), []);
+    const closeWallet = useCallback(() => setIsWalletOpen(false), []);
+
     return (
-        <WalletContext.Provider value={{ wallet, isLoading, refreshWallet, updateBalance }}>
+        <WalletContext.Provider value={{ wallet, isLoading, refreshWallet, updateBalance, isWalletOpen, openWallet, closeWallet }}>
             {children}
         </WalletContext.Provider>
     );

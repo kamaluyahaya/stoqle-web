@@ -30,7 +30,7 @@ interface ReelsModalProps {
     open: boolean;
     onClose: () => void;
     initialProductId: number | null;
-    onActiveProductChange?: (productId: number, businessName?: string) => void;
+    onActiveProductChange?: (productId: number, businessName?: string, businessSlug?: string) => void;
     origin?: { x: number; y: number };
 }
 
@@ -129,6 +129,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
             price: bestPrice || 0,
             category: p.category,
             business_id: p.business_id,
+            business_slug: p.business_slug || p.business?.business_slug || null,
             business_name: p.business_name || p.business?.business_name || "Store",
             logo: p.logo || p.business?.logo || null,
             first_image: mediaImages[0] || p.first_image || p.media?.[0]?.url || "",
@@ -244,7 +245,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
         if (index !== activeVideoIndex && index >= 0 && index < products.length) {
             setActiveVideoIndex(index);
             const p = products[index];
-            if (onActiveProductChange) onActiveProductChange(p.product_id, p.business_name);
+            if (onActiveProductChange) onActiveProductChange(p.product_id, p.business_name, p.business_slug);
             logUserActivity({ product_id: p.product_id, action_type: 'view', category: p.category }, token);
         }
     };
@@ -264,7 +265,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                     behavior: "smooth"
                 });
             }
-            if (onActiveProductChange) onActiveProductChange(productId, products[existingIndex].business_name);
+            if (onActiveProductChange) onActiveProductChange(productId, products[existingIndex].business_name, products[existingIndex].business_slug);
             logUserActivity({ product_id: productId, action_type: 'view', category: products[existingIndex].category }, token);
         } else {
             // If not found, we might need to fetch it and prepend or reload. 
@@ -281,7 +282,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                     if (containerRef.current) {
                         containerRef.current.scrollTop = 0;
                     }
-                    if (onActiveProductChange) onActiveProductChange(productId);
+                    if (onActiveProductChange) onActiveProductChange(productId, newItem.business_name, newItem.business_slug);
                     logUserActivity({ product_id: productId, action_type: 'view', category: newItem.category }, token);
                 }
             } catch (e) {
@@ -361,10 +362,11 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
         }
     };
 
-    const handleVendorClick = (businessId: number | string) => {
-        if (!businessId) return;
+    const handleVendorClick = (product: ProductFeedItem) => {
+        const identifier = product.business_slug || (product.business_name ? slugify(product.business_name) : null);
+        if (!identifier) return;
         // Don't call onClose() so we keep URL state. Browser navigation will naturally hide the modal.
-        router.push(`/shop/${businessId}`);
+        router.push(`/shop/${identifier}`);
     };
 
     const handleShareClick = (product: ProductFeedItem) => {
@@ -441,7 +443,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                                             isActive={i === activeVideoIndex}
                                             shouldPreload={i === activeVideoIndex + 1 || i === activeVideoIndex + 2}
                                             onBuyClick={(e: React.MouseEvent) => handleProductBuyClick(p.product_id, e)}
-                                            onVendorClick={() => handleVendorClick(p.business_id)}
+                                            onVendorClick={() => handleVendorClick(p)}
                                             onLikeClick={() => handleLikeClick(p.product_id)}
                                             onShareClick={() => handleShareClick(p)}
                                             isGlobalMuted={isGlobalMuted}

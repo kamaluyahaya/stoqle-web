@@ -174,14 +174,19 @@ export default function PolicyModal({ open, title, body, onClose, onAddressChang
 
   return (
     <div
-      className="fixed inset-0 z-[20000] flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[20000] flex items-end sm:items-center justify-center px-0 sm:px-4"
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="relative w-full max-w-2xl bg-slate-100 lg:rounded-2xl md:rounded-2xl rounded-t-2xl shadow-xl z-10 max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-2xl bg-slate-100 lg:rounded-2xl md:rounded-2xl rounded-t-2xl shadow-xl z-10 max-h-[85vh] flex flex-col overflow-hidden"
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         {/* Header - Sticky */}
         <div className="bg-white sticky top-0 z-30 border-b border-slate-50 lg:rounded-t-2xl md:rounded-t-2xl rounded-t-2xl shadow-sm">
           <div className="relative flex items-center px-5">

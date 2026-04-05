@@ -7,6 +7,8 @@ import { API_BASE_URL } from "@/src/lib/config";
 import Swal from "sweetalert2";
 import { useRouter } from "next/navigation";
 
+import { useAudio } from "./audioContext";
+
 type Notification = {
     id: number;
     type: string;
@@ -26,6 +28,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
     const { user, token } = useAuth();
+    const { playSound } = useAudio();
     const [unreadNotifications, setUnreadNotifications] = useState<Notification[]>([]);
     const router = useRouter();
 
@@ -87,13 +90,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                 socket.on("new-order", (data: any) => {
                     console.log("Received new-order event:", data);
+                    
+                    // Play sound for Vendor
+                    playSound("order_placed");
+
                     // Show SweetAlert
                     Swal.fire({
                         title: "<strong>New Order Received</strong>",
                         icon: "success",
                         html:
-                            `Order ID: <b>${data.order_id}</b><br/>` +
-                            `Customer: <b>${data.customer_name}</b>`,
+                            `Order ID: <b>${data.order_id || data.sale_id}</b><br/>` +
+                            `Customer: <b>${data.customer_name || 'A customer'}</b>`,
                         showCloseButton: true,
                         focusConfirm: false,
                         confirmButtonText: "View Order",
@@ -115,6 +122,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                 socket.on("order-status-update", (data: any) => {
                     console.log("Received order-status-update:", data);
+                    
+                    // Map status to sound
+                    const status = data.status?.toLowerCase();
+                    if (status === 'confirmed' || status === 'order_confirmed') {
+                        playSound("delivery_confirmed");
+                    } else if (status === 'out_for_delivery') {
+                        playSound("out_for_delivery");
+                    } else if (status === 'shipped' || status === 'ready_for_shipping' || status === 'shipping') {
+                        playSound("shipping");
+                    } else if (status === 'delivered' || status === 'completed') {
+                        playSound("delivery_confirmed");
+                    } else if (data.type === 'escrow_release' || data.type === 'credited') {
+                        playSound("credited");
+                    }
+
                     Swal.fire({
                         title: `<strong>${data.title}</strong>`,
                         icon: (data.status === 'delivered' || data.status === 'cancelled') ? "success" : "info",
@@ -154,26 +176,47 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 function StoredNotificationAlarmer({ notifications, markAsRead }: { notifications: Notification[], markAsRead: (id: number) => void }) {
     const [displayedIds, setDisplayedIds] = useState<Set<number>>(new Set());
     const router = useRouter();
+    const { playSound } = useAudio();
 
     useEffect(() => {
         if (notifications.length > 0) {
             notifications.forEach(notif => {
                 if (!displayedIds.has(notif.id)) {
+                    // Map type to sound
+                    if (notif.type === 'new_order' || notif.type === 'order_placed') {
+                        playSound("order_placed");
+                    } else if (notif.type === 'order_confirmed' || notif.type === 'confirmed') {
+                        playSound("delivery_confirmed");
+                    } else if (notif.type === 'order_shipped' || notif.type === 'shipped' || notif.type === 'ready_for_shipping') {
+                        playSound("shipping");
+                    } else if (notif.type === 'out_for_delivery') {
+                        playSound("out_for_delivery");
+                    } else if (notif.type === 'order_delivered' || notif.type === 'delivered' || notif.type === 'escrow_release' || notif.type === 'credited') {
+                        if (notif.type === 'escrow_release' || notif.type === 'credited') {
+                            playSound("credited");
+                        } else {
+                            playSound("delivery_confirmed");
+                        }
+                    }
+
                     // We only want to show popups for 'new_order' types or all?
-                    // Let's show all stored as alerts as requested
-                    if (notif.type === 'escrow_release' || notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped' || notif.type === 'order_refunded') {
-                        const isOrderUpdate = notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped' || notif.type === 'order_refunded';
+                    if (notif.type === 'escrow_release' || notif.type === 'order_confirmed' || notif.type === 'order_delivered' || notif.type === 'order_shipped' || notif.type === 'order_refunded' || notif.type === 'new_order') {
+                        const isOrderUpdate = notif.type !== 'escrow_release';
                         Swal.fire({
                             title: `<strong>${notif.title}</strong>`,
                             icon: (notif.type === 'order_delivered' || notif.type === 'escrow_release' || notif.type === 'order_refunded') ? "success" : "info",
                             html: notif.message,
                             showCloseButton: true,
                             focusConfirm: false,
-                            confirmButtonText: notif.type === 'order_delivered' ? "Confirmed & Delivered" : (isOrderUpdate ? "View Orders" : "Great!"),
+                            confirmButtonText: notif.type === 'new_order' ? "View New Order" : (notif.type === 'order_delivered' ? "Confirmed & Delivered" : (isOrderUpdate ? "View Orders" : "Great!")),
                             confirmButtonColor: "#f43f5e",
                         }).then((result) => {
-                            if (result.isConfirmed && isOrderUpdate) {
-                                router.push("/profile/orders");
+                            if (result.isConfirmed) {
+                                if (notif.type === 'new_order') {
+                                    router.push("/profile/business/customer-order");
+                                } else if (isOrderUpdate) {
+                                    router.push("/profile/orders");
+                                }
                             }
                         });
                     } else {
@@ -194,7 +237,7 @@ function StoredNotificationAlarmer({ notifications, markAsRead }: { notification
                 }
             });
         }
-    }, [notifications, markAsRead, displayedIds, router]);
+    }, [notifications, markAsRead, displayedIds, router, playSound]);
 
     return null;
 }

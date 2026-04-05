@@ -153,7 +153,7 @@ export default function CategorySelectionModal({
       {/* Modal */}
       <AnimatePresence>
         {open && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-[99999999] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
             {/* Backdrop */}
             <motion.button
               initial={{ opacity: 0 }}

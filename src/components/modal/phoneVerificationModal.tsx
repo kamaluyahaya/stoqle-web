@@ -11,7 +11,7 @@ import NumberInput from "@/src/components/input/phoneNumber";
 interface PhoneVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (user?: any) => void;
 }
 
 export default function PhoneVerificationModal({ isOpen, onClose, onSuccess }: PhoneVerificationModalProps) {
@@ -132,7 +132,7 @@ export default function PhoneVerificationModal({ isOpen, onClose, onSuccess }: P
         } else {
           _onLoginSuccess(updatedUser, token!);
         }
-        onSuccess();
+        onSuccess(updatedUser);
       } else {
         toast.error(data.message || "Invalid OTP");
         setOtp(["", "", "", "", "", ""]);
@@ -149,18 +149,23 @@ export default function PhoneVerificationModal({ isOpen, onClose, onSuccess }: P
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[30000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div
+        className="fixed inset-0 z-[30000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+      >
         <motion.div
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           className=" w-full max-w-md rounded-[0.5rem] bg-gray-900 overflow-hidden relative"
         >
           {/* Header */}
           <div className="p-6 flex items-center justify-between border-gray-50">
             {step === "otp" ? (
               <button
-                onClick={() => setStep("phone")}
+                onClick={(e) => { e.stopPropagation(); setStep("phone"); }}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <IoChevronBackOutline size={20} className="text-gray-600" />
@@ -172,7 +177,8 @@ export default function PhoneVerificationModal({ isOpen, onClose, onSuccess }: P
               {step === "phone" ? "Add Your Mobile Number" : "Enter Code"}
             </h2>
             <button
-              onClick={onClose}
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              onMouseDown={(e) => e.stopPropagation()}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             >
               <IoCloseOutline size={24} className="text-gray-600" />

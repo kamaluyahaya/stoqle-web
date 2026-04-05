@@ -128,7 +128,7 @@ export default function InventoryReportPage() {
     return (
         <div className="min-h-screen bg-slate-50 md:p-10 print:p-0">
             {/* Nav / Tools - Hidden on Print */}
-            <div className="max-w-5xl mx-auto mb-8 flex items-center justify-between no-print px-4 md:px-0">
+            <div className="max-w-5xl mx-auto mb-8 flex items-center justify-between no-print px-4 md:px-0 pt-[env(safe-area-inset-top,20px)]">
                 <button
                     onClick={() => router.back()}
                     className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors font-bold text-sm"

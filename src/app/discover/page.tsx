@@ -1,12 +1,12 @@
 "use client";
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import PostModal from "../../components/modal/postModal";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import LoginModal from "@/src/components/modal/auth/loginModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import type { Post } from "@/src/lib/types";
-import { fetchDiscoverFeed, fetchSocialPosts, fetchSocialPostById, prefetchMediaConservative, logSocialActivity } from "@/src/lib/api/social";
+import { fetchDiscoverFeed, fetchSocialPosts, fetchSocialPostById, prefetchMediaConservative, logSocialActivity, fetchSecurePostUrl } from "@/src/lib/api/social";
 import { DISCOVERY_CACHE } from "@/src/lib/cache";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
@@ -15,6 +15,8 @@ import { io } from "socket.io-client";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toggleSocialPostLike, mapApiPost } from "@/src/lib/api/social";
 import { toast } from "sonner";
+import { ArrowUp, RotateCcw } from "lucide-react";
+import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 const NO_IMAGE_PLACEHOLDER = "assets/images/post-icons.png"; // fallback post image
 const DEFAULT_AVATAR = "/assets/images/post-icons.png";
 
@@ -89,6 +91,7 @@ const PostCard = React.memo(({
           {post.coverType === "note" && !post.src ? (
             <div
               className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+
               style={getNoteStyles(post.noteConfig)}
             >
               <style jsx>{`
@@ -119,7 +122,7 @@ const PostCard = React.memo(({
               </div>
             </div>
           ) : (
-            <div className="relative w-full aspect-[4/5] overflow-hidden bg-slate-50">
+            <div className="relative w-full overflow-hidden bg-slate-50">
               <style jsx global>{`
                 @keyframes fadeIn {
                   from { opacity: 0; }
@@ -129,7 +132,7 @@ const PostCard = React.memo(({
               <img
                 src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
                 alt={post.caption}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
                 loading="lazy"
                 onLoad={(e) => {
                   (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
@@ -165,15 +168,20 @@ const PostCard = React.memo(({
             >
               <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
             </div>
-            <span
-              className="truncate text-[11px] font-semibold text-slate-400 max-w-[120px] capitalize cursor-pointer hover:text-slate-900 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/user/profile/${post.user.id}`);
-              }}
-            >
-              {post.user.name}
-            </span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span
+                className="truncate text-[11px] font-semibold text-slate-400 cursor-pointer hover:text-slate-900 transition-colors capitalize"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/user/profile/${post.user.id}`);
+                }}
+              >
+                {post.user.name}
+              </span>
+              {post.user.is_trusted && (
+                <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 fill-blue-500 shrink-0" />
+              )}
+            </div>
           </div>
 
           <div
@@ -283,34 +291,44 @@ const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginMod
   }, [items, columns]);
 
   return (
+
     <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
-      {columnData.map((colItems, colIdx) => (
+      {columnData.map((colItems, colIdx) => {
+        let visibilityClass = "flex-1 flex flex-col gap-2 sm:gap-6 min-w-0";
+        if (colIdx === 2) visibilityClass += " hidden [@media(min-width:700px)]:flex";
+        if (colIdx === 3) visibilityClass += " hidden [@media(min-width:1210px)]:flex";
+        if (colIdx === 4) visibilityClass += " hidden [@media(min-width:1430px)]:flex";
 
-
-        <div key={colIdx} className="flex-1 flex flex-col gap-2 sm:gap-4 min-w-0">
-          {colItems.map((post: any, itemIdx: number) => (
-
-            <PostCard
-              key={post.id}
-              post={post}
-              index={post.originalIndex ?? itemIdx}
-              openPostWithUrl={openPostWithUrl}
-              toggleLike={toggleLike}
-              user={user}
-              setShowLoginModal={setShowLoginModal}
-              router={router}
-              getNoteStyles={getNoteStyles}
-              isRestored={isRestored}
-            />
-          ))}
-        </div>
-      ))}
+        return (
+          <div key={colIdx} className={visibilityClass}>
+            {colItems.map((p: any, idx: number) => (
+              <PostCard
+                key={p.post_id || p.id}
+                post={p}
+                index={p.originalIndex ?? idx}
+                openPostWithUrl={openPostWithUrl}
+                toggleLike={toggleLike}
+                user={user}
+                setShowLoginModal={setShowLoginModal}
+                router={router}
+                getNoteStyles={getNoteStyles}
+                isRestored={isRestored}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 };
 
-export default function Discover({ postCount = 100 }: Props) {
+export default function DiscoverPage() {
+  return <DiscoverFeed postCount={100} />;
+}
+
+function DiscoverFeed({ postCount = 100 }: Props) {
   const [activeCategory, setActiveCategory] = useState<string>(DISCOVERY_CACHE.category);
+
   const [posts, setPosts] = useState<Post[]>(DISCOVERY_CACHE.posts);
   const [sections, setSections] = useState<{ trending: Post[], following: Post[], similar: Post[] }>({
     trending: [],
@@ -329,11 +347,45 @@ export default function Discover({ postCount = 100 }: Props) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
-    const handleRefresh = () => setRefreshKey(prev => prev + 1);
-    window.addEventListener("post-created", handleRefresh);
-    return () => window.removeEventListener("post-created", handleRefresh);
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleManualRefresh = () => {
+    scrollToTop();
+    // Use a small timeout to clear cache so it doesn't flicker while scrolling
+    setTimeout(() => {
+      DISCOVERY_CACHE.posts = [];
+      DISCOVERY_CACHE.offset = 0;
+      DISCOVERY_CACHE.category = ""; // force fresh load
+      setRefreshKey(prev => prev + 1);
+    }, 400);
+    // toast.info("Refreshing feed...", { icon: <RotateCcw className="w-4 h-4 animate-spin" />, duration: 2000 });
+  };
+
+  useEffect(() => {
+    const handleRefresh = (e: any) => {
+      // If no path specified or it's discover, refresh
+      if (!e.detail?.path || e.detail.path === "/discover") {
+        handleManualRefresh();
+      }
+    };
+    window.addEventListener("post-created", () => setRefreshKey(prev => prev + 1));
+    window.addEventListener("nav-refresh", handleRefresh);
+    return () => {
+      window.removeEventListener("post-created", () => setRefreshKey(prev => prev + 1));
+      window.removeEventListener("nav-refresh", handleRefresh);
+    };
   }, []);
   const BATCH_SIZE = 20;
 
@@ -540,7 +592,113 @@ export default function Discover({ postCount = 100 }: Props) {
     return () => observer.disconnect();
   }, [hasMore, loading, batchLoading, offset, activeCategory]);
 
-  const openPostWithUrl = (post: Post, e?: React.MouseEvent) => {
+  useEffect(() => {
+    const tryOpenFromUrl = async () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      const param = url.searchParams.get("post");
+      if (!param) return;
+      const postId = Number(param);
+      if (isNaN(postId)) return;
+
+      const found = posts.find((p) => Number(p.id) === postId);
+      if (found) {
+        setSelectedPost(found);
+        pushedRef.current = false;
+        return;
+      }
+
+      try {
+        const base = process.env.NEXT_PUBLIC_API_URL;
+        if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
+
+        const fetchUrl = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}`);
+        const xsecToken = url.searchParams.get("xsec_token");
+        const xsecSource = url.searchParams.get("xsec_source");
+        if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
+        if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
+
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const headers: any = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const res = await fetch(fetchUrl.toString(), { headers });
+        if (!res.ok) throw new Error("Post not found");
+        const json = await res.json();
+        const single = mapApiPost(json?.data?.post ?? json?.data ?? json);
+        setSelectedPost(single);
+        pushedRef.current = false;
+      } catch (err) {
+        setSelectedPost({
+          id: postId,
+          caption: "Post unavailable",
+          user: { name: "---", avatar: DEFAULT_AVATAR },
+          liked: false,
+          likeCount: 0,
+        } as Post);
+        pushedRef.current = false;
+      }
+    };
+
+    tryOpenFromUrl();
+  }, []);
+
+  useEffect(() => {
+    const onPop = (ev: PopStateEvent) => {
+      const url = new URL(window.location.href);
+      const param = url.searchParams.get("post");
+      if (param) {
+        const postId = Number(param);
+        if (isNaN(postId)) {
+          setSelectedPost(null);
+          return;
+        }
+        const found = posts.find((p) => Number(p.id) === postId);
+        if (found) {
+          setSelectedPost(found);
+          pushedRef.current = false;
+        } else {
+          (async () => {
+            try {
+              const base = process.env.NEXT_PUBLIC_API_URL;
+              if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
+
+              const fetchUrl = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}`);
+              const xsecToken = url.searchParams.get("xsec_token");
+              const xsecSource = url.searchParams.get("xsec_source");
+              if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
+              if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
+
+              const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+              const headers: any = {};
+              if (token) headers.Authorization = `Bearer ${token}`;
+
+              const res = await fetch(fetchUrl.toString(), { headers });
+              if (!res.ok) throw new Error("Post not found");
+              const json = await res.json();
+              setSelectedPost(mapApiPost(json?.data?.post ?? json?.data ?? json));
+            } catch {
+              setSelectedPost({
+                id: postId,
+                caption: "Post unavailable",
+                user: { name: "---", avatar: DEFAULT_AVATAR },
+                liked: false,
+                likeCount: 0,
+              } as Post);
+            }
+          })();
+        }
+      } else {
+        setSelectedPost(null);
+      }
+    };
+
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [posts]);
+
+
+  const openPostWithUrl = async (post: Post, e?: React.MouseEvent) => {
     if (e) setModalOrigin({ x: e.clientX, y: e.clientY });
     setSelectedPost(post);
 
@@ -551,40 +709,68 @@ export default function Discover({ postCount = 100 }: Props) {
       category: post.category
     }, token || undefined);
 
+    let xsecToken = "";
+    let xsecSource = "discovery_feed";
+    try {
+      const secData = await fetchSecurePostUrl(post.id, "discovery_feed", token);
+      if (secData && secData.xsec_token) {
+        xsecToken = secData.xsec_token;
+        xsecSource = secData.xsec_source;
+      }
+    } catch (err) {
+      console.warn("Could not fetch secure token", err);
+    }
+
     const url = new URL(window.location.href);
     url.searchParams.set("post", String(post.id));
+    if (xsecToken) url.searchParams.set("xsec_token", xsecToken);
+    url.searchParams.set("xsec_source", xsecSource);
+
     window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
     pushedRef.current = true;
   };
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setSelectedPost(null);
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("post")) {
-      url.searchParams.delete("post");
-      window.history.replaceState({}, "", url.toString());
-    }
-  };
 
-  const toggleLike = async (postId: string | number) => {
+    // If we pushed a state, go back to revert it
+    // If not (e.g. initial load), just replace the URL
+    if (pushedRef.current) {
+      window.history.back();
+      pushedRef.current = false;
+    } else {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("post")) {
+        url.searchParams.delete("post");
+        url.searchParams.delete("xsec_token");
+        url.searchParams.delete("xsec_source");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }, []);
+
+  const toggleLike = async (postId: string | number, skipApi = false) => {
     const ok = await ensureLoggedIn();
     if (!ok || !token) {
       setShowLoginModal(true);
       return;
     }
 
+    // Phase 1: Local Optimistic Update
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 } : p
       )
     );
 
+    if (skipApi) return; // Modal already handled the database persistence
+
     try {
       await toggleSocialPostLike(postId, token);
     } catch (err) {
       console.error(err);
       toast.error("Failed to update like status");
-      // Rollback
+      // Rollback on failure
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId ? { ...p, liked: !p.liked, likeCount: p.liked ? p.likeCount + 1 : Math.max(0, p.likeCount - 1) } : p
@@ -628,7 +814,7 @@ export default function Discover({ postCount = 100 }: Props) {
 
   return (
     <>
-      <section className="min-h-screen bg-slate-50 pb-20">
+      <section className="min-h-screen transition-colors duration-500 bg-slate-50 pb-20">
         <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-100">
           <div className="flex px-4 py-4 gap-2 overflow-x-auto no-scrollbar">
             {CATEGORIES.map((item) => (
@@ -643,53 +829,102 @@ export default function Discover({ postCount = 100 }: Props) {
           </div>
         </div>
 
-        <div className="p-0 sm:p-4">
-          {loading ? (
-            <ShimmerGrid count={6} />
-          ) : error ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center px-4">
-              <FaCompass className="text-slate-200 mb-4" size={60} />
-              <p className="text-slate-900 font-bold mb-2">Something went wrong</p>
-              <p className="text-slate-400 text-sm mb-6">{error}</p>
-              <button onClick={() => window.location.reload()} className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-slate-800 transition">
-                Try Again
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {activeCategory === "Recommend" && (
-                <>
-
-                </>
-              )}
-
-              <div className="px-2 sm:px-0">
-                <MasonryGrid
-                  items={posts}
-                  openPostWithUrl={openPostWithUrl}
-                  toggleLike={toggleLike}
-                  user={user}
-                  setShowLoginModal={setShowLoginModal}
-                  router={router}
-                  getNoteStyles={getNoteStyles}
-                />
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="flex justify-center items-center py-6 bg-slate-50 overflow-hidden"
+            >
+              <div className="flex items-center gap-2 px-6 py-3 rounded-full  border-slate-100">
+                <svg className="w-4 h-4 text-slate-900 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
+                </svg>
               </div>
-            </div>
+            </motion.div>
           )}
+        </AnimatePresence>
 
-          {posts.length > 0 && hasMore && (
-            <div ref={observerTarget} className="flex justify-center p-12">
-              <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        {loading ? (
+          <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
+        ) : error ? (
+          <div className="py-20 flex flex-col items-center justify-center text-center px-4">
+            <div className="w-32 h-32 rounded-full flex items-center justify-center">
+              <img src="/assets/images/message-icon.png" alt="" />
             </div>
-          )}
-        </div>
+            <p className="text-slate-400 text-sm mb-6">{error}, Please pull down to refresh</p>
+            <button onClick={() => window.location.reload()} className=" rounded-2xl  text-sm text-bold transition">
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {activeCategory === "Recommend" && (
+              <>
+
+              </>
+            )}
+
+            <div className="p-2 sm:p-4 ">
+              <MasonryGrid
+                items={posts}
+                openPostWithUrl={openPostWithUrl}
+                toggleLike={toggleLike}
+                user={user}
+                setShowLoginModal={setShowLoginModal}
+                router={router}
+                getNoteStyles={getNoteStyles}
+              />
+            </div>
+          </div>
+        )}
+
+        {posts.length > 0 && hasMore && (
+          <div ref={observerTarget} className="flex justify-center p-12">
+            <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+          </div>
+        )}
 
         <AnimatePresence>
           {selectedPost && (
-            <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} origin={modalOrigin} />
+            <PostModal open={!!selectedPost} post={selectedPost} onClose={closeModal} onToggleLike={(id) => toggleLike(id, true)} origin={modalOrigin} />
           )}
         </AnimatePresence>
       </section>
+
+      {/* Floating Action Buttons */}
+      <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-3">
+        {/* Scroll to Top (Now on top) */}
+        <AnimatePresence>
+          {showScrollTop && (
+            <motion.button
+              initial={{ opacity: 0, y: 20, scale: 0.8 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.8 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={scrollToTop}
+              className="w-12 h-12 bg-white text-slate-900 rounded-full shadow-2xl flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-colors"
+              title="Back to Top"
+            >
+              <ArrowUp className="w-5 h-5" />
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        {/* Refresh Button */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={handleManualRefresh}
+          className="w-12 h-12 bg-white text-slate-900 rounded-full shadow-2xl flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-colors"
+          title="Refresh Recommended"
+        >
+          <RotateCcw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+        </motion.button>
+      </div>
 
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
 

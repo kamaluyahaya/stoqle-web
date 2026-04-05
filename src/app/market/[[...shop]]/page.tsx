@@ -6,7 +6,9 @@ import { useAuth } from "@/src/context/authContext";
 import LoginModal from "@/src/components/modal/auth/loginModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
-import { FaHeart, FaRegHeart } from "react-icons/fa";
+import { fetchLinkedProductPosts } from "@/src/lib/api/social";
+import PostModal from "@/src/components/modal/postModal";
+import { FaHeart, FaRegHeart, FaPlay, FaImage } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
@@ -17,6 +19,7 @@ import { fetchBusinessCategories, fetchTrendingProducts, fetchPersonalizedFeed }
 import { API_BASE_URL } from "@/src/lib/config";
 import { MARKET_CACHE } from "@/src/lib/cache";
 import { fetchActionableSummary } from "@/src/lib/api/orderApi";
+import { ArrowUp, ShoppingCart } from "lucide-react";
 
 type Props = {
     params: Promise<{ shop?: string[] }>,
@@ -151,7 +154,6 @@ const ProductCard = React.memo(({
         );
     }
 
-    // Animation variants
     const entryVariants = {
         initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
         animate: { opacity: 1, scale: 1, y: 0 },
@@ -162,14 +164,73 @@ const ProductCard = React.memo(({
         }
     };
 
+    if (p.is_social_post) {
+        return (
+            <motion.article
+                initial={entryVariants.initial}
+                animate={entryVariants.animate}
+                transition={entryVariants.transition}
+                onClick={(e) => handleProductClick(p.product_id, p.business_name, e, p.business_slug, true)}
+                className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden relative"
+            >
+                <div className="relative w-full aspect-[4/5] overflow-hidden bg-slate-100">
+                    <img 
+                        src={formatUrl(p.first_image)} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        loading="lazy"
+                        alt={p.title}
+                    />
+                    <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white text-[9px] font-black px-2 py-1 rounded-full z-10 tracking-widest shadow-sm border border-white/10 flex items-center gap-1.5">
+                        {p.isVideo ? (
+                            <>
+                                <FaPlay size={7} className="text-white fill-current" />
+                                <span>VIDEO</span>
+                            </>
+                        ) : (
+                            <>
+                                <FaImage size={7} className="text-white fill-current" />
+                                <span>POST</span>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Gradient Overlay for Author */}
+                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                </div>
+                <div className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                         <div className="h-4 w-4 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
+                            <Image 
+                                src={p.logo ? formatUrl(p.logo) : "/assets/images/favio.png"} 
+                                fill
+                                sizes="16px"
+                                className="object-cover" 
+                                alt="avatar" 
+                            />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 truncate">{p.business_name}</span>
+                    </div>
+                    <h3 className="text-sm text-slate-800 line-clamp-2 leading-tight font-medium mb-1" title={p.title}>{p.title}</h3>
+                    <div className="flex items-center justify-between mt-auto">
+                        <div className="text-sm font-black text-slate-900">₦{Number(p.price || 0).toLocaleString()}</div>
+                        <div className="flex items-center gap-1 opacity-40">
+                             <FaHeart size={10} />
+                             <span className="text-[10px] font-bold">{p.likes_count || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            </motion.article>
+        );
+    }
+
     return (
         <article
             key={`${p.product_id}${isVideoCover ? '-vid' : ''}`}
             onClick={(e) => {
                 if (isVideoCover) {
-                    handleReelsClick(p.product_id, p.business_name, e);
+                    handleReelsClick(p.product_id, p.business_name, e, p.business_slug);
                 } else {
-                    handleProductClick(p.product_id, p.business_name, e);
+                    handleProductClick(p.product_id, p.business_name, e, p.business_slug);
                 }
             }}
             className={`group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border overflow-hidden ${isPartnerTab ? "border-emerald-100 shadow-sm shadow-emerald-50/50" : "border-slate-100"}`}
@@ -269,10 +330,11 @@ const ProductCard = React.memo(({
                         <div className="flex items-center justify-between">
                             <div
                                 className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (p.business_id) router.push(`/shop/${p.business_id}`);
-                                }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const slug = p.business_slug || (p.business_name ? slugify(p.business_name) : null);
+                                        if (slug) router.push(`/shop/${slug}`);
+                                    }}
                             >
                                 <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
                                     <Image
@@ -334,10 +396,11 @@ const ProductCard = React.memo(({
                         <div className="flex items-center justify-between pt-1 border-slate-50">
                             <div
                                 className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (p.business_id) router.push(`/shop/${p.business_id}`);
-                                }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const slug = p.business_slug || (p.business_name ? slugify(p.business_name) : null);
+                                        if (slug) router.push(`/shop/${slug}`);
+                                    }}
                             >
                                 <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
                                     <Image
@@ -458,8 +521,8 @@ const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, h
                                     isVideoCover={!!p.product_video}
                                     p={p}
                                     formatUrl={formatUrl}
-                                    handleProductClick={(id: number, b: string, e: any) => handleProductClick(id, b, e)}
-                                    handleReelsClick={(id: number, b: string, e: any) => handleReelsClick(id, b, e)}
+                                    handleProductClick={(id: number | string, b: string, e: any, s: string, isSocial: boolean) => handleProductClick(id, b, e, s, isSocial)}
+                                    handleReelsClick={(id: number, b: string, e: any, s: string) => handleReelsClick(id, b, e, s)}
                                     handleLikeClick={handleLikeClick}
                                     isLiked={ld.liked}
                                     likeCount={ld.count}
@@ -489,7 +552,8 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
 
-    const [modalOpen, setModalOpen] = useState(false);
+    const [selectedSocialPost, setSelectedSocialPost] = useState<any | null>(null);
+    const [socialPostModalOpen, setSocialPostModalOpen] = useState(false);    const [modalOpen, setModalOpen] = useState(false);
     const [reelsModalOpen, setReelsModalOpen] = useState(false);
     const [fetchingProductId, setFetchingProductId] = useState<number | null>(null);
     const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
@@ -500,6 +564,8 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const loaderRef = useRef<HTMLDivElement>(null);
     const tabsRef = useRef<HTMLDivElement>(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [showManualLoading, setShowManualLoading] = useState(false);
     const LIMIT = 10;
 
     const router = useRouter();
@@ -512,6 +578,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
     const [actionableData, setActionableData] = useState<{ vendorPendingCount: number, customerDeliveredCount: number } | null>(null);
     const [fetchedCategories, setFetchedCategories] = useState<string[]>(MARKET_CACHE.categories);
     const [isScrolled, setIsScrolled] = useState(false);
+    const [showScrollTop, setShowScrollTop] = useState(false);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -520,9 +587,36 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
             } else {
                 setIsScrolled(false);
             }
+            setShowScrollTop(window.scrollY > 400);
         };
-        window.addEventListener("scroll", handleScroll);
+        window.addEventListener("scroll", handleScroll, { passive: true });
         return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    const handleManualRefresh = () => {
+        scrollToTop();
+        setShowManualLoading(true);
+        setTimeout(() => {
+            MARKET_CACHE.products = [];
+            MARKET_CACHE.page = 0;
+            MARKET_CACHE.category = ""; // Force fresh load
+            setRefreshKey(prev => prev + 1);
+            setShowManualLoading(false);
+        }, 600);
+    };
+
+    useEffect(() => {
+        const handleNavRefresh = (e: any) => {
+            if (!e.detail?.path || e.detail.path === "/market") {
+                handleManualRefresh();
+            }
+        };
+        window.addEventListener("nav-refresh", handleNavRefresh);
+        return () => window.removeEventListener("nav-refresh", handleNavRefresh);
     }, []);
 
     useEffect(() => {
@@ -633,6 +727,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
         try {
             let nextProducts: ProductFeedItem[] = [];
+            let nextPosts: any[] = [];
 
             if (activeCategory === "PARTNERS") {
                 const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true);
@@ -641,6 +736,16 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                 const bizCat = activeCategory === "For you" ? null : activeCategory;
                 const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, bizCat);
                 nextProducts = res?.data || [];
+                
+                // Fetch social posts with linked products
+                if (activeCategory === "For you" || activeCategory === "PARTNERS") {
+                    try {
+                        const posts = await fetchLinkedProductPosts({ limit: 5, offset: pageNum * 5, token: token! });
+                        nextPosts = posts;
+                    } catch (e) {
+                        console.error("Failed to fetch linked social posts", e);
+                    }
+                }
             }
 
             // If this was an authenticated fetch, mark the cache as personalized
@@ -674,9 +779,38 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                         product_video: p.product_video || media.find((m: any) => m.type === 'video')?.url || "",
                     };
                 });
+
+                const mappedSocialPosts = nextPosts.map((p: any, i: number) => ({
+                    ...p,
+                    product_id: `post-${p.id}`,
+                    is_social_post: true,
+                    title: p.caption || p.linked_product?.title || "Social Post",
+                    first_image: p.thumbnail || p.src, // Use cover image if available
+                    price: p.linked_product?.price || 0,
+                    business_name: p.user.name,
+                    logo: p.user.avatar,
+                    originalIndex: (pageNum === 0 ? 0 : prev.length) + mappedProducts.length + i,
+                }));
+
+                // Interleave social posts instead of appending
+                let combined: any[] = [];
+                const socialStep = Math.max(3, Math.ceil(mappedProducts.length / (mappedSocialPosts.length || 1)));
+                let socialIdx = 0;
+
+                mappedProducts.forEach((prod, i) => {
+                    combined.push(prod);
+                    if (i > 0 && i % socialStep === 0 && socialIdx < mappedSocialPosts.length) {
+                        combined.push(mappedSocialPosts[socialIdx++]);
+                    }
+                });
+                // Add remaining social posts if any
+                while (socialIdx < mappedSocialPosts.length) {
+                    combined.push(mappedSocialPosts[socialIdx++]);
+                }
+
                 const existingIds = new Set(prev.map(p => p.product_id));
-                const unique = mappedProducts.filter((p) => !existingIds.has(p.product_id));
-                const finalProducts = pageNum === 0 ? mappedProducts : [...prev, ...unique];
+                const unique = combined.filter((p) => !existingIds.has(p.product_id));
+                const finalProducts = pageNum === 0 ? combined : [...prev, ...unique];
 
                 // Update cache
                 MARKET_CACHE.products = finalProducts;
@@ -727,7 +861,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         setProducts([]);
         fetchPage(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isHydrated, token, activeCategory]);
+    }, [isHydrated, token, activeCategory, refreshKey]);
 
     // Center active tab automatically on change
     useEffect(() => {
@@ -815,7 +949,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         return encodeURI(formatted);
     }, []);
 
-    const updateUrl = (productId: number | null, businessName?: string, isReels: boolean = false) => {
+    const updateUrl = (productId: number | string | null, businessName?: string, isReels: boolean = false, businessSlug?: string, isSocialPost: boolean = false) => {
         const params = new URLSearchParams(window.location.search);
 
         if (productId) {
@@ -825,7 +959,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
             } else {
                 params.delete("reels");
             }
-            const slug = businessName ? slugify(businessName) : (routeParams?.shop?.[0] || "product");
+            const slug = businessSlug || (businessName ? slugify(businessName) : (routeParams?.shop?.[0] || "product"));
             const search = params.toString();
             const newUrl = `/market/${slug}${search ? `?${search}` : ""}`;
 
@@ -845,15 +979,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         }
     };
 
-    const handleReelsClick = React.useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
-        if (e) setClickPos({ x: e.clientX, y: e.clientY });
-
-        updateUrl(productId, businessName, true);
-        setSelectedProductId(productId);
-        setReelsModalOpen(true);
-    }, [routeParams?.shop]);
-
-    const handleProductClick = React.useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
+    const handleProductClick = React.useCallback(async (productId: number | string, businessName?: string, e?: React.MouseEvent, businessSlug?: string, isSocialPost: boolean = false) => {
         if (fetchingProductId) return;
 
         // Capture click position
@@ -863,10 +989,21 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
             setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
         }
 
-        updateUrl(productId, businessName);
+        if (isSocialPost) {
+            const post = products.find(p => p.product_id === productId);
+            if (post) {
+                setSelectedSocialPost(post);
+                setSocialPostModalOpen(true);
+            }
+            return;
+        }
+
+        const pid = typeof productId === 'string' ? Number(productId.replace('post-', '')) : productId;
+
+        updateUrl(pid, businessName, false, businessSlug);
         try {
-            setFetchingProductId(productId);
-            const res = await fetchProductById(productId, token);
+            setFetchingProductId(pid);
+            const res = await fetchProductById(pid, token);
             if (res?.data?.product) {
                 const dbProduct = res.data.product;
                 const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
@@ -877,11 +1014,11 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
                 setSelectedProductPayload(mappedPayload);
                 setModalOpen(true);
-                logUserActivity({ product_id: productId, action_type: 'view', category: dbProduct.category }, token);
+                logUserActivity({ product_id: pid, action_type: 'view', category: dbProduct.category }, token);
 
                 // If on initial load we didn't have the business name, update URL now
-                if (dbProduct.business_name) {
-                    updateUrl(productId, dbProduct.business_name);
+                if (dbProduct.business_name || dbProduct.business_slug) {
+                    updateUrl(pid, dbProduct.business_name, false, dbProduct.business_slug);
                 }
             }
         } catch (err) {
@@ -889,7 +1026,11 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
         } finally {
             setFetchingProductId(null);
         }
-    }, [fetchingProductId, formatUrl, updateUrl, token]);
+    }, [fetchingProductId, formatUrl, updateUrl, token, products]);
+
+    const handleReelsClick = React.useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent, businessSlug?: string) => {
+        handleProductClick(productId, businessName, e, businessSlug);
+    }, [handleProductClick]);
 
     // Handle deep linking from URL and Browser Back/Forward buttons
     useEffect(() => {
@@ -1019,6 +1160,24 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                     )}
                 </div>
 
+                <AnimatePresence>
+                    {showManualLoading && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                            className="flex justify-center items-center py-6 bg-slate-50 overflow-hidden"
+                        >
+                            <div className="flex items-center gap-2 px-6 py-3 rounded-full  border-slate-100">
+                                <svg className="w-4 h-4 text-slate-900 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
+                                </svg>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 {loading ? (
                     <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
                 ) : error ? (
@@ -1057,6 +1216,38 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
 
             </section >
 
+            {/* Floating Action Buttons */}
+            <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-3">
+                {/* Scroll to Top */}
+                <AnimatePresence>
+                    {showScrollTop && (
+                        <motion.button
+                            initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 20, scale: 0.8 }}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={scrollToTop}
+                            className="w-12 h-12 bg-white text-slate-900 rounded-full shadow-2xl flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-colors"
+                            title="Back to Top"
+                        >
+                            <ArrowUp className="w-5 h-5" />
+                        </motion.button>
+                    )}
+                </AnimatePresence>
+
+                {/* Shopping Cart Button */}
+                <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => router.push('/cart')}
+                    className="w-12 h-12 bg-white text-slate-900 rounded-full shadow-2xl flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-colors"
+                    title="View Cart"
+                >
+                    <ShoppingCart className="w-5 h-5" />
+                </motion.button>
+            </div>
+
             {/* Render ProductPreviewModal directly! Reusing your existing component but with real mapping. */}
             <AnimatePresence>
                 {
@@ -1078,6 +1269,22 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                 }
             </AnimatePresence>
 
+            <AnimatePresence>
+                {socialPostModalOpen && selectedSocialPost && (
+                    <PostModal
+                        open={socialPostModalOpen}
+                        post={selectedSocialPost}
+                        onClose={() => {
+                            setSocialPostModalOpen(false);
+                            setSelectedSocialPost(null);
+                        }}
+                        onToggleLike={() => {}}
+                        userToken={token}
+                        isProductLinkedOnly={true}
+                    />
+                )}
+            </AnimatePresence>
+
             <ReelsModal
                 open={reelsModalOpen}
                 initialProductId={selectedProductId}
@@ -1088,7 +1295,7 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                     // Instead of null, restore the preview ID if it exists
                     updateUrl(selectedProductPayload?.productId || null);
                 }}
-                onActiveProductChange={(pid, bizName) => {
+                onActiveProductChange={(pid, bizName, bizSlug) => {
                     setSelectedProductId(pid);
                     const params = new URLSearchParams(window.location.search);
                     params.set("reels", "true");
@@ -1096,8 +1303,9 @@ export default function MarketPage({ params, postCount = 100 }: Props) {
                     const search = params.toString();
 
                     let path = window.location.pathname;
-                    if (bizName) {
-                        path = `/market/${slugify(bizName)}`;
+                    const slug = bizSlug || (bizName ? slugify(bizName) : null);
+                    if (slug) {
+                        path = `/market/${slug}`;
                     }
 
                     const currentUrl = `${path}${search ? `?${search}` : ""}`;

@@ -13,6 +13,7 @@ import Image from "next/image";
 import { useAuth } from "@/src/context/authContext";
 import { toast } from "sonner";
 import { Suspense } from "react";
+import VideoPlayer from "@/src/components/posts/videoPlayer";
 
 const formatUrl = (url: string) => {
     if (!url) return "";
@@ -202,6 +203,7 @@ function ShoppingReelsContent() {
             category: p.category,
             business_id: p.business_id,
             business_name: p.business_name || p.business?.business_name || "Store",
+            business_slug: p.business_slug || p.business?.business_slug,
             logo: p.logo || p.business?.logo || null,
             first_image: mediaImages[0] || p.first_image || p.media?.[0]?.url || "",
             product_video: p.product_video || p.media?.find((m: any) => m.type === 'video')?.url || "",
@@ -252,18 +254,38 @@ function ShoppingReelsContent() {
         }
     }, [initialProductId, mapToFeedItem]);
 
+    const updateUrlTimeout = useRef<NodeJS.Timeout | null>(null);
+
     const updateUrl = useCallback((productId: number | null) => {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (productId) {
-            urlParams.set("product_id", String(productId));
-        } else {
-            urlParams.delete("product_id");
-        }
-        const search = urlParams.toString();
-        const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
-        if (newUrl !== window.location.pathname + window.location.search) {
-            window.history.replaceState(window.history.state, "", newUrl);
-        }
+        if (updateUrlTimeout.current) clearTimeout(updateUrlTimeout.current);
+
+        updateUrlTimeout.current = setTimeout(async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (productId) {
+                try {
+                    const { fetchSecurePostUrl } = require("@/src/lib/api/social");
+                    const userToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+                    const urlData = await fetchSecurePostUrl(productId, "shopping_reels", userToken);
+
+                    urlParams.set("product_id", String(productId));
+                    if (urlData && urlData.xsec_token) {
+                        urlParams.set("xsec_token", urlData.xsec_token);
+                        urlParams.set("xsec_source", "shopping_reels");
+                    }
+                } catch (err) {
+                    urlParams.set("product_id", String(productId));
+                }
+            } else {
+                urlParams.delete("product_id");
+                urlParams.delete("xsec_token");
+                urlParams.delete("xsec_source");
+            }
+            const search = urlParams.toString();
+            const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
+            if (newUrl !== window.location.pathname + window.location.search) {
+                window.history.replaceState(window.history.state, "", newUrl);
+            }
+        }, 500);
     }, []);
 
     useEffect(() => {
@@ -366,16 +388,25 @@ function ShoppingReelsContent() {
                 ) : (
                     products.map((p, i) => (
                         <div key={`${p.product_id}-${i}`} className="h-full w-full snap-start relative bg-slate-900 flex justify-center items-center">
-                            <ReelItem
-                                product={p}
-                                isActive={i === activeVideoIndex}
-                                onBuyClick={(e?: React.MouseEvent) => handleProductBuyClick(p.product_id, p.business_name, e)}
-                                onVendorClick={(bid) => router.push(`/shop/${bid}`)}
-                                onLikeClick={() => handleLikeClick(p.product_id)}
-                                onShareClick={() => handleShareClick(p)}
-                                isGlobalMuted={isGlobalMuted}
-                                setIsGlobalMuted={setIsGlobalMuted}
-                            />
+                            {Math.abs(i - activeVideoIndex) <= 1 ? (
+                                <ReelItem
+                                    product={p}
+                                    isActive={i === activeVideoIndex}
+                                    onBuyClick={(e?: React.MouseEvent) => handleProductBuyClick(p.product_id, p.business_name, e)}
+                                    onVendorClick={(bid) => {
+                                        const slug = p.business_slug || bid;
+                                        router.push(`/shop/${slug}`);
+                                    }}
+                                    onLikeClick={() => handleLikeClick(p.product_id)}
+                                    onShareClick={() => handleShareClick(p)}
+                                    isGlobalMuted={isGlobalMuted}
+                                    setIsGlobalMuted={setIsGlobalMuted}
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center">
+                                    <div className="w-8 h-8 border-4 border-slate-800 border-t-white/20 rounded-full animate-spin"></div>
+                                </div>
+                            )}
                         </div>
                     ))
                 )}
@@ -499,7 +530,7 @@ function ReelItem({
     product: ProductFeedItem;
     isActive: boolean;
     onBuyClick: (e?: React.MouseEvent) => void;
-    onVendorClick: (businessId: number) => void;
+    onVendorClick: (businessId: number | string) => void;
     onLikeClick: () => void;
     onShareClick: () => void;
     isGlobalMuted: boolean;
@@ -526,35 +557,7 @@ function ReelItem({
         }
     }, [isActive, product.product_id, params.length]);
 
-    useEffect(() => {
-        if (!videoRef.current) return;
-
-        // Always enforce muted state when active because of browser policy
-        videoRef.current.muted = isGlobalMuted;
-
-        if (isActive) {
-            videoRef.current.currentTime = 0;
-            const playPromise = videoRef.current.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(() => {
-                    // Auto-play prevented, wait for user interaction
-                    setIsPlaying(false);
-                });
-            }
-            setIsPlaying(true);
-        } else {
-            videoRef.current.pause();
-            setIsPlaying(false);
-        }
-    }, [isActive, isGlobalMuted]);
-
     const togglePlay = () => {
-        if (!videoRef.current) return;
-        if (isPlaying) {
-            videoRef.current.pause();
-        } else {
-            videoRef.current.play();
-        }
         setIsPlaying(!isPlaying);
     };
 
@@ -572,14 +575,15 @@ function ReelItem({
         <div className="w-full h-full sm:max-w-[450px] sm:border-x sm:border-white/10 relative" onClick={togglePlay}>
             <ProductTicker product={product} params={params} />
             {videoUrl ? (
-                <video
-                    ref={videoRef}
+                <VideoPlayer
+                    videoId={String(product.product_id)}
                     src={videoUrl}
-                    className="w-full h-full object-cover"
-                    loop
-                    playsInline
-                    muted={isGlobalMuted}
                     poster={product.first_image ? formatUrl(product.first_image) : undefined}
+                    isMuted={isGlobalMuted}
+                    isPaused={!isPlaying}
+                    autoplay={isActive}
+                    videoClassName="w-full h-full object-cover"
+                    onMuteChange={setIsGlobalMuted}
                 />
             ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-800">

@@ -20,7 +20,7 @@ const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 export default function VendorShopPage() {
     const params = useParams();
-    const businessId = params?.businessId;
+    const slug = params?.slug;
     const router = useRouter();
     const auth = useAuth();
 
@@ -44,6 +44,42 @@ export default function VendorShopPage() {
     const [productModalOpen, setProductModalOpen] = useState(false);
     const [fetchingProduct, setFetchingProduct] = useState(false);
     const [clickPos, setClickPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [columns, setColumns] = useState(2);
+    const [hasUnviewedReleases, setHasUnviewedReleases] = useState(false);
+
+    const newestReleaseId = useMemo(() => {
+        if (!Array.isArray(products) || !products.length) return 0;
+        return Math.max(...products.map(p => p.product_id));
+    }, [products]);
+
+    useEffect(() => {
+        if (!slug || !newestReleaseId) return;
+        const lastSeen = localStorage.getItem(`shop_last_seen_${slug}`);
+        if (!lastSeen || Number(lastSeen) < newestReleaseId) {
+            setHasUnviewedReleases(true);
+        } else {
+            setHasUnviewedReleases(false);
+        }
+
+        // If currently on New release tab, mark as seen
+        if (activeNav === "New release") {
+            localStorage.setItem(`shop_last_seen_${slug}`, String(newestReleaseId));
+            setHasUnviewedReleases(false);
+        }
+    }, [slug, newestReleaseId, activeNav]);
+
+    useEffect(() => {
+        const updateColumns = () => {
+            const w = window.innerWidth;
+            if (w < 700) setColumns(2);
+            else if (w < 1350) setColumns(3);
+            else if (w < 1650) setColumns(4);
+            else setColumns(5);
+        };
+        updateColumns();
+        window.addEventListener('resize', updateColumns);
+        return () => window.removeEventListener('resize', updateColumns);
+    }, []);
 
     const formatUrl = (url: string) => {
         if (!url) return NO_IMAGE_PLACEHOLDER;
@@ -59,21 +95,20 @@ export default function VendorShopPage() {
     // or we need a new endpoint. 
     useEffect(() => {
         async function loadShop() {
-            if (!businessId) return;
+            if (!slug) return;
             setLoading(true);
             try {
-                // Here we ideally need a way to get the owner userId from businessId to use existing profile API
+                // Here we ideally need a way to get the owner userId from slug to use existing profile API
                 // or a specific business fetch API. For now, let's try to fetch products first.
-                const res = await fetch(`${API_BASE_URL}/api/products/business/${businessId}?limit=100`);
+                const res = await fetch(`${API_BASE_URL}/api/products/business/${slug}?limit=100`);
                 const data = await res.json();
-                const foundProducts = data?.data?.products || data?.data || data || [];
+                const foundProducts = (data?.status === "success" && Array.isArray(data?.data?.products)) ? data.data.products : [];
                 setProducts(foundProducts);
 
-                // Let's also try to get business details. 
-                // We'll build a synthetic profileApi object if we can't find a direct endpoint.
-                const bizRes = await fetch(`${API_BASE_URL}/api/business/${businessId}`);
+                // Let's also try to get business details.
+                const bizRes = await fetch(`${API_BASE_URL}/api/business/${slug}`);
                 const bizData = await bizRes.json();
-                if (bizData.ok) {
+                if (bizData.ok && bizData.data) {
                     setProfileApi(bizData.data);
                 }
             } catch (err) {
@@ -83,7 +118,7 @@ export default function VendorShopPage() {
             }
         }
         loadShop();
-    }, [businessId]);
+    }, [slug]);
 
     const updateUrl = (productId: number | null, replace: boolean = false) => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -161,21 +196,52 @@ export default function VendorShopPage() {
 
     const categoriesList = useMemo(() => {
         const cats = new Set<string>();
-        products.forEach(p => { if (p.category) cats.add(p.category); });
+        if (Array.isArray(products)) {
+            products.forEach(p => { if (p.category) cats.add(p.category); });
+        }
         return ["All", ...Array.from(cats)];
     }, [products]);
 
     const filteredProducts = useMemo(() => {
+        if (!Array.isArray(products)) return [];
         let list = [...products];
 
-        // Apply Search Filter First
+        // Implementation of professional multi-word search
         if (searchTerm.trim() !== "") {
-            const lowTerm = searchTerm.toLowerCase();
-            list = list.filter(p =>
-                (p.product_name?.toLowerCase().includes(lowTerm)) ||
-                (p.description?.toLowerCase().includes(lowTerm)) ||
-                (p.category?.toLowerCase().includes(lowTerm))
-            );
+            const rawTerm = searchTerm.toLowerCase();
+            const words = rawTerm.split(/\s+/).filter(w => w.length > 0);
+
+            list = list.filter(p => {
+                const title = (p.title || p.product_name || "").toLowerCase();
+                const desc = (p.description || "").toLowerCase();
+                const cat = (p.category || "").toLowerCase();
+                const price = String(p.price || "");
+                const discount = String(p.promo_discount || p.sale_discount || "");
+
+                // "Professional" matching: if any specific word matches any field
+                return words.some(w =>
+                    title.includes(w) ||
+                    desc.includes(w) ||
+                    cat.includes(w) ||
+                    price.includes(w) ||
+                    discount.includes(w)
+                );
+            });
+
+            // Sort by search relevance (matches in title weigh more than description)
+            list.sort((a, b) => {
+                const getScore = (prod: any) => {
+                    const t = (prod.title || prod.product_name || "").toLowerCase();
+                    let s = 0;
+                    words.forEach(w => {
+                        if (t.includes(w)) s += 10;
+                        if ((prod.category || "").toLowerCase().includes(w)) s += 5;
+                        if ((prod.description || "").toLowerCase().includes(w)) s += 1;
+                    });
+                    return s;
+                };
+                return getScore(b) - getScore(a);
+            });
         }
 
         if (activeNav === "Home") {
@@ -217,20 +283,22 @@ export default function VendorShopPage() {
     // Grouped products for "New release" (Calendar)
     const groupedByDate = useMemo(() => {
         const groupsMap: Record<string, { label: string, products: any[], timestamp: number }> = {};
-        products.forEach(p => {
-            const dateObj = p.created_at ? new Date(p.created_at) : null;
-            // Use date-only string as a stable key
-            const dateKey = dateObj ? new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()).toISOString() : 'Unknown';
+        if (Array.isArray(products)) {
+            products.forEach(p => {
+                const dateObj = p.created_at ? new Date(p.created_at) : null;
+                // Use date-only string as a stable key
+                const dateKey = dateObj ? new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()).toISOString() : 'Unknown';
 
-            if (!groupsMap[dateKey]) {
-                groupsMap[dateKey] = {
-                    label: formatReleaseDate(dateKey),
-                    products: [],
-                    timestamp: dateObj ? dateObj.getTime() : 0
-                };
-            }
-            groupsMap[dateKey].products.push(p);
-        });
+                if (!groupsMap[dateKey]) {
+                    groupsMap[dateKey] = {
+                        label: formatReleaseDate(dateKey),
+                        products: [],
+                        timestamp: dateObj ? dateObj.getTime() : 0
+                    };
+                }
+                groupsMap[dateKey].products.push(p);
+            });
+        }
 
         return Object.values(groupsMap).sort((a, b) => b.timestamp - a.timestamp);
     }, [products]);
@@ -249,11 +317,6 @@ export default function VendorShopPage() {
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
-                {/* {p.total_quantity !== undefined && Number(p.total_quantity) <= 4 && Number(p.total_quantity) > 0 && (
-                    <div className="absolute top-2 left-2 bg-red-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-full z-10">
-                        Low Stock
-                    </div>
-                )} */}
                 {p.product_video && (
                     <div className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full">
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z" /></svg>
@@ -294,8 +357,10 @@ export default function VendorShopPage() {
                         </div>
 
                         {loading ? <ShimmerGrid count={8} /> : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-
+                            <div
+                                className="grid gap-1 sm:gap-4"
+                                style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+                            >
                                 {filteredProducts.map(renderProductItem)}
                             </div>
                         )}
@@ -319,7 +384,10 @@ export default function VendorShopPage() {
                         </div>
                         {/* Right products */}
                         <div className="flex-1 overflow-y-auto no-scrollbar">
-                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+                            <div
+                                className="grid gap-3"
+                                style={{ gridTemplateColumns: `repeat(${columns > 3 ? columns - 1 : 2}, minmax(0, 1fr))` }}
+                            >
                                 {filteredProducts.map(renderProductItem)}
                             </div>
                         </div>
@@ -355,7 +423,10 @@ export default function VendorShopPage() {
                                     <h2 className="text-sm font-bold text-slate-800  tracking-tight">{group.label}</h2>
                                     <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">{group.products.length} Products</span>
                                 </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                <div
+                                    className="grid gap-4"
+                                    style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+                                >
                                     {group.products.map(renderProductItem)}
                                 </div>
                             </div>
@@ -372,7 +443,7 @@ export default function VendorShopPage() {
             </main>
 
             {/* BOTTOM NAVIGATION */}
-            <nav className="fixed bottom-0 left-0 right-0 lg:left-40 lg:right-40 bg-white/95 backdrop-blur-md px-6 py-2 border-t border-slate-100 flex items-center justify-around z-[999] pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+            <nav className="fixed bottom-0 left-0 lg:left-[300px] right-0 bg-white/95 backdrop-blur-md px-6 py-2 flex items-center justify-around z-[999] pb-[calc(0.5rem+env(safe-area-inset-bottom))] transition-[left] duration-300">
                 <button onClick={() => setActiveNav("Home")} className="flex flex-col items-center gap-1 group">
                     {activeNav === "Home" ? <HomeIconSolid className="w-4 h-4 text-red-500" /> : <HomeIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
                     <span className={`text-[10px] font-bold ${activeNav === "Home" ? "text-red-500" : "text-slate-400"}`}>Home</span>
@@ -381,8 +452,22 @@ export default function VendorShopPage() {
                     {activeNav === "Categories" ? <ListBulletIconSolid className="w-4 h-4 text-red-500" /> : <ListBulletIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
                     <span className={`text-[10px] font-bold ${activeNav === "Categories" ? "text-red-500" : "text-slate-400"}`}>Categories</span>
                 </button>
-                <button onClick={() => setActiveNav("New release")} className="flex flex-col items-center gap-1 group">
-                    {activeNav === "New release" ? <CalendarDaysIconSolid className="w-4 h-4 text-red-500" /> : <CalendarDaysIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+                <button 
+                  onClick={() => {
+                    setActiveNav("New release");
+                    if (newestReleaseId) {
+                      localStorage.setItem(`shop_last_seen_${slug}`, String(newestReleaseId));
+                      setHasUnviewedReleases(false);
+                    }
+                  }} 
+                  className="flex flex-col items-center gap-1 group"
+                >
+                    <div className="relative">
+                      {activeNav === "New release" ? <CalendarDaysIconSolid className="w-4 h-4 text-red-500" /> : <CalendarDaysIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+                      {hasUnviewedReleases && activeNav !== "New release" && (
+                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-[1.5px] border-white ring-1 ring-red-500/20" />
+                      )}
+                    </div>
                     <span className={`text-[10px] font-bold ${activeNav === "New release" ? "text-red-500" : "text-slate-400"}`}>New release</span>
                 </button>
             </nav>

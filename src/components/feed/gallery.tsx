@@ -1,24 +1,8 @@
 "use client";
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import PostModal from "../modal/postModal"; // adjust path if needed
-
-type User = { name: string; avatar: string; id?: number | string; };
-
-type Post = {
-  id: number;
-  src?: string;
-  isVideo?: boolean;
-  caption?: string;
-  user: User;
-  liked: boolean;
-  likeCount: number;
-  coverType?: string;
-  noteConfig?: any;
-  rawCreatedAt?: string;
-  apiId?: number;
-  status?: string;
-  mediaType?: string;
-};
+import PostModal from "../modal/postModal";
+import type { Post, User } from "@/src/lib/types";
+import { AnimatePresence } from "framer-motion";
 
 type Props = { postCount?: number };
 
@@ -57,6 +41,10 @@ const mapApiPost = (p: any): Post => {
     rawCreatedAt: p.created_at,
     status: p.status,
     mediaType: p.media_type,
+    is_product_linked: Boolean(p.is_product_linked),
+    linked_product: p.linked_product,
+    original_audio_url: p.original_audio_url,
+    original_video_url: p.original_video_url,
   };
 };
 
@@ -147,10 +135,10 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
         setSelectedPost({
           id: postId,
           caption: "Post unavailable",
-          user: { name: "Unknown", avatar: `https://i.pravatar.cc/100?u=post-${postId}` },
+          user: { id: 0, name: "Unknown", avatar: `https://i.pravatar.cc/100?u=post-${postId}` },
           liked: false,
           likeCount: 0,
-        });
+        } as Post);
         pushedRef.current = false;
       }
     };
@@ -188,10 +176,10 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
               setSelectedPost({
                 id: postId,
                 caption: "Post unavailable",
-                user: { name: "Unknown", avatar: `https://i.pravatar.cc/100?u=post-${postId}` },
+                user: { id: 0, name: "Unknown", avatar: `https://i.pravatar.cc/100?u=post-${postId}` },
                 liked: false,
                 likeCount: 0,
-              });
+              } as Post);
             }
           })();
         }
@@ -247,9 +235,19 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
     }
   };
 
-  // placeholder toggleLike (you can keep your own implementation)
+  // Handle sync back from modal
   const toggleLike = (postId: string | number) => {
-    // noop - implement your API call here
+    setPosts(prev => prev.map(p => {
+      if (String(p.apiId ?? p.id) === String(postId)) {
+        const newLiked = !p.liked;
+        return {
+          ...p,
+          liked: newLiked,
+          likeCount: newLiked ? p.likeCount + 1 : Math.max(0, p.likeCount - 1)
+        };
+      }
+      return p;
+    }));
   };
 
   const CATEGORIES = useMemo(
@@ -367,7 +365,16 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
       )}
 
       {/* Modal */}
-      {selectedPost && <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} />}
+      <AnimatePresence>
+        {selectedPost && (
+          <PostModal
+            open={!!selectedPost}
+            post={selectedPost}
+            onClose={closeModal}
+            onToggleLike={toggleLike}
+          />
+        )}
+      </AnimatePresence>
     </section>
   );
 }

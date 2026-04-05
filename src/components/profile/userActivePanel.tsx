@@ -1,7 +1,7 @@
 // src/components/profile/userActivePanel.tsx
 "use client";
 import React, { useState } from "react";
-import { FaChevronRight, FaCamera, FaLock } from "react-icons/fa";
+import { FaChevronRight, FaCamera, FaLock, FaCheckCircle, FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "@/src/context/authContext";
 import { useEditUserProfile } from "@/src/hooks/useEditUserProfile";
 import UserNameIdModal from "./modals/UserNameIdModal";
@@ -29,17 +29,35 @@ export default function UserActivePanel() {
     auth?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
 
   const {
-    fullName, bio, gender, dob, location, job, school, profilePic,
+    fullName, bio, gender, dob, location, job, school, profilePic, email, phone_no,
     isLoading, isSyncing, saveEditorValue, setProfilePic,
-  } = useEditUserProfile({ userId: user?.user_id, token });
+  } = useEditUserProfile({ userId: user?.user_id || user?.id, token });
+
+  // Keep auth context in sync with the most recent profile data
+  React.useEffect(() => {
+    const hasChanges = (email && email !== user?.email) || (phone_no && phone_no !== user?.phone_no);
+    if (hasChanges) {
+      if (auth?.onVerificationSuccess) {
+        auth.onVerificationSuccess({ 
+          ...user, 
+          email: email || user?.email, 
+          phone_no: phone_no || user?.phone_no 
+        });
+      }
+    }
+  }, [email, phone_no, user, auth]);
 
   const [activeModal, setActiveModal] = useState<ModalKey>(null);
   const [cropperImage, setCropperImage] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
   const [uploadingProfile, setUploadingProfile] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showFullEmail, setShowFullEmail] = useState(false);
+  const [showFullPhone, setShowFullPhone] = useState(false);
 
-  const isVerified = !!(user?.phone_no && user?.email);
+  const realEmail = email || user?.email;
+  const realPhone = phone_no || user?.phone_no;
+  const isVerified = !!(realEmail && realPhone); // Strict check: both must be present to allow editing
 
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [defaultAddress, setDefaultAddress] = useState<UserAddress | null>(null);
@@ -107,8 +125,24 @@ export default function UserActivePanel() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <div className="animate-spin h-8 w-8 border-4 border-rose-400 border-t-transparent rounded-full" />
+      <div className="pb-10 bg-slate-100 p-4 min-h-screen space-y-4 pt-4 animate-pulse">
+        {/* Profile Pic Shimmer */}
+        <div className="flex flex-col items-center mb-8 mt-4">
+          <div className="w-32 h-32 rounded-full bg-slate-200 shadow-sm" />
+        </div>
+
+        {/* Groups Shimmer */}
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-white rounded-xl overflow-hidden divide-y divide-slate-100 border border-slate-50">
+            {[1, 2].map(j => (
+              <div key={j} className="px-5 py-[1.15rem] flex items-center gap-3">
+                <div className="h-3.5 bg-slate-100 rounded w-[90px] shrink-0" />
+                <div className="flex-1 h-3.5 bg-slate-50 rounded w-1/2" />
+                <div className="h-3.5 bg-slate-100 rounded-full w-3.5 shrink-0" />
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     );
   }
@@ -122,6 +156,20 @@ export default function UserActivePanel() {
   };
 
   const capFirst = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+
+  const maskEmail = (email?: string) => {
+    if (!email) return "";
+    const [user, domain] = email.split("@");
+    if (!domain) return email;
+    if (user.length <= 1) return `*@${domain}`;
+    return `${"*".repeat(user.length - 1)}${user.slice(-1)}@${domain}`;
+  };
+
+  const maskPhone = (phone?: string) => {
+    if (!phone) return "";
+    if (phone.length <= 4) return phone;
+    return `${"*".repeat(phone.length - 4)}${phone.slice(-4)}`;
+  };
 
   return (
     <div className="pb-10 bg-slate-100 p-4 min-h-screen">
@@ -150,13 +198,12 @@ export default function UserActivePanel() {
           >
             <FaLock className="text-amber-500 mt-0.5 shrink-0" size={16} />
             <div>
-              <p className="text-sm font-bold text-amber-800">Verify your account to edit profile</p>
               <p className="text-xs text-amber-600 mt-0.5">
-                {!user?.phone_no && !user?.email
-                  ? "A phone number and email are required."
-                  : !user?.phone_no
-                    ? "A phone number is required before you can edit your profile."
-                    : "An email address is required before you can edit your profile."}
+                {!realPhone && !realEmail
+                  ? "A phone number and email are required to edit your profile."
+                  : !realPhone
+                    ? "A verified phone number is required to edit your profile."
+                    : "A verified email address is required to edit your profile."}
                 {" "}Tap to verify.
               </p>
             </div>
@@ -177,6 +224,42 @@ export default function UserActivePanel() {
             isLocked={!isVerified}
             onClick={() => openModal("name_id")}
             muted
+          />
+        </ProfileGroup>
+
+        {/* Contact Group */}
+        <ProfileGroup>
+          <ProfileRow
+            label="Phone"
+            value={showFullPhone ? realPhone : maskPhone(realPhone)}
+            placeholder="Add phone number"
+            isLocked={false}
+            isVerified={!!realPhone}
+            isVisible={showFullPhone}
+            onToggleVisibility={() => setShowFullPhone(!showFullPhone)}
+            onClick={() => {
+              if (realPhone) {
+                toast.success("Success! Your phone number is already verified.");
+                return;
+              }
+              setShowVerifyModal(true);
+            }}
+          />
+          <ProfileRow
+            label="Email"
+            value={showFullEmail ? realEmail : maskEmail(realEmail)}
+            placeholder="Add email address"
+            isLocked={false}
+            isVerified={!!realEmail}
+            isVisible={showFullEmail}
+            onToggleVisibility={() => setShowFullEmail(!showFullEmail)}
+            onClick={() => {
+              if (realEmail) {
+                toast.success("Success! Your email address is already verified.");
+                return;
+              }
+              setShowVerifyModal(true);
+            }}
           />
         </ProfileGroup>
 
@@ -356,6 +439,9 @@ function ProfileRow({
   isLocked,
   muted,
   multiline,
+  isVerified,
+  onToggleVisibility,
+  isVisible,
 }: {
   label: string;
   value: string | null;
@@ -364,33 +450,57 @@ function ProfileRow({
   isLocked: boolean;
   muted?: boolean;
   multiline?: boolean;
+  isVerified?: boolean;
+  onToggleVisibility?: () => void;
+  isVisible?: boolean;
 }) {
   const isEmpty = !value || value.trim() === "";
 
   return (
     <div
-      onClick={onClick}
-      className="px-5 py-4 flex items-center gap-3 cursor-pointer active:bg-slate-50 transition"
+      onClick={onToggleVisibility ? undefined : onClick}
+      className={`px-5 py-4 flex items-center gap-3 cursor-pointer active:bg-slate-50 transition ${onToggleVisibility ? "cursor-default" : ""}`}
     >
       {/* Fixed-width label column */}
-      <span className="text-sm text-slate-500 w-[110px] shrink-0">
+      <span
+        onClick={onToggleVisibility ? onClick : undefined}
+        className={`text-sm text-slate-500 w-[110px] shrink-0 ${onToggleVisibility ? "cursor-pointer" : ""}`}
+      >
         {label}
       </span>
 
       {/* Value */}
       <span
-        className={`flex-1 text-sm min-w-0 ${isEmpty ? "text-slate-400" : muted ? "text-slate-500" : "text-slate-700"
+        onClick={onToggleVisibility ? onClick : undefined}
+        className={`flex-1 text-sm min-w-0 ${onToggleVisibility ? "cursor-pointer" : ""} ${isEmpty ? "text-slate-400" : muted ? "text-slate-500" : "text-slate-700"
           } ${multiline ? "line-clamp-2 whitespace-normal" : "truncate"}`}
       >
         {isEmpty ? placeholder : value}
       </span>
 
+      {/* Visibility Toggle */}
+      {onToggleVisibility && !isEmpty && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+          className="p-1.5 text-slate-400 hover:text-slate-600 active:scale-90 transition rounded-full hover:bg-slate-100"
+        >
+          {isVisible ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
+        </button>
+      )}
+
       {/* Icon — always right-aligned, same line as label */}
-      <div className="shrink-0 ml-2">
-        {isLocked
-          ? <FaLock className="text-amber-400" size={12} />
-          : <FaChevronRight className="text-slate-300" size={13} />
-        }
+      <div
+        onClick={onToggleVisibility ? onClick : undefined}
+        className={`shrink-0 ml-2 ${onToggleVisibility ? "cursor-pointer" : ""}`}
+      >
+        {isVerified ? (
+          <FaCheckCircle className="text-emerald-500" size={14} />
+        ) : isLocked ? (
+          <FaLock className="text-amber-400" size={12} />
+        ) : (
+          <FaChevronRight className="text-slate-300" size={13} />
+        )}
       </div>
     </div>
   );

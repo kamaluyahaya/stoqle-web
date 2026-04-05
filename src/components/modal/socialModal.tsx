@@ -28,15 +28,17 @@ interface SocialModalProps {
   onClose: () => void;
   userId: string | number;
   initialTab?: SocialTab;
+  onFollowUpdate?: (targetUserId: string | number, following: boolean) => void;
 }
 
-const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, initialTab = "followers" }) => {
+const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, initialTab = "followers", onFollowUpdate }) => {
   const [activeTab, setActiveTab] = useState<SocialTab>(initialTab);
   const [users, setUsers] = useState<SocialUser[]>([]);
   const [recommendedUsers, setRecommendedUsers] = useState<SocialUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [unfollowConfirm, setUnfollowConfirm] = useState<SocialUser | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const cacheRef = useRef<Record<string, { users: SocialUser[]; timestamp: number }>>({});
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   const auth = useAuth() as any;
@@ -55,6 +57,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
       setActiveTab(initialTab);
       setSearchQuery("");
       setRecommendedUsers([]);
+      setError(null);
     }
   }, [isOpen, initialTab]);
 
@@ -65,6 +68,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
   }, [isOpen, activeTab, userId]);
 
   const fetchData = async () => {
+    setError(null);
     // Check cache first
     const cacheKey = `${activeTab}-${userId}`;
     const cachedData = cacheRef.current[cacheKey];
@@ -104,6 +108,12 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
       const res = await fetch(url, { headers });
       const data = await res.json();
 
+      if (!res.ok) {
+        setError(data.message || "Failed to fetch users");
+        setLoading(false);
+        return;
+      }
+
       let rawList = [];
       if (activeTab === "recommend") {
         const usersList = data?.data?.users || [];
@@ -126,6 +136,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
       }
 
       setUsers(filteredList);
+      setError(null);
 
       // Update Tab Cache
       cacheRef.current[cacheKey] = { users: filteredList, timestamp: Date.now() };
@@ -137,9 +148,10 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
         setRecommendedUsers([]);
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch users:", err);
       setUsers([]);
+      setError(err.message || "Failed to fetch users");
     } finally {
       setLoading(false);
     }
@@ -198,13 +210,8 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
     };
 
     updateStateAndCache(prev => {
-      // If following from recommendations, or unfollowing from following/friends, we remove immediately
-      if ((activeTab === "recommend" && !currentStatus) ||
-        ((activeTab === "following" || activeTab === "friends") && currentStatus)) {
-        return prev.filter(u => String(u.user_id) !== String(targetUserId));
-      }
-
-      // Otherwise regular toggle
+      // ✅ We NO LONGER filter out immediately. This prevents the list from jumping ("changing position")
+      // The user will simply see the button text change to "Follow" or "Following"
       return prev.map(u =>
         String(u.user_id) === String(targetUserId)
           ? { ...u, is_followed_by_viewer: !currentStatus }
@@ -239,6 +246,9 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
         }
       });
       if (!res.ok) throw new Error("Failed to update follow status");
+      
+      // ✅ Notify parent about the update
+      onFollowUpdate?.(targetUserId, !currentStatus);
     } catch (err) {
       console.error(err);
       // Rollback
@@ -295,7 +305,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full bg-white shadow-2xl overflow-hidden flex flex-col h-[100dvh] sm:h-[80vh] sm:max-w-md sm:rounded-3xl"
+              className="relative w-full bg-white  overflow-hidden flex flex-col h-[100dvh] sm:h-[80vh] sm:max-w-md sm:rounded-[0.5rem]"
             >
               {/* Header */}
               <div className="px-6 py-4 flex items-center justify-between border-b border-slate-50 shrink-0">
@@ -321,8 +331,8 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                         setSearchQuery("");
                       }}
                       className={`relative py-3 text-sm font-bold whitespace-nowrap transition-all ${isActive
-                          ? "text-red-500"
-                          : "text-slate-400 hover:text-slate-600"
+                        ? "text-red-500"
+                        : "text-slate-400 hover:text-slate-600"
                         }`}
                     >
                       {tab.label}
@@ -339,7 +349,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
               </div>
 
               {/* Search */}
-              {users.length > 0 && (
+              {(users.length > 0 || searchQuery) && (
                 <div className="px-6 py-3 shrink-0 flex flex-col gap-3">
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -371,11 +381,11 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                     <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin" />
                     <p className="text-xs font-medium text-slate-400 animate-pulse">Gathering community...</p>
                   </div>
-                ) : filteredUsers.length === 0 ? (
+                ) : (filteredUsers.length === 0 || error) ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-10">
                     <img src="/assets/images/message-icons.png" alt="No users found" className="w-24 opacity-50 mb-4" />
                     <p className="text-sm font-bold text-slate-900">
-                      {searchQuery
+                      {error ? "Access Restricted" : searchQuery
                         ? "No users match your search"
                         : activeTab === "followers"
                           ? "You don't have any followers yet"
@@ -386,7 +396,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                               : "No recommendations available"}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
-                      {searchQuery
+                      {error ? error : searchQuery
                         ? "Try a different spelling or name"
                         : activeTab === "followers"
                           ? "Keep posting to grow your community!"
@@ -396,6 +406,14 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                               ? "When you follow someone who follows you, they appear here."
                               : "Check back later for more suggestions."}
                     </p>
+                    {error && (
+                      <button 
+                        onClick={() => { setError(null); fetchData(); }}
+                        className="mt-6 px-6 py-2 bg-slate-100 text-slate-600 rounded-full text-xs font-bold hover:bg-slate-200 transition-colors"
+                      >
+                        Try again
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -451,8 +469,8 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                               }
                             }}
                             className={`px-2.5 py-0.5 rounded-full border-[0.5px] text-[9px] font-bold transition-all active:scale-95 ${user.is_followed_by_viewer
-                                ? "border-slate-200 text-slate-400 hover:bg-slate-50"
-                                : "border-red-500 text-red-500 hover:bg-red-50"
+                              ? "border-slate-200 text-slate-400 hover:bg-slate-50"
+                              : "border-red-500 text-red-500 hover:bg-red-50"
                               }`}
                           >
                             {user.is_followed_by_viewer
@@ -466,7 +484,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                 )}
 
                 {/* Recommendations Section */}
-                {!loading && activeTab !== "recommend" && recommendedUsers.length > 0 && !searchQuery && (
+                {!loading && activeTab !== "recommend" && recommendedUsers.length > 0 && !searchQuery && !error && (
                   <div className="mt-8 border-t border-slate-100 pt-6">
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-xs font-bold text-slate-900 tracking-wide px-2">Recommended for you</h4>
@@ -533,8 +551,8 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                                 }
                               }}
                               className={`px-3 py-1 rounded-full border-[0.5px] text-[10px] font-bold transition-all active:scale-95 ${user.is_followed_by_viewer
-                                  ? "border-slate-200 text-slate-400 hover:bg-slate-50"
-                                  : "border-red-500 text-red-500 hover:bg-red-50"
+                                ? "border-slate-200 text-slate-400 hover:bg-slate-50"
+                                : "border-red-500 text-red-500 hover:bg-red-50"
                                 }`}
                             >
                               {user.is_followed_by_viewer ? 'Following' : 'Follow'}
@@ -628,4 +646,3 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
 };
 
 export default SocialModal;
-

@@ -24,6 +24,8 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
         price: dbProduct.price ?? "",
         quantity: dbProduct.quantity ?? "",
         businessId: Number(dbProduct.business_id),
+        businessSlug: dbProduct.business_slug,
+        businessName: dbProduct.business_name,
         productImages: (() => {
             const media = dbProduct.media || [];
             const imgs = media.filter((m: any) => m.type === "image");
@@ -62,18 +64,24 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
         soldCount: dbProduct.sold_count,
         samePriceForAll: dbProduct.same_price_for_all === 1,
         sharedPrice: dbProduct.price ?? "",
-        variantGroups: (dbProduct.variant_groups || []).map((g: any) => ({
-            id: String(g.group_id),
+        variantGroups: (dbProduct.variant_groups || dbProduct.variants_structure || dbProduct.variantGroups || dbProduct.groups || []).map((g: any) => ({
+            id: String(g.group_id || g.id),
             title: g.title,
-            allowImages: g.allow_images === 1,
-            entries: (g.options || []).map((o: any) => {
-                const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => Number(inv.variant_option_id) === Number(o.option_id));
+            allowImages: g.allow_images === 1 || !!g.allow_images,
+            entries: (g.options || g.entries || []).map((o: any) => {
+                const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => 
+                    Number(inv.variant_option_id || inv.option_id) === Number(o.option_id || o.id)
+                );
+                const mediaItems = o.media || o.images || [];
                 return {
-                    id: String(o.option_id),
+                    id: String(o.option_id || o.id),
                     name: o.name,
                     price: o.price,
-                    quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.initial_quantity || 0) - Number(o.sold_count || 0)),
-                    images: (o.media || []).map((m: any) => ({ name: "img", url: formatUrl(m.url) }))
+                    quantity: inventoryMatch ? inventoryMatch.quantity : (Number(o.quantity || o.initial_quantity || 0) - Number(o.sold_count || 0)),
+                    images: mediaItems.map((m: any) => {
+                        const url = typeof m === 'string' ? m : (m.url || m.image_url || m.path);
+                        return { name: "img", url: formatUrl(url) };
+                    })
                 };
             })
         })),

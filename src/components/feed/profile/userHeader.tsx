@@ -8,39 +8,20 @@ import { useRouter } from "next/navigation";
 import Header from "./header";
 import ShimmerGrid from "../../shimmer";
 import ImageViewer from "../../modal/imageViewer";
-import { FaHeart, FaRegHeart } from "react-icons/fa";
-import { motion, AnimatePresence } from "framer-motion";
+import { FaHeart, FaRegHeart, FaImages } from "react-icons/fa";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
+import type { Post, User } from "@/src/lib/types";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { API_BASE_URL } from "@/src/lib/config";
 import { io } from "socket.io-client";
 import SocialModal from "../../modal/socialModal";
+import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 
 
 type ApiPost = any;
-
-type User = { name: string; avatar: string; id?: number | string; };
-
-type Post = {
-  id: number;
-  src?: string;
-  isVideo?: boolean;
-  isImage?: boolean;
-  caption?: string;
-  note_caption?: string;
-  user: User;
-  liked: boolean;
-  likeCount: number;
-  coverType?: string;
-  noteConfig?: any;
-  rawCreatedAt?: string;
-  apiId?: number;
-  thumbnail?: string;
-  isPinned?: boolean;
-  status?: string;
-};
 
 type Props = { postCount?: number; userId?: string | number }; // <--- new userId prop
 const STICKY_BUFFER = 10; // px — prevents shaking
@@ -55,31 +36,44 @@ const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png"; // fallback post image
 const DEFAULT_AVATAR = "/assets/images/favio.png";       // fallback avatar
 const DEFAULT_BG = "/assets/images/background.png";      // fallback background
 
+const slugify = (str: string) =>
+  String(str || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+
 const mapApiPost = (p: any): Post => {
-  const apiId = p.social_post_id ?? Math.floor(Math.random() * 1e6);
+  if (!p) return { id: 0, user: { id: 0, name: '', avatar: DEFAULT_AVATAR }, liked: false, likeCount: 0 } as Post;
+  const apiId = p?.social_post_id ?? Math.floor(Math.random() * 1e6);
   let src: string | undefined = undefined;
   let thumbnail: string | undefined = undefined;
-  const images = Array.isArray(p.images) ? p.images : [];
+  const images = Array.isArray(p?.images) ? p.images : [];
 
-  if (p.cover_type === "video") {
-    const videoFile = images.find((i: any) => isVideoUrl(i.image_url));
-    const coverFile = images.find((i: any) => !!i.is_cover);
+  if (p?.cover_type === "video") {
+    const videoFile = images.find((i: any) => isVideoUrl(i?.image_url));
+    const coverFile = images.find((i: any) => !!i?.is_cover);
     src = videoFile?.image_url;
     thumbnail = coverFile?.image_url;
     if (!src) src = coverFile?.image_url;
   } else if (images.length > 0) {
-    const cover = images.find((i: any) => !!i.is_cover) ?? images[0];
+    const cover = images.find((i: any) => !!i?.is_cover) ?? images[0];
     src = cover?.image_url;
   }
 
-  if (!src && p.cover_type !== "note") {
+  if (!src && p?.cover_type !== "note") {
     src = NO_IMAGE_PLACEHOLDER;
   }
 
-  const isVideo = p.cover_type === "video" || isVideoUrl(src);
+  const isVideo = p?.cover_type === "video" || isVideoUrl(src);
   const isImage = !isVideo && isImageUrl(src);
-  const caption = p.text ?? p.subtitle ?? "";
-  const note_caption = p.subtitle ?? "";
+  const caption = p?.text ?? p?.subtitle ?? "";
+  const note_caption = p?.subtitle ?? "";
+
+  const allMedia = images.length > 0
+    ? images.map((i: any) => ({ url: i?.image_url, id: i?.social_post_image_id || i?.post_image_id || i?.id }))
+    : src ? [{ url: src, id: p?.cover_id || p?.id }] : [];
 
   return {
     id: apiId,
@@ -90,18 +84,39 @@ const mapApiPost = (p: any): Post => {
     caption,
     note_caption,
     user: {
-      id: p.user_id ?? p.user?.user_id ?? p.user?.id,
-      name: p.author_name ?? p.user?.full_name ?? "---",
-      avatar: p.author_pic ?? p.user?.profile_pic ?? DEFAULT_AVATAR,
+      id: p?.user_id ?? p?.user?.user_id ?? p?.user?.id ?? 0,
+      name: p?.author_name ?? p?.user?.name ?? p?.user?.full_name ?? "",
+      avatar: p?.author_pic ?? p?.user?.profile_pic ?? DEFAULT_AVATAR,
+      is_trusted: Number(
+        p?.author_is_trusted ?? 
+        p?.user?.is_trusted ?? 
+        p?.user?.is_verified_partner ?? 
+        p?.user?.is_partner ?? 
+        p?.user?.policy?.market_affiliation?.trusted_partner ?? 
+        p?.is_verified_partner ?? 
+        p?.is_partner ??
+        0
+      ) === 1 || 
+      !!p?.author_is_verified || 
+      !!p?.user?.is_verified_partner || 
+      !!p?.user?.is_partner || 
+      !!p?.is_verified_partner || 
+      !!p?.is_partner ||
+      !!p?.author_is_trusted,
     },
-    liked: Boolean(p.liked_by_me),
-    likeCount: p.likes_count ?? 0,
-    coverType: p.cover_type,
-    noteConfig: p.config,
-    rawCreatedAt: p.created_at,
+    liked: Boolean(p?.liked_by_me),
+    likeCount: p?.likes_count ?? 0,
+    coverType: p?.cover_type,
+    noteConfig: p?.config,
+    rawCreatedAt: p?.created_at,
     thumbnail,
-    isPinned: Boolean(p.is_pinned),
-    status: p.status,
+    isPinned: Boolean(p?.is_pinned),
+    status: p?.status,
+    is_product_linked: Boolean(p?.is_product_linked),
+    linked_product: p?.linked_product,
+    original_audio_url: p?.original_audio_url,
+    original_video_url: p?.original_video_url,
+    allMedia,
   };
 };
 
@@ -141,7 +156,10 @@ const PostCard = React.memo(({
   const [showBurst, setShowBurst] = useState(false);
 
   return (
-    <article
+    <motion.article
+      layout
+      layoutId={`post-${post.id}`}
+      transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       onClick={() => openPostWithUrl(post)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
@@ -157,6 +175,12 @@ const PostCard = React.memo(({
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
               <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
             </svg>
+          </div>
+        )}
+
+        {!post.isVideo && post.allMedia && post.allMedia.length > 1 && (
+          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+            <FaImages className="text-white text-[10px]" />
           </div>
         )}
 
@@ -217,9 +241,14 @@ const PostCard = React.memo(({
             >
               <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
             </div>
-            <span className="truncate text-[11px] font-semibold text-slate-400 max-w-[120px] capitalize">
-              {post.user.name}
-            </span>
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className="truncate text-[11px] font-semibold text-slate-400 capitalize">
+                {post.user.name}
+              </span>
+              {post.user.is_trusted && (
+                <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              )}
+            </div>
           </div>
 
           <div
@@ -262,7 +291,7 @@ const PostCard = React.memo(({
           </div>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 }, (prev, next) => {
   return prev.post.id === next.post.id &&
@@ -282,15 +311,62 @@ const ProductCard = React.memo(({
   fetchingProduct
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
-  const isPromoActive = !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
+  const now = new Date();
+  const effectivePromo = React.useMemo(() => {
+    // 1. If product uses its OWN policy (use_store_default_promotions === 0), do NOT fallback to defaults
+    if (p.use_store_default_promotions === 0) {
+      if (Array.isArray(p.promotions_data)) {
+        const active = p.promotions_data.find((promo: any) => {
+          const start = promo.start ? new Date(promo.start) : (promo.start_date ? new Date(promo.start_date) : null);
+          const end = promo.end ? new Date(promo.end) : (promo.end_date ? new Date(promo.end_date) : null);
+          const isActive = promo.isActive !== false;
+          const discountVal = Number(promo.discount || promo.discount_percent || 0);
+          return isActive && discountVal > 0 && (!start || now >= start) && (!end || now <= end);
+        });
+        if (active) return { title: active.title, discount: Number(active.discount || active.discount_percent) };
+      }
+
+      if (p.sale_discount_data && p.sale_discount_data.discount > 0) {
+        const sType = p.sale_discount_data.type;
+        const sTitle = (sType && sType !== 'percent' && sType !== 'amount') ? sType : "Sale";
+        return { title: sTitle, discount: Number(p.sale_discount_data.discount) };
+      }
+
+      return null;
+    }
+
+    // 2. Otherwise, use Store Default / Joined fields
+    if (p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= now)) {
+      return { title: p.promo_title, discount: p.promo_discount };
+    }
+
+    // 3. Default sale type join
+    if (p.sale_discount > 0) {
+      const sType = p.sale_type;
+      const sTitle = (sType && sType !== 'percent' && sType !== 'amount') ? sType : "Sale";
+      return { title: sTitle, discount: p.sale_discount };
+    }
+
+    return null;
+  }, [p]);
+
+  const isPromoActive = !!effectivePromo;
 
   return (
-    <article
+    <motion.article
+      layout
+      layoutId={`product-${p.product_id}`}
+      transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-50 overflow-hidden post-media">
+        {p.isPinned && (
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+            <span className="text-[10px] font-bold">Pinned</span>
+          </div>
+        )}
         {p.product_video ? (
           <video
             src={formatUrl(p.product_video)}
@@ -363,22 +439,22 @@ const ProductCard = React.memo(({
         </div>
         <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>{p.title}</h3>
         <div className="mt-2 min-h-[14px]">
-          {isPromoActive ? (
-            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
-              {p.promo_discount}% OFF
-            </span>
-          ) : p.sale_type ? (
-            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1 uppercase tracking-tighter">
-              {p.sale_discount}% Off
+          {effectivePromo ? (
+            <span className="text-[9px] text-rose-500 border-red-500 border-[0.2px] px-1.5 py-0.5 ">
+              {effectivePromo.title ? `${effectivePromo.title}: ` : "Sale: "}{effectivePromo.discount}% off
             </span>
           ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tighter">
+            <span className="text-[9px] text-rose-500 ">
               Only {Number(p.total_quantity)} Left
+            </span>
+          ) : p.return_shipping_subsidy ? (
+            <span className="text-[9px] text-emerald-600 border-emerald-500 border-[0.2px] px-1.5 py-0.5 ">
+              Return shipping subsidy
             </span>
           ) : null}
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 }, (prev, next) => {
   return prev.p.product_id === next.p.product_id &&
@@ -410,41 +486,43 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
   });
 
   return (
-    <div className="flex gap-2 sm:gap-4 items-start w-full max-w-full overflow-hidden mb-30">
-      {columnData.map((colItems, colIdx) => (
-        <div key={colIdx} className="flex-1 flex flex-col gap-2 sm:gap-6 min-w-0">
-          {colItems.map((item: any, index: number) => {
-            const isPost = type === 'post' || type === 'note' || (type === 'liked' && !item.isProduct);
-            if (isPost) {
-              return (
-                <PostCard
-                  key={item.id || index}
-                  post={item}
-                  openPostWithUrl={openPostWithUrl}
-                  toggleLike={toggleLike}
-                  getNoteStyles={getNoteStyles}
-                  setFullImageUrl={setFullImageUrl}
-                />
-              );
-            } else {
-              const ld = likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 };
-              return (
-                <ProductCard
-                  key={item.product_id}
-                  p={item}
-                  formatUrl={formatUrl}
-                  handleProductClick={handleProductClick}
-                  handleLikeClick={handleLikeClick}
-                  isLiked={ld.liked}
-                  likeCount={ld.count}
-                  fetchingProduct={fetchingProductId === item.product_id}
-                />
-              );
-            }
-          })}
-        </div>
-      ))}
-    </div>
+    <LayoutGroup>
+      <div className="flex gap-2 sm:gap-4 items-start w-full max-w-full overflow-hidden mb-30">
+        {columnData.map((colItems, colIdx) => (
+          <div key={colIdx} className="flex-1 flex flex-col gap-2 sm:gap-6 min-w-0">
+            {colItems.map((item: any, index: number) => {
+              const isPost = type === 'post' || type === 'note' || (type === 'liked' && !item.isProduct);
+              if (isPost) {
+                return (
+                  <PostCard
+                    key={item.id || index}
+                    post={item}
+                    openPostWithUrl={openPostWithUrl}
+                    toggleLike={toggleLike}
+                    getNoteStyles={getNoteStyles}
+                    setFullImageUrl={setFullImageUrl}
+                  />
+                );
+              } else {
+                const ld = likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 };
+                return (
+                  <ProductCard
+                    key={item.product_id}
+                    p={item}
+                    formatUrl={formatUrl}
+                    handleProductClick={handleProductClick}
+                    handleLikeClick={handleLikeClick}
+                    isLiked={ld.liked}
+                    likeCount={ld.count}
+                    fetchingProduct={fetchingProductId === item.product_id}
+                  />
+                );
+              }
+            })}
+          </div>
+        ))}
+      </div>
+    </LayoutGroup>
   );
 };
 
@@ -479,6 +557,13 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const suggestionTriggered = useRef(false);
   const scrollTracker = useRef(0);
   const [isMiniHeaderVisible, setIsMiniHeaderVisible] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  useEffect(() => {
+    const fc = Number(profileApi?.stats?.followers ?? profileApi?.stats?.followers_count ?? 0);
+    setFollowersCount(fc);
+  }, [profileApi]);
 
   const [likedItems, setLikedItems] = useState<any[]>([]);
   const [likedLoading, setLikedLoading] = useState(false);
@@ -602,6 +687,14 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           ? { ...p, ...updated }
           : p
       ));
+      
+      // Update the active modal if it's viewing this post
+      setSelectedPost(prev => {
+        if (prev && String(prev.id) === String(updatedPost.social_post_id)) {
+          return { ...prev, ...updated };
+        }
+        return prev;
+      });
     });
 
     return () => {
@@ -610,11 +703,34 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     };
   }, [auth?.user?.user_id, auth?.user?.id]);
 
+  const handleFollowUpdate = (targetUserId: string | number, following: boolean) => {
+    // If we're on SOMEONE ELSE'S profile and we just followed/unfollowed them
+    if (!isOwner && String(targetUserId) === viewUserId) {
+        setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1));
+        setIsFollowing(following);
+    }
+
+    // If we're on OUR OWN profile, our "following" count changes
+    if (isOwner) {
+        setProfileApi((prev: any) => {
+            if (!prev) return prev;
+            const currentFollowing = Number(prev.stats?.following ?? 0);
+            return {
+                ...prev,
+                stats: {
+                    ...prev.stats,
+                    following: following ? currentFollowing + 1 : Math.max(0, currentFollowing - 1)
+                }
+            };
+        });
+    }
+  };
+
   // Scroll listener for Follow Suggestion & MiniHeader
   useEffect(() => {
     const handleScroll = () => {
-      // Suggestion logic
-      if (!isOwner && !isFollowing && !suggestionTriggered.current) {
+      // Suggestion logic - only for businesses and once profile is loaded
+      if (!isOwner && profileApi && profileApi.business && !isFollowing && !suggestionTriggered.current) {
         if (window.scrollY > 400 && !suggestionTriggered.current) {
           suggestionTriggered.current = true;
           setShowFollowSuggestion(true);
@@ -630,7 +746,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isOwner, isFollowing]);
+  }, [isOwner, isFollowing, profileApi]);
 
   const tabs = useMemo(() => {
     const base = ["Notes", "Posts"];
@@ -678,9 +794,18 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           recent_followers: d?.recent_followers ?? [],
           is_business_owner: Boolean(d?.is_business_owner),
           is_following: Boolean(d?.is_following || d?.is_followed_by_me),
+          is_follower: Boolean(d?.is_follower),
+          latest_ip: d?.latest_ip ?? null,
+          latest_location: d?.latest_location ?? null,
+          is_verified_partner: Boolean(d?.is_verified_partner),
+          is_blocked: Boolean(d?.is_blocked),
+          hide_following: Boolean(d?.hide_following || d?.user?.hide_following),
+          hide_followers: Boolean(d?.hide_followers || d?.user?.hide_followers),
+          dm_preference: d?.dm_preference || d?.user?.dm_preference || "Default",
         };
         setProfileApi(normalized);
         setIsFollowing(normalized.is_following);
+        setIsBlocked(normalized.is_blocked);
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to fetch profile:", err);
@@ -752,7 +877,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       setProductsLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const res = await fetchBusinessProducts(businessId, 100, undefined, undefined, token);
+        const identifier = profileApi?.business?.business_slug || businessId;
+        const res = await fetchBusinessProducts(identifier, 100, undefined, undefined, token);
         let foundProducts = [];
         if (res?.data?.products && Array.isArray(res.data.products)) {
           foundProducts = res.data.products;
@@ -761,7 +887,16 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         } else if (Array.isArray(res)) {
           foundProducts = res;
         }
-        setVendorProducts(foundProducts);
+
+        const sortedProducts = foundProducts.map((pr: any) => ({
+          ...pr,
+          isPinned: !!pr.isPinned || !!pr.is_pinned
+        })).sort((a: any, b: any) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return new Date(b.created_at || a.created_at || 0).getTime() - new Date(a.created_at || b.created_at || 0).getTime();
+        });
+        setVendorProducts(sortedProducts);
       } catch (err) {
         console.error("Failed to load products", err);
       } finally {
@@ -778,6 +913,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       return;
     }
     setIsFollowing(true);
+    setFollowersCount(prev => prev + 1);
     setShowFollowSuggestion(false);
     try {
       const resp = await fetch(`${API_BASE_URL}/api/follow/${viewUserId}/follow`, {
@@ -886,17 +1022,28 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       try {
         const base = process.env.NEXT_PUBLIC_API_URL;
         if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-        const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`);
+
+        const fetchUrl = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}`);
+        const xsecToken = url.searchParams.get("xsec_token");
+        const xsecSource = url.searchParams.get("xsec_source");
+        if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
+        if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
+
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const headers: any = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const res = await fetch(fetchUrl.toString(), { headers });
         if (!res.ok) throw new Error("Post not found");
         const json = await res.json();
-        const single = mapApiPost(json?.data ?? json);
+        const single = mapApiPost(json?.data?.post ?? json?.data ?? json);
         setSelectedPost(single);
         pushedRef.current = false;
       } catch (err) {
         setSelectedPost({
           id: postId,
           caption: "Post unavailable",
-          user: { name: "---", avatar: DEFAULT_AVATAR },
+          user: { name: "", avatar: DEFAULT_AVATAR },
           liked: false,
           likeCount: 0,
         } as Post);
@@ -927,15 +1074,26 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             try {
               const base = process.env.NEXT_PUBLIC_API_URL;
               if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-              const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`);
+
+              const fetchUrl = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}`);
+              const xsecToken = url.searchParams.get("xsec_token");
+              const xsecSource = url.searchParams.get("xsec_source");
+              if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
+              if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
+
+              const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+              const headers: any = {};
+              if (token) headers.Authorization = `Bearer ${token}`;
+
+              const res = await fetch(fetchUrl.toString(), { headers });
               if (!res.ok) throw new Error("Post not found");
               const json = await res.json();
-              setSelectedPost(mapApiPost(json?.data ?? json));
+              setSelectedPost(mapApiPost(json?.data?.post ?? json?.data ?? json));
             } catch {
               setSelectedPost({
                 id: postId,
                 caption: "Post unavailable",
-                user: { name: "---", avatar: DEFAULT_AVATAR },
+                user: { name: "", avatar: DEFAULT_AVATAR },
                 liked: false,
                 likeCount: 0,
               } as Post);
@@ -951,16 +1109,35 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     return () => window.removeEventListener("popstate", onPop);
   }, [mediaPosts, notePosts]);
 
-  const openPostWithUrl = (post: Post) => {
+  const openPostWithUrl = async (post: Post) => {
     setSelectedPost(post);
     try {
+      const { fetchSecurePostUrl } = require("@/src/lib/api/social");
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const urlData = await fetchSecurePostUrl(post.id, "profile_feed", token);
+
+      let xsecToken = "";
+      let xsecSource = "profile_feed";
+      if (urlData && urlData.xsec_token) {
+        xsecToken = urlData.xsec_token;
+        xsecSource = urlData.xsec_source || "profile_feed";
+      }
+
       const url = new URL(window.location.href);
       url.searchParams.set("post", String(post.id));
+      if (xsecToken) url.searchParams.set("xsec_token", xsecToken);
+      url.searchParams.set("xsec_source", xsecSource);
+
       window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
       pushedRef.current = true;
     } catch (err) {
       console.warn("Failed to update URL", err);
-      pushedRef.current = false;
+      // Fallback
+      const url = new URL(window.location.href);
+      url.searchParams.set("post", String(post.id));
+      url.searchParams.set("xsec_source", "profile_feed");
+      window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
+      pushedRef.current = true;
     }
   };
 
@@ -978,6 +1155,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       }
 
       url.searchParams.delete("post");
+      url.searchParams.delete("xsec_token");
+      url.searchParams.delete("xsec_source");
       window.history.replaceState({}, "", url.toString());
       pushedRef.current = false;
     } catch (err) {
@@ -1090,7 +1269,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     const business = profileApi?.business;
     const user = profileApi?.user;
     if (profileApi?.is_business_owner && business?.business_name) return business.business_name;
-    return user?.full_name ?? user?.name ?? "---";
+    return user?.full_name ?? user?.name ?? "";
   }, [profileApi]);
 
   useLayoutEffect(() => {
@@ -1144,17 +1323,25 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className={`bg-white p-3 flex justify-center sticky z-50 border-slate-100`}
+      className={`bg-white px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50`}
       style={{ top: isMiniHeaderVisible ? "56px" : `${navbarHeight}px` }}
     >
-      <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto">
+      <div ref={tabsInnerRef} className="flex gap-8 overflow-x-auto scrollbar-hide py-1">
         {tabs.map((t, i) => (
           <button
             key={t}
             onClick={() => setActiveTabIndex(i)}
-            className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
+            className={`relative py-2 text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
           >
             {t}
+            {i === activeTabIndex && (
+              <motion.div
+                layoutId="activeTabUnderline"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full"
+                initial={false}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              />
+            )}
           </button>
         ))}
       </div>
@@ -1171,7 +1358,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             <ShimmerGrid count={10} />
           ) : notePosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No notes" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <img src="/assets/images/post.png" alt="No notes"
+                className="w-40 h-40 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No note found.</p>
             </div>
           ) : (
@@ -1196,15 +1384,19 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
               <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No posts found.</p>
-              <button
-                onClick={() => router.push('/release/')}
-                className="px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-                </svg>
-                Share your thought
-              </button>
+              {isOwner && (
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
+                  }}
+                  className="mt-4 px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                  </svg>
+                  Post now
+                </button>
+              )}
             </div>
           ) : (
             <div className="p-2 sm:p-4 post-grid-container">
@@ -1293,12 +1485,20 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       <Header
         profileApi={profileApi}
         displayName={displayName}
+        isFollowing={isFollowing}
+        isBlocked={isBlocked}
+        followersCount={followersCount}
         onVisitShop={() => {
-          if (profileApi?.business?.business_id || profileApi?.business?.id) {
-            router.push(`/shop/${profileApi.business.business_id || profileApi.business.id}`);
+          const business = profileApi?.business;
+          if (business) {
+            const slug = business.business_slug || (business.business_name ? slugify(business.business_name) : null);
+            if (slug) router.push(`/shop/${slug}`);
           }
         }}
-        onFollowToggle={(val) => setIsFollowing(val)}
+        onFollowToggle={(val) => {
+          setIsFollowing(val);
+          setFollowersCount(prev => val ? prev + 1 : Math.max(0, prev - 1));
+        }}
         onSocialClick={(tab) => {
           if (tab === "liked") {
             const idx = tabs.indexOf("Liked");
@@ -1313,7 +1513,17 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       {TabsBar}
       {TabPanes}
 
-      {selectedPost && <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} />}
+      <AnimatePresence>
+        {selectedPost && (
+          <PostModal
+            open={!!selectedPost}
+            post={selectedPost}
+            onClose={closeModal}
+            onToggleLike={toggleLike}
+            targetUserId={viewUserId === "me" ? auth?.user?.user_id : viewUserId}
+          />
+        )}
+      </AnimatePresence>
 
       {productModalOpen && selectedProductPayload && (
         <ProductPreviewModal
@@ -1334,6 +1544,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           onClose={() => setSocialModalOpen(false)}
           userId={viewUserId}
           initialTab={activeSocialTab === "liked" ? "followers" : activeSocialTab as any}
+          onFollowUpdate={handleFollowUpdate}
         />
       )}
 
@@ -1341,10 +1552,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       <AnimatePresence>
         {showFollowSuggestion && !isFollowing && (
           <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-6 left-4 right-4 z-[100] bg-white rounded-[0.5rem] border border-slate-100 p-3 flex items-center gap-3"
+            initial={{ y: 100, opacity: 0, x: "-50%" }}
+            animate={{ y: 0, opacity: 1, x: "-50%" }}
+            exit={{ y: 100, opacity: 0, x: "-50%" }}
+            className="fixed bottom-6 left-1/2 bg-white rounded-[1rem] border border-slate-100 p-3 flex items-center gap-3 w-[calc(100%-2rem)] max-w-[400px] shadow-2xl"
           >
             {/* Left: Info */}
             <div className="flex items-center gap-3 min-w-0 flex-1">

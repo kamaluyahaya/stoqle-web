@@ -50,6 +50,7 @@ export default function ProductPreviewModal({
   onCartClick,
   onShopClick,
   origin,
+  zIndex,
 }: {
   open: boolean;
   payload: PreviewPayload | null;
@@ -64,6 +65,7 @@ export default function ProductPreviewModal({
   onCartClick?: () => void;
   onShopClick?: () => void;
   origin?: { x: number; y: number };
+  zIndex?: number;
 }) {
   //
   // --- Hooks (always declared in the same order, unconditionally) ---
@@ -84,6 +86,7 @@ export default function ProductPreviewModal({
 
   const router = useRouter();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const asideScrollRef = useRef<HTMLDivElement | null>(null);
   const lastScrollY = useRef(0);
@@ -100,7 +103,11 @@ export default function ProductPreviewModal({
   const [cartActionType, setCartActionType] = useState<"cart" | "buy">("cart");
 
   // business data hook (unconditional hook call using payload ID if provided)
-  const { businessData, loading: loadingBusiness, error: businessError } = useBusinessPolicy(open, payload?.businessId);
+  const bizIdentifier = useMemo(() => {
+    return payload?.businessSlug || (payload?.businessName ? slugify(payload.businessName) : payload?.businessId);
+  }, [payload]);
+
+  const { businessData, loading: loadingBusiness, error: businessError } = useBusinessPolicy(open, bizIdentifier);
 
   const policy = businessData?.policy ?? null;
 
@@ -154,6 +161,7 @@ export default function ProductPreviewModal({
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [isReviewsModalOpen, setIsReviewsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"video" | "images" | "styles">("images");
 
   // Search State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -282,6 +290,12 @@ export default function ProductPreviewModal({
     }
     runEstimation();
   }, [open, payload, businessData, storedAddress, effectiveShippingPolicies]);
+
+  // --- Derived values (safe if payload is null) ---
+  const images = payload?.productImages ?? [];
+  // If selectedIndex is -1, it means the video is selected, so main should be null to let MediaViewer show video
+  const main = selectedIndex === -1 ? null : (images[selectedIndex] ?? (images.length > 0 ? images[0] : null));
+
   const [recommendedProducts, setRecommendedProducts] = useState<ProductFeedItem[]>([]);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
 
@@ -292,6 +306,31 @@ export default function ProductPreviewModal({
   const [globalHasMore, setGlobalHasMore] = useState(true);
   const loaderRef = useRef<HTMLDivElement>(null);
   const [cartClickPos, setCartClickPos] = useState({ x: 0, y: 0 });
+
+  // Extract variant images for "Styles" mode
+  const variantEntriesWithImages = useMemo(() => {
+    if (!payload?.variantGroups || !Array.isArray(payload.variantGroups)) return [];
+
+    // Per-group awareness: Only include entries from groups where at least one entry has an image
+    return payload.variantGroups.flatMap(g => {
+      const groupEntries = g.entries || [];
+      const hasAnyImage = groupEntries.some((e: any) => e.images && e.images.length > 0);
+
+      // If no entry in this group has an image, we don't show this group in "Styles" mode
+      if (!hasAnyImage) return [];
+
+      const firstProductImageUrl = images?.[0]?.url || "";
+
+      return groupEntries.map((e: any) => ({
+        ...e,
+        groupId: g.id,
+        groupTitle: g.title,
+        url: e.images?.[0]?.url || (e as any).imagePreviews?.[0] || firstProductImageUrl
+      }));
+    });
+  }, [payload?.variantGroups, images]);
+
+  const hasStyles = variantEntriesWithImages.length > 1;
 
   useEffect(() => {
     if (!open || !payload?.productId) return;
@@ -350,7 +389,10 @@ export default function ProductPreviewModal({
     const loadRecommended = async () => {
       setLoadingRecommended(true);
       try {
-        const res = await fetchBusinessProducts(payload.businessId as number, 6, undefined, payload.productId, token);
+        const identifier = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : payload.businessId);
+        if (!identifier) return;
+
+        const res = await fetchBusinessProducts(identifier, 6, undefined, payload.productId, token);
         setRecommendedProducts(res?.data?.products || []);
       } catch (err) {
         console.error("Failed to load recommended products:", err);
@@ -425,7 +467,15 @@ export default function ProductPreviewModal({
   useEffect(() => {
     if (!open || !payload?.productId) return;
 
-    setSelectedIndex(0);
+    const hasVideo = !!payload?.productVideo?.url;
+    if (hasVideo) {
+      setViewMode("video");
+      setSelectedIndex(-1);
+    } else {
+      setViewMode("images");
+      setSelectedIndex(0);
+    }
+
     if (modalRef.current) modalRef.current.scrollTo(0, 0);
     if (asideScrollRef.current) asideScrollRef.current.scrollTo(0, 0);
 
@@ -498,6 +548,43 @@ export default function ProductPreviewModal({
       if (currentLoader) observer.unobserve(currentLoader);
     };
   }, [open, globalHasMore, globalLoading, globalPage, fetchGlobalRecs]);
+  // Auto-slide engine: Sequential Discovery Loop (Video -> Images -> Styles -> Loop)
+  useEffect(() => {
+    if (!open || isPaused || viewMode === "video") return;
+
+    const hasVideo = !!payload?.productVideo?.url;
+    const hasImages = images.length > 0;
+    const hasStyleList = variantEntriesWithImages.length > 0;
+
+    // Don't slide if only 1 total item across all modes
+    const totalMediaCount = (hasVideo ? 1 : 0) + (hasImages ? images.length : 0) + (hasStyleList ? variantEntriesWithImages.length : 0);
+    if (totalMediaCount <= 1) return;
+
+    const interval = setInterval(() => {
+      if (viewMode === "images") {
+        if (selectedIndex < images.length - 1) {
+          setSelectedIndex(prev => prev + 1);
+        } else {
+          // Finished images: go to styles or loop to video
+          if (hasStyleList) { setViewMode("styles"); setSelectedIndex(0); }
+          else if (hasVideo) { setViewMode("video"); setSelectedIndex(-1); }
+          else { setSelectedIndex(0); } // loop images
+        }
+      }
+      else if (viewMode === "styles") {
+        if (selectedIndex < variantEntriesWithImages.length - 1) {
+          setSelectedIndex(prev => prev + 1);
+        } else {
+          // Finished styles: back to video or images
+          if (hasVideo) { setViewMode("video"); setSelectedIndex(-1); }
+          else if (hasImages) { setViewMode("images"); setSelectedIndex(0); }
+          else { setSelectedIndex(0); } // loop styles
+        }
+      }
+    }, 3500); // 3.5s interval
+
+    return () => clearInterval(interval);
+  }, [open, images.length, variantEntriesWithImages.length, isPaused, selectedIndex, viewMode, payload?.productVideo?.url]);
 
   // Initialize selected options when payload changes or modal opens (only if not already restored from cache)
   useEffect(() => {
@@ -547,12 +634,6 @@ export default function ProductPreviewModal({
     }
   }, [open, payload?.variantGroups, payload?.useCombinations, payload?.skus]);
 
-  //
-  // --- Derived values (safe if payload is null) ---
-  //
-  const images = payload?.productImages ?? [];
-  // If selectedIndex is -1, it means the video is selected, so main should be null to let MediaViewer show video
-  const main = selectedIndex === -1 ? null : (images[selectedIndex] ?? (images.length > 0 ? images[0] : null));
 
   // SKU Logic
   const currentSku = useMemo(() => {
@@ -594,37 +675,26 @@ export default function ProductPreviewModal({
 
   const basePrice = basePriceValue;
 
-  // Handlers for AddToCartModal
+  const handleIndexChange = useCallback((idx: number, mode?: "video" | "images" | "styles") => {
+    const finalMode = mode || viewMode;
+    if (mode) setViewMode(mode);
+    setSelectedIndex(idx);
+
+    // Auto-select variant if switching to/browsing styles
+    if (finalMode === "styles" && variantEntriesWithImages[idx]) {
+      const v = variantEntriesWithImages[idx];
+      setSelectedOptions(prev => ({
+        ...prev,
+        [v.groupId]: v.id
+      }));
+    }
+  }, [viewMode, variantEntriesWithImages]);
+
   const handleAddToCartClick = (e?: React.MouseEvent) => {
     if (!payload) return;
 
     if (e) setCartClickPos({ x: e.clientX, y: e.clientY });
     else setCartClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-
-    // Check if vendor is trying to buy their own product
-    const currentUserId = user?.user_id || user?.id || user?.id_signup;
-    const currentBizId = user?.business_id || (user as any)?.business?.business_id || (user as any)?.business?.id;
-
-    const productUserId = payload.userId || (payload as any).user_id || businessData?.business?.user_id;
-    const productBizId = payload.businessId || (payload as any).business_id || businessData?.business?.business_id;
-
-    const isOwner = (currentUserId && productUserId && Number(currentUserId) === Number(productUserId)) ||
-      (currentBizId && productBizId && Number(currentBizId) === Number(productBizId));
-
-    if (isOwner) {
-      Swal.fire({
-        title: "Not Allowed",
-        text: "You cannot purchase your own products.",
-        icon: "warning",
-        confirmButtonText: "I understand",
-        confirmButtonColor: "#f43f5e",
-        customClass: {
-          popup: "rounded-[2rem]",
-          confirmButton: "rounded-xl font-bold px-6 py-3",
-        }
-      });
-      return;
-    }
 
     setCartActionType("cart");
     setCartModalOpen(true);
@@ -635,31 +705,6 @@ export default function ProductPreviewModal({
 
     if (e) setCartClickPos({ x: e.clientX, y: e.clientY });
     else setCartClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-
-    // Check if vendor is trying to buy their own product
-    const currentUserId = user?.user_id || user?.id || user?.id_signup;
-    const currentBizId = user?.business_id || (user as any)?.business?.business_id || (user as any)?.business?.id;
-
-    const productUserId = payload.userId || (payload as any).user_id || businessData?.business?.user_id;
-    const productBizId = payload.businessId || (payload as any).business_id || businessData?.business?.business_id;
-
-    const isOwner = (currentUserId && productUserId && Number(currentUserId) === Number(productUserId)) ||
-      (currentBizId && productBizId && Number(currentBizId) === Number(productBizId));
-
-    if (isOwner) {
-      Swal.fire({
-        title: "Not Allowed",
-        text: "You cannot purchase your own products.",
-        icon: "warning",
-        confirmButtonText: "I understand",
-        confirmButtonColor: "#f43f5e",
-        customClass: {
-          popup: "rounded-[2rem]",
-          confirmButton: "rounded-xl font-bold px-6 py-3",
-        }
-      });
-      return;
-    }
 
     setCartActionType("buy");
     setCartModalOpen(true);
@@ -720,6 +765,32 @@ export default function ProductPreviewModal({
 
   const handleCartConfirm = (data: { selectedOptions: Record<string, string>; quantity: number; sku: any; address?: any }) => {
     if (!payload) return;
+
+    // RESTRICT OWNER AT CONFIRMATION
+    const currentUserId = user?.user_id || user?.id || user?.id_signup;
+    const currentBizId = user?.business_id || (user as any)?.business?.business_id || (user as any)?.business?.id;
+    const productUserId = payload.userId || (payload as any).user_id || businessData?.business?.user_id;
+    const productBizId = payload.businessId || (payload as any).business_id || businessData?.business?.business_id;
+
+    const isOwnerByAuth = (currentUserId && productUserId && Number(currentUserId) === Number(productUserId)) ||
+      (currentBizId && productBizId && Number(currentBizId) === Number(productBizId));
+
+    if (isOwnerByAuth) {
+      Swal.fire({
+        title: "Not Allowed",
+        text: "You cannot purchase your own products.",
+        icon: "warning",
+        confirmButtonText: "I understand",
+        confirmButtonColor: "#f43f5e",
+        customClass: {
+          popup: "rounded-[2rem]",
+          confirmButton: "rounded-xl font-bold px-6 py-3",
+        }
+      });
+      setCartModalOpen(false);
+      return;
+    }
+
     const finalPayload = { ...payload, ...data } as PreviewPayload;
     if (data.selectedOptions) {
       setSelectedOptions(data.selectedOptions);
@@ -756,18 +827,23 @@ export default function ProductPreviewModal({
   useEffect(() => {
     if (!open) return;
 
-    // Prevent background scrolling while modal is open
-    const originalStyle = window.getComputedStyle(document.body).overflow;
-    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+    // Detect if scroll is already locked by a parent modal
+    const wasAlreadyLocked = document.body.style.overflow === "hidden";
 
-    document.body.style.overflow = "hidden";
-    if (scrollBarWidth > 0) {
-      document.body.style.paddingRight = `${scrollBarWidth}px`;
+    if (!wasAlreadyLocked) {
+      document.body.style.overflow = "hidden";
+      const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+      if (scrollBarWidth > 0) {
+        document.body.style.paddingRight = `${scrollBarWidth}px`;
+      }
     }
 
     return () => {
-      document.body.style.overflow = originalStyle;
-      document.body.style.paddingRight = "0";
+      // Only restore if we were the ones who locked it
+      if (!wasAlreadyLocked) {
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "0";
+      }
     };
   }, [open]);
 
@@ -808,15 +884,8 @@ export default function ProductPreviewModal({
     return () => clearInterval(interval);
   }, [isPromotionActive, promotion?.end_date, promotion?.end]);
 
-  //
-  // Now it's safe to early-return the UI if not open or missing payload.
-  // (All hooks have already been declared and will execute in the same order.)
-  //
   if (!open || !payload) return null;
 
-  //
-  // --- helper functions ---
-  //
   const stop = (e: React.MouseEvent | React.TouchEvent) => e.stopPropagation();
 
   const openPolicyModal = (title: string, body: string) => {
@@ -847,7 +916,14 @@ export default function ProductPreviewModal({
   //
   return (
     <>
-      <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] flex items-center justify-center px-0 py-0 lg:p-4" onMouseDown={onClose} onTouchStart={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`fixed inset-0 flex items-center justify-center px-0 py-0 lg:p-4 ${!zIndex ? 'z-[9999]' : ''}`}
+        style={zIndex ? { zIndex } : {}}
+        onMouseDown={(e) => { e.stopPropagation(); onClose(); }}
+        onTouchStart={(e) => { e.stopPropagation(); onClose(); }}
+      >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -856,7 +932,6 @@ export default function ProductPreviewModal({
           className="absolute inset-0 bg-black/65 backdrop-blur-sm"
           aria-hidden
         />
-
 
         <motion.div
           style={{
@@ -1009,23 +1084,41 @@ export default function ProductPreviewModal({
             </div>
 
             {/* LEFT: media */}
-            <div id="overview" ref={sectionRefs.overview} className="w-full lg:flex-1 lg:h-full flex flex-col bg-slate-100">
+            <div
+              id="overview"
+              ref={sectionRefs.overview}
+              className="w-full lg:flex-1 lg:h-full flex flex-col bg-slate-100"
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+            >
               <MediaViewer
-                main={main}
+                main={viewMode === "images" ? (images[selectedIndex] || null) : viewMode === "styles" ? (variantEntriesWithImages[selectedIndex] || null) : null}
                 payload={payload}
                 images={images}
+                variantImages={variantEntriesWithImages}
                 selectedIndex={selectedIndex}
-                onIndexChange={setSelectedIndex}
+                viewMode={viewMode}
+                onIndexChange={handleIndexChange}
               />
             </div>
 
             {/* RIGHT: details */}
             <aside className="w-full lg:w-[380px] border-l border-slate-100 flex flex-col">
-              <div className="px-4 bg-white">
-                <div className="flex gap-1 lg:flex-row overflow-auto p-1">
-                  <ThumbnailList images={images} video={payload.productVideo} selectedIndex={selectedIndex} onSelect={setSelectedIndex} />
+              {variantEntriesWithImages.length > 0 && (
+                <div className="px-4 bg-white">
+                  <div className="flex gap-1 lg:flex-row overflow-auto p-1">
+                    <ThumbnailList
+                      payload={payload}
+                      images={images}
+                      variantImages={variantEntriesWithImages}
+                      selectedIndex={selectedIndex}
+                      viewMode={viewMode}
+                      onIndexChange={handleIndexChange}
+                      onAllStyles={() => handleAddToCartClick()}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div
                 ref={asideScrollRef}
@@ -1196,126 +1289,133 @@ export default function ProductPreviewModal({
 
                 </div>
 
-                {recommendedProducts.length > 0 && (
-                  <div className="bg-white p-5 mt-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div
-                        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => businessData?.business?.user_id && router.push(`/user/profile/${businessData.business.user_id}`)}
-                      >
-                        <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center flex-shrink-0">
-                          <img
-                            src={businessData?.business?.business_logo || businessData?.business?.logo || businessData?.business?.profile_pic || "/assets/images/favio.png"}
-                            alt="Shop Logo"
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <div className="leading-tight min-w-0 flex-1">
-                          <div className="font-semibold text-slate-900 text-[clamp(10px,3.5vw,12px)] whitespace-nowrap overflow-hidden">
-                            {businessData?.business?.business_name ?? businessData?.business?.full_name ?? ""}
-                          </div>
-
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <div className="flex items-center">
-                              {[1, 2, 3, 4, 5].map((star) => {
-                                const rating = Number(vendorStats?.avg_rating || 0);
-                                return (
-                                  <StarIconSolid
-                                    key={star}
-                                    className={`w-2.5 h-2.5 ${star <= rating ? "text-red-500" : "text-slate-200"}`}
-                                  />
-                                );
-                              })}
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-700">{vendorStats?.avg_rating || "0.0"}</span>
-                            <span className="text-[10px] text-slate-400">({vendorStats?.total_reviews?.toLocaleString() || "0"} reviews)</span>
-                          </div>
-
-                          <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                            <span className="font-medium text-slate-700">{vendorStats?.followers?.toLocaleString() ?? "0"}</span>+ Followers
-                            <span className="mx-1">•</span>
-                            <span className="font-medium text-slate-700">{vendorStats?.total_sold?.toLocaleString() ?? "0"}</span>+ Sold
-                          </div>
-                        </div>
+                <div className="bg-white p-5 mt-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div
+                      className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => businessData?.business?.user_id && router.push(`/user/profile/${businessData.business.user_id}`)}
+                    >
+                      <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center flex-shrink-0">
+                        <img
+                          src={businessData?.business?.business_logo || businessData?.business?.logo || businessData?.business?.profile_pic || "/assets/images/favio.png"}
+                          alt="Shop Logo"
+                          className="h-full w-full object-cover"
+                        />
                       </div>
-                      <button
-                        onClick={() => {
-                          router.push(`/shop/${payload.businessId}`);
-                          onClose();
-                        }}
-                        className="flex-shrink-0 whitespace-nowrap bg-red-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-red-600 transition"
-                      >
-                        Visit shop
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2 py-1 mt-4 border-y border-slate-50  overflow-x-auto no-scrollbar rounded px-2 bg-slate-100">
-                      <div className="flex-1 min-w-[30%] text-center">
-                        <div className="text-[10px] text-slate-400  mb-2">Item Quality</div>
-                        <div className="text-[10px] font-bold text-slate-500">{vendorStats?.positive_percent || 100}% Positive</div>
-                      </div>
-                      <div className="flex-1 min-w-[35%] text-center border-x border-slate-200 px-4">
-                        <div className="text-[10px] text-slate-400  mb-2">Shipping Service</div>
-                        <div className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                          Ships in {avgShipping ? `${avgShipping.value} ${avgShipping.unit}` : "Fast Delivery"}
+                      <div className="leading-tight min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 text-[clamp(10px,3.5vw,12px)] whitespace-nowrap overflow-hidden">
+                          {businessData?.business?.business_name ?? businessData?.business?.full_name ?? ""}
                         </div>
-                      </div>
-                      <div className="flex-1 min-w-[30%] text-center">
-                        <div className="text-[10px] text-slate-400 mb-2 ">Customer Service</div>
-                        <div className="text-[10px] font-bold text-slate-500">
-                          Reply {customerService?.reply_time || " 2 minutes"}
+
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <div className="flex items-center">
+                            {[1, 2, 3, 4, 5].map((star) => {
+                              const rating = Number(vendorStats?.avg_rating || 0);
+                              return (
+                                <StarIconSolid
+                                  key={star}
+                                  className={`w-2.5 h-2.5 ${star <= rating ? "text-red-500" : "text-slate-200"}`}
+                                />
+                              );
+                            })}
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-700">{vendorStats?.avg_rating || "0.0"}</span>
+                          <span className="text-[10px] text-slate-400">({vendorStats?.total_reviews?.toLocaleString() || "0"} reviews)</span>
+                        </div>
+
+                        <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                          <span className="font-medium text-slate-700">{vendorStats?.followers?.toLocaleString() ?? "0"}</span>+ Followers
+                          <span className="mx-1">•</span>
+                          <span className="font-medium text-slate-700">{vendorStats?.total_sold?.toLocaleString() ?? "0"}</span>+ Sold
                         </div>
                       </div>
                     </div>
-                    <div className="mt-6 flex items-center justify-between mb-4 pb-2" onClick={() => { router.push(`/shop/${payload.businessId}`); }}>
-                      <h4 className="text-[13px] font-bold text-slate-600">Shop Recommendations</h4>
+                    <button
+                      onClick={() => {
+                        const slug = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : null);
+                        if (slug) router.push(`/shop/${slug}`);
+                        onClose();
+                      }}
+                      className="flex-shrink-0 whitespace-nowrap bg-red-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-red-600 transition"
+                    >
+                      Visit shop
+                    </button>
+                  </div>
 
-                      <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                  <div className="flex items-center gap-2 py-1 mt-4 border-y border-slate-50  overflow-x-auto no-scrollbar rounded px-2 bg-slate-100">
+                    <div className="flex-1 min-w-[30%] text-center">
+                      <div className="text-[10px] text-slate-400  mb-2">Item Quality</div>
+                      <div className="text-[10px] font-bold text-slate-500">{vendorStats?.positive_percent || 100}% Positive</div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {recommendedProducts.map((p) => {
-                        const price = p.price || 0;
-                        const isPromoActive = !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
-
-                        return (
-                          <div key={p.product_id} className="group cursor-pointer" onClick={() => {
-                            if (p.product_video) {
-                              saveModalState();
-                              if (onReelsClick) onReelsClick(p.product_id, businessData?.business?.business_name);
-                              else {
-                                const bizName = businessData?.business?.business_name || "store";
-                                const bizSlug = businessData?.business?.business_slug || slugify(bizName);
-                                router.push(`/market/${bizSlug}?product_id=${p.product_id}&reels=true`);
-                              }
-                            } else if (onProductClick) onProductClick(p.product_id, businessData?.business?.business_name);
-                          }}>
-                            <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
-                              {p.first_image ? <img src={formatUrl(p.first_image)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>}
-                              {p.product_video && (
-                                <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-1.5 z-10 shadow-lg border border-white/20">
-                                  <svg className="w-3 h-3 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z" /></svg>
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-red-600 transition-colors">{p.title}</div>
-
-                            {isPromoActive ? (
-                              <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
-                                {p.promo_title} {p.promo_discount}% OFF
-                              </div>
-                            ) : p.sale_type ? (
-                              <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
-                                {p.sale_type} {p.sale_discount}% OFF
-                              </div>
-                            ) : null}
-
-                            <div className="text-[11px] font-bold text-slate-900">₦{Number(price).toLocaleString()}</div>
-                          </div>
-                        );
-                      })}
+                    <div className="flex-1 min-w-[35%] text-center border-x border-slate-200 px-4">
+                      <div className="text-[10px] text-slate-400  mb-2">Shipping Service</div>
+                      <div className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                        Ships in {avgShipping ? `${avgShipping.value} ${avgShipping.unit}` : "Fast Delivery"}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-[30%] text-center">
+                      <div className="text-[10px] text-slate-400 mb-2 ">Customer Service</div>
+                      <div className="text-[10px] font-bold text-slate-500">
+                        Reply {customerService?.reply_time || " 2 minutes"}
+                      </div>
                     </div>
                   </div>
-                )}
+
+                  {recommendedProducts.length > 0 && (
+                    <>
+                      <div className="mt-6 flex items-center justify-between mb-4 pb-2" onClick={() => {
+                        const slug = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : null);
+                        if (slug) router.push(`/shop/${slug}`);
+                      }}>
+                        <h4 className="text-[13px] font-bold text-slate-600">Shop Recommendations</h4>
+
+                        <ChevronRightIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {recommendedProducts.map((p) => {
+                          const price = p.price || 0;
+                          const isPromoActive = !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
+
+                          return (
+                            <div key={p.product_id} className="group cursor-pointer" onClick={() => {
+                              if (p.product_video) {
+                                saveModalState();
+                                if (onReelsClick) onReelsClick(p.product_id, businessData?.business?.business_name);
+                                else {
+                                  const bizName = businessData?.business?.business_name || "store";
+                                  const bizSlug = businessData?.business?.business_slug || slugify(bizName);
+                                  router.push(`/market/${bizSlug}?product_id=${p.product_id}&reels=true`);
+                                }
+                              } else if (onProductClick) onProductClick(p.product_id, businessData?.business?.business_name);
+                            }}>
+                              <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
+                                {p.first_image ? <img src={formatUrl(p.first_image)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>}
+                                {p.product_video && (
+                                  <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-1.5 z-10 shadow-lg border border-white/20">
+                                    <svg className="w-3 h-3 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z" /></svg>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-red-600 transition-colors">{p.title}</div>
+
+                              {isPromoActive ? (
+                                <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
+                                  {p.promo_title} {p.promo_discount}% OFF
+                                </div>
+                              ) : p.sale_type ? (
+                                <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
+                                  {p.sale_type} {p.sale_discount}% OFF
+                                </div>
+                              ) : null}
+
+                              <div className="text-[11px] font-bold text-slate-900">₦{Number(price).toLocaleString()}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
 
 
                 {/* Details Section (Parameters + Images) */}
@@ -1328,7 +1428,7 @@ export default function ProductPreviewModal({
                       <div className="space-y-1">
                         {payload.params.map((p, i) => (
                           <div key={i} className="flex items-center gap-4 py-3 border-b border-slate-50 last:border-0">
-                            <div className="w-24 text-[10px] uppercase tracking-wide text-slate-500 flex-shrink-0">
+                            <div className="w-24 text-[10px]  tracking-wide text-slate-500 flex-shrink-0">
                               {p.key}
                             </div>
                             <div className="text-xs font-medium text-slate-900">
@@ -1454,6 +1554,8 @@ export default function ProductPreviewModal({
                 shopLogo={businessData?.business?.logo}
                 shopProfilePic={businessData?.business?.profile_pic}
                 businessId={payload?.businessId}
+                businessSlug={payload?.businessSlug}
+                businessName={payload?.businessName}
               />
             </aside>
           </div>

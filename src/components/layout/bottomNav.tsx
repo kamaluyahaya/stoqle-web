@@ -44,9 +44,9 @@ export default function BottomNav() {
   const { openLogin } = auth as any;
 
   if (
-    pathname === "/cart" || 
-    pathname === "/checkout" || 
-    (pathname === "/messages" && (searchParams.get("room") || searchParams.get("user"))) || 
+    pathname === "/cart" ||
+    pathname === "/checkout" ||
+    (pathname === "/messages" && (searchParams.get("room") || searchParams.get("user"))) ||
     pathname?.startsWith("/shop") ||
     pathname?.startsWith("/profile/business/business-status") ||
     pathname === "/profile/business/customer-order" ||
@@ -122,7 +122,7 @@ export default function BottomNav() {
     <>
       <nav
         aria-label="Primary"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/95 border-t border-slate-100 backdrop-blur"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/95 border-slate-100 backdrop-blur"
         style={{
           // respect notch/safe-area
           paddingBottom: "env(safe-area-inset-bottom)",
@@ -137,6 +137,12 @@ export default function BottomNav() {
 
               const handleClick = async (e: React.MouseEvent) => {
                 e.preventDefault();
+                if (active) {
+                  // If tapping active tab, trigger refresh
+                  window.dispatchEvent(new CustomEvent("nav-refresh", { detail: { path: it.href } }));
+                  return;
+                }
+
                 if (isProtected) {
                   const ok = await auth.ensureLoggedIn();
                   if (!ok) return;
@@ -167,7 +173,7 @@ export default function BottomNav() {
                       </span>
                     ) : null}
                   </div>
-                  
+
                   {!isRelease && (
                     <span className={`text-[9px] sm:text-[10px] md:text-sm md:inline-block whitespace-nowrap mt-0.5 md:mt-0 ${active ? "font-bold text-red-500" : "font-medium"}`}>
                       {it.title}

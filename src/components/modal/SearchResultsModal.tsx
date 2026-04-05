@@ -24,8 +24,8 @@ import { fetchUnifiedSearch } from "@/src/lib/api/searchApi";
 import { useAuth } from "@/src/context/authContext";
 import PostModal from "./postModal";
 import LoginModal from "./auth/loginModal";
-import { fetchSocialPostById } from "@/src/lib/api/social";
-import { Post } from "@/src/lib/types";
+import { fetchSocialPostById, fetchSecurePostUrl } from "@/src/lib/api/social";
+import { Post, User } from "@/src/lib/types";
 import ReelsModal from "@/src/components/product/addProduct/modal/reelsModal";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import { fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
@@ -408,9 +408,9 @@ const ProductCard = React.memo(({
             className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
-              if (p.business_id) {
-                // onClose(); // Don't close, just navigate
-                router.push(`/shop/${p.business_id}`);
+              const bizIdentifier = p.business_slug;
+              if (bizIdentifier) {
+                router.push(`/shop/${bizIdentifier}`);
               }
             }}
           >
@@ -639,21 +639,35 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   }, [fetchCartCount]);
 
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
-  const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   useEffect(() => {
-    if (isPage) return; // Don't lock scroll if it's a page
-    const originalBody = document.body.style.overflow;
-    const originalHtml = document.documentElement.style.overflow;
-    if (isOpen && !shouldHideModal) {
+    if (isPage) return;
+    if (!isOpen || shouldHideModal) return;
+
+    const wasAlreadyLocked = document.body.style.overflow === "hidden";
+    
+    if (!wasAlreadyLocked) {
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
     }
+
     return () => {
-      document.body.style.overflow = originalBody;
-      document.documentElement.style.overflow = originalHtml;
+      if (!wasAlreadyLocked) {
+        document.body.style.overflow = "";
+        document.documentElement.style.overflow = "";
+      }
     };
   }, [isOpen, shouldHideModal, isPage]);
+
+  const formatFullUrl = useCallback((url: string | undefined): string => {
+    if (!url) return "";
+    if (url.startsWith('http')) {
+      return url.replace('http://10.233.107.181:4000', API_BASE_URL);
+    }
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    return `${API_BASE_URL}${cleanUrl}`;
+  }, []);
 
   const formatProductUrl = useCallback((url: string) => {
     if (!url) return "https://via.placeholder.com/800x600?text=No+Image";
@@ -672,17 +686,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     title: p.name,
     first_image: p.image,
     product_video: p.product_video,
-    logo: p.business_logo,
+    business_logo: p.business_logo,
+    business_slug: p.business_slug,
     isLiked: p.is_liked === 1 || p.is_liked === true,
     likes_count: p.likes_count || 0,
     index
   });
-
-  const handleReelsClick = useCallback((productId: number, businessName?: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSelectedProductId(productId);
-    setReelsModalOpen(true);
-  }, []);
 
   const handleProductClick = useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -707,6 +716,10 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       setFetchingProductId(null);
     }
   }, [token, fetchingProductId, formatProductUrl]);
+
+  const handleReelsClick = useCallback((productId: number, businessName?: string, e?: React.MouseEvent) => {
+    handleProductClick(productId, businessName, e);
+  }, [handleProductClick]);
 
   const handleProductLike = async (e: React.MouseEvent, productId: number, baseCount: number) => {
     e.stopPropagation();
@@ -772,20 +785,10 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     const isVideo = p.cover_type === 'video' || (p.image && VIDEO_EXT_RE.test(p.image));
 
     // Media URL mapping
-    let finalSrc = p.image || "";
-    if (finalSrc.startsWith('http')) {
-      finalSrc = finalSrc.replace('http://10.233.107.181:4000', 'https://stoqle.com');
-    } else if (finalSrc) {
-      finalSrc = `https://stoqle.com/${finalSrc}`;
-    }
+    const finalSrc = formatFullUrl(p.image);
 
     // Author image URL mapping
-    let avatarUrl = p.author_image || "";
-    if (avatarUrl.startsWith('http')) {
-      avatarUrl = avatarUrl.replace('http://10.233.107.181:4000', 'https://stoqle.com');
-    } else if (avatarUrl) {
-      avatarUrl = `https://stoqle.com/${avatarUrl}`;
-    }
+    const avatarUrl = formatFullUrl(p.author_image);
 
     return {
       id: p.id,
@@ -805,18 +808,37 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       noteConfig: p.config,
       rawCreatedAt: p.created_at,
       location: p.location,
+      is_product_linked: Boolean(p.is_product_linked),
+      linked_product: p.linked_product,
     };
   };
 
-  const openPostWithUrl = (post: any, e?: React.MouseEvent) => {
+  const openPostWithUrl = async (post: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setSelectedPost(post);
     try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("post", String(post.id));
-      window.history.pushState({ modal: true }, "", url.toString());
+      const urlData = await fetchSecurePostUrl(post.id, "search_feed", token);
+      if (urlData) {
+        if (urlData.url) {
+          window.history.pushState({ modal: true }, "", urlData.url);
+          // If the secure link provides a better URL (signed with xsec_token/source),
+          // update the selectedPost immediately so the Modal sees the valid link.
+          setSelectedPost((prev: any) => prev ? { 
+            ...prev, 
+            src: urlData.url || prev.src,
+            final_video_url: urlData.url || prev.final_video_url
+          } : null);
+        } else {
+          const url = new URL(window.location.href);
+          url.searchParams.set("post", String(post.id));
+          window.history.pushState({ modal: true }, "", url.toString());
+        }
+      }
       pushedRef.current = true;
-    } catch { }
+    } catch (err) {
+      console.warn("fetchSecurePostUrl failed", err);
+      pushedRef.current = false;
+    }
   };
 
   const closeModal = () => {
@@ -899,7 +921,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden border border-slate-100 flex-shrink-0">
         {p.image ? (
           <img
-            src={p.image.startsWith('http') ? p.image : `https://stoqle.com/${p.image}`}
+            src={formatFullUrl(p.image)}
             alt={p.name}
             className="w-full h-full object-cover"
           />
@@ -928,13 +950,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         <div
           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => {
-            // onClose();
-            router.push(`/shop/${s.id}`);
+            if (s.business_slug) router.push(`/shop/${s.business_slug}`);
           }}
         >
           <div className="w-12 h-12 rounded-full border border-slate-100 overflow-hidden flex-shrink-0">
             <img
-              src={s.image?.startsWith('http') ? s.image : `https://stoqle.com/${s.image}`}
+              src={formatFullUrl(s.image)}
               alt={s.name}
               className="w-full h-full object-cover"
               onError={(e) => { (e.target as any).src = 'https://ui-avatars.com/api/?name=' + s.name }}
@@ -952,8 +973,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         </div>
         <button
           onClick={() => {
-            // onClose();
-            router.push(`/shop/${s.id}`);
+            if (s.business_slug) router.push(`/shop/${s.business_slug}`);
           }}
           className="px-4 py-1 bg-white text-red-500 border-[0.5px] text-[11px] font-black rounded-full tracking-tighter shadow-sm hover:bg-red-700 transition-colors"
         >
@@ -972,7 +992,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                 }`}
             >
               <img
-                src={p.image?.startsWith('http') ? p.image : `https://stoqle.com/${p.image}`}
+                src={formatFullUrl(p.image)}
                 alt={p.title}
                 className="w-full h-full object-cover transition-transform group-hover:scale-110"
                 onError={(e) => { (e.target as any).src = '/assets/images/placeholder.png' }}
@@ -1103,7 +1123,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                       }}
                     >
                       <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden flex-shrink-0">
-                        <img src={u.image ? (u.image.startsWith('http') ? u.image.replace('http://10.233.107.181:4000', 'https://stoqle.com') : `https://stoqle.com/${u.image}`) : 'https://ui-avatars.com/api/?name=' + u.name} alt="" className="w-full h-full object-cover" />
+                        <img src={u.image ? formatFullUrl(u.image) : 'https://ui-avatars.com/api/?name=' + u.name} alt="" className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-bold text-slate-900 truncate">{u.name}</p>
@@ -1165,7 +1185,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                   }}
                 >
                   <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-50 flex-shrink-0">
-                    <img src={u.image ? (u.image.startsWith('http') ? u.image.replace('http://10.233.107.181:4000', 'https://stoqle.com') : `https://stoqle.com/${u.image}`) : 'https://ui-avatars.com/api/?name=' + u.name} alt="" className="w-full h-full object-cover" />
+                    <img src={u.image ? formatFullUrl(u.image) : 'https://ui-avatars.com/api/?name=' + u.name} alt="" className="w-full h-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-bold text-slate-900 truncate">{u.name}</p>
@@ -1354,6 +1374,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
           <AnimatePresence>
             {selectedPost && (
               <PostModal
+                open={!!selectedPost}
                 post={selectedPost}
                 onClose={closeModal}
                 onToggleLike={toggleLike}

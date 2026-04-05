@@ -54,7 +54,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
   useEffect(() => {
     // Check if body is already locked by another modal
     const originalStyle = window.getComputedStyle(document.body).overflow;
-    
+
     if (isOpen) {
       document.body.style.overflow = "hidden";
     }
@@ -164,7 +164,16 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       if (!res.ok) {
         // backend may return structured error
         const message = data?.message || "Failed to request OTP";
-        toast.error(message);
+        if (res.status === 429 || res.status === 403) {
+          Swal.fire({
+            title: "Security Alert",
+            text: message,
+            icon: "error",
+            confirmButtonColor: "#e11d48",
+          });
+        } else {
+          toast.error(message);
+        }
         setError(message);
         setLoading(false);
         return;
@@ -367,7 +376,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
-      className="fixed inset-0 z-[2000] flex items-center justify-center lg:px-4 lg:py-6 "
+      className="fixed inset-0 z-[200000] flex items-center justify-center lg:px-4 lg:py-6 "
       onMouseDown={onClose}
     >
       <div className="absolute inset-0 bg-black/50 " aria-hidden />
@@ -504,9 +513,9 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                             // last box filled, auto-verify
                             const finalOtpString = newOtp.join("");
                             if (finalOtpString.length === 6) {
-                               setTimeout(() => {
-                                  verifyOtp(finalOtpString);
-                               }, 100);
+                              setTimeout(() => {
+                                verifyOtp(finalOtpString);
+                              }, 100);
                             }
                           }
                         }
@@ -558,8 +567,8 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                   {timeLeft > 0 ? (
                     <span className="text-slate-500 font-medium">Resend in {timeLeft}s</span>
                   ) : (
-                    <button 
-                      className="text-sky-600 underline font-semibold hover:text-sky-700" 
+                    <button
+                      className="text-sky-600 underline font-semibold hover:text-sky-700"
                       onClick={() => {
                         setTimeLeft(60);
                         sendRegisterOrLogin();

@@ -41,7 +41,7 @@ export default function AddCategoryModal({ open, onClose, onCreated }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[99999999] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-5 z-10">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">

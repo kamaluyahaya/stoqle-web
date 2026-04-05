@@ -2,7 +2,7 @@
 "use client";
 
 import { Profiler, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   HomeIcon as HomeOutline,
@@ -31,6 +31,7 @@ export default function Sidebar({ navHeight, width }: Props) {
   const auth = useAuth();
   const { unreadCount } = useChat();
   const { cartCount } = useCart();
+  const pathname = usePathname();
 
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
@@ -139,11 +140,16 @@ export default function Sidebar({ navHeight, width }: Props) {
       <Link
         href={href}
         onClick={async (e) => {
+          if (pathname === href) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent("nav-refresh", { detail: { path: href } }));
+            return;
+          }
           if (requireLogin) {
             e.preventDefault();
             const ok = await auth.ensureLoggedIn();
             if (ok) {
-              if (label === "Release") {
+              if (label === "Upload") {
                 window.dispatchEvent(new CustomEvent("showReleaseModal"));
               } else {
                 router.push(href);
@@ -209,7 +215,7 @@ export default function Sidebar({ navHeight, width }: Props) {
 
           {/* gated */}
           <MenuItem
-            label="Release"
+            label="Upload"
             Outline={() => (
               <div className="h-5 w-5 rounded-md border border-gray-400 flex items-center justify-center">
                 <span className="text-gray-500 font-bold">+</span>
@@ -233,8 +239,8 @@ export default function Sidebar({ navHeight, width }: Props) {
         </ul>
 
         {/* Login Section */}
-        {/* Login Section (hidden when logged in) */}
-        {!isLoggedIn && (
+        {/* Login Section (hidden when logged in or still hydrating) */}
+        {auth.isHydrated && !isLoggedIn && (
           <div className="w-full">
             <button
               onClick={() => {

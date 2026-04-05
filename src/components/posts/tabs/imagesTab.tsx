@@ -167,14 +167,17 @@ export default function ImagesTab({
         }}
       />
 
-      {previewPost && (
-        <PostModal
-          post={previewPost}
-          onClose={() => setPreviewPost(null)}
-          onToggleLike={() => { }}
-          isPreview={true}
-        />
-      )}
+      <AnimatePresence>
+        {previewPost && (
+          <PostModal
+            open={!!previewPost}
+            post={previewPost}
+            onClose={() => setPreviewPost(null)}
+            onToggleLike={() => { }}
+            isPreview={true}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="pt-4">
         <button

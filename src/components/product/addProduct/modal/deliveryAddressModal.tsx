@@ -91,7 +91,7 @@ export default function DeliveryAddressModal({
             return;
         }
 
-        const scriptId = "google-maps-sdk"; // Unified ID to match other components
+        const scriptId = "google-maps-geocoding-script"; // Unified ID to match geocoding.ts
 
         const initPlacesService = (retryCount = 0) => {
             try {
@@ -132,7 +132,6 @@ export default function DeliveryAddressModal({
             debug("Google Maps script not found. Creating script tag...");
             script = document.createElement("script");
             script.id = scriptId;
-            // Removed 'loading=async' to use standard onload behavior
             script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
             script.async = true;
             script.defer = true;
@@ -150,8 +149,34 @@ export default function DeliveryAddressModal({
             document.head.appendChild(script);
         } else {
             debug("Google Maps script already exists on page. Checking for library...");
+            
+            // If script exists but URL doesn't have places, we might need a reload or to warn
+            const hasPlacesInUrl = script.src.includes("libraries=places") || script.src.includes("libraries=...,places") || script.src.includes("libraries=places,...");
+            
             if (window.google?.maps?.places) {
                 initPlacesService();
+            } else if (!hasPlacesInUrl) {
+                debug("Existing script missing 'places' library. Appending library...");
+                // Force reload with places if possible, or at least try to load it
+                const newSrc = script.src.includes("libraries=") 
+                    ? script.src.replace(/libraries=([^&]+)/, "libraries=$1,places")
+                    : `${script.src}&libraries=places`;
+                
+                // Note: Simply changing src might not work for Google Maps API once initialized.
+                // But we can try to append a new script if the first one hasn't initialized google.maps yet.
+                if (!window.google?.maps) {
+                    script.src = newSrc;
+                } else {
+                    console.warn("[DeliveryAddressModal] Google Maps initialized without 'places'. Autocomplete may fail.");
+                }
+                
+                const waitForLoad = setInterval(() => {
+                    if (window.google?.maps?.places) {
+                        clearInterval(waitForLoad);
+                        initPlacesService();
+                    }
+                }, 300);
+                setTimeout(() => clearInterval(waitForLoad), 5000);
             } else {
                 const waitForLoad = setInterval(() => {
                     if (window.google?.maps?.places) {
@@ -494,6 +519,8 @@ export default function DeliveryAddressModal({
                 <div
                     key="delivery-address-container"
                     className="fixed inset-0 z-[20005] flex items-end sm:items-center justify-center p-0 outline-none"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     role="dialog"
                     aria-modal="true"
                 >
@@ -506,6 +533,8 @@ export default function DeliveryAddressModal({
                     />
 
                     <motion.div
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         initial={{ y: "100%", opacity: 0.5 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: "100%", opacity: 0.5 }}

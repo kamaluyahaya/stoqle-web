@@ -285,14 +285,14 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                         <div className="p-6 bg-slate-50/50 flex gap-3">
                             <button
                                 onClick={onClose}
-                                className="flex-1 px-6 py-3.5 rounded-2xl font-bold text-slate-600 hover:bg-slate-100 transition"
+                                className="flex-1 px-6 py-3 rounded-full text-slate-600 hover:bg-slate-100 transition"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="flex-1 px-6 py-3.5 rounded-2xl font-bold bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-200 disabled:opacity-50 transition"
+                                className="flex-1 px-6 py-3 rounded-full bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200 disabled:opacity-50 transition"
                             >
                                 {saving ? "Saving..." : "Save Changes"}
                             </button>

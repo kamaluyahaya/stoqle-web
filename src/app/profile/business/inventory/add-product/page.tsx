@@ -990,12 +990,12 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
       )}
 
       {/* Top Sticky Header */}
-      <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+      <div className="sticky top-0 lg:top-16 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 pt-[env(safe-area-inset-top,12px)]">
         <div className="px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={() => router.back()}
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-700 active:scale-95"
+              className="p-2 lg:hidden hover:bg-slate-100 rounded-full transition-colors text-slate-700 active:scale-95"
             >
               <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
             </button>

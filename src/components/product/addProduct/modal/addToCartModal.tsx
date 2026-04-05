@@ -239,8 +239,7 @@ export default function AddToCartModal({
     }, [estimation, effectiveShippingPolicies]);
 
     const [loading, setLoading] = useState(false);
-    const { user, token, ensureLoggedIn, _onLoginSuccess } = useAuth() as any;
-    const [accountModalOpen, setAccountModalOpen] = useState(false);
+    const { user, token, ensureLoggedIn, _onLoginSuccess, ensureAccountVerified } = useAuth() as any;
     const router = useRouter();
     const isOwner = useMemo(() => {
         if (!user || !payload) return false;
@@ -550,17 +549,17 @@ export default function AddToCartModal({
             return (discValue > 0) && (!start || now >= start) && (!end || now <= end);
         });
         if (promo) {
-            return { 
-                percent: Number(promo.discount_percent ?? promo.discount ?? 0), 
-                name: promo.title || promo.occasion || "Promotion" 
+            return {
+                percent: Number(promo.discount_percent ?? promo.discount ?? 0),
+                name: promo.title || promo.occasion || "Promotion"
             };
         }
 
         const sale = effectiveSaleDiscounts.find((d: any) => Number(d.discount_percent ?? d.discount ?? 0) > 0);
         if (sale) {
-            return { 
-                percent: Number(sale.discount_percent ?? sale.discount ?? 0), 
-                name: (sale as any).title || (sale as any).discount_type || (sale as any).type || "Sales Discount" 
+            return {
+                percent: Number(sale.discount_percent ?? sale.discount ?? 0),
+                name: (sale as any).title || (sale as any).discount_type || (sale as any).type || "Sales Discount"
             };
         }
 
@@ -684,7 +683,17 @@ export default function AddToCartModal({
                 setPinError(res.message || "Incorrect PIN");
             }
         } catch (error: any) {
-            setPinError(error?.body?.message || error?.message || "Payment failed");
+            if (error?.message && error.message.startsWith("SECURITY_BLOCK:")) {
+                setShowPinModal(false);
+                Swal.fire({
+                    title: "Security Alert",
+                    text: error.message.replace("SECURITY_BLOCK:", ""),
+                    icon: "error",
+                    confirmButtonColor: "#f43f5e",
+                });
+            } else {
+                setPinError(error?.body?.message || error?.message || "Payment failed");
+            }
         } finally {
             setPinLoading(false);
         }
@@ -756,21 +765,16 @@ export default function AddToCartModal({
                 return;
             }
 
-            if (!user?.phone_no) {
-                setPhoneModalOpen(true);
-                return;
-            }
+            // Unified check for phone and email before allowing purchase
+            const verifiedUser = await ensureAccountVerified() as any;
+            if (!verifiedUser) return;
 
             if (paymentMethod === "paystack") {
-                if (!user?.email) {
-                    setAccountModalOpen(true);
-                    return;
-                }
                 try {
                     setIsPaying(true);
                     const amount = price * quantity;
                     const res = await initializePayment({
-                        email: user.email,
+                        email: verifiedUser.email,
                         amount: amount,
                         metadata: {
                             product_id: payload.productId,
@@ -783,11 +787,11 @@ export default function AddToCartModal({
                             note: sellerNote,
                             business_id: payload.businessId,
                             product_image: productImg,
-                            customer_account_name: user?.full_name || user?.fullName || `${user?.first_name || ""} ${user?.last_name || ""}`.trim() || user?.username,
-                            customer_account_email: user?.email,
-                            customer_account_phone: user?.phone_no || user?.phone || user?.contactNo
+                            customer_account_name: verifiedUser?.full_name || verifiedUser?.fullName || `${verifiedUser?.first_name || ""} ${verifiedUser?.last_name || ""}`.trim() || verifiedUser?.username,
+                            customer_account_email: verifiedUser?.email,
+                            customer_account_phone: verifiedUser?.phone_no || verifiedUser?.phone || verifiedUser?.contactNo
                         }
-                    });
+                    }, token);
 
                     if (res.status && res.data.access_code) {
                         const PaystackPop = (window as any).PaystackPop;
@@ -802,7 +806,7 @@ export default function AddToCartModal({
                             onSuccess: async (response: any) => {
                                 setIsPaying(true);
                                 try {
-                                    const completeRes = await verifyAndCompleteOrder(response.reference);
+                                    const completeRes = await verifyAndCompleteOrder(response.reference, token);
                                     if (completeRes.status) {
                                         toast.success("Order placed successfully!");
                                         onClose(); // Close the modal
@@ -836,15 +840,26 @@ export default function AddToCartModal({
                                 }
                             },
                             onCancel: () => {
+                                setIsPaying(false);
                                 toast("Payment cancelled");
                             }
                         });
                     } else {
                         toast.error("Failed to initialize payment modal. Please try again.");
+                        setIsPaying(false);
                     }
-                } catch (err) {
+                } catch (err: any) {
                     console.error("Payment error", err);
-                    toast.error("Payment initialization failed");
+                    if (err?.message && err.message.startsWith("SECURITY_BLOCK:")) {
+                        Swal.fire({
+                            title: "Security Alert",
+                            text: err.message.replace("SECURITY_BLOCK:", ""),
+                            icon: "error",
+                            confirmButtonColor: "#f43f5e",
+                        });
+                    } else {
+                        toast.error("Payment processing failed");
+                    }
                 } finally {
                     setIsPaying(false);
                 }
@@ -930,6 +945,8 @@ export default function AddToCartModal({
                 <div
                     key="add-to-cart-container"
                     className="fixed inset-0 z-[20000] flex items-end sm:items-center justify-center p-0 outline-none"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     role="dialog"
                     aria-modal="true"
                 >
@@ -965,6 +982,8 @@ export default function AddToCartModal({
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.3 }}
                         transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         style={{
                             transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center"
                         }}
@@ -1076,24 +1095,27 @@ export default function AddToCartModal({
                             </div>
 
                             {/* Integrated Quantity Selector */}
-                            <div className="mt-1 flex items-center gap-3">
-                                <div className="flex items-center bg-slate-100/80 rounded-full px-1 py-1 border border-slate-200 shadow-sm">
-                                    <button
-                                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                                        disabled={quantity <= 1}
-                                        className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm hover:bg-slate-50 disabled:opacity-50 transition"
-                                    >
-                                        <MinusIcon className="w-3.5 h-3.5 text-slate-700 stroke-[3]" />
-                                    </button>
-                                    <span className="text-sm font-black w-10 text-center text-slate-800">{quantity}</span>
-                                    <button
-                                        onClick={() => setQuantity(q => Math.min(availableStock, q + 1))}
-                                        disabled={quantity >= availableStock}
-                                        className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm hover:bg-slate-50 disabled:opacity-50 transition"
-                                    >
-                                        <PlusIcon className="w-3.5 h-3.5 text-slate-700 stroke-[3]" />
-                                    </button>
+                            <div className="mt-1  items-center gap-3">
+                                <div className="">
+                                    <div className="flex items-center  px-1 py-1">
+                                        <button
+                                            onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                                            disabled={quantity <= 1}
+                                            className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm hover:bg-slate-50 disabled:opacity-50 transition"
+                                        >
+                                            <MinusIcon className="w-3.5 h-3.5 text-slate-700 stroke-[3]" />
+                                        </button>
+                                        <span className="text-sm font-black w-10 text-center text-slate-800">{quantity}</span>
+                                        <button
+                                            onClick={() => setQuantity(q => Math.min(availableStock, q + 1))}
+                                            disabled={quantity >= availableStock}
+                                            className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm hover:bg-slate-50 disabled:opacity-50 transition"
+                                        >
+                                            <PlusIcon className="w-3.5 h-3.5 text-slate-700 stroke-[3]" />
+                                        </button>
+                                    </div>
                                 </div>
+                                <p className="text-[10px] text-slate-400 ml-1 -mt-1 ">Maximum 10 purchase</p>
                             </div>
                         </div>
 
@@ -1447,15 +1469,6 @@ export default function AddToCartModal({
                                             <span className="text-lg font-black text-red-600 leading-none">₦{(price * quantity).toLocaleString()}</span>
                                         </div>
 
-                                        {/* <div className="flex-1 flex flex-col items-center justify-center min-w-0 px-2">
-
-                                            {displayPromiseDuration && (
-                                                <span className="text-[8px] font-medium text-slate-400 truncate w-full text-center mt-0.5">
-                                                    Delayed compensation guanrantee
-                                                </span>
-                                            )}
-                                        </div> */}
-
                                         <button
                                             onClick={handleConfirmClick}
                                             disabled={isPaying || isOwner || (estimation !== null && !estimation.is_available) || (paymentMethod === 'stoqle_pay' && wallet !== null && (wallet.available_balance ?? 0) < (price * quantity))}
@@ -1480,14 +1493,6 @@ export default function AddToCartModal({
                                             </>
                                         )}
                                     </div>
-
-                                    // <button
-                                    //     onClick={handleConfirmClick}
-
-                                    //     className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl shadow-xl shadow-red-100 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                    // >
-                                    //     {isPaying ? "Adding..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : `Confirm · ₦ ${(price * quantity).toLocaleString()}`))}
-                                    // </button>
                                 )}
                             </div>
                         </div>
@@ -1501,15 +1506,6 @@ export default function AddToCartModal({
                 onClose={() => setAddressModalOpen(false)}
                 onSave={handleAddressSave}
                 initialData={activeAddress}
-            />
-
-            <AccountVerificationModal 
-                open={accountModalOpen} 
-                onClose={() => setAccountModalOpen(false)}
-                onSuccess={(updatedUser: any) => {
-                    setAccountModalOpen(false);
-                    _onLoginSuccess(updatedUser, token!);
-                }}
             />
 
             {/* Full Screen Image Overlay */}
@@ -1546,17 +1542,6 @@ export default function AddToCartModal({
                     </motion.div>
                 )}
             </AnimatePresence>
-            <PhoneVerificationModal 
-                key="phone-verification-modal-internal"
-                isOpen={phoneModalOpen} 
-                onClose={() => setPhoneModalOpen(false)}
-                onSuccess={() => {
-                    setPhoneModalOpen(false);
-                    // Automatically re-trigger the pay process? 
-                    // Or just let user click "Pay Now" again. 
-                    // Clicking again is safer for UX clarity.
-                }}
-            />
         </AnimatePresence>
     );
 }

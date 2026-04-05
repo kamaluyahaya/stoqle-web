@@ -56,6 +56,22 @@ export const mapApiPost = (p: any): Post => {
       id: p.user_id ?? p.user?.user_id ?? p.user?.id ?? 0,
       name: p.author_name ?? "Unknown",
       avatar: p.author_pic ?? `https://i.pravatar.cc/100?u=${p.user_id ?? apiId}`,
+      is_trusted: Number(
+        p.author_is_trusted ?? 
+        p.user?.is_trusted ?? 
+        p.user?.is_verified_partner ?? 
+        p.user?.is_partner ?? 
+        p.user?.policy?.market_affiliation?.trusted_partner ?? 
+        p.is_verified_partner ?? 
+        p.is_partner ??
+        0
+      ) === 1 || 
+      !!p.author_is_verified || 
+      !!p.user?.is_verified_partner || 
+      !!p.user?.is_partner || 
+      !!p.is_verified_partner || 
+      !!p.is_partner ||
+      !!p.author_is_trusted,
     },
     liked: Boolean(p.liked_by_me),
     likeCount: p.likes_count ?? 0,
@@ -67,6 +83,15 @@ export const mapApiPost = (p: any): Post => {
     category: p.category,
     thumbnail: thumbnail,
     status: p.status,
+    is_product_linked: Boolean(p.is_product_linked),
+    linked_product: p.linked_product,
+    
+    // Engagement Metadata - Master Keys
+    likes_count: p.likes_count ?? p.likeCount ?? 0,
+    comment_count: p.comment_count ?? p.comments_count ?? p.commentCount ?? 0,
+    liked_by_user: Boolean(p.liked_by_me ?? p.liked ?? false),
+    original_audio_url: p.original_audio_url,
+    original_video_url: p.original_video_url,
   };
 };
 
@@ -75,8 +100,12 @@ type FetchPostsOptions = {
   signal?: AbortSignal;
   limit?: number;
   offset?: number;
+  cursor?: string | null;
   category?: string;
   token?: string | null;
+  targetUserId?: string | number | null;
+  buffer_ids?: (string | number)[];
+  is_product_linked?: boolean;
 };
 
 /**
@@ -105,6 +134,31 @@ export async function fetchSocialPosts(opts: FetchPostsOptions = {}) {
 }
 
 /**
+ * Fetch social posts with linked products
+ */
+export async function fetchLinkedProductPosts(opts: FetchPostsOptions = {}) {
+  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+
+  const url = new URL(`${base.replace(/\/$/, "")}/api/social/`);
+  url.searchParams.set("is_product_linked", "true");
+  if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) url.searchParams.set("offset", String(opts.offset));
+
+  const headers: any = { Accept: "application/json" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+
+  const res = await fetch(url.toString(), {
+    signal: opts.signal,
+    headers,
+  });
+  if (!res.ok) throw new Error(`API returned ${res.status}`);
+  const json = await res.json();
+  const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
+  return apiPosts.map(mapApiPost);
+}
+
+/**
  * Fetch a single post by ID
  */
 export async function fetchSocialPostById(postId: number, opts: FetchPostsOptions = {}) {
@@ -117,6 +171,91 @@ export async function fetchSocialPostById(postId: number, opts: FetchPostsOption
   if (!res.ok) throw new Error(`Post not found (${res.status})`);
   const json = await res.json();
   return mapApiPost(json?.data ?? json);
+}
+
+// Persistent cache for deep-link tokens
+interface CachedTokenStore {
+  urlData: any;
+  expiresAt: number;
+}
+
+const getCache = (): Map<string, CachedTokenStore> => {
+  if (typeof window === "undefined") return new Map();
+  try {
+    const stored = sessionStorage.getItem("xsec_tokens");
+    if (stored) return new Map(JSON.parse(stored));
+  } catch (e) {}
+  return new Map();
+};
+
+const saveCache = (cache: Map<string, CachedTokenStore>) => {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem("xsec_tokens", JSON.stringify(Array.from(cache.entries())));
+  } catch (e) {}
+};
+
+/**
+ * Fetch a securely signed deep-link URL from the backend (with caching)
+ */
+export async function fetchSecurePostUrl(postId: number | string, source: string, token?: string | null) {
+  const cacheKey = `${postId}-${source}`;
+  const now = Date.now();
+  const cache = getCache();
+  const cached = cache.get(cacheKey);
+
+  // Return cached token if valid, maintaining a 1-minute buffer before backend expiration
+  if (cached && cached.expiresAt > now + 60000) {
+    return cached.urlData;
+  }
+
+  const base = process.env.NEXT_PUBLIC_API_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+
+  const url = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}/secure-link`);
+  url.searchParams.set("source", source);
+  
+  const headers: any = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const res = await fetch(url.toString(), { headers });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json?.data) {
+      // Backend tokens live for 10m. Cache locally for 9m to handle silent refresh.
+      cache.set(cacheKey, {
+        urlData: json.data,
+        expiresAt: now + 9 * 60 * 1000,
+      });
+      saveCache(cache);
+    }
+    return json?.data || null;
+  } catch (err) {
+    console.error("fetchSecurePostUrl failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Preload securely signed URLs during idle time for upcoming posts
+ */
+export function preloadSecurePostUrls(postIds: (number | string)[], source: string, token?: string | null) {
+  if (typeof window === "undefined") return;
+  const cb = (window as any).requestIdleCallback ?? ((fn: Function) => setTimeout(fn, 250));
+  
+  cb(async () => {
+    for (const id of postIds) {
+      const cacheKey = `${id}-${source}`;
+      const cache = getCache();
+      const cached = cache.get(cacheKey);
+      
+      // Skip if already cached and far from expiry
+      if (!cached || cached.expiresAt <= Date.now() + 60000) {
+        await fetchSecurePostUrl(id, source, token);
+      }
+    }
+  });
 }
 
 /**
@@ -210,7 +349,11 @@ export async function createSocialPost(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(json);
       } else {
-        reject(new Error(json?.message || "Failed to create post"));
+        if (xhr.status === 403 || xhr.status === 429) {
+          reject(new Error("SECURITY_BLOCK:" + (json?.message || "Action restricted by security engine")));
+        } else {
+          reject(new Error(json?.message || "Failed to create post"));
+        }
       }
     };
 
@@ -237,28 +380,38 @@ export async function toggleSocialPostLike(postId: number | string, token: strin
   return json;
 }
 
+export type ActivityPayload = {
+  social_post_id: number;
+  action_type: 'view' | 'like' | 'comment' | 'follow' | 'share';
+  watch_time?: number;
+  watch_progress?: number;
+  completed?: boolean;
+  skipped?: boolean;
+  replays?: number;
+  scroll_velocity_flag?: boolean;
+  category?: string;
+  token?: string | null;
+};
+
 /**
  * Log activity for a social post (view, save, share, etc.)
  */
-export async function logSocialActivity(
-  activity: { social_post_id: number; action_type: string; category?: string; watch_time?: number },
-  token?: string
-) {
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
-  if (!base) return;
+export async function logSocialActivity(payload: ActivityPayload, token?: string | null, baseUrl?: string) {
+  const base = baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
+  if (!base) return null;
+
+  const url = `${base.replace(/\/$/, "")}/api/social/activity`;
+  const headers: any = { "Content-Type": "application/json" };
+  if (token || payload.token) headers.Authorization = `Bearer ${token || payload.token}`;
 
   try {
-    const headers: any = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    fetch(`${base.replace(/\/$/, "")}/api/social/activity`, {
+    const res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(activity),
-    }).catch(() => { }); // fire and forget
-  } catch (e) {
-    console.error("Failed to log social activity", e);
-  }
+      body: JSON.stringify(payload)
+    });
+    return res.ok;
+  } catch(e) { return false; }
 }
 
 /**
@@ -290,4 +443,64 @@ export async function fetchDiscoverFeed(opts: FetchPostsOptions = {}) {
     following: (data.following || []).map(mapApiPost),
     similar: (data.similar || []).map(mapApiPost),
   };
+}
+
+export async function fetchSmartReels(opts: FetchPostsOptions = {}): Promise<{ posts: Post[], nextCursor: string | null }> {
+  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+
+  const url = new URL(`${base.replace(/\/$/, "")}/api/social/reels`);
+  if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
+  if (opts.cursor) url.searchParams.set("cursor", String(opts.cursor));
+  if (opts.targetUserId) url.searchParams.set("target_user_id", String(opts.targetUserId));
+  if (opts.buffer_ids && opts.buffer_ids.length > 0) url.searchParams.set("buffer_ids", opts.buffer_ids.join(","));
+  if (opts.is_product_linked) url.searchParams.set("is_product_linked", "true");
+
+  const headers: any = { Accept: "application/json" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+
+  const res = await fetch(url.toString(), {
+    signal: opts.signal,
+    headers
+  });
+  if (!res.ok) throw new Error(`API returned ${res.status}`);
+  const json = await res.json();
+  const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
+  return {
+    posts: apiPosts.map(mapApiPost),
+    nextCursor: json?.data?.nextCursor || null
+  };
+}
+
+/**
+ * Fetch trending background sounds from the global sound library
+ */
+export async function fetchTrendingSounds(token?: string | null) {
+  const base = process.env.NEXT_PUBLIC_API_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+
+  const url = `${base.replace(/\/$/, "")}/api/social/sounds/trending`;
+  const headers: any = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error("Failed to fetch trending sounds");
+  const json = await res.json();
+  return json?.data || [];
+}
+
+/**
+ * Record usage of a specific sound
+ */
+export async function recordSoundUsage(soundId: number | string, token?: string | null) {
+  const base = process.env.NEXT_PUBLIC_API_URL;
+  if (!base) return;
+
+  const url = `${base.replace(/\/$/, "")}/api/social/sounds/${soundId}/use`;
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    await fetch(url, { method: "POST", headers });
+  } catch (err) {}
 }

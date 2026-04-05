@@ -67,9 +67,9 @@ export default function UserNameIdModal({ open, initialValue, onClose, onSave }:
                 onChange={setFullName}
               />
               <div className="space-y-1.5 px-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Stoqle ID</label>
+                <label className="text-xs font-bold text-slate-500">Stoqle ID</label>
                 <div className="px-5 py-4 rounded-2xl bg-slate-100 text-slate-500 text-sm font-medium">
-                   @{userId || "---"}
+                  @{userId || "---"}
                 </div>
                 <p className="text-[10px] text-slate-400">Stoqle ID cannot be changed currently.</p>
               </div>

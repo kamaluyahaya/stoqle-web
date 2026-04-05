@@ -5,6 +5,7 @@ import { VideoCameraIcon, FilmIcon, TrashIcon, PlayIcon, XMarkIcon, EyeIcon } fr
 import PostModal from "@/src/components/modal/postModal";
 import { useAuth } from "@/src/context/authContext";
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function VideoTab({
   video,
@@ -259,14 +260,17 @@ export default function VideoTab({
         </div>
       </div> */}
 
-      {previewPost && (
-        <PostModal
-          post={previewPost}
-          onClose={() => setPreviewPost(null)}
-          onToggleLike={() => { }}
-          isPreview={true}
-        />
-      )}
+      <AnimatePresence>
+        {previewPost && (
+          <PostModal
+            open={!!previewPost}
+            post={previewPost}
+            onClose={() => setPreviewPost(null)}
+            onToggleLike={() => { }}
+            isPreview={true}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

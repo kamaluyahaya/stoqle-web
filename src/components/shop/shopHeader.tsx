@@ -8,12 +8,13 @@ import LoginModal from "../../components/modal/auth/loginModal";
 import { StarIcon } from "@heroicons/react/24/solid";
 
 import ImageViewer from "../../components/modal/imageViewer";
-import { 
-    ChevronLeftIcon, 
-    MagnifyingGlassIcon, 
-    ChatBubbleOvalLeftEllipsisIcon, 
-    ShareIcon 
+import {
+    ChevronLeftIcon,
+    MagnifyingGlassIcon,
+    ChatBubbleOvalLeftEllipsisIcon,
+    ShareIcon,
 } from "@heroicons/react/24/outline";
+import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { motion, AnimatePresence } from "framer-motion";
 import NextImage from "next/image";
 
@@ -46,6 +47,10 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
     const policy = profileApi?.policy;
 
     const profileUserId = profileApi?.business?.user_id || profileApi?.user_id || profileApi?.user?.user_id || profileApi?.user?.id;
+    const isOwner = Boolean(
+        currentUser && profileUserId &&
+        (String(currentUser.user_id || currentUser.id) === String(profileUserId))
+    );
 
     useEffect(() => {
         if (stats && !followersCount) {
@@ -145,7 +150,9 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
     const logo = formatUrl(business?.business_logo) || formatUrl(business?.logo) || formatUrl(profileApi?.user?.profile_pic) || formatUrl(business?.profile_pic) || DEFAULT_AVATAR;
 
     // rating calculation
-    const rating = Number(stats?.rating ?? (policy?.customer_service?.good_reviews_threshold ? (policy.customer_service.good_reviews_threshold / 20) : 5.0));
+    const rating = Number(stats?.rating ?? stats?.avg_rating ?? (policy?.customer_service?.good_reviews_threshold ? (policy.customer_service.good_reviews_threshold / 20) : 5.0));
+    const totalSold = Number(stats?.total_sold || 0);
+    const totalReviews = Number(stats?.total_reviews || 0);
 
     const handleShare = async () => {
         if (navigator.share) {
@@ -196,21 +203,20 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
     return (
         <div className="w-full bg-white">
             {/* STICKY APP BAR (All Screens) */}
-            <motion.div 
+            <motion.div
                 initial={false}
                 animate={{
                     backgroundColor: scrolled ? dominantColor : "rgba(0,0,0,0)",
                     backdropFilter: scrolled ? "blur(12px)" : "blur(0px)",
                     boxShadow: scrolled ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
-                className={`fixed top-0 left-0 lg:left-[300px] right-0 z-[100] px-4 flex items-center justify-between transition-[left] duration-300 ${
-                    scrolled 
-                        ? "pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-2 h-14" 
+                className={`fixed top-0 left-0 lg:left-[300px] right-0 z-[100] px-4 flex items-center justify-between transition-[left] duration-300 ${scrolled
+                        ? "pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-2 h-14"
                         : "pt-[calc(env(safe-area-inset-top,0px)+10px)] pb-3 h-16"
-                }`}
+                    }`}
             >
                 <div className="flex items-center gap-1.5">
-                    <button 
+                    <button
                         onClick={() => {
                             if (window.history.length > 1) {
                                 router.back();
@@ -224,19 +230,19 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                     </button>
                     <AnimatePresence>
                         {scrolled && (
-                            <motion.div 
+                            <motion.div
                                 initial={{ y: 20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 exit={{ y: 10, opacity: 0 }}
                                 className="flex items-center gap-2"
                             >
                                 <div className="w-7 h-7 rounded-full overflow-hidden border border-white/40 shadow-sm bg-white relative">
-                                    <NextImage 
-                                        src={logo} 
+                                    <NextImage
+                                        src={logo}
                                         fill
                                         sizes="28px"
-                                        className="object-cover" 
-                                        alt="" 
+                                        className="object-cover"
+                                        alt=""
                                     />
                                 </div>
                             </motion.div>
@@ -247,7 +253,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                 {/* Scrolled/Mobile Search Input */}
                 <AnimatePresence>
                     {(scrolled || showSearch) && (
-                        <motion.div 
+                        <motion.div
                             initial={{ y: 20, opacity: 0, scale: 0.95 }}
                             animate={{ y: 0, opacity: 1, scale: 1 }}
                             exit={{ y: 10, opacity: 0, scale: 0.95 }}
@@ -256,7 +262,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                         >
                             <div className="relative flex items-center bg-black/5 rounded-full px-3 py-1.5 border-none outline-none">
                                 <MagnifyingGlassIcon className="w-3.5 h-3.5 text-slate-100 shrink-0" />
-                                <input 
+                                <input
                                     type="text"
                                     autoFocus
                                     value={searchTerm}
@@ -273,7 +279,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                     {/* Search icon (toggles search on/off) */}
                     <AnimatePresence mode="wait">
                         {!(scrolled || showSearch) && (
-                            <motion.button 
+                            <motion.button
                                 key="search-btn"
                                 initial={{ y: 20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
@@ -285,16 +291,47 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                             </motion.button>
                         )}
                     </AnimatePresence>
-                    
+
                     {/* Service / Chat icon */}
-                    <button 
-                        onClick={() => router.push(`/messages?user=${profileUserId}`)}
-                        className="p-2 text-slate-100 transition-colors"
-                    >
-                        <ChatBubbleOvalLeftEllipsisIcon className="w-5.5 h-5.5" />
-                    </button>
+                    {!isOwner && (
+                        <button
+                            onClick={async () => {
+                                if (!token) {
+                                    setShowLoginModal(true);
+                                    return;
+                                }
+                                if (!profileUserId) return;
+
+                                // Try to init conversation instantly 
+                                try {
+                                    const headers: Record<string, string> = {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${token}`,
+                                    };
+                                    const resp = await fetch(`${API_BASE_URL}/api/chat/create`, {
+                                        method: "POST",
+                                        headers,
+                                        body: JSON.stringify({ other_user_id: profileUserId }),
+                                    });
+                                    const json = await resp.json().catch(() => null);
+                                    const convId = json?.chat_room_id ?? json?.data?.chat_room_id ?? json?.id ?? json?.data?.id ?? null;
+
+                                    if (convId) {
+                                        router.push(`/messages?room=${convId}`);
+                                    } else {
+                                        router.push(`/messages?user=${profileUserId}`);
+                                    }
+                                } catch (err) {
+                                    router.push(`/messages?user=${profileUserId}`);
+                                }
+                            }}
+                            className="p-2 text-slate-100 transition-colors"
+                        >
+                            <ChatBubbleOvalLeftEllipsisIcon className="w-5.5 h-5.5" />
+                        </button>
+                    )}
                     {/* Share icon */}
-                    <button 
+                    <button
                         onClick={handleShare}
                         className="p-2 text-slate-100 transition-colors"
                     >
@@ -333,14 +370,27 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
 
                             <div className="flex-1 pb-1 mt-3 sm:mt-5 min-w-0">
                                 <h1
-                                    className="text-[clamp(9px,3.8vw,36px)] font-extrabold text-white drop-shadow-lg tracking-tight whitespace-nowrap leading-tight max-w-full block cursor-pointer hover:text-white/90"
+                                    className="text-[clamp(9px,3.8vw,36px)] font-extrabold text-white drop-shadow-lg tracking-tight whitespace-nowrap leading-tight max-w-full flex items-center gap-2 cursor-pointer hover:text-white/90"
                                     onClick={() => profileUserId && router.push(`/user/profile/${profileUserId}`)}
                                 >
                                     {displayName}
+                                    {Number(profileApi?.policy?.market_affiliation?.trusted_partner) === 1 && (
+                                        <CheckBadgeIcon className="w-5 h-5 text-blue-500 fill-current drop-shadow-md shrink-0" />
+                                    )}
                                 </h1>
+                                {business?.previous_business_name && (
+                                    <p className="text-[10px] text-white/70 italic mt-1 mb-1 drop-shadow-md">
+                                        Previously known as {business.previous_business_name}
+                                    </p>
+                                )}
                                 <div className="flex items-center gap-3 mt-2">
                                     <div className="flex items-start">
-                                        <span className="text-[10px] font-bold text-white/80  tracking-widest drop-shadow-md uppercase">Followers {followersCount.toLocaleString()}+</span>
+                                        <span className="text-[10px] font-bold text-white/80  tracking-widest drop-shadow-md">Followers {followersCount.toLocaleString()}+</span>
+                                    </div>
+
+                                    {/* Sold Count */}
+                                    <div className="flex items-center gap-1.5 border-l border-white/20 pl-3">
+                                        <span className="text-[10px] font-bold text-white/80 tracking-widest drop-shadow-md">Sold {totalSold.toLocaleString()}+</span>
                                     </div>
 
                                     {/* Rating */}
@@ -353,7 +403,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                                                 />
                                             ))}
                                         </div>
-                                        <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">{rating.toFixed(1)}</span>
+                                        <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">{rating.toFixed(1)} ({totalReviews})</span>
                                     </div>
                                 </div>
 

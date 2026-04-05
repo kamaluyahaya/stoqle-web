@@ -133,7 +133,7 @@ function isPromotionActive(promotion: any) {
     const now = new Date();
     const startDate = promotion.start_date || promotion.start;
     const endDate = promotion.end_date || promotion.end;
-    
+
     const start = startDate ? new Date(startDate) : null;
     const end = endDate ? new Date(endDate) : null;
     return (!start || start <= now) && (!end || end >= now);
@@ -186,10 +186,13 @@ function ProductPromoIndicator({ promotion }: { promotion: any }) {
     );
 }
 
+import { useAudio } from "@/src/context/audioContext";
+
 export default function CheckoutPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, token, ensureLoggedIn, isHydrated, _onLoginSuccess } = useAuth();
+    const { user, token, ensureLoggedIn, isHydrated, _onLoginSuccess, ensureAccountVerified } = useAuth();
+    const { playSound } = useAudio();
 
     const [items, setItems] = useState<CartItem[]>([]);
     const [selectedIds, setSelectedIds] = useState<number[]>(() => {
@@ -220,7 +223,6 @@ export default function CheckoutPage() {
 
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerSrc, setViewerSrc] = useState<string | null>(null);
-    const [accountModalOpen, setAccountModalOpen] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -259,12 +261,8 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (typeof document !== 'undefined') {
             if (isProcessing) {
-                document.body.style.backgroundColor = '#0f172a'; // slate-900
-                document.documentElement.style.backgroundColor = '#0f172a';
                 document.body.style.overflow = 'hidden';
             } else {
-                document.body.style.backgroundColor = '';
-                document.documentElement.style.backgroundColor = '';
                 document.body.style.overflow = '';
             }
         }
@@ -276,7 +274,7 @@ export default function CheckoutPage() {
             const res = await fetchCartApi(token);
             if (res.status === 'success') {
                 const fetchedItems: CartItem[] = res.data?.items || [];
-                
+
                 // Deduplicate by cart_id to prevent "duplicate key" crashes in checkout
                 const uniqueItems = fetchedItems.filter((item, index, self) =>
                     index === self.findIndex((t) => t.cart_id === item.cart_id)
@@ -479,7 +477,8 @@ export default function CheckoutPage() {
 
     const { grandTotal } = globalSummary;
 
-    const handlePlaceOrder = async () => {
+    const handlePlaceOrder = async (overrideUser?: any) => {
+        const currentUser = overrideUser || user;
         // Check internet connection
         if (!navigator.onLine) {
             Swal.fire({
@@ -502,8 +501,10 @@ export default function CheckoutPage() {
             return;
         }
 
-        if (!user?.phone_no || !user?.email) {
-            setAccountModalOpen(true);
+        // Unified check for phone and email before allowing purchase
+        const verifiedUser = await ensureAccountVerified() as any;
+        if (!verifiedUser) {
+            setIsProcessing(false);
             return;
         }
 
@@ -526,14 +527,14 @@ export default function CheckoutPage() {
 
                 const metadata = {
                     cart_ids: selectedIds,
-                    customer_id: user?.user_id,
+                    customer_id: verifiedUser?.user_id || verifiedUser?.id,
                     address,
                     vendor_notes: vendorNotes,
                     type: "multi_vendor_checkout"
                 };
 
                 const res = await initializePayment({
-                    email: user.email,
+                    email: verifiedUser.email,
                     amount: grandTotal,
                     metadata
                 });
@@ -560,6 +561,7 @@ export default function CheckoutPage() {
                                     channel.close();
 
                                     toast.success("Order placed successfully!");
+                                    playSound("order_placed");
 
                                     // Log activities for each item
                                     items.forEach(item => {
@@ -603,6 +605,9 @@ export default function CheckoutPage() {
                             }
                         }
                     });
+                } else {
+                    toast.error(res.message || "Could not initialize payment");
+                    setIsProcessing(false);
                 }
             } catch (err) {
                 console.error(err);
@@ -629,21 +634,28 @@ export default function CheckoutPage() {
         setPinLoading(true);
         setPinError(null);
         try {
+            // Re-verify account to get ultra-fresh user for StoqlePay
+            const verifiedUser = await ensureAccountVerified() as any;
+            if (!verifiedUser) {
+                setPinLoading(false);
+                return;
+            }
+
             const metadata = {
                 cart_ids: selectedIds,
-                customer_id: Number(user?.user_id || user?.id),
+                customer_id: Number(verifiedUser?.user_id || verifiedUser?.id),
                 address,
                 vendor_notes: vendorNotes,
-                customer_account_name: user?.full_name || user?.fullName || `${user?.first_name || ""} ${user?.last_name || ""}`.trim() || user?.username,
-                customer_account_email: user?.email,
-                customer_account_phone: user?.phone_no || user?.phone || user?.contactNo,
+                customer_account_name: verifiedUser?.full_name || verifiedUser?.fullName || `${verifiedUser?.first_name || ""} ${verifiedUser?.last_name || ""}`.trim() || verifiedUser?.username,
+                customer_account_email: verifiedUser?.email,
+                customer_account_phone: verifiedUser?.phone_no || verifiedUser?.phone || verifiedUser?.contactNo,
                 type: "multi_vendor_checkout"
             };
             const res = await walletCheckoutApi({
                 amount: grandTotal,
                 pin,
                 metadata,
-                email: user?.email ?? undefined
+                email: verifiedUser?.email ?? undefined
             });
 
             if (res.status === 'success' || res.success) {
@@ -657,6 +669,8 @@ export default function CheckoutPage() {
                 channel.close();
 
                 toast.success("Order placed successfully!");
+                playSound("order_placed");
+
                 // Log activities for each item
                 items.forEach(item => {
                     logUserActivity({ product_id: item.product_id, action_type: 'purchase' }, token);
@@ -1033,36 +1047,6 @@ export default function CheckoutPage() {
             <ImageViewer
                 src={viewerSrc}
                 onClose={() => { setViewerOpen(false); setViewerSrc(null); }}
-            />
-
-            <AnimatePresence>
-                {isProcessing && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[999999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6"
-                    >
-                        <div className="flex flex-col items-center gap-6 max-w-[280px] w-full bg-slate-800/80 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                            <div className="relative">
-                                <div className="w-16 h-16 border-4 border-white/20 rounded-full" />
-                                <div className="absolute top-0 left-0 w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
-                            </div>
-                            <div className="flex flex-col items-center gap-1">
-                                <p className="text-white font-bold text-[10px]  tracking-[0.3em] animate-pulse">Secure Payment</p>
-                                <p className="text-white/60 text-[9px] font-medium">Initializing Paystack...</p>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            <AccountVerificationModal 
-                open={accountModalOpen} 
-                onClose={() => setAccountModalOpen(false)}
-                onSuccess={(updatedUser) => {
-                    setAccountModalOpen(false);
-                    _onLoginSuccess(updatedUser, token!);
-                }}
             />
         </div>
     );

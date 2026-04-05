@@ -1,23 +1,58 @@
 // central types used across the UI and API layer
 export type User = {
-  id: number;
+  id: number | string;
   name: string;
   avatar?: string;
+  is_trusted?: boolean;
+  is_partner?: boolean;
+};
+
+export type APIComment = {
+  comment_id: number;
+  post_id: number;
+  user_id: number;
+  comment_content: string;
+  location?: string | null;
+  comment_at: string;
+  is_author: number;
+  is_first_comment: number;
+  author_name: string;
+  author_pic?: string;
+  author_is_trusted?: boolean;
+  is_partner?: boolean;
+  likes_count: number;
+  author_liked?: boolean;
+  followers_count?: number;
+  posts_count?: number;
+  liked_by_user?: boolean;
+  parent_id?: number | null;
 };
 
 export type Post = {
-  id: number;
-  apiId?: number;
+  id: number | string;
+  apiId?: number | string;
+  social_post_id?: number | string;
   src?: string;
   isVideo?: boolean;
+  isImage?: boolean;
   caption?: string;
   note_caption?: string;
   user: User;
   liked: boolean;
+  liked_by_me?: boolean;
+  liked_by_user?: boolean;
   likeCount: number;
+  likes_count?: number;
+  likesCount?: number;
+  comment_count?: number;
+  commentCount?: number;
+  total_comments?: number;
+  comments_count?: number;
   coverType?: string;
   noteConfig?: any;
   rawCreatedAt?: string;
+  privacy?: string;
+  subtitle?: string;
   allMedia?: { url: string; id: any }[];
   location?: string | null;
   category?: string;
@@ -25,4 +60,22 @@ export type Post = {
   pinnedAt?: string;
   status?: string;
   thumbnail?: string;
+  mediaType?: string;
+  final_video_url?: string;
+  original_video_url?: string;
+  original_audio_url?: string;
+  is_product_linked?: boolean;
+  linked_product?: {
+    product_id: number | string;
+    title: string;
+    price: number | string;
+    image_url?: string;
+    first_image?: string;
+    total_sold?: number;
+    total_quantity?: number;
+    return_shipping_subsidy?: boolean;
+    seven_day_no_reason_return?: boolean;
+    promotions_data?: any;
+    sale_discount_data?: any;
+  } | null;
 };

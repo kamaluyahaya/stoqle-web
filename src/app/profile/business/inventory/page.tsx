@@ -34,7 +34,7 @@ import {
     User
 } from "lucide-react";
 import { smartInventoryApi } from "@/src/lib/api/inventoryApi";
-import { checkDeletionSafety, deleteProduct as apiDeleteProduct } from "@/src/lib/api/productApi";
+import { checkDeletionSafety, deleteProduct as apiDeleteProduct, fetchBusinessMe } from "@/src/lib/api/productApi";
 import { useAuth } from "@/src/context/authContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,6 +47,7 @@ import { fetchProductById } from "@/src/lib/api/productApi";
 interface InventoryItem {
     product_id: number;
     business_id: number;
+    business_slug?: string;
     inventory_id: number;
     name: string;
     category: string;
@@ -112,6 +113,7 @@ export default function SmartInventoryPage() {
     const [deleteModal, setDeleteModal] = useState<{ open: boolean; item: InventoryItem | null; safety: any | null; loading: boolean }>({ open: false, item: null, safety: null, loading: false });
     const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
     const [loadingPreview, setLoadingPreview] = useState<number | null>(null);
+    const [businessData, setBusinessData] = useState<any>(null);
 
     // Stats
     const stats = useMemo(() => {
@@ -155,6 +157,20 @@ export default function SmartInventoryPage() {
             setRefreshing(false);
         }
     };
+
+    const loadBusiness = async () => {
+        if (!token) return;
+        try {
+            const res = await fetchBusinessMe(token);
+            if (res?.ok) setBusinessData(res.data?.business);
+        } catch (err) {
+            console.error("Failed to load business details");
+        }
+    };
+
+    useEffect(() => {
+        loadBusiness();
+    }, [token]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -247,7 +263,7 @@ export default function SmartInventoryPage() {
             setDeleteModal(prev => ({ ...prev, loading: false }));
         }
     };
-    
+
     const openProductPreview = async (productId: number) => {
         setLoadingPreview(productId);
         try {
@@ -312,7 +328,7 @@ export default function SmartInventoryPage() {
     return (
         <div className="min-h-screen bg-slate-100 pb-20">
             {/* Header */}
-            <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-4 left-0 right-0">
+            <div className="sticky top-0 lg:top-16 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 pb-4 flex items-center justify-between gap-4 left-0 right-0 pt-[env(safe-area-inset-top,12px)]">
                 <div className="flex items-center">
                     <button
                         onClick={() => router.back()}
@@ -321,7 +337,10 @@ export default function SmartInventoryPage() {
                         <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
                     </button>
                     <h1 className="text-sm sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                        My Inventory
+                        {businessData?.logo && (
+                            <img src={businessData.logo} alt="" className="w-6 h-6 rounded-full border border-slate-200" />
+                        )}
+                        {businessData?.business_name || "My Inventory"}
                     </h1>
                 </div>
                 <div className="flex items-center gap-3">
@@ -405,8 +424,8 @@ export default function SmartInventoryPage() {
                 </div>
 
                 {/* Inventory Table (Desktop/Tablet) */}
-                <div className="hidden md:block bg-white rounded-[0.5rem] border border-slate-200  overflow-hidden">
-                    <div className="overflow-x-auto">
+                <div className="hidden md:block bg-white rounded-[0.5rem] border border-slate-200">
+                    <div className="">
                         <table className="w-full text-left border-collapse min-w-[900px]">
                             <thead>
                                 <tr className="bg-slate-50/50 border-b border-slate-200">
@@ -434,7 +453,7 @@ export default function SmartInventoryPage() {
                                     products.map(product => (
                                         <React.Fragment key={product.product_id}>
                                             <tr
-                                                className={`${expandedProducts.has(product.product_id) ? 'bg-slate-50/30' : 'hover:bg-slate-50/30'} group transition-colors`}
+                                                className={`${expandedProducts.has(product.product_id) ? 'bg-slate-50/30' : 'hover:bg-slate-50/30'} group transition-colors ${activeMenu === product.product_id ? 'relative z-[60]' : ''}`}
                                             >
                                                 {/* Info */}
                                                 <td className="px-6 py-2.5">
@@ -575,7 +594,7 @@ export default function SmartInventoryPage() {
                                                                             initial={{ opacity: 0, scale: 0.95, y: -10 }}
                                                                             animate={{ opacity: 1, scale: 1, y: 0 }}
                                                                             exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                                                            className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                                                                            className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden"
                                                                         >
                                                                             <div className="p-2 space-y-1">
                                                                                 <button
@@ -589,7 +608,7 @@ export default function SmartInventoryPage() {
                                                                                     Edit Details
                                                                                 </button>
                                                                                 <button
-                                                                                    onClick={() => window.open(`/shop/${product.business_id}?product_id=${product.product_id}`, '_blank')}
+                                                                                    onClick={() => window.open(`/shop/${product.business_slug || product.business_id}?product_id=${product.product_id}`, '_blank')}
                                                                                     className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-all text-left"
                                                                                 >
                                                                                     <Eye className="w-4 h-4 text-slate-400" />
@@ -837,9 +856,9 @@ export default function SmartInventoryPage() {
                             >
                                 <div className="p-6">
                                     <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
-                                        <AlertTriangle className="w-6 h-6 text-red-600" />
+                                        <AlertTriangle className="w-6 h-6 text-red-600 text-center" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2">
+                                    <h3 className="text-xl font-bold text-slate-900 mb-2 text-center">
                                         {deleteModal.loading && !deleteModal.safety ? "Checking safety..." : "Delete Product?"}
                                     </h3>
 
@@ -851,7 +870,7 @@ export default function SmartInventoryPage() {
                                     ) : (
                                         <>
                                             {deleteModal.safety?.canDelete ? (
-                                                <p className="text-slate-600 mb-6 font-medium">
+                                                <p className="text-slate-600 mb-6 ">
                                                     Are you sure you want to permanently delete <span className="font-bold text-slate-900">"{deleteModal.item?.name}"</span>?
                                                     This action cannot be undone.
                                                 </p>
@@ -875,7 +894,7 @@ export default function SmartInventoryPage() {
                                                     <button
                                                         disabled={deleteModal.loading}
                                                         onClick={() => confirmDeletion(false)}
-                                                        className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                                                        className="w-full py-2 bg-red-500 text-white rounded-full hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                                                     >
                                                         {deleteModal.loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Archive Product"}
                                                     </button>
@@ -883,7 +902,7 @@ export default function SmartInventoryPage() {
                                                 <button
                                                     disabled={deleteModal.loading}
                                                     onClick={() => setDeleteModal({ open: false, item: null, safety: null, loading: false })}
-                                                    className="w-full py-3 bg-white text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                                                    className="w-full py-2 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 transition-all"
                                                 >
                                                     Cancel
                                                 </button>
@@ -895,7 +914,7 @@ export default function SmartInventoryPage() {
                         </div>
                     )}
                 </AnimatePresence>
-                
+
                 <PreviewModal
                     open={!!previewPayload}
                     payload={previewPayload}
@@ -926,11 +945,11 @@ function MobileProductCard({
     loadingPreview
 }: any) {
     return (
-        <div className={`bg-white rounded-2xl border ${expanded ? 'border-indigo-200 ring-2 ring-indigo-50' : 'border-slate-200 shadow-sm'} overflow-hidden transition-all duration-300 `}>
+        <div className={`bg-white rounded-2xl border ${expanded ? 'border-indigo-200 ring-2 ring-indigo-50' : 'border-slate-200 shadow-sm'} transition-all duration-300 ${activeMenu === product.product_id ? 'relative z-[30]' : 'relative'}`}>
             <div className="p-4 space-y-4">
                 {/* Header: Info & Menu */}
                 <div className="flex items-start gap-4">
-                    <div 
+                    <div
                         className="w-20 h-20 rounded-xl bg-slate-50 overflow-hidden border border-slate-100 shrink-0 cursor-pointer"
                         onClick={() => onPreview(product.product_id)}
                     >
@@ -965,10 +984,10 @@ function MobileProductCard({
                                 <AnimatePresence>
                                     {activeMenu === product.product_id && (
                                         <motion.div
-                                            initial={{ opacity: 0, scale: 0.9, y: 5 }}
+                                            initial={{ opacity: 0, scale: 0.9, y: -10 }}
                                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.9, y: 5 }}
-                                            className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-[0.5rem] z-50 overflow-hidden ring-1 ring-black/5"
+                                            exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                            className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-[0.5rem] z-[100] overflow-hidden shadow-2xl ring-1 ring-black/5"
                                         >
                                             <div className="p-2 space-y-1">
                                                 <button

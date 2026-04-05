@@ -12,10 +12,13 @@ import AddressSelectionModal from "./addressSelectionModal";
 import { countries } from "@/src/lib/api/country";
 import { fetchBusinessCategories } from "@/src/lib/api/categoryApi";
 import CategorySelectionModal from "../input/default-select";
+import Swal from "sweetalert2";
+import { useAuth } from "@/src/context/authContext";
 
 type StoreType = "individual" | "enterprise" | null;
 
 export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+  const { refreshUser } = useAuth();
   const [step, setStep] = useState<"choose" | "form">("choose");
   const [storeType, setStoreType] = useState<StoreType>(null);
 
@@ -193,11 +196,25 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
         return;
       }
 
-      toast.success(payload.message || "Request submitted — awaiting review");
+      await Swal.fire({
+        title: "Request Received! 🎉",
+        text: payload.message || "Your business registration is now being reviewed. We'll get back to you shortly via email.",
+        icon: "success",
+        confirmButtonColor: "#EF4444",
+        confirmButtonText: "View My Status",
+        background: "#F8FAFC",
+        customClass: {
+          popup: 'rounded-[2rem]',
+          confirmButton: 'rounded-full px-8 py-3'
+        }
+      });
+
       try {
         onClose();
         reset();
+        await refreshUser();
       } catch (e) { }
+
       window.location.href = "/profile/business/business-status";
     } catch (err: any) {
       console.error("submit error", err);

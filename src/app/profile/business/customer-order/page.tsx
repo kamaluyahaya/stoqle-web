@@ -1,16 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { io } from "socket.io-client";
+import DescriptionTextarea from "@/src/components/input/defaultDescTextarea";
 import { API_BASE_URL } from "@/src/lib/config";
 import { useAuth } from "@/src/context/authContext";
 import { cancelOrder, refundOrder } from "@/src/lib/api/orderApi";
-import { ArrowLeft, CheckCircle2, Truck, Package, Search, SearchX, Filter, MoreVertical, XCircle, ChevronRight, MapPin, Phone, User, Info, Calendar, Hash, ExternalLink, ShieldCheck, Clock, SlidersHorizontal } from "lucide-react";
+import { CheckCircle2, Truck, Package, Search, SearchX, Filter, MoreVertical, XCircle, ChevronRight, ChevronLeft, MapPin, Phone, User, Info, Calendar, Hash, ExternalLink, ShieldCheck, Clock, SlidersHorizontal, RefreshCcw, X, ShieldAlert, FileText, Camera, Send, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import OrderSnapshotModal from "@/src/components/orders/OrderSnapshotModal";
 import CancelOrderModal from "@/src/components/orders/CancelOrderModal";
 import { useRouter, useSearchParams } from "next/navigation";
 import OrderSummaryFlyer from "@/src/components/orders/OrderSummaryFlyer";
 import { Download } from "lucide-react";
+import Swal from "sweetalert2";
 
 interface OrderTracking {
     history_id: number;
@@ -45,6 +48,7 @@ interface OrderItem {
 }
 
 interface Shipment {
+    id: number | string;
     shipment_id: number | string;
     status: string;
     shipping_promise: string | null;
@@ -52,6 +56,12 @@ interface Shipment {
     ship_cancel_reason?: string | null;
     ship_cancel_explanation?: string | null;
     delivered_at?: string | null;
+    delivery_code?: string;
+    is_pending_admin_review?: boolean;
+    escrow_status?: string;
+    dispute_status?: string;
+    dispute_reason?: string;
+    dispute_explanation?: string;
 }
 
 interface MasterOrder {
@@ -76,11 +86,15 @@ interface MasterOrder {
     business?: any;
     policies?: any;
     items?: OrderItem[];
+    customer_id?: number | string | null;
     shipments: Shipment[];
 }
 
+import { useAudio } from "@/src/context/audioContext";
+
 export default function VendorOrdersPage() {
     const { token, user } = useAuth();
+    const { playSound } = useAudio();
     const router = useRouter();
     const searchParams = useSearchParams();
     const requestedOrderId = searchParams.get("orderId");
@@ -98,8 +112,11 @@ export default function VendorOrdersPage() {
     const [snapshotOpen, setSnapshotOpen] = useState(false);
     const [snapshotItem, setSnapshotItem] = useState<any>(null);
     const [cancelModalOpen, setCancelModalOpen] = useState(false);
+    const [confirmModalOpen, setConfirmModalOpen] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [confirmingShipmentId, setConfirmingShipmentId] = useState<any | null>(null);
     const flyerRef = React.useRef<HTMLDivElement>(null);
+    const [messageLoading, setMessageLoading] = useState(false);
 
     const statuses = ["all", "order_placed", "confirmed", "ready_for_shipping", "out_for_delivery", "delivered", "cancelled"];
 
@@ -110,6 +127,9 @@ export default function VendorOrdersPage() {
         'confirmed': { label: 'Ready for Shipping', value: 'ready_for_shipping', color: 'bg-indigo-600', icon: Truck },
         'ready_for_pickup': { label: 'Confirm Order', value: 'confirmed', color: 'bg-emerald-600', icon: CheckCircle2 },
         'processing': { label: 'Ready for Shipping', value: 'ready_for_shipping', color: 'bg-indigo-600', icon: Truck },
+        'ready_for_shipping': { label: 'Mark Out for Delivery', value: 'out_for_delivery', color: 'bg-purple-600', icon: Truck },
+        'out_for_delivery': { label: 'Mark as Delivered', value: 'delivered', color: 'bg-rose-600', icon: CheckCircle2 },
+        'pending_admin_review': { label: 'Check Status', value: 'delivered', color: 'bg-emerald-600', icon: ShieldCheck },
     };
 
     const getStatusDisplay = (status: string) => {
@@ -128,10 +148,12 @@ export default function VendorOrdersPage() {
                 return { label: "Partially Cancelled", color: "bg-amber-50 text-amber-600 border border-amber-100", icon: Info };
             case 'partially_completed':
                 return { label: "Partially Completed", color: "bg-emerald-50 text-emerald-600 border border-emerald-100", icon: CheckCircle2 };
-            case "delivered": 
+            case "delivered":
             case "completed":
                 return { label: "Completed", color: "bg-rose-50 text-rose-600 border border-rose-100", icon: CheckCircle2 };
-            case "cancelled": 
+            case "pending_admin_review":
+                return { label: "Under Review", color: "bg-blue-50 text-blue-600 border border-blue-100 animate-pulse", icon: Clock };
+            case "cancelled":
             case "refunded":
                 return { label: "Cancelled", color: "bg-slate-100 text-slate-500", icon: XCircle };
             default: return { label: (status || "Processing").replace(/_/g, ' '), color: "bg-slate-50 text-slate-500", icon: Clock };
@@ -162,11 +184,35 @@ export default function VendorOrdersPage() {
         }
     };
 
-    useEffect(() => { fetchOrders(); }, [token]);
- 
+    useEffect(() => {
+        fetchOrders();
+
+        // Real-time listener for updates
+        if (user && token) {
+            const userId = user.user_id || user.id;
+            if (userId) {
+                const socket = io(API_BASE_URL, { query: { userId } });
+
+                socket.on("order-status-update", (data: any) => {
+                    console.log("Real-time vendor order status updated:", data);
+                    fetchOrders(); // Refresh status instantly
+                });
+
+                socket.on("new-order", (data: any) => {
+                    console.log("Real-time new vendor order received:", data);
+                    fetchOrders(); // Refresh order list instantly
+                });
+
+                return () => {
+                    socket.disconnect();
+                };
+            }
+        }
+    }, [token, user]);
+
     useEffect(() => {
         if (!loading && (requestedOrderId || requestedOrderRef) && orders.length > 0 && !selectedOrder) {
-            const match = orders.find(o => 
+            const match = orders.find(o =>
                 (requestedOrderId && String(o.master_order_id) === String(requestedOrderId)) ||
                 (requestedOrderRef && (o.order_ref === requestedOrderRef || o.display_id === requestedOrderRef || o.payment_ref === requestedOrderRef))
             );
@@ -174,8 +220,84 @@ export default function VendorOrdersPage() {
         }
     }, [loading, requestedOrderId, requestedOrderRef, orders, selectedOrder]);
 
+    const handleMessageClick = async (customerId?: number | string | null) => {
+        if (!token) {
+            toast.error("Please login to message the customer");
+            return;
+        }
+        if (!customerId) {
+            toast.error("Customer context not found for messaging");
+            return;
+        }
+
+        setMessageLoading(true);
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+        };
+
+        try {
+            let convId: string | number | null = null;
+            const tryEndpoints = [
+                { url: `${API_BASE_URL}/api/chat/create`, body: { other_user_id: customerId } },
+                { url: `${API_BASE_URL}/api/conversations/init`, body: { user_id: customerId } },
+            ];
+
+            for (const ep of tryEndpoints) {
+                try {
+                    const resp = await fetch(ep.url, {
+                        method: "POST",
+                        headers,
+                        body: JSON.stringify(ep.body),
+                    });
+                    const json = await resp.json().catch(() => null);
+                    if (resp.ok && json) {
+                        convId = json?.chat_room_id ?? json?.data?.chat_room_id ?? json?.id ?? json?.data?.id ?? null;
+                        if (convId) break;
+                    }
+                } catch (err) {
+                    console.warn("conversation init attempt failed:", ep.url, err);
+                }
+            }
+
+            if (convId) {
+                router.push(`/messages?room=${convId}&user_id=${customerId}`);
+            } else {
+                router.push(`/messages?user_id=${customerId}`);
+            }
+        } catch (err) {
+            console.error("Failed to init conversation:", err);
+            router.push(`/messages?user=${customerId}`);
+        } finally {
+            setMessageLoading(false);
+        }
+    };
+
     const handleCancelOrder = async (cancelData: { type: string; reason: string; explanation?: string }) => {
         if (!selectedOrder) return;
+
+        // ✅ Granular Cancellation Guard: Only block if the TARGET items are already processing
+        const alreadyProcessingStates = ['confirmed', 'ready_for_shipping', 'out_for_delivery', 'shipped', 'delivered', 'released', 'completed', 'pending_admin_review'];
+
+        let targetShipments = selectedOrder.shipments || [];
+        if (cancelData.type === 'shipment') {
+            targetShipments = [selectedOrder.shipments[activeShipmentIdx]];
+        }
+
+        const hasProcessingInTarget = targetShipments.some(s =>
+            alreadyProcessingStates.includes(s.status?.toLowerCase() || '')
+        );
+
+        if (hasProcessingInTarget) {
+            Swal.fire({
+                title: "Cancellation Blocked",
+                text: "The entire order cannot be cancelled as processing has already begun.",
+                icon: "warning",
+                confirmButtonColor: "#f43f5e", // rose-500
+                confirmButtonText: "Understand"
+            });
+            return;
+        }
 
         let idToCancel: string | number = selectedOrder.sale_id || '';
         if (cancelData.type === 'shipment') {
@@ -224,6 +346,18 @@ export default function VendorOrdersPage() {
             const data = await res.json();
             if (res.ok && data.success) {
                 toast.success(`Order ${status.replace(/_/g, ' ')} successfully`);
+
+                // Play specific sound for status update
+                if (status === 'confirmed') {
+                    playSound("delivery_confirmed");
+                } else if (status === 'ready_for_shipping' || status === 'shipping') {
+                    playSound("shipping");
+                } else if (status === 'out_for_delivery') {
+                    playSound("out_for_delivery");
+                } else if (status === 'delivered') {
+                    playSound("delivery_confirmed");
+                }
+
                 await fetchOrders();
                 if (selectedOrder) {
                     await fetchTracking(orderId);
@@ -249,7 +383,7 @@ export default function VendorOrdersPage() {
         } catch (e) { }
 
         const duration = (policy.seven_day_no_reason === true || String(policy.seven_day_no_reason) === "1") ? 7 : (Number(policy.return_window) || 3);
-        
+
         let deliveredDate: Date;
         if (typeof referenceDate === 'string') {
             deliveredDate = new Date(referenceDate.replace(' ', 'T'));
@@ -258,7 +392,7 @@ export default function VendorOrdersPage() {
         }
 
         if (!deliveredDate || isNaN(deliveredDate.getTime())) return false;
-        
+
         const deadline = new Date(deliveredDate.getTime() + duration * 24 * 60 * 60 * 1000);
         return new Date() <= deadline;
     };
@@ -346,7 +480,7 @@ export default function VendorOrdersPage() {
 
         const os = (order.status || 'pending').toLowerCase();
         const sf = statusFilter.toLowerCase();
-        
+
         let matchesStatus = statusFilter === "all";
         if (sf === 'order_placed') {
             matchesStatus = os === 'order_placed' || os === 'pending';
@@ -373,13 +507,36 @@ export default function VendorOrdersPage() {
     const groupOrder = ['Today', 'Yesterday', '2 Days Ago', 'Last 7 Days', 'Last Month', 'Older'];
 
     if (loading) return (
-        <div className="flex h-screen items-center justify-center bg-slate-50">
-            <div className="animate-spin h-8 w-8 border-4 border-rose-500 border-t-transparent rounded-full" />
+        <div className="min-h-screen md:h-[100dvh] lg:h-[calc(100vh-64px)] md:overflow-hidden bg-slate-50 flex flex-col">
+            <div className="px-1 pb-4 pt-0 md:py-4 md:px-8 grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 overflow-hidden">
+                <div className="col-span-1 md:col-span-4 space-y-4 h-full overflow-y-auto scrollbar-hide px-1">
+                    <div className="flex items-center justify-between mb-2 px-1 sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md pt-[max(env(safe-area-inset-top),16px)] pb-3 md:pt-0 md:relative md:bg-transparent">
+                        <div className="h-6 w-24 bg-slate-200 rounded animate-pulse" />
+                        <div className="flex gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-slate-200 animate-pulse" />
+                            <div className="w-8 h-8 rounded-lg bg-slate-200 animate-pulse" />
+                        </div>
+                    </div>
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className="bg-white p-4 rounded-lg border border-slate-100 space-y-3 shadow-sm">
+                            <div className="flex justify-between items-center">
+                                <div className="h-4 w-1/3 bg-slate-100 rounded animate-pulse" />
+                                <div className="h-4 w-16 bg-slate-100 rounded animate-pulse" />
+                            </div>
+                            <div className="h-3 w-1/2 bg-slate-50 rounded animate-pulse" />
+                            <div className="h-10 w-full bg-slate-50 rounded animate-pulse mt-2" />
+                        </div>
+                    ))}
+                </div>
+                <div className="hidden md:block col-span-1 md:col-span-8 bg-white/50 rounded-[0.5rem] border border-slate-100 h-full p-8 animate-pulse">
+                    <div className="w-full h-full bg-slate-100/50 rounded-lg" />
+                </div>
+            </div>
         </div>
     );
 
     return (
-        <div className="md:h-screen md:overflow-hidden bg-slate-50">
+        <div className="h-[100dvh] overflow-hidden bg-slate-50 flex flex-col lg:h-[calc(100vh-64px)]">
             <OrderSnapshotModal
                 open={snapshotOpen}
                 onClose={() => setSnapshotOpen(false)}
@@ -394,77 +551,85 @@ export default function VendorOrdersPage() {
                 shipmentIndex={activeShipmentIdx}
                 saleId={selectedOrder?.sale_id || ''}
             />
-            <div className="px-1 py-4 md:px-8 grid grid-cols-1 md:grid-cols-12 gap-6 md:h-full">
+            <div className="px-1 pb-4 pt-0 md:py-4 md:px-8 grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 overflow-hidden">
 
                 {/* Orders List */}
-                <div className={`col-span-1 md:col-span-4 space-y-3 ${selectedOrder ? 'hidden md:block' : 'block'} md:h-full md:overflow-y-auto scrollbar-hide md:pb-24`}>
-                    <div className="flex items-center justify-between mb-4 px-1">
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-sm text-slate-500 font-bold">Orders</h2>
-                            <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-lg">{filteredOrders.length}</span>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setIsSearchOpen(!isSearchOpen)}
-                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isSearchOpen ? 'bg-rose-500 text-white' : 'hover:bg-slate-200 text-slate-500'}`}
-                            >
-                                <Search size={16} />
-                            </button>
-                            <div className="relative">
+                <div className={`col-span-1 md:col-span-4 h-full overflow-y-auto scrollbar-hide pb-24 space-y-3 ${selectedOrder ? 'hidden md:block' : 'block'}`}>
+                    <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md pt-[max(env(safe-area-inset-top),16px)] pb-3 md:pb-4 -mx-1 px-2 md:-mx-0 md:px-0 md:pt-0 border-b border-slate-200/50 md:border-b-0 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${statusFilter !== 'all' ? 'bg-slate-900 text-white' : 'hover:bg-slate-200 text-slate-500'}`}
+                                    onClick={() => router.back()}
+                                    className="p-1 hover:bg-slate-200 rounded-lg transition-colors text-slate-600 md:hidden"
                                 >
-                                    <SlidersHorizontal size={16} />
+                                    <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
                                 </button>
-
-                                {isFilterOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
-                                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                            {statuses.map(s => (
-                                                <button
-                                                    key={s}
-                                                    onClick={() => {
-                                                        setStatusFilter(s);
-                                                        setIsFilterOpen(false);
-                                                    }}
-                                                    className={`w-full text-left px-4 py-2 text-xs font-bold   hover:bg-slate-50 transition-colors ${statusFilter === s ? 'text-rose-500 bg-rose-50/50' : 'text-slate-600'}`}
-                                                >
-                                                    {s.replace(/_/g, ' ')}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </>
-                                )}
+                                <h2 className="text-sm text-slate-500 font-bold">Orders</h2>
+                                <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-lg">{filteredOrders.length}</span>
                             </div>
-                        </div>
-                    </div>
 
-                    {isSearchOpen && (
-                        <div className="px-1 mb-4 animate-in slide-in-from-top-2 duration-200">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                <input
-                                    type="text"
-                                    placeholder="Search name, ID or product..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-9 pr-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                                    autoFocus
-                                />
-                                {searchQuery && (
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setIsSearchOpen(!isSearchOpen)}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isSearchOpen ? 'bg-rose-500 text-white' : 'hover:bg-slate-200 text-slate-500'}`}
+                                >
+                                    <Search size={16} />
+                                </button>
+                                <div className="relative">
                                     <button
-                                        onClick={() => setSearchQuery("")}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                        onClick={() => setIsFilterOpen(!isFilterOpen)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${statusFilter !== 'all' ? 'bg-slate-900 text-white' : 'hover:bg-slate-200 text-slate-500'}`}
                                     >
-                                        <SearchX size={14} />
+                                        <SlidersHorizontal size={16} />
                                     </button>
-                                )}
+
+                                    {isFilterOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
+                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                {statuses.map(s => (
+                                                    <button
+                                                        key={s}
+                                                        onClick={() => {
+                                                            setStatusFilter(s);
+                                                            setIsFilterOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-slate-50 transition-colors ${statusFilter === s ? 'text-rose-500 bg-rose-50/50' : 'text-slate-600'}`}
+                                                    >
+                                                        {s.replace(/_/g, ' ')}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    )}
+
+                        {isSearchOpen && (
+                            <div className="animate-in slide-in-from-top-2 duration-200 pb-1">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search name, ID or product..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-9 pr-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all shadow-sm"
+                                        autoFocus
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            onClick={() => setSearchQuery("")}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                        >
+                                            <SearchX size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {filteredOrders.length === 0 ? (
                         <div className="bg-white rounded-2xl p-8 border border-dashed border-slate-300 text-center">
@@ -517,7 +682,7 @@ export default function VendorOrdersPage() {
                                                     <span className="text-[10px] text-slate-400 font-bold flex-shrink-0">#{order.sale_id || 'REF'}</span>
                                                 </div>
                                                 <h3 className="font-extrabold text-slate-900 line-clamp-1 text-sm tracking-tight">{order.display_id || order.sale_id}</h3>
-                                                <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400 font-bold mb-3 uppercase tracking-tighter">
+                                                <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400 font-bold mb-3  tracking-tighter">
                                                     <User size={10} />
                                                     <span className="truncate">{order.full_name}</span>
                                                     <span className="text-slate-200">|</span>
@@ -544,7 +709,7 @@ export default function VendorOrdersPage() {
                 </div>
 
                 {/* Order Details / Tracking View */}
-                <div className={`col-span-1 md:col-span-8 ${selectedOrder ? 'block' : 'hidden md:block'} md:h-full md:overflow-y-auto scrollbar-hide md:pb-24`}>
+                <div className={`col-span-1 md:col-span-8 h-full overflow-y-auto scrollbar-hide pb-24 ${selectedOrder ? 'block' : 'hidden md:block'}`}>
                     {selectedOrder ? (
                         <div className="bg-white rounded-lg border border-slate-100 overflow-hidden">
                             {/* Detail Header */}
@@ -559,7 +724,7 @@ export default function VendorOrdersPage() {
                                         }}
                                         className="md:hidden flex items-center bg-red-500 rounded-lg p-2 text-slate-200 mb-2 hover:text-white transition shadow-lg active:scale-95"
                                     >
-                                        <ArrowLeft size={20} />
+                                        <ChevronLeft size={20} />
                                     </button>
                                     <div className="flex gap-2 items-center">
                                         <button
@@ -569,7 +734,7 @@ export default function VendorOrdersPage() {
                                         >
                                             <Download size={18} />
                                         </button>
-                                        <span className={`text-[10px] font-bold px-2 py-2 rounded-lg   ${getStatusDisplay(selectedOrder.status).color.replace('bg-', 'bg-opacity-20 text-').replace('text-', 'text-white bg-')}`}>
+                                        <span className={`text-[10px] px-4 font-bold py-1 rounded-full bg-red-500   ${getStatusDisplay(selectedOrder.status).color.replace('bg-', ' text-').replace('text-', 'bg-')}`}>
                                             {getStatusDisplay(selectedOrder.status).label}
                                         </span>
                                     </div>
@@ -587,14 +752,13 @@ export default function VendorOrdersPage() {
                                             </div>
                                         </div>
                                         <h2 className="text-xl md:text-2xl font-black leading-tight tracking-tight">{selectedOrder.display_id || `ORD-${selectedOrder.sale_id}`}</h2>
-                                        <p className="text-slate-400 text-xs mt-1 flex items-center flex-wrap gap-2 font-bold uppercase tracking-tighter">
+                                        <p className="text-slate-400 text-xs mt-1 flex items-center flex-wrap gap-2 font-bold  tracking-tighter">
                                             <span className="flex items-center gap-1"><User size={12} className="text-rose-500" /> {selectedOrder.full_name}</span>
                                             <span className="w-1 h-1 rounded-full bg-slate-700"></span>
                                             <span className="flex items-center gap-1"><Package size={12} className="text-rose-500" /> {selectedOrder.shipments.reduce((acc, s) => acc + s.items.length, 0)} products</span>
                                             {selectedOrder.order_ref && (
                                                 <>
                                                     <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                                    <span className="text-white bg-slate-800 px-2 py-0.5 rounded">Ref: {selectedOrder.order_ref}</span>
                                                 </>
                                             )}
                                         </p>
@@ -655,11 +819,13 @@ export default function VendorOrdersPage() {
                                                             ? "Order Cancelled. Money Refunded to Customer."
                                                             : (shipStatus === 'delivered' || shipStatus === 'released' || shipStatus === 'completed')
                                                                 ? (refundable ? "Refund Window Active. You can refund if customer requested." : "Delivered. Return Policy Expired.")
-                                                                : refreshing 
-                                                                    ? "Processing updates..." 
-                                                                    : (shipStatus === 'order_placed' || shipStatus === 'pending')
-                                                                        ? (selectedOrder.shipments.length > 1 ? "Confirming will accept ALL parts of this order." : "Confirm this order to begin fulfillment.")
-                                                                        : (selectedOrder.shipments.length > 1 ? `Ready to ship Shipment ${activeShipmentIdx + 1}?` : "Ready to ship this order?")
+                                                                : shipStatus === 'pending_admin_review'
+                                                                    ? "Claim Pending Admin Review. You can still use the customer code for instant approval."
+                                                                    : refreshing
+                                                                        ? "Processing updates..."
+                                                                        : (shipStatus === 'order_placed' || shipStatus === 'pending')
+                                                                            ? (selectedOrder.shipments.length > 1 ? "Confirming will accept ALL parts of this order." : "Confirm this order to begin fulfillment.")
+                                                                            : (selectedOrder.shipments.length > 1 ? `Ready to ship Shipment ${activeShipmentIdx + 1}?` : "Ready to ship this order?")
                                                         }
                                                     </span>
                                                     {(shipStatus === 'cancelled' || shipStatus === 'refunded') && (selectedOrder.dispute_reason || currentShipment.ship_cancel_reason || currentShipment.items[0]?.status === 'cancelled') && (
@@ -676,7 +842,7 @@ export default function VendorOrdersPage() {
                                                     {/* Mobile Actions */}
                                                     {(nextStatusMap[shipStatus] || refundable) && (
                                                         <div className="flex md:hidden items-center gap-2 w-full">
-                                                            {!refundable && !['confirmed', 'shipped', 'delivered', 'released', 'completed'].includes(shipStatus) && (
+                                                            {!refundable && !['confirmed', 'ready_for_shipping', 'out_for_delivery', 'shipped', 'delivered', 'released', 'completed', 'pending_admin_review'].includes(shipStatus) && (
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
@@ -690,7 +856,7 @@ export default function VendorOrdersPage() {
                                                             )}
                                                             <button
                                                                 disabled={refreshing}
-                                                                 onClick={() => {
+                                                                onClick={() => {
                                                                     const items = currentShipment.items || [];
                                                                     if (items.length === 0) {
                                                                         toast.error("No items found in this shipment");
@@ -708,12 +874,50 @@ export default function VendorOrdersPage() {
                                                                             toast.error(`No transition available for status: ${shipStatus}`);
                                                                             return;
                                                                         }
-                                                                        updateStatus(orderIdToUpdate, mapped.value);
+                                                                        if (mapped.value === 'delivered') {
+                                                                            // Dispute Guard Check
+                                                                            if (['held', 'disputed'].includes(currentShipment.escrow_status?.toLowerCase() || '') || (currentShipment.dispute_status === 'open')) {
+                                                                                Swal.fire({
+                                                                                    title: '<span style="font-weight:900;">Order Under Review ⚠️</span>',
+                                                                                    html: `
+                                                                                        <div style="text-align: left; padding: 20px;">
+                                                                                            <p style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 12px;">This order is currently under dispute and is being reviewed by the administration.</p>
+                                                                                            
+                                                                                            <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                                                                                                <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: uppercase; margin-bottom: 4px;">Customer's Reason</p>
+                                                                                                <p style="font-size: 13px; font-weight: 600; color: #9f1239;">${currentShipment.dispute_explanation || currentShipment.dispute_reason || 'Customer reported a problem with this shipment.'}</p>
+                                                                                            </div>
+
+                                                                                            <p style="font-size: 13px; color: #475569; line-height: 1.6;">
+                                                                                                All delivery actions for this shipment have been <b>temporarily disabled</b> while our platform team investigates the claim. We will contact you via email or phone shortly to discuss the resolution.
+                                                                                            </p>
+
+                                                                                            <p style="font-size: 12px; color: #94a3b8; font-weight: 600; margin-top: 24px; text-align: center;">
+                                                                                                Thank you for your patience and for using our platform.
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    `,
+                                                                                    icon: 'info',
+                                                                                    confirmButtonText: 'Got it, Thank you',
+                                                                                    confirmButtonColor: '#0f172a',
+                                                                                    customClass: {
+                                                                                        popup: 'rounded-[1.5rem]',
+                                                                                        confirmButton: 'rounded-full px-8 py-3 font-bold text-xs uppercase'
+                                                                                    }
+                                                                                });
+                                                                                return;
+                                                                            }
+
+                                                                            setConfirmingShipmentId(currentShipment); // Pass entire object
+                                                                            setConfirmModalOpen(true);
+                                                                        } else {
+                                                                            updateStatus(orderIdToUpdate, mapped.value);
+                                                                        }
                                                                     }
                                                                 }}
                                                                 className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-white text-[10px]  shadow-lg transition-all ${refundable ? 'bg-rose-600 hover:bg-rose-700' : nextStatusMap[shipStatus]?.color} ${refreshing ? 'opacity-50' : 'active:scale-95'}`}
                                                             >
-                                                                {refundable ? <ArrowLeft size={12} /> : (!refreshing && nextStatusMap[shipStatus] && React.createElement(nextStatusMap[shipStatus].icon, { size: 12 }))}
+                                                                {refundable ? <ChevronLeft size={12} /> : (!refreshing && nextStatusMap[shipStatus] && React.createElement(nextStatusMap[shipStatus].icon, { size: 12 }))}
                                                                 {refreshing ? "Loading..." : (refundable ? "Refund Customer" : nextStatusMap[shipStatus]?.label)}
                                                             </button>
                                                         </div>
@@ -724,7 +928,7 @@ export default function VendorOrdersPage() {
                                             {/* Desktop Actions */}
                                             {(nextStatusMap[shipStatus] || refundable) && (
                                                 <div className="hidden md:flex items-center gap-2">
-                                                    {!refundable && !['confirmed', 'shipped', 'delivered', 'released', 'completed'].includes(shipStatus) && (
+                                                    {!refundable && !['confirmed', 'ready_for_shipping', 'out_for_delivery', 'shipped', 'delivered', 'released', 'completed', 'pending_admin_review'].includes(shipStatus) && (
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -742,11 +946,49 @@ export default function VendorOrdersPage() {
                                                             const orderIdToUpdate = currentShipment.items[0]?.order_id;
                                                             if (!orderIdToUpdate) return;
                                                             if (refundable) handleRefund(orderIdToUpdate);
-                                                            else updateStatus(orderIdToUpdate, nextStatusMap[shipStatus].value);
+                                                            if (nextStatusMap[shipStatus].value === 'delivered') {
+                                                                // Dispute Guard Check (Desktop)
+                                                                if (['held', 'disputed'].includes(currentShipment.escrow_status?.toLowerCase() || '') || (currentShipment.dispute_status === 'open')) {
+                                                                    Swal.fire({
+                                                                        title: '<span style="font-weight:900;">Order Under Review ⚠️</span>',
+                                                                        html: `
+                                                                                        <div style="text-align: left; padding: 20px;">
+                                                                                            <p style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 12px;">This order is currently under dispute and is being reviewed by the administration.</p>
+                                                                                            
+                                                                                            <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                                                                                                <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: uppercase; margin-bottom: 4px;">Customer's Reason</p>
+                                                                                                <p style="font-size: 13px; font-weight: 600; color: #9f1239;">${currentShipment.dispute_explanation || currentShipment.dispute_reason || 'Customer reported a problem with this shipment.'}</p>
+                                                                                            </div>
+
+                                                                                            <p style="font-size: 13px; color: #475569; line-height: 1.6;">
+                                                                                                All delivery actions for this shipment have been <b>temporarily disabled</b> while our platform team investigates the claim. We will contact you via email or phone shortly to discuss the resolution.
+                                                                                            </p>
+
+                                                                                            <p style="font-size: 12px; color: #94a3b8; font-weight: 600; margin-top: 24px; text-align: center;">
+                                                                                                Thank you for your patience and for using our platform.
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    `,
+                                                                        icon: 'info',
+                                                                        confirmButtonText: 'Got it, Thank you',
+                                                                        confirmButtonColor: '#0f172a',
+                                                                        customClass: {
+                                                                            popup: 'rounded-[1.5rem]',
+                                                                            confirmButton: 'rounded-full px-8 py-3 font-bold text-xs uppercase'
+                                                                        }
+                                                                    });
+                                                                    return;
+                                                                }
+
+                                                                setConfirmingShipmentId(currentShipment); // Pass entire object
+                                                                setConfirmModalOpen(true);
+                                                            } else {
+                                                                updateStatus(orderIdToUpdate, nextStatusMap[shipStatus].value);
+                                                            }
                                                         }}
                                                         className={`flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-white text-[10px] font-bold shadow-lg transition-all ${refundable ? 'bg-rose-600 hover:bg-rose-700' : nextStatusMap[shipStatus]?.color} ${refreshing ? 'opacity-50' : 'hover:scale-[1.02] active:scale-95'}`}
                                                     >
-                                                        {refundable ? <ArrowLeft size={12} /> : (!refreshing && nextStatusMap[shipStatus] && React.createElement(nextStatusMap[shipStatus].icon, { size: 12 }))}
+                                                        {refundable ? <ChevronLeft size={12} /> : (!refreshing && nextStatusMap[shipStatus] && React.createElement(nextStatusMap[shipStatus].icon, { size: 12 }))}
                                                         {refreshing ? "Loading..." : (refundable ? "Refund Customer" : nextStatusMap[shipStatus]?.label)}
                                                     </button>
                                                 </div>
@@ -781,7 +1023,7 @@ export default function VendorOrdersPage() {
                                                                     <h6 className="text-xs font-bold text-slate-900">
                                                                         {selectedOrder.shipments.length > 1 ? `Shipment ${activeShipmentIdx + 1}` : 'Standard Shipping'}
                                                                     </h6>
-                                                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Promise: {ship.shipping_promise || 'Standard'}</p>
+                                                                    <p className="text-[9px] text-slate-400 font-bold  tracking-tighter">Promise: {ship.shipping_promise || 'Standard'}</p>
                                                                 </div>
                                                             </div>
                                                             <span className={`text-[10px] font-bold px-3 py-1 rounded-lg ${getStatusDisplay(ship.status).color}`}>
@@ -850,9 +1092,30 @@ export default function VendorOrdersPage() {
                                                                         (addr.recipientName || selectedOrder.full_name).charAt(0)
                                                                     )}
                                                                 </div>
-                                                                <div>
-                                                                    <div className="font-bold text-slate-900 text-sm">{(addr.recipientName && addr.recipientName !== 'null') ? addr.recipientName : selectedOrder.full_name}</div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="font-bold text-slate-900 text-sm truncate">{(addr.recipientName && addr.recipientName !== 'null') ? addr.recipientName : selectedOrder.full_name}</div>
                                                                     <div className="text-xs text-slate-500">{(addr.contactNo && addr.contactNo !== 'null') ? addr.contactNo : (selectedOrder.phone !== 'null' ? selectedOrder.phone : '')}</div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handleMessageClick(selectedOrder.customer_id)}
+                                                                        disabled={messageLoading}
+                                                                        className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors active:scale-90 disabled:opacity-50"
+                                                                        title="Message Customer"
+                                                                    >
+                                                                        {messageLoading ? (
+                                                                            <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                                                                        ) : (
+                                                                            <MessageSquare size={16} />
+                                                                        )}
+                                                                    </button>
+                                                                    <a
+                                                                        href={`tel:${(addr.contactNo && addr.contactNo !== 'null') ? addr.contactNo : selectedOrder.phone}`}
+                                                                        className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors active:scale-90"
+                                                                        title="Call Customer"
+                                                                    >
+                                                                        <Phone size={16} />
+                                                                    </a>
                                                                 </div>
                                                             </div>
                                                             <div className="flex gap-3">
@@ -875,9 +1138,30 @@ export default function VendorOrdersPage() {
                                                                         selectedOrder.full_name.charAt(0)
                                                                     )}
                                                                 </div>
-                                                                <div>
-                                                                    <div className="font-bold text-slate-900 text-sm">{selectedOrder.full_name}</div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="font-bold text-slate-900 text-sm truncate">{selectedOrder.full_name}</div>
                                                                     <div className="text-xs text-slate-500">{selectedOrder.phone !== 'null' ? selectedOrder.phone : ''}</div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handleMessageClick(selectedOrder.customer_id)}
+                                                                        disabled={messageLoading}
+                                                                        className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors active:scale-90 disabled:opacity-50"
+                                                                        title="Message Customer"
+                                                                    >
+                                                                        {messageLoading ? (
+                                                                            <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                                                                        ) : (
+                                                                            <MessageSquare size={16} />
+                                                                        )}
+                                                                    </button>
+                                                                    <a
+                                                                        href={`tel:${selectedOrder.phone}`}
+                                                                        className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors active:scale-90"
+                                                                        title="Call Customer"
+                                                                    >
+                                                                        <Phone size={16} />
+                                                                    </a>
                                                                 </div>
                                                             </div>
                                                             <div className="flex gap-3">
@@ -1026,7 +1310,489 @@ export default function VendorOrdersPage() {
                     }
                 }
             `}</style>
-            
+
+            {/* Confirm Delivery Modal */}
+            {confirmModalOpen && confirmingShipmentId && (
+                <ConfirmDeliveryModal
+                    shipment={confirmingShipmentId}
+                    onClose={() => {
+                        setConfirmModalOpen(false);
+                        setConfirmingShipmentId(null);
+                    }}
+                    onSuccess={() => {
+                        setConfirmModalOpen(false);
+                        setConfirmingShipmentId(null);
+                        fetchOrders();
+                    }}
+                    token={token || ''}
+                    API_BASE_URL={API_BASE_URL}
+                />
+            )}
+        </div>
+
+    );
+}
+// --- Confirm Delivery Modal (Primary + Fallback) ---
+function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_URL }: any) {
+    const { playSound } = useAudio();
+    const shipmentId = shipment?.shipment_id || shipment?.id;
+    const isPendingReview = shipment?.status === 'pending_admin_review';
+    const [step, setStep] = useState<'method' | 'code' | 'fallback' | 'review'>(isPendingReview ? 'review' : 'method');
+    const [digits, setDigits] = useState(['', '', '', '']);
+    const [reason, setReason] = useState('');
+    const [explanation, setExplanation] = useState('');
+    const [images, setImages] = useState<{ file: File, preview: string }[]>([]);
+    const inputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploading, setUploading] = useState(false);
+
+    const handleDigitChange = (idx: number, val: string) => {
+        const char = val.slice(-1).replace(/\D/g, '');
+        if (!char && val !== '') return;
+
+        const newDigits = [...digits];
+        newDigits[idx] = char;
+        setDigits(newDigits);
+
+        if (char && idx < 3) {
+            inputRefs[idx + 1].current?.focus();
+        }
+
+        if (newDigits.every(d => d !== '')) {
+            handleCodeSubmit(newDigits.join(''));
+        }
+    };
+
+    const handleKeyDown = (idx: number, e: React.KeyboardEvent) => {
+        if (e.key === 'Backspace' && !digits[idx] && idx > 0) {
+            inputRefs[idx - 1].current?.focus();
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+        if (pasteData.length > 0) {
+            const newDigits = [...digits];
+            pasteData.split('').forEach((char, i) => {
+                if (i < 4) newDigits[i] = char;
+            });
+            setDigits(newDigits);
+
+            // Focus the last filled input or the next one
+            const nextIdx = Math.min(pasteData.length, 3);
+            inputRefs[nextIdx].current?.focus();
+
+            if (newDigits.every(d => d !== '')) {
+                handleCodeSubmit(newDigits.join(''));
+            }
+        }
+    };
+
+    const handleCodeSubmit = async (finalCode: string) => {
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/orders/${shipmentId}/confirm-delivery`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code: finalCode })
+            });
+            const data = await res.json();
+            if (data.status === 'success' || data.success) {
+                // Play credited sound as vendor wallet has been credited
+                playSound("credited");
+                onSuccess(); // Close and refresh list
+                Swal.fire({
+                    title: 'Delivery Confirmed!',
+                    text: 'The 4-digit code was verified successfully. Funds have been released to your wallet.',
+                    icon: 'success',
+                    confirmButtonColor: '#10b981'
+                });
+            } else {
+                toast.error(data.message || "Failed to confirm delivery");
+                // Clear code on error to retry
+                setDigits(['', '', '', '']);
+                inputRefs[0].current?.focus();
+            }
+        } catch (err) {
+            toast.error("An error occurred. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleFallbackSubmit = async () => {
+        const isOther = reason === "Other (See explanation)";
+        if (isOther && !explanation) {
+            toast.error("Please provide an explanation.");
+            return;
+        }
+        if (!reason) {
+            toast.error("Please select a reason.");
+            return;
+        }
+        if (images.length === 0) {
+            toast.error("Please upload at least one proof image.");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            setUploading(true);
+            const formData = new FormData();
+            images.forEach(img => formData.append('files', img.file));
+
+            const uploadRes = await fetch(`${API_BASE_URL}/api/meta/upload`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+
+            const uploadData = await uploadRes.json();
+            setUploading(false);
+
+            if (uploadData.status !== 'success') {
+                toast.error("Proof upload failed");
+                setIsSubmitting(false);
+                return;
+            }
+
+            const urls = uploadData.data.filenames.map((u: string) =>
+                u.startsWith('http') ? u : `${API_BASE_URL}/public/${u}`
+            );
+
+            const res = await fetch(`${API_BASE_URL}/api/orders/${shipmentId}/confirm-delivery`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    reason,
+                    explanation: isOther ? explanation : reason,
+                    proof_images: urls
+                })
+            });
+            const data = await res.json();
+            if (data.status === 'success' || data.success) {
+                // Not credited yet, but delivery info submitted
+                playSound("delivery_confirmed");
+                onSuccess();
+                Swal.fire({
+                    title: 'Review Submitted',
+                    text: 'Delivery details have been sent for admin review. This usually takes 24-48 hours.',
+                    icon: 'info',
+                    confirmButtonColor: '#f43f5e'
+                });
+            } else {
+                toast.error(data.message || "Failed to submit delivery");
+            }
+        } catch (err) {
+            toast.error("An error occurred. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+            setUploading(false);
+        }
+    };
+
+    const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        const newImages = Array.from(files).map(file => ({
+            file,
+            preview: URL.createObjectURL(file)
+        }));
+
+        setImages(prev => [...prev, ...newImages].slice(0, 5));
+    };
+
+    const removeImage = (idx: number) => {
+        setImages(prev => {
+            const updated = [...prev];
+            URL.revokeObjectURL(updated[idx].preview);
+            updated.splice(idx, 1);
+            return updated;
+        });
+    };
+
+    const reasons = [
+        "Customer misplaced phone",
+        "No internet access / Poor signal",
+        "Code not received / SMS delay",
+        "Delivery at reception / security post",
+        "Customer request (Special case)",
+        "Other (See explanation)"
+    ];
+
+    return (
+        <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white rounded-[0.5rem] w-full max-w-md shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh]">
+
+                {/* Header */}
+                <div className="p-6 flex items-center justify-between bg-white relative">
+                    {step !== 'method' && step !== 'review' && (
+                        <button onClick={() => setStep(isPendingReview ? 'review' : 'method')} className="p-2 hover:bg-slate-100 rounded-full transition-colors absolute left-4">
+                            <ChevronLeft size={18} className="text-slate-400" />
+                        </button>
+                    )}
+                    <h3 className="text-base font-black text-slate-900 w-full text-center">
+                        {step === 'method' ? "Confirm Delivery" : step === 'review' ? "Review Status" : "Delivery Review"}
+                    </h3>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors absolute right-4">
+                        <X size={20} className="text-slate-400" />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                    {step === 'method' && (
+                        <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
+                            <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 mb-6 font-bold">
+                                <div className="flex gap-3">
+                                    <ShieldAlert className="text-orange-600 flex-shrink-0" size={20} />
+                                    <p className="text-xs text-orange-900 leading-relaxed">
+                                        Secure verification prevents fraud. Primary method requires customer code. Only use fallback method if absolutely necessary.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setStep('code')}
+                                className="w-full p-6 text-left rounded-2xl border border-slate-100 bg-white hover:border-emerald-200 hover:bg-emerald-50/50 transition-all group flex items-start gap-4 shadow-sm"
+                            >
+                                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                    <ShieldCheck size={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h4 className="text-sm font-black text-slate-900">Use Delivery Code</h4>
+                                        <span className="text-[10px] font-black text-white bg-emerald-500 px-2 py-0.5 rounded-full  tracking-widest">Recommended</span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 font-medium leading-relaxed">Enter the 4-digit code provided by the customer. Payment released instantly.</p>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => setStep('fallback')}
+                                disabled={isPendingReview}
+                                className={`w-full p-6 text-left rounded-2xl border border-slate-100 bg-white transition-all group flex items-start gap-4 shadow-sm ${isPendingReview ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:border-rose-200 hover:bg-rose-50/50'}`}
+                            >
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${isPendingReview ? 'bg-slate-100 text-slate-400' : 'bg-rose-100 text-rose-600'}`}>
+                                    <FileText size={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-black text-slate-900 mb-1">No Code (Fallback)</h4>
+                                    <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                                        {isPendingReview ? "Delivery proof already submitted for review." : "Provide proof of delivery and explanation. Subject to 48h admin review."}
+                                    </p>
+                                </div>
+                            </button>
+                        </div>
+                    )}
+
+                    {step === 'review' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100 mb-6 shadow-sm">
+                                <div className="flex gap-4">
+                                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shrink-0">
+                                        <Clock size={20} />
+                                    </div>
+                                    <div>
+                                        <h5 className="text-[12px] font-black text-blue-900 uppercase tracking-widest mb-1">Claim Under Review</h5>
+                                        <p className="text-[11px] text-blue-700/80 font-bold leading-relaxed">
+                                            Fulfillment proof was submitted on {new Date(shipment.updated_at || shipment.created_at).toLocaleDateString()}. Admin will verify this within 48h.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <section className="p-5 bg-white rounded-2xl border border-slate-100 space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Claim Reason</label>
+                                        <p className="text-[13px] font-black text-slate-900 leading-snug">{shipment.delivery_review_reason || "Standard Delivery Claim"}</p>
+                                    </div>
+
+                                    {shipment.delivery_review_explanation && (
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Explanation</label>
+                                            <p className="text-[12px] font-bold text-slate-500 leading-relaxed bg-slate-50/50 p-3 rounded-lg border border-slate-100/50 italic">
+                                                "{shipment.delivery_review_explanation}"
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {shipment.delivery_review_images && (() => {
+                                        try {
+                                            const imgs = JSON.parse(shipment.delivery_review_images);
+                                            if (imgs.length > 0) {
+                                                return (
+                                                    <div>
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Evidence Provided</label>
+                                                        <div className="flex gap-3 mt-1 overflow-x-auto pb-2 scrollbar-hide">
+                                                            {imgs.map((url: string, i: number) => (
+                                                                <img key={i} src={url} className="w-20 h-20 rounded-xl object-cover border-2 border-white shadow-sm ring-1 ring-slate-100 flex-shrink-0" />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                        } catch (e) { } return null;
+                                    })()}
+                                </section>
+
+                                <div className="pt-2">
+                                    <button
+                                        onClick={() => setStep('code')}
+                                        className="w-full p-4 rounded-2xl bg-emerald-50 border-2 border-dashed border-emerald-200 hover:border-emerald-500 hover:bg-emerald-100/50 transition-all group"
+                                    >
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="flex items-center gap-2 text-emerald-700">
+                                                <ShieldCheck size={18} className="animate-bounce" />
+                                                <span className="text-sm font-black tracking-tight">Have the Delivery Code?</span>
+                                            </div>
+                                            <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest group-hover:scale-105 transition-transform underline underline-offset-4 decoration-2">Verify the Delivery NOW</p>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'code' && (
+                        <div className="animate-in slide-in-from-right-4 duration-300">
+                            <div className="flex flex-col items-center text-center mt-4">
+                                <div className="w-16 h-16 bg-emerald-50 rounded-3xl flex items-center justify-center mb-4">
+                                    <ShieldCheck size={32} className="text-emerald-500" />
+                                </div>
+                                <h4 className="text-xl font-black text-slate-900 mb-2">Enter 4-Digit Code</h4>
+                                <p className="text-xs text-slate-400 font-bold mb-8 max-w-[240px]">Ask the customer for the code sent to their email or WhatsApp.</p>
+                            </div>
+
+                            <div className="flex justify-center gap-3 mb-10 mt-6 px-10">
+                                {digits.map((d, i) => (
+                                    <input
+                                        key={i}
+                                        ref={inputRefs[i]}
+                                        type="text"
+                                        maxLength={1}
+                                        value={d}
+                                        onChange={(e) => handleDigitChange(i, e.target.value)}
+                                        onKeyDown={(e) => handleKeyDown(i, e)}
+                                        onPaste={handlePaste}
+                                        disabled={isSubmitting}
+                                        className="w-14 h-16 text-2xl text-center font-black border-2 border-slate-100 focus:border-emerald-500 rounded-2xl outline-none transition-all shadow-inner bg-slate-50 focus:bg-white"
+                                        autoFocus={i === 0}
+                                    />
+                                ))}
+                            </div>
+
+                            <div className="flex flex-col items-center gap-4">
+                                {isSubmitting ? (
+                                    <div className="flex items-center gap-2 text-emerald-600 font-black text-xs  tracking-widest animate-pulse">
+                                        <div className="w-4 h-4 border-2 border-emerald-100 border-t-emerald-600 rounded-full animate-spin" />
+                                        Verifying Secure Code...
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400 font-black  tracking-widest">Awaiting customer code</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'fallback' && (
+                        <div className="animate-in slide-in-from-right-4 duration-300 space-y-6 pb-4">
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400  tracking-widest">Select Reason</label>
+                                    <div className="space-y-2 mt-5">
+                                        {reasons.map((r) => (
+                                            <div
+                                                key={r}
+                                                onClick={() => setReason(r)}
+                                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer group ${reason === r ? 'bg-white border-rose-200 shadow-sm' : 'bg-white/50 border-slate-100 hover:border-slate-200'}`}
+                                            >
+                                                <span className={`text-[13px] font-bold ${reason === r ? 'text-slate-900' : 'text-slate-400'}`}>{r}</span>
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${reason === r ? "bg-rose-500 border-rose-500 shadow-lg shadow-rose-200" : "bg-white border-slate-200"}`}>
+                                                    {reason === r && <CheckCircle2 size={10} className="text-white stroke-[3] animate-in zoom-in duration-200" />}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {reason === "Other (See explanation)" && (
+                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <label className="text-[10px] font-black text-slate-400  tracking-widest">Explanation</label>
+                                        <DescriptionTextarea
+                                            value={explanation}
+                                            onChange={setExplanation}
+                                            placeholder="Briefly explain the situation..."
+                                            maxLength={500}
+                                            required
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-slate-400  tracking-widest block">Media Proof (Min 1 Image)</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {images.map((img, idx) => (
+                                            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 shadow-sm animate-in zoom-in-90">
+                                                <img src={img.preview} className="w-full h-full object-cover" />
+                                                <button
+                                                    onClick={() => removeImage(idx)}
+                                                    className="absolute top-1 right-1 bg-white/90 p-1 rounded-full shadow-lg hover:bg-rose-500 hover:text-white transition-all"
+                                                >
+                                                    <X size={10} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {images.length < 5 && (
+                                            <div className="relative aspect-square group">
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    accept="image/*"
+                                                    onChange={handleImageSelection}
+                                                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                />
+                                                <div className={`w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-1 group-hover:bg-white group-hover:border-rose-300 transition-all ${uploading ? 'animate-pulse' : 'bg-white/50'}`}>
+                                                    {uploading ? <Clock size={16} className="text-rose-400" /> : <Camera size={16} className="text-slate-300" />}
+                                                    <span className="text-[8px] font-black text-slate-400  tracking-tighter">Add Photo</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-[9px] text-slate-400 font-medium italic">Photos of package at customer location are best.</p>
+                                </div>
+                            </div>
+
+                            <button
+                                disabled={isSubmitting || !reason || (reason === "Other (See explanation)" && !explanation) || images.length === 0}
+                                onClick={handleFallbackSubmit}
+                                className="w-full py-2.5 bg-rose-600 text-white rounded-full text-sm shadow-xl shadow-rose-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all flex items-center justify-center gap-2 mt-4"
+                            >
+                                {isSubmitting ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                        {uploading ? "Uploading Proof..." : "Submitting..."}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Send size={18} />
+                                        Request Delivery Confirmation
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
+

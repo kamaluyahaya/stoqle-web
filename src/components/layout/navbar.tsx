@@ -9,6 +9,26 @@ import { useCart } from "@/src/context/cartContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import SearchModal from "../modal/SearchModal";
 import SearchResultsModal from "../modal/SearchResultsModal";
+import {
+  Bars3Icon,
+  XMarkIcon,
+  UserPlusIcon,
+  SparklesIcon,
+  DocumentTextIcon,
+  ChatBubbleOvalLeftIcon,
+  ShoppingBagIcon,
+  ShoppingCartIcon,
+  InformationCircleIcon,
+  QrCodeIcon,
+  QuestionMarkCircleIcon,
+  Cog6ToothIcon,
+  ChevronLeftIcon,
+  MagnifyingGlassIcon,
+  ChevronRightIcon,
+  CreditCardIcon
+} from "@heroicons/react/24/outline";
+import { motion, AnimatePresence } from "framer-motion";
+import { useWallet } from "@/src/context/walletContext";
 type Props = {
   height: number;
 };
@@ -27,6 +47,7 @@ export default function Navbar({ height }: Props) {
   const router = useRouter();
   const { token, user, openLogin } = useAuth();
   const { cartCount } = useCart();
+  const { openWallet } = useWallet();
   const lastPath = useRef(pathname);
 
   useEffect(() => {
@@ -117,6 +138,11 @@ export default function Navbar({ height }: Props) {
 
   // click outside / escape to close mobile menu
   useEffect(() => {
+    if (showMobileMenu) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
     const handleClick = (e: MouseEvent) => {
       if (!showMobileMenu) return;
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -135,6 +161,7 @@ export default function Navbar({ height }: Props) {
     return () => {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = "";
     };
   }, [showMobileMenu]);
 
@@ -162,12 +189,154 @@ export default function Navbar({ height }: Props) {
         }}
       />
 
+      <AnimatePresence>
+        {showMobileMenu && isLoggedIn && (
+          <>
+            {/* Logged-In Full-Page Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileMenu(false)}
+              className="fixed inset-0 z-[400000] bg-black/60 "
+            />
+
+            {/* Logged-In Mobile Drawer */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 h-screen w-[75%] bg-white z-[500000] flex flex-col shadow-2xl overflow-hidden"
+            >
+              {/* Header (Top of Drawer) */}
+              <div className="p-4 mt-5 relative flex items-center justify-center border-gray-50 bg-white">
+                {user && (
+                    <Link
+                      href="/profile/business/business-status"
+                      onClick={() => setShowMobileMenu(false)}
+                      className="bg-red-500 text-white px-6 py-1.5 rounded-full text-xs font-extrabold shadow-sm active:scale-95 transition-all"
+                    >
+                      {Boolean(user?.is_business_owner || user?.business_name || user?.business_id || user?.isBusiness) ? "My shop" : "Open Store"}
+                    </Link>
+                )}
+
+                <button
+                  onClick={() => setShowMobileMenu(false)}
+                  className="absolute right-4 p-2 rounded-full hover:bg-slate-50 transition-colors"
+                >
+                  <XMarkIcon className="h-5 w-5 text-slate-400" />
+                </button>
+              </div>
+
+
+              {/* Main Scrollable Menu Section */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Group 1: Personal / Social - prioritizing per user request */}
+                <MenuGroup>
+                  <DrawerItem
+                    label="Add friends"
+                    icon={UserPlusIcon}
+                    href={`/user/profile/${user?.id || user?.user_id}?tab=friends`}
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                  <DrawerItem
+                    label="Draft"
+                    icon={DocumentTextIcon}
+                    href="/profile?tab=Drafts"
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                </MenuGroup>
+
+                {/* Group 2: Creator & Comments */}
+                <MenuGroup>
+                  <DrawerItem
+                    label="Creator center"
+                    icon={SparklesIcon}
+                    href="/creative/portfolio"
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                  <DrawerItem
+                    label="My comments"
+                    icon={ChatBubbleOvalLeftIcon}
+                    href="/profile?tab=Comments"
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                </MenuGroup>
+
+                {/* Group 3: Shopping & Finance - Wallet under Order */}
+                <MenuGroup>
+                  <DrawerItem
+                    label="Order"
+                    icon={ShoppingBagIcon}
+                    href="/profile/orders"
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                  <DrawerItem
+                    label="Wallet"
+                    icon={CreditCardIcon}
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      openWallet();
+                    }}
+                  />
+                  <DrawerItem
+                    label="Cart"
+                    icon={ShoppingCartIcon}
+                    href="/cart"
+                    badge={cartCount}
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                </MenuGroup>
+
+                {/* Group 4: Information */}
+                <MenuGroup>
+                  <DrawerItem
+                    label="Community Guidelines"
+                    icon={InformationCircleIcon}
+                    href="/help/guidelines"
+                    onClick={() => setShowMobileMenu(false)}
+                  />
+                </MenuGroup>
+              </div>
+
+
+
+              {/* Bottom Footer Section */}
+              <div className="p-6  border-gray-100">
+                <div className="flex items-center justify-around">
+                  {[
+                    { label: "Scan", icon: QrCodeIcon, href: "/scan" },
+                    { label: "Help center", icon: QuestionMarkCircleIcon, href: "/help/faq" },
+                    { label: "Settings", icon: Cog6ToothIcon, href: "/settings" },
+                  ].map((item, idx) => (
+                    <Link
+                      key={idx}
+                      href={item.href}
+                      onClick={() => { }}
+                      className="flex flex-col items-center gap-1 group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-red-500 transition-all">
+                        <item.icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
+                        {item.label}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <header
         className={`fixed top-0 inset-x-0 bg-white backdrop-blur-md p-2 ${pathname === "/messages" || pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory")
           ? "hidden sm:block"
           : ""
           }`}
-        style={{ height, zIndex: (showMobileMenu || showMobileSearch) ? 2500 : 1000 }}
+        style={{ height, zIndex: (showMobileMenu || showMobileSearch) ? 300000 : 1000 }}
       >
         <div className="mx-auto flex h-full items-center px-4 w-full">
           {/* ---------- Desktop & Tablet: Logo & main search ---------- */}
@@ -229,8 +398,8 @@ export default function Navbar({ height }: Props) {
               </svg>
             </button>
 
-            {/* Hamburger + anchored dropdown */}
-            <div className="relative" ref={menuRef}>
+            {/* Hamburger + optional anchored dropdown / drawer trigger */}
+            <div className="relative">
               <button
                 className="rounded-full p-2 hover:bg-gray-100 transition-all duration-300"
                 aria-label="Menu"
@@ -240,25 +409,21 @@ export default function Navbar({ height }: Props) {
                 }}
               >
                 <div className="relative w-5 h-5">
-                   <div 
+                  <div
                     className={`absolute inset-0 transition-all duration-300 transform ${showMobileMenu ? 'rotate-90 opacity-0' : 'rotate-0 opacity-100'}`}
-                   >
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                     </svg>
-                   </div>
-                   <div 
+                  >
+                    <Bars3Icon className="h-5 w-5 text-gray-700" />
+                  </div>
+                  <div
                     className={`absolute inset-0 transition-all duration-300 transform ${showMobileMenu ? 'rotate-0 opacity-100' : '-rotate-90 opacity-0'}`}
-                   >
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                     </svg>
-                   </div>
+                  >
+                    <XMarkIcon className="h-5 w-5 text-gray-700" />
+                  </div>
                 </div>
               </button>
 
-              {/* Dropdown container anchored under the hamburger */}
-              {showMobileMenu && (
+              {/* 2. Legacy Dropdown (For Logged Out Users - keep simplicity) */}
+              {showMobileMenu && !isLoggedIn && (
                 <div
                   className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-gray-200/60 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] z-[2000]"
                   role="menu"
@@ -274,41 +439,18 @@ export default function Navbar({ height }: Props) {
                           aria-label="Back"
                           className="p-2 rounded-full hover:bg-gray-100/10"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                          </svg>
+                          <ChevronLeftIcon className="h-4 w-4 text-gray-700" />
                         </button>
 
-                        {/* Title: bold white on dark background for readability */}
                         <div className="flex-1 px-3 py-2 rounded-md">
                           <div className="text-sm font-bold text-black">{activeSubmenu}</div>
                         </div>
                       </div>
                     )}
 
-                    {/* Main menu list */}
                     {!activeSubmenu && (
                       <div>
                         <ul className="flex flex-col gap-1">
-                          {isLoggedIn && (
-                            <li>
-                              <button
-                                className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
-                                onClick={() => setActiveSubmenu("My Profile")}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {isLoggedIn && profileImage && (
-                                    <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border border-gray-100" />
-                                  )}
-                                  <span className="truncate max-w-[140px]">{displayName}</span>
-                                </div>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                </svg>
-                              </button>
-                            </li>
-                          )}
-
                           <li>
                             <button
                               className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
@@ -336,7 +478,7 @@ export default function Navbar({ height }: Props) {
                         </ul>
 
                         {/* divider */}
-                        <div className="my-2 border-t border-gray-100" />
+                        <div className="my-2  " />
 
                         <ul className="flex flex-col gap-1">
                           <li>
@@ -376,252 +518,18 @@ export default function Navbar({ height }: Props) {
                           </li>
                         </ul>
 
-
-
                         {/* Login button (only when NOT logged in) */}
-                        {!isLoggedIn && (
-                          <div className="mt-3 flex justify-center">
-                            <div className="my-2 border-t border-gray-100" />
-                            <button
-                              onClick={async () => {
-                                setShowMobileMenu(false);
-                                setActiveSubmenu(null);
-                                await openLogin();
-                              }}
-                              className="rounded-full bg-red-500 text-white px-6 py-2 text-sm font-medium shadow-sm"
-                            >
-                              Login
-                            </button>
-                          </div>
-                        )}
-
+                        <div className="mt-3 flex justify-center pb-2">
+                          <button
+                            onClick={async () => {
+                              await openLogin();
+                            }}
+                            className="w-[90%] rounded-full bg-red-500 text-white px-6 py-2 text-sm font-bold shadow-sm active:scale-95 transition-all"
+                          >
+                            Login
+                          </button>
+                        </div>
                       </div>
-                    )}
-                    {/* Submenu: About Stoqle */}
-                    {activeSubmenu === "My Profile" && (
-                      <ul className="flex flex-col gap-1">
-                        <div className="my-2 border-t border-gray-100" />
-                        <MobileSubmenuRow label="Order" href="/profile/orders" />
-                        <MobileSubmenuRow label="Cart" href="/cart" badge={cartCount || 0} />
-                        <MobileSubmenuRow label="Wallet" href="/profile/wallet" />
-                        <MobileSubmenuRow label="My Account" href="/profile" />
-                      </ul>
-                    )}
-
-
-                    {/* Submenu: Creative Center */}
-                    {activeSubmenu === "Creative Center" && (
-
-                      <ul className="flex flex-col gap-1">
-                        <div className="my-2 border-t border-gray-100" />
-                        <li>
-                          <Link
-                            href="/creative/portfolio"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Portfolio</span>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/creative/contact"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Contact creatives</span>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                      </ul>
-                    )}
-
-                    {/* Submenu: Business Cooperation */}
-                    {activeSubmenu === "Business Cooperation" && (
-                      <ul className="flex flex-col gap-1">
-                        <div className="my-2 border-t border-gray-100" />
-                        <li>
-                          <Link
-                            href="/business/account"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Business account</span>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/business/onboarding"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Merchant onboarding</span>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                      </ul>
-                    )}
-
-                    {/* Submenu: Help and Customer Service */}
-                    {activeSubmenu === "Help and Customer Service" && (
-
-                      <ul className="flex flex-col gap-1">
-                        <div className="my-2 border-t border-gray-100" />
-                        <li>
-                          <Link
-                            href="/help/faq"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">FAQ</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/help/contact"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Contact support</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                      </ul>
-                    )}
-
-                    {/* Submenu: Privacy, Agreement */}
-                    {activeSubmenu === "Privacy, Agreement" && (
-                      <ul className="flex flex-col gap-1">
-                        <div className="my-2 border-t border-gray-100" />
-                        <li>
-                          <Link
-                            href="/legal/terms"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Terms of Service</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/legal/privacy"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Privacy Policy</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                      </ul>
-                    )}
-
-                    {/* Submenu: About Stoqle */}
-                    {activeSubmenu === "About Stoqle" && (
-                      <ul className="flex flex-col gap-1">
-                        <div className="my-2 border-t border-gray-100" />
-                        <li>
-                          <Link
-                            href="/about/team"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Our team</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                        <li>
-                          <Link
-                            href="/about/careers"
-                            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 group transition-colors"
-                            onClick={() => {
-                              setShowMobileMenu(false);
-                              setActiveSubmenu(null);
-                            }}
-                          >
-                            <span className="text-gray-500">Careers</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-transparent group-hover:text-gray-400 transition-transform transform -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M11 7h6v6" />
-                            </svg>
-                          </Link>
-                        </li>
-                      </ul>
                     )}
                   </div>
                 </div>
@@ -631,5 +539,62 @@ export default function Navbar({ height }: Props) {
         </div>
       </header>
     </>
+  );
+}
+
+// ── Styled Menu Components ─────────────────────────────────────
+
+function MenuGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-slate-50 border border-slate-100/50 rounded-2xl overflow-hidden divide-y divide-slate-100/60 ">
+      {children}
+    </div>
+  );
+}
+
+function DrawerItem({
+  label,
+  icon: Icon,
+  href,
+  onClick,
+  badge,
+}: {
+  label: string;
+  icon: any;
+  href?: string;
+  onClick: () => void;
+  badge?: number;
+}) {
+  const content = (
+    <div className="flex items-center justify-between p-4 hover:bg-slate-100 active:bg-slate-200 transition-all group active:scale-[0.99] cursor-pointer">
+      <div className="flex items-center gap-4">
+        <Icon className="w-5 h-5 text-slate-500 group-hover:text-red-500 transition-colors" />
+        <span className="font-bold text-slate-800 text-[14px] tracking-tight">
+          {label}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        {badge !== undefined && badge > 0 && (
+          <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold min-w-[18px] text-center shadow-sm">
+            {badge}
+          </span>
+        )}
+        <ChevronRightIcon className="w-4 h-4 text-slate-300" />
+      </div>
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} onClick={onClick}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div onClick={onClick}>
+      {content}
+    </div>
   );
 }

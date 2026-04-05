@@ -80,28 +80,61 @@ export default function PolicyList({
   const business = businessData?.business ?? null;
 
   const effectiveReturnPolicy = React.useMemo(() => {
+    const storeReturns = policy?.returns ?? {};
     if (payload?.policyOverrides && !payload.policyOverrides.useStoreDefaultReturn) {
       const over = payload.policyOverrides.returnPolicy;
       return {
-        seven_day_no_reason: (over?.['7dayNoReasonReturn'] || over?.sevenDayNoReasonReturn) ? 1 : 0,
-        rapid_refund: over?.rapidRefund ? 1 : 0,
-        return_shipping_subsidy: over?.returnShippingSubsidy ? 1 : 0,
-        return_window: over?.returnWindow ?? 3
+        seven_day_no_reason: (over?.['7dayNoReasonReturn'] ?? over?.sevenDayNoReasonReturn) !== undefined
+          ? (over?.['7dayNoReasonReturn'] || over?.sevenDayNoReasonReturn ? 1 : 0)
+          : (storeReturns.seven_day_no_reason ?? 0),
+        rapid_refund: over?.rapidRefund !== undefined
+          ? (over.rapidRefund ? 1 : 0)
+          : (storeReturns.rapid_refund ?? 0),
+        return_shipping_subsidy: over?.returnShippingSubsidy !== undefined
+          ? (over.returnShippingSubsidy ? 1 : 0)
+          : (storeReturns.return_shipping_subsidy ?? 0),
+        return_window: over?.returnWindow ?? storeReturns.return_window ?? 3,
+        additional_info: over?.additionalInfo ?? storeReturns.additional_info
       };
     }
-    return policy?.returns ?? {};
+    return storeReturns;
   }, [payload?.policyOverrides, policy]);
 
   const effectiveShippingPolicies = React.useMemo(() => {
+    const storeShipping = (policy?.shipping || policy?.shipping_duration) ?? [];
+    const getStoreRule = (kind: string) => storeShipping.find((s: any) => s.kind === kind || s.type === kind);
+
     if (payload?.policyOverrides && !payload.policyOverrides.useStoreDefaultShipping) {
       const over = payload.policyOverrides.shippingPolicy;
-      return [
-        { kind: "avg", value: over?.avgDuration, unit: over?.avgUnit },
-        { kind: "promise", value: over?.promiseDuration, unit: over?.promiseUnit },
-        { kind: "delivery_radius_km", value: over?.radiusKm, unit: "km" }
-      ] as any[];
+      const rules = [];
+
+      // Avg Duration
+      const avgRule = getStoreRule("avg");
+      rules.push({
+        kind: "avg",
+        value: over?.avgDuration ?? avgRule?.value,
+        unit: over?.avgUnit ?? avgRule?.unit
+      });
+
+      // Promise Duration
+      const promiseRule = getStoreRule("promise");
+      rules.push({
+        kind: "promise",
+        value: over?.promiseDuration ?? promiseRule?.value,
+        unit: over?.promiseUnit ?? promiseRule?.unit
+      });
+
+      // Delivery Radius
+      const radiusRule = getStoreRule("delivery_radius_km");
+      rules.push({
+        kind: "delivery_radius_km",
+        value: over?.radiusKm ?? radiusRule?.value,
+        unit: "km"
+      });
+
+      return rules as any[];
     }
-    return (policy?.shipping || policy?.shipping_duration) ?? [];
+    return storeShipping;
   }, [payload?.policyOverrides, policy]);
 
   const vendorLoc = {
@@ -148,7 +181,7 @@ export default function PolicyList({
 
   if (loading) return <div className="text-xs text-slate-400">loading…</div>;
   if (error) return <div className="mt-2 text-xs text-rose-600">{error}</div>;
-  if (!businessData || !policy) return <div className="mt-2 text-xs text-slate-400">No business details available</div>;
+  if (!businessData) return <div className="mt-2 text-xs text-slate-400">No business details available</div>;
 
   const shippingArray = effectiveShippingPolicies;
   const shippingAvg = shippingArray.find((s: any) => s.kind === "avg" || s.type === "avg") ?? null;
@@ -343,7 +376,7 @@ export default function PolicyList({
                 <div className="flex items-start gap-2 min-w-0">
                   <ClockIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
                   <div className="min-w-0">
-                    <div className="font-medium text-slate-700 truncate flex">Selected: <div className="bg-slate-200 px-2 ml-2 flex">{selectedText}</div></div>
+                    <div className="font-medium text-slate-700 truncate flex">Selected: <div className="bg-slate-200 px-2 ml-2 flex rounded">{selectedText}</div></div>
                   </div>
                 </div>
               </div>

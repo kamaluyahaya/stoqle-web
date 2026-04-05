@@ -14,9 +14,11 @@ import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { ChevronLeftIcon, ChevronRightIcon, ChatBubbleBottomCenterTextIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { chatDb, type CachedMessage, type CachedRoom } from "@/src/lib/services/chatDb";
-import { Package, X, CheckCircle, ChevronRight, Zap, RefreshCw, AlertCircle } from "lucide-react";
+import { Package, X, CheckCircle, ChevronRight, Zap, RefreshCw, AlertCircle, AlertTriangle, Copy, XCircle } from "lucide-react";
 import ImageViewer from "@/src/components/modal/imageViewer"; // Added ImageViewer import
 
 const formatUrl = (path?: string | null) => {
@@ -57,7 +59,7 @@ type Message = {
   message_type?: "text" | "file" | string;
   is_read?: number | boolean;
   sent_at?: string | null;
-  status?: "sending" | "sent" | "failed";
+  status?: "sending" | "sent" | "failed" | "processing";
   file?: { file_id?: string | number; file_url?: string } | any;
   file_url?: string | null;
   file_type?: string | null;
@@ -70,6 +72,7 @@ type Message = {
   order_id?: string | number | null;
   order_ref?: string | null;
   updated_at?: string | null;
+  video_thumbnail?: string | null;
 };
 
 function MessagesPageContent({
@@ -84,8 +87,8 @@ function MessagesPageContent({
   const userId = String(userIdProp ?? ctxUserId ?? savedUserId ?? "150");
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const searchParams = useSearchParams();
-  const roomParam = searchParams.get("room");
-  const userParam = searchParams.get("user");
+  const roomParam = searchParams.get("room") || searchParams.get("room_id");
+  const userParam = searchParams.get("user") || searchParams.get("user_id") || searchParams.get("u_id");
   const router = useRouter();
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -114,6 +117,21 @@ function MessagesPageContent({
   const [taggedOrderId, setTaggedOrderId] = useState<string | number | null>(null);
   const [taggedOrderData, setTaggedOrderData] = useState<any | null>(null);
   const [isOrderDataLoading, setIsOrderDataLoading] = useState(false);
+  const [isTrimming, setIsTrimming] = useState(false);
+  const [trimmingProgress, setTrimmingProgress] = useState(0);
+  const ffmpegRef = useRef<any>(null);
+
+  const loadFFmpeg = async () => {
+    if (ffmpegRef.current) return ffmpegRef.current;
+    const ffmpeg = new FFmpeg();
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+    ffmpegRef.current = ffmpeg;
+    return ffmpeg;
+  };
 
   // Tracking Modal State
   const [trackingOrderId, setTrackingOrderId] = useState<string | number | null>(null);
@@ -133,12 +151,20 @@ function MessagesPageContent({
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [isSearchingList, setIsSearchingList] = useState(false);
+  const [roomsLoaded, setRoomsLoaded] = useState(false);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
 
   function scrollToBottom(behavior: ScrollBehavior = "smooth") {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }
+
+  // Ensure page starts from top on navigation (crucial for mobile/tablet)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
+    }
+  }, [roomParam]);
 
   // ---------- API calls ----------
 
@@ -169,6 +195,7 @@ function MessagesPageContent({
         if (r.unread_count) cacheUnread[r.chat_room_id] = Number(r.unread_count);
       });
       setUnreadMap(cacheUnread);
+      setRoomsLoaded(true); // Allow UI to proceed with cached data
     }
 
     try {
@@ -191,9 +218,11 @@ function MessagesPageContent({
         }
       });
       setUnreadMap(initialUnread);
+      setRoomsLoaded(true);
     } catch (err) {
       console.warn("fetchRooms sync failed", err);
       // Fallback: If network fails, already showing cache
+      setRoomsLoaded(true);
     }
   }
 
@@ -286,6 +315,17 @@ function MessagesPageContent({
         body: JSON.stringify({ other_user_id: otherUserId })
       });
       const data = await res.json();
+
+      if (res.status === 403) {
+        toast.error(data.error || data.message || "Message restricted by recipient's privacy settings");
+        return;
+      }
+
+      if (!res.ok) {
+        toast.error(data.error || data.message || "Failed to start conversation");
+        return;
+      }
+
       const newRoom = data.chatRoom || data.data || data;
 
       if (newRoom && newRoom.chat_room_id) {
@@ -344,18 +384,23 @@ function MessagesPageContent({
   };
 
   const handleImageClick = (clickedUrl: string) => {
-    const allImages = messages
+    const allMedia = messages
       .filter(m => {
         const url = m.file_url || m.file?.file_url;
         const type = m.file_type || m.file?.file_type;
-        return url && (type?.includes('image') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(type || ''));
+        return url && (
+          type?.includes('image') ||
+          ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(type || '') ||
+          type?.includes('video') ||
+          ['mp4', 'webm', 'ogg'].includes(type || '')
+        );
       })
       .map(m => formatUrl(m.file_url || m.file?.file_url));
 
-    if (allImages.length === 0 && clickedUrl) allImages.push(clickedUrl);
+    if (allMedia.length === 0 && clickedUrl) allMedia.push(clickedUrl);
 
-    setViewerImages(allImages);
-    const idx = allImages.indexOf(clickedUrl);
+    setViewerImages(allMedia);
+    const idx = allMedia.indexOf(clickedUrl);
     setViewerIndex(idx >= 0 ? idx : 0);
     setIsViewerOpen(true);
   };
@@ -378,7 +423,7 @@ function MessagesPageContent({
       chat_room_id: selectedRoom.chat_room_id,
       sender_id: userId,
       message_content: finalContent.trim(),
-      message_type: selectedFile ? "file" : "text",
+      message_type: selectedFile ? (selectedFile.name.startsWith('voice_') ? 'voice' : "file") : "text",
       sent_at: new Date().toISOString(),
       file_url: localFileUrl || filePreview,
       file_type: selectedFile?.type,
@@ -421,10 +466,79 @@ function MessagesPageContent({
   async function performSendMessage(tempMsg: Message, file: File | null, content: string, roomId: string | number) {
     try {
       let finalMessage: Message;
+      let uploadFile = file;
 
-      if (file) {
+      if (uploadFile) {
+        if (uploadFile.type.startsWith('video/')) {
+          setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? { ...m, status: "processing" } : m));
+
+          try {
+            const tempVideo = document.createElement("video");
+            const objectUrl = URL.createObjectURL(uploadFile);
+            tempVideo.preload = "metadata";
+
+            await new Promise<void>((resolve, reject) => {
+              tempVideo.onloadedmetadata = () => resolve();
+              tempVideo.onerror = () => reject(new Error("Failed to load video metadata"));
+              tempVideo.src = objectUrl;
+            });
+
+            if (tempVideo.duration > 120) {
+              const ffmpeg = await loadFFmpeg();
+              const inputName = `input_${Date.now()}.mp4`;
+              const outputName = `output_${Date.now()}.mp4`;
+              const thumbName = `thumb_${Date.now()}.jpg`;
+
+              await ffmpeg.writeFile(inputName, await fetchFile(uploadFile));
+
+              // Generate thumbnail at 3s simultaneously with trimming
+              await ffmpeg.exec(['-i', inputName, '-ss', '00:00:03', '-vframes', '1', thumbName]);
+              const thumbData = await ffmpeg.readFile(thumbName);
+              const thumbBlob = new Blob([(thumbData as any).buffer], { type: 'image/jpeg' });
+              const thumbUrl = URL.createObjectURL(thumbBlob);
+
+              setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? { ...m, video_thumbnail: thumbUrl } : m));
+
+              await ffmpeg.exec(['-i', inputName, '-t', '120', '-c', 'copy', outputName]);
+
+              const data = await ffmpeg.readFile(outputName);
+              const trimmedBlob = new Blob([(data as any).buffer], { type: 'video/mp4' });
+              uploadFile = new File([trimmedBlob], uploadFile.name, { type: 'video/mp4' });
+
+              await ffmpeg.deleteFile(inputName);
+              await ffmpeg.deleteFile(outputName);
+              await ffmpeg.deleteFile(thumbName);
+            } else {
+              // Even if not trimming, generate thumbnail for instant view
+              const ffmpeg = await loadFFmpeg();
+              const inputName = `input_${Date.now()}.mp4`;
+              const thumbName = `thumb_${Date.now()}.jpg`;
+              await ffmpeg.writeFile(inputName, await fetchFile(uploadFile));
+              await ffmpeg.exec(['-i', inputName, '-ss', '00:00:03', '-vframes', '1', thumbName]);
+              const thumbData = await ffmpeg.readFile(thumbName);
+              const thumbBlob = new Blob([(thumbData as any).buffer], { type: 'image/jpeg' });
+              const thumbUrl = URL.createObjectURL(thumbBlob);
+              setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? { ...m, video_thumbnail: thumbUrl } : m));
+              await ffmpeg.deleteFile(inputName);
+              await ffmpeg.deleteFile(thumbName);
+            }
+            URL.revokeObjectURL(objectUrl);
+          } catch (err) {
+            console.error("Background video processing failed:", err);
+          }
+
+          setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? { ...m, status: "sending" } : m));
+        }
+
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", uploadFile);
+        if (tempMsg.video_thumbnail?.startsWith('blob:')) {
+          try {
+            const thumbRes = await fetch(tempMsg.video_thumbnail);
+            const thumbBlob = await thumbRes.blob();
+            formData.append("video_thumbnail_file", thumbBlob, "thumbnail.jpg");
+          } catch (e) { console.error("Could not fetch thumb blob", e); }
+        }
         formData.append("chat_room_id", String(roomId));
         if (content) formData.append("message_content", content);
         if (tempMsg.product_id) {
@@ -460,7 +574,7 @@ function MessagesPageContent({
         const payload = {
           chat_room_id: roomId,
           message_content: content,
-          message_type: "text",
+          message_type: tempMsg.message_type || "text",
           product_id: tempMsg.product_id,
           product_name: tempMsg.product_name,
           product_price: tempMsg.product_price,
@@ -510,7 +624,7 @@ function MessagesPageContent({
       console.warn("performSendMessage Error:", err);
       // Mark as failed instead of removing
       setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? { ...m, status: "failed" } : m));
-      toast.error("Message failed to send. Please try again.");
+      toast.error(err instanceof Error ? err.message : "Message failed to send. Please try again.");
     } finally {
       setIsSending(false);
     }
@@ -532,10 +646,14 @@ function MessagesPageContent({
   function handleFile(file: File | null) {
     if (!file) return;
     setSelectedFile(file);
+
     if (file.type.startsWith('image/') || file.type === 'application/pdf') {
       const reader = new FileReader();
       reader.onloadend = () => setFilePreview(reader.result as string);
       reader.readAsDataURL(file);
+    } else if (file.type.startsWith('video/')) {
+      const url = URL.createObjectURL(file);
+      setFilePreview(url);
     } else {
       setFilePreview(null);
     }
@@ -824,7 +942,7 @@ function MessagesPageContent({
 
   // Handle URL parameters (room or user)
   useEffect(() => {
-    if (rooms.length === 0) return;
+    if (!roomsLoaded) return;
 
     if (roomParam) {
       const room = rooms.find(r => String(r.chat_room_id) === String(roomParam));
@@ -868,6 +986,8 @@ function MessagesPageContent({
     const idMatch = String(r.other_user_id || "").includes(searchStr);
     return nameMatch || messageMatch || idMatch;
   });
+
+  const isShowingChat = !!selectedRoom || !!roomParam || !!userParam;
 
   const formatDateLabel = (dateStr: string | null) => {
     if (!dateStr) return "";
@@ -966,13 +1086,7 @@ function MessagesPageContent({
           String(v.staff_id) === currentUserId
         );
 
-        const u = auth?.user;
-        const userRole = String(u?.role || "").toLowerCase();
-        const isGlobalVendor =
-          userRole === "vendor" || userRole === "owner" || userRole === "staff" ||
-          !!u?.business_id || !!u?.is_vendor;
-
-        if (isVendorForThisOrder || isGlobalVendor) {
+        if (isVendorForThisOrder) {
           router.push(`/profile/business/customer-order?orderId=${order.master_order_id || order.id || orderId}&orderRef=${orderRef}`);
         } else {
           setTrackingOrderId(orderId);
@@ -998,6 +1112,9 @@ function MessagesPageContent({
     const [order, setOrder] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [selectedShipmentIdx, setSelectedShipmentIdx] = useState(0);
+    const [isDeliveryCodeModalOpen, setIsDeliveryCodeModalOpen] = useState(false);
+    const [selectedDeliveryCode, setSelectedDeliveryCode] = useState<string | null>(null);
+    const [selectedDeliveryOrderRef, setSelectedDeliveryOrderRef] = useState<string | null>(null);
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
     useEffect(() => {
@@ -1025,10 +1142,12 @@ function MessagesPageContent({
         // Find the specific vendor matching the orderRef (Transaction ID)
         const targetVendor = order.vendors?.find((v: any) => v.reference_no === orderRef) || order.vendors?.[0];
         const shipment = targetVendor?.shipments?.[selectedShipmentIdx];
-        const shipmentId = shipment?.id;
 
-        if (shipmentId) {
-          fetch(`${API_BASE_URL}/api/orders/${shipmentId}/tracking`, {
+        // Tracking history is tied to the actual order items, not the shipment ID
+        const trackingOrderId = shipment?.items?.[0]?.order_id || shipment?.id || orderId;
+
+        if (trackingOrderId) {
+          fetch(`${API_BASE_URL}/api/orders/${trackingOrderId}/tracking`, {
             headers: { Authorization: `Bearer ${token}` }
           })
             .then(res => res.json())
@@ -1055,22 +1174,34 @@ function MessagesPageContent({
     const currentStatus = (currentShipment?.status || targetVendor?.status || order?.status || 'pending').toLowerCase();
 
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-        <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-          <div className="p-6 pb-2 flex items-center justify-between">
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">Order Tracking</h3>
+      <div className="fixed inset-0 z-[99999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="bg-white w-full max-w-md rounded-[0.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between shrink-0">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 leading-tight">Tracking History</h3>
+              <p className="text-[10px] font-bold text-slate-400 mt-1">Order {orderRef || order?.display_id || orderId}</p>
+            </div>
             <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-50 text-slate-400 transition-colors"><X size={20} /></button>
           </div>
 
-          <div className="p-6 max-h-[70vh] overflow-y-auto">
+          <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
             {loading ? (
-              <div className="py-20 flex flex-col items-center justify-center gap-4">
-                <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs font-bold text-slate-400 animate-pulse">Fetching updates...</p>
+              <div className="py-10 space-y-6 animate-pulse">
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <div className="h-4 w-32 bg-slate-100 rounded-full" />
+                  <div className="space-y-3">
+                    <div className="h-2 w-full bg-slate-50 rounded-full" />
+                    <div className="h-2 w-5/6 bg-slate-50 rounded-full" />
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="h-3 w-40 bg-slate-200 rounded-full" />
+                  <p className="text-[10px] font-black text-slate-300 tracking-widest uppercase">Fetching Status</p>
+                </div>
               </div>
             ) : order ? (
               <div className="space-y-6">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                   {targetVendor?.shipments?.length > 1 && (
                     <div className="flex gap-2 overflow-x-auto pb-4 mb-2 no-scrollbar">
                       {targetVendor.shipments.map((s: any, idx: number) => (
@@ -1078,8 +1209,8 @@ function MessagesPageContent({
                           key={s.id || `ship-${idx}`}
                           onClick={() => setSelectedShipmentIdx(idx)}
                           className={`px-3 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap transition-all ${selectedShipmentIdx === idx
-                            ? "bg-red-500 text-white shadow-md shadow-red-500/20"
-                            : "bg-white text-slate-400 border border-slate-200 hover:border-red-200"
+                            ? "bg-slate-900 text-white shadow-md shadow-slate-900/20"
+                            : "bg-slate-50 text-slate-400 border border-slate-200 hover:border-slate-300"
                             }`}
                         >
                           Shipment #{idx + 1}
@@ -1087,50 +1218,103 @@ function MessagesPageContent({
                       ))}
                     </div>
                   )}
-                  <p className="text-[10px] font-black text-slate-400  tracking-widest mb-1">Status</p>
-                  <p className="text-sm font-bold text-slate-900 capitalize">{currentStatus.replace(/_/g, ' ')}</p>
-                  <div className="mt-4 space-y-6">
-                    {steps.map((step, idx) => {
-                      const isActive = step.status.includes(currentStatus);
+
+                  {/* Dynamic Timeline logic copied from Orders page */}
+                  {(() => {
+                    const dispSteps: any[] = [];
+                    trackingHistory.forEach((item, index) => {
+                      const isCurrent = index === trackingHistory.length - 1;
+                      dispSteps.push({
+                        id: `hist-${index}`,
+                        isCompleted: !isCurrent || ['delivered', 'cancelled', 'refunded'].includes(item.status),
+                        isCurrent: isCurrent && !['delivered', 'cancelled', 'refunded'].includes(item.status),
+                        isPending: false,
+                        status: item.status,
+                        label: item.status?.replace(/_/g, ' '),
+                        message: item.message || `Shipment status updated to ${item.status?.replace(/_/g, ' ')}`,
+                        date: item.created_at
+                      });
+                    });
+
+                    const lastEvent = trackingHistory[trackingHistory.length - 1];
+                    const seq = ['order_placed', 'confirmed', 'ready_for_shipping', 'out_for_delivery', 'delivered'];
+                    const isCancelled = lastEvent ? ['cancelled', 'refunded', 'disputed'].includes(lastEvent.status) : false;
+
+                    if (lastEvent && !isCancelled && lastEvent.status !== 'delivered') {
+                      let lastSeqIdx = -1;
+                      for (let i = seq.length - 1; i >= 0; i--) {
+                        if (trackingHistory.some(h => h.status === seq[i])) {
+                          lastSeqIdx = i;
+                          break;
+                        }
+                      }
+                      if (lastSeqIdx !== -1) {
+                        for (let i = lastSeqIdx + 1; i < seq.length; i++) {
+                          dispSteps.push({
+                            id: `seq-${seq[i]}`,
+                            isCompleted: false,
+                            isCurrent: false,
+                            isPending: true,
+                            status: seq[i],
+                            label: seq[i].replace(/_/g, ' '),
+                            message: seq[i] === 'delivered' ? 'Waiting for delivery confirmation.' : 'Pending update...',
+                            date: null
+                          });
+                        }
+                      }
+                    }
+
+                    if (dispSteps.length === 0) {
                       return (
-                        <div key={step.key || idx} className="flex gap-4 relative">
-                          {idx !== steps.length - 1 && (
-                            <div className={`absolute left-[11px] top-6 w-[2px] h-8 ${isActive ? 'bg-red-500' : 'bg-slate-100'}`} />
-                          )}
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 z-10 transition-colors duration-500 ${isActive ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-white border-slate-200 text-slate-300'}`}>
-                            {isActive ? <CheckCircle size={14} /> : <div className="w-1.5 h-1.5 rounded-full bg-current" />}
-                          </div>
-                          <div>
-                            <p className={`text-xs font-bold ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>{step.label}</p>
-                            {isActive && idx === steps.findLastIndex(s => s.status.includes(currentStatus)) && (
-                              <p className="text-[10px] text-red-500 font-bold mt-0.5">Current Stage</p>
-                            )}
-                          </div>
+                        <div className="text-center py-10">
+                          <p className="text-sm font-bold text-slate-500">No tracking history available yet.</p>
                         </div>
                       );
-                    })}
-                  </div>
+                    }
+
+                    return (
+                      <div className="mt-2">
+                        {dispSteps.map((step, index) => {
+                          const isLast = index === dispSteps.length - 1;
+                          return (
+                            <div key={step.id} className="relative flex gap-4 pb-8 last:pb-2">
+                              {/* Timeline Line */}
+                              {!isLast && (
+                                <div className={`absolute left-[11px] top-6 bottom-[-24px] w-[2px] ${step.isCompleted || step.isCurrent ? 'bg-emerald-500' : 'bg-slate-200'}`}></div>
+                              )}
+
+                              {/* Status Indicator Icon */}
+                              <div className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 mt-0.5 ${step.isCompleted ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' :
+                                step.isCurrent ? 'bg-white border-emerald-500 text-emerald-500 shadow-sm' :
+                                  'bg-slate-50 border-slate-200 text-transparent'
+                                }`}>
+                                {step.isCompleted && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                {step.isCurrent && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
+                              </div>
+
+                              <div className="flex-1 -mt-1">
+                                <h4 className={`text-[13px] font-bold  tracking-widest ${step.isCompleted || step.isCurrent ? 'text-slate-900' : 'text-slate-400'
+                                  }`}>
+                                  {step.label}
+                                </h4>
+                                <p className={`text-[11px] font-medium mt-1.5 leading-relaxed bg-white p-3 rounded-xl border ${step.isCompleted || step.isCurrent ? 'text-slate-600 border-slate-100 shadow-sm' : 'text-slate-400 border-slate-50/50 opacity-60'
+                                  }`}>
+                                  {step.message}
+                                </p>
+                                {step.date && (
+                                  <p className="text-[10px] font-bold text-slate-400 mt-2 flex items-center gap-1.5">
+                                    {new Date(step.date).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                {/* Tracking History Logs */}
-                {trackingHistory.length > 0 && (
-                  <div className="space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-400  tracking-widest px-1">Tracking History</h4>
-                    <div className="space-y-4">
-                      {trackingHistory.slice().reverse().map((log, idx) => (
-                        <div key={log.history_id || `log-${idx}`} className="flex gap-3 items-start group">
-                          <div className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full bg-red-500 ring-4 ring-red-50" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-900 leading-snug">{log.message}</p>
-                            <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                              {new Date(log.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="space-y-3 px-1">
                   <div className="flex justify-between items-start text-[11px]">
@@ -1158,9 +1342,66 @@ function MessagesPageContent({
             )}
           </div>
 
-          <div className="p-6 pt-2">
-            <button onClick={onClose} className="w-full py-4 rounded-2xl bg-slate-900 text-white text-xs font-bold shadow-xl shadow-slate-900/10 active:scale-[0.98] transition-all">Done</button>
+          <div className="p-6 border-t border-slate-50 bg-white shrink-0 space-y-3">
+            {currentStatus === 'out_for_delivery' && (
+              <button
+                onClick={() => {
+                  setSelectedDeliveryCode(currentShipment?.delivery_code || 'N/A');
+                  setSelectedDeliveryOrderRef(targetVendor?.reference_no || 'ORDER');
+                  setIsDeliveryCodeModalOpen(true);
+                }}
+                className="w-full py-4 bg-amber-500 text-white rounded-2xl font-bold text-[11px] active:scale-95 transition flex items-center justify-center gap-2"
+              >
+                <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                </div>
+                View Delivery Code
+              </button>
+            )}
+            <button onClick={onClose} className="w-full py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-[11px] active:scale-95 transition hover:bg-slate-200">Close History</button>
           </div>
+
+          {/* Secure Delivery Code Modal (Chat Integration) */}
+          {isDeliveryCodeModalOpen && (
+            <div className="fixed inset-0 z-[99999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 relative">
+                <button onClick={() => setIsDeliveryCodeModalOpen(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors z-10">
+                  <X size={20} />
+                </button>
+
+                <div className="p-8 text-center flex flex-col items-center">
+                  <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mb-6">
+                    <AlertTriangle size={28} className="text-amber-500" strokeWidth={2.5} />
+                  </div>
+
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Secure Delivery Code</h3>
+                  <p className="text-xs font-medium text-slate-500 leading-relaxed mb-6">
+                    Reference: <strong className="text-slate-800 uppercase">{selectedDeliveryOrderRef}</strong>
+                  </p>
+
+                  <div className="bg-slate-50 border-2 border-slate-100 rounded-xl p-6 w-full mb-6 cursor-pointer"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedDeliveryCode || 'N/A');
+                      toast.success('Code copied to clipboard!');
+                    }}
+                  >
+                    <span className="text-4xl font-black text-slate-800 tracking-[0.4em]">{selectedDeliveryCode || 'N/A'}</span>
+                    <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-400">
+                      <Copy size={12} /> Tap to copy
+                    </div>
+                  </div>
+
+                  <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl text-left flex gap-3 text-rose-700 w-full mb-2">
+                    <XCircle size={16} className="shrink-0 mt-0.5" />
+                    <div className="text-[10px] font-bold leading-relaxed">
+                      <span className="uppercase tracking-widest text-rose-800 font-black text-[9px] mb-1 block">Critical Warning</span>
+                      Do <strong>NOT</strong> disclose this 4-digit code to the vendor or rider until you have successfully received AND inspected your complete order in good condition. Handing over this code confirms delivery and authorizes payment!
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1168,9 +1409,9 @@ function MessagesPageContent({
 
   return (
     <div className="bg-slate-100 overflow-hidden pt-[env(safe-area-inset-top)] sm:pt-0">
-      {/* Balanced height for full-screen experience without bottom nav */}
-      <div className="flex h-dvh sm:h-[calc(100dvh-64px)] overflow-hidden">
-        <aside className={`${selectedRoom ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] flex-col bg-slate-100 border-r border-gray-100`}>
+      {/* Balanced height for full-screen experience when a room is selected, otherwise account for bottom nav */}
+      <div className={`flex ${isShowingChat ? 'h-dvh' : 'h-[calc(100dvh-56px)]'} sm:h-[calc(100dvh-64px)] overflow-hidden`}>
+        <aside className={`${isShowingChat ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] flex-col bg-slate-100 border-r border-gray-100`}>
           <div className="p-4 sm:p-6 pb-2 shrink-0 h-[80px] flex flex-col justify-center">
             <AnimatePresence mode="wait">
               {!isSearchingList ? (
@@ -1233,7 +1474,22 @@ function MessagesPageContent({
             </AnimatePresence>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
-            {rooms.length > 0 ? (
+            {!roomsLoaded && rooms.length === 0 ? (
+              <div className="space-y-1">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex items-center p-3.5 rounded-[1.25rem] bg-white/40 animate-pulse gap-3">
+                    <div className="w-12 h-12 rounded-full bg-slate-200 shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="h-3 w-28 bg-slate-200 rounded-full" />
+                        <div className="h-2 w-10 bg-slate-100 rounded-full" />
+                      </div>
+                      <div className="h-2.5 w-40 bg-slate-100 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : rooms.length > 0 ? (
               <>
                 {filtered.map((room) => (
                   <RoomItem
@@ -1297,130 +1553,167 @@ function MessagesPageContent({
 
                 <div className="pt-6 border-t border-gray-50 mx-2">
                   <h4 className="text-[10px] font-bold text-slate-400   text-left px-2 mb-3">People You May Know</h4>
-                  <div className="space-y-1">
-                    {loadingRecs ? (
-                      <div className="py-4 flex justify-center">
-                        <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    ) : (
-                      recommendations.map((rec, i) => (
-                        <div
-                          key={rec.user_id || i}
-                          onClick={() => router.push(`/user/profile/${rec.user_id}`)}
-                          className="flex items-center gap-3 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors text-left group"
-                        >
-                          <img
-                            src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
-                            className="w-8 h-8 rounded-full border border-white shadow-sm object-cover"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-800 truncate">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
-                            <p className="text-[9px] text-slate-400 truncate">@{rec.username || "stoqleID" + rec.user_id}</p>
+                  {loadingRecs ? (
+                    <div className="p-2 space-y-3 animate-pulse">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-2 w-24 bg-slate-100 rounded" />
+                            <div className="h-1.5 w-16 bg-slate-50 rounded" />
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartNewChat(rec.user_id);
-                            }}
-                            className="px-3 py-1 rounded-full border-[0.5px] border-red-500 text-red-500 hover:bg-red-50 text-[9px] font-bold transition-all active:scale-95"
-                          >
-                            Message
-                          </button>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <AnimatePresence mode="popLayout">
+                      <motion.div
+                        key="recs-list"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.4, ease: "easeOut" }}
+                        className="space-y-1"
+                      >
+                        {recommendations.map((rec, i) => (
+                          <div
+                            key={rec.user_id || i}
+                            onClick={() => router.push(`/user/profile/${rec.user_id}`)}
+                            className="flex items-center gap-3 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors text-left group"
+                          >
+                            <img
+                              src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
+                              className="w-8 h-8 rounded-full border border-white shadow-sm object-cover"
+                              alt=""
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-800 truncate">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
+                              <p className="text-[9px] text-slate-400 truncate">@{rec.username || "stoqleID" + rec.user_id}</p>
+                            </div>
+                            <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 transition-colors" />
+                          </div>
+                        ))}
+                      </motion.div>
+                    </AnimatePresence>
+                  )}
                 </div>
               </div>
             )}
           </div>
         </aside>
 
-        <main className={`${selectedRoom ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white border-l border-slate-200`}>
+        <main className={`${isShowingChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white border-l border-slate-200`}>
           {!selectedRoom ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/30 overflow-y-auto">
-              <div className="flex flex-col items-center max-w-2xl w-full">
-                <div className="relative mb-8">
-                  <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-2xl shadow-red-100 animate-in fade-in zoom-in duration-700">
-                    <img src="/assets/images/message-icon.png" className="w-14" alt="Messages" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white shadow-sm" />
-                </div>
-
-                <h2 className="text-3xl font-bold text-slate-900  tracking-tight mb-3 flex items-center gap-3">
-                  <img
-                    src={auth?.user?.profile_pic || auth?.user?.avatar || `https://i.pravatar.cc/150?u=${userId}`}
-                    className="w-10 h-10 rounded-full border-2 border-white shadow-md object-cover"
-                    alt=""
-                  />
-                  {auth?.user?.full_name || auth?.user?.name || "Ready to Connect?"}
-                </h2>
-                <p className="text-slate-400 font-medium mb-12 text-center max-w-sm leading-relaxed">
-                  Select a conversation from the sidebar or start a new one with people you may know.
-                </p>
-
-                <div className="w-full">
-                  <div className="flex items-center justify-between mb-6 px-2">
-                    <h3 className="text-xs font-bold text-slate-400   flex items-center gap-2">
-                      <span className="w-2 h-2 bg-red-500 rounded-full" />
-                      People You May Know
-                    </h3>
-                    <button onClick={fetchRecommendations} className="p-1 rounded-full hover:bg-white text-slate-300 hover:text-red-500 transition-all">
-                      <svg className={`h-4 w-4 ${loadingRecs ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {loadingRecs && recommendations.length === 0 ? (
-                      Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-20 bg-white/50 rounded-2xl animate-pulse border border-slate-100" />
-                      ))
-                    ) : recommendations.slice(0, 6).map((rec, i) => (
-                      <div
-                        key={rec.user_id || i}
-                        onClick={() => router.push(`/user/profile/${rec.user_id}`)}
-                        className="group bg-white p-4 rounded-2xl border border-slate-100 hover:border-red-100 hover:shadow-xl hover:shadow-red-500/5 transition-all cursor-pointer flex items-center gap-4"
-                      >
-                        <div className="relative shrink-0">
-                          <img
-                            src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
-                            className="w-12 h-12 rounded-full object-cover ring-2 ring-slate-50"
-                            alt=""
-                          />
-                          <div className="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full shadow-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full" />
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-800 truncate mb-0.5">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
-                          <p className="text-[10px] text-slate-400 font-medium truncate  tracking-tighter">@{rec.username || "stoqleID" + rec.user_id}</p>
-                        </div>
-                        <div className="shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartNewChat(rec.user_id);
-                            }}
-                            className="px-4 py-1.5 rounded-full border-[0.5px] border-red-500 text-red-500 hover:bg-red-50 text-[10px] font-bold transition-all active:scale-95"
-                          >
-                            Message
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {!loadingRecs && recommendations.length === 0 && (
-                    <div className="text-center py-10 bg-white/50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-xs font-bold text-slate-300  ">No suggestions yet</p>
+            (roomParam || userParam) ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/10 overflow-y-auto">
+                <div className="w-full max-w-sm flex flex-col items-center gap-10 animate-pulse">
+                  <div className="flex items-center gap-4 w-6xs md:w-full">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex-shrink-0" />
+                    <div className="flex-1 space-y-3">
+                      <div className="h-3 w-32 bg-slate-100 rounded-full" />
+                      <div className="h-2 w-20 bg-slate-50 rounded-full" />
                     </div>
-                  )}
+                  </div>
+                  <div className="w-full space-y-6">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="h-10 w-48 bg-slate-100 rounded-2xl rounded-tl-none shadow-sm" />
+                      <div className="h-2 w-12 bg-slate-50 rounded-full ml-1" />
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="h-12 w-56 bg-red-100/50 rounded-2xl rounded-tr-none shadow-sm" />
+                      <div className="h-2 w-12 bg-slate-50 rounded-full mr-1" />
+                    </div>
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="h-16 w-64 bg-slate-100 rounded-2xl rounded-tl-none shadow-sm" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] font-black text-slate-300 tracking-[0.2em] uppercase">Securing Connection...</p>
                 </div>
               </div>
-            </div>
-          ) : (
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/30 overflow-y-auto">
+                <div className="flex flex-col items-center max-w-2xl w-full">
+                  <div className="relative mb-8">
+                    <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-2xl shadow-red-100 animate-in fade-in zoom-in duration-700">
+                      <img src="/assets/images/message-icon.png" className="w-14" alt="Messages" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white shadow-sm" />
+                  </div>
+
+                  <h2 className="text-3xl font-bold text-slate-900  tracking-tight mb-3 flex items-center gap-3">
+                    <img
+                      src={auth?.user?.profile_pic || auth?.user?.avatar || `https://i.pravatar.cc/150?u=${userId}`}
+                      className="w-10 h-10 rounded-full border-2 border-white shadow-md object-cover"
+                      alt=""
+                    />
+                    {auth?.user?.full_name || auth?.user?.name || "Ready to Connect?"}
+                  </h2>
+                  <p className="text-slate-400 font-medium mb-12 text-center max-w-sm leading-relaxed">
+                    Select a conversation from the sidebar or start a new one with people you may know.
+                  </p>
+
+                  <div className="w-full">
+                    <div className="flex items-center justify-between mb-6 px-2">
+                      <h3 className="text-xs font-bold text-slate-400   flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-500 rounded-full" />
+                        People You May Know
+                      </h3>
+                      <button onClick={fetchRecommendations} className="p-1 rounded-full hover:bg-white text-slate-300 hover:text-red-500 transition-all">
+                        <svg className={`h-4 w-4 ${loadingRecs ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {loadingRecs && recommendations.length === 0 ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="h-20 bg-white/50 rounded-2xl animate-pulse border border-slate-100" />
+                        ))
+                      ) : recommendations.slice(0, 6).map((rec, i) => (
+                        <div
+                          key={rec.user_id || i}
+                          onClick={() => router.push(`/user/profile/${rec.user_id}`)}
+                          className="group bg-white p-4 rounded-2xl border border-slate-100 hover:border-red-100 hover:shadow-xl hover:shadow-red-500/5 transition-all cursor-pointer flex items-center gap-4"
+                        >
+                          <div className="relative shrink-0">
+                            <img
+                              src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
+                              className="w-12 h-12 rounded-full object-cover ring-2 ring-slate-50"
+                              alt=""
+                            />
+                            <div className="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full shadow-sm">
+                              <div className="w-2 h-2 bg-green-500 rounded-full" />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-800 truncate mb-0.5">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
+                            <p className="text-[10px] text-slate-400 font-medium truncate  tracking-tighter">@{rec.username || "stoqleID" + rec.user_id}</p>
+                          </div>
+                          <div className="shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartNewChat(rec.user_id);
+                              }}
+                              className="px-4 py-1.5 rounded-full border-[0.5px] border-red-500 text-red-500 hover:bg-red-50 text-[10px] font-bold transition-all active:scale-95"
+                            >
+                              Message
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!loadingRecs && recommendations.length === 0 && (
+                      <div className="text-center py-10 bg-white/50 rounded-2xl border border-dashed border-slate-200">
+                        <p className="text-xs font-bold text-slate-300  ">No suggestions yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )) : (
             <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
               {/* ⚡ Constant Static Chat Background Layer (Behind scrollable content) */}
               <div
@@ -1440,7 +1733,7 @@ function MessagesPageContent({
                   <button onClick={() => {
                     setSelectedRoom(null);
                     router.push("/messages");
-                  }} className="md:hidden p-2 -ml-3 rounded-full hover:bg-gray-100 text-gray-400 hover:text-red-500">
+                  }} className="md:hidden p-2 -ml-3 rounded-full hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-all active:scale-95">
                     <ChevronLeftIcon className="h-6 w-6" />
                   </button>
                   <div
@@ -1467,7 +1760,7 @@ function MessagesPageContent({
                       />
                     ) : (
                       <div
-                        className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white font-bold shrink-0 cursor-pointer"
+                        className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white text-[12px] shrink-0 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleAvatarClick(selectedRoom.other_user_id || 0, "", selectedRoom.business_name || selectedRoom.full_name || "");
@@ -1498,29 +1791,36 @@ function MessagesPageContent({
               <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar relative z-10">
                 <div className="relative z-10 min-h-full flex flex-col">
                   {isMessagesLoading ? (
-                    <div className="flex-1 flex flex-col gap-4 py-6 px-2 animate-pulse">
+                    <div className="flex-1 flex flex-col gap-6 py-8 px-2 animate-pulse">
                       {/* Left shimmer bubble */}
-                      <div className="flex flex-col items-start gap-1">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 mb-1" />
-                        <div className="h-10 w-48 bg-slate-100 rounded-2xl rounded-tl-none shadow-sm" />
+                      <div className="flex flex-col items-start gap-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
+                          <div className="h-2.5 w-20 bg-slate-100 rounded-full" />
+                        </div>
+                        <div className="h-12 w-3/4 max-w-[320px] bg-slate-100 rounded-[1.25rem] rounded-tl-none shadow-sm" />
+                        <div className="h-2 w-14 bg-slate-50/50 rounded-full ml-10" />
                       </div>
+
                       {/* Right shimmer bubble */}
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="h-12 w-56 bg-red-50 rounded-2xl rounded-tr-none shadow-sm shadow-red-500/5" />
+                      <div className="flex flex-col items-end gap-2 mt-2">
+                        <div className="h-10 w-2/3 max-w-[280px] bg-red-100/30 rounded-[1.25rem] rounded-tr-none shadow-sm border border-red-50/50" />
+                        <div className="h-2 w-14 bg-slate-50/50 rounded-full mr-2" />
                       </div>
-                      {/* Left shimmer bubble */}
-                      <div className="flex flex-col items-start gap-1 mt-2">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 mb-1" />
-                        <div className="h-20 w-64 bg-slate-100 rounded-2xl rounded-tl-none shadow-sm" />
+
+                      {/* Left shimmer bubble (Medium) */}
+                      <div className="flex flex-col items-start gap-2 mt-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
+                          <div className="h-2.5 w-24 bg-slate-100 rounded-full" />
+                        </div>
+                        <div className="h-24 w-[85%] max-w-[400px] bg-slate-100 rounded-[1.25rem] rounded-tl-none shadow-sm" />
+                        <div className="h-2 w-14 bg-slate-50/50 rounded-full ml-10" />
                       </div>
-                      {/* Right shimmer bubble */}
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="h-10 w-32 bg-red-50 rounded-2xl rounded-tr-none shadow-sm shadow-red-500/5" />
-                      </div>
-                      {/* Bottom sync indicator */}
-                      <div className="flex items-center justify-center gap-2 mt-auto py-4">
-                        <Zap size={10} className="text-red-500 animate-pulse" />
-                        <p className="text-[9px] font-black text-slate-300 tracking-[0.2em]">Syncing</p>
+
+                      {/* Right shimmer bubble (Small) */}
+                      <div className="flex flex-col items-end gap-2 mt-2">
+                        <div className="h-8 w-32 bg-red-100/30 rounded-[1.25rem] rounded-tr-none shadow-sm border border-red-50/50" />
                       </div>
                     </div>
                   ) : messages.length === 0 ? (
@@ -1594,11 +1894,13 @@ function MessagesPageContent({
                               onProductClick={handleProductClick}
                               onImageClick={handleImageClick}
                               onPdfClick={handlePdfClick}
+                              onVideoClick={handleImageClick}
                               senderId={m.sender_id}
                               onAvatarClick={handleAvatarClick}
                               messageId={m.message_id}
                               onLongPress={handleMessageLongPress}
                               isEdited={!!m.updated_at && m.updated_at !== m.sent_at}
+                              video_thumbnail={m.video_thumbnail}
                             />
                           </React.Fragment>
                         );
@@ -1684,9 +1986,9 @@ function MessagesPageContent({
                         }}
                         onFileSelect={handleFile}
                         isSending={isSending}
-                        selectedFile={null}
-                        filePreview={null}
-                        onCancelFile={() => { }}
+                        selectedFile={selectedFile}
+                        filePreview={filePreview}
+                        onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
                       />
                     </div>
                   </motion.div>
@@ -1796,9 +2098,9 @@ function MessagesPageContent({
                         }}
                         onFileSelect={handleFile}
                         isSending={isSending}
-                        selectedFile={null}
-                        filePreview={null}
-                        onCancelFile={() => { }}
+                        selectedFile={selectedFile}
+                        filePreview={filePreview}
+                        onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
                       />
                     </div>
                   </motion.div>
@@ -1817,7 +2119,8 @@ function MessagesPageContent({
                     <div className="flex items-center justify-between mb-6 shrink-0">
                       <div className="flex flex-col text-left">
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                          {selectedFile.type === 'application/pdf' ? 'Send PDF Document' : 'Send Photo'}
+                          {selectedFile.type === 'application/pdf' ? 'Send PDF Document' :
+                            selectedFile.type.startsWith('video/') ? 'Send Video' : 'Send Photo'}
                         </h3>
                         <p className="text-[10px] font-bold text-slate-400 tracking-widest">{selectedFile.name} • {(selectedFile.size / 1024).toFixed(1)} KB</p>
                       </div>
@@ -1829,22 +2132,21 @@ function MessagesPageContent({
                       </button>
                     </div>
 
-                    <div className="flex-1 min-h-0 flex items-center justify-center relative group">
-                      <div className="relative max-w-full max-h-full aspect-auto rounded-[0.5rem] overflow-hidden border border-slate-100 w-full flex justify-center">
-                        {selectedFile.type === 'application/pdf' ? (
-                          <iframe
-                            src={filePreview}
-                            className="w-full h-full min-h-[50vh] rounded-[0.5rem]"
-                            title="PDF Preview"
-                          />
-                        ) : (
-                          <img
-                            src={filePreview}
-                            className="max-h-[60dvh] object-contain"
-                            alt="Preview"
-                          />
-                        )}
-                      </div>
+                    <div className="flex-1 min-h-0 flex items-center justify-center relative rounded-3xl overflow-hidden border border-gray-100 bg-gray-50/50 p-2 sm:p-4">
+                      {selectedFile.type.startsWith('image/') ? (
+                        <img src={filePreview} className="max-w-full max-h-full object-contain rounded-2xl shadow-sm" alt="" />
+                      ) : selectedFile.type.startsWith('video/') ? (
+                        <video src={filePreview} className="max-w-full max-h-full object-contain rounded-2xl shadow-sm" controls autoPlay loop />
+                      ) : selectedFile.type === 'application/pdf' ? (
+                        <iframe src={filePreview} className="w-full h-full min-h-[50vh] rounded-2xl" title="PDF Preview" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center shadow-sm">
+                            <Package size={32} />
+                          </div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedFile.name}</p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-8 mx-auto w-full max-w-xl">
@@ -1871,7 +2173,7 @@ function MessagesPageContent({
                 <style dangerouslySetInnerHTML={{
                   __html: `
                   @media (max-width: 1023px) {
-                    nav[aria-label="Primary"] { display: ${selectedRoom ? 'none' : 'flex'} !important; }
+                    nav[aria-label="Primary"] { display: ${isShowingChat ? 'none' : 'flex'} !important; }
                   }
                 ` }} />
                 {taggedOrderRef && (
@@ -1938,7 +2240,7 @@ function MessagesPageContent({
               initial={{ opacity: 0, scale: 0.9, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full h-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border border-slate-100"
+              className="w-full h-full max-w-5xl bg-white rounded-[0.5rem] shadow-2xl flex flex-col overflow-hidden relative border border-slate-100"
             >
               <div className="p-6 border-b border-slate-50 flex items-center justify-between shrink-0">
                 <div className="flex flex-col">
@@ -1947,7 +2249,7 @@ function MessagesPageContent({
                 </div>
                 <button
                   onClick={() => { setIsPdfViewerOpen(false); setActivePdfUrl(null); }}
-                  className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
                 >
                   <X size={20} />
                 </button>
@@ -1964,7 +2266,7 @@ function MessagesPageContent({
               <div className="p-6 bg-white border-t border-slate-50 flex justify-end shrink-0">
                 <button
                   onClick={() => { setIsPdfViewerOpen(false); setActivePdfUrl(null); }}
-                  className="px-8 py-3 bg-red-500 text-white rounded-2xl text-[11px] font-black  tracking-widest shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                  className="px-8 py-3 bg-red-500 text-white rounded-full text-[11px] shadow-lg shadow-red-500/20 active:scale-95 transition-all"
                 >
                   Close Review
                 </button>
@@ -2262,11 +2564,22 @@ function ChatImageViewer({
           className="absolute inset-x-0 inset-y-20 flex items-center justify-center p-4 sm:p-12 cursor-grab active:cursor-grabbing"
           onClick={(e: any) => e.stopPropagation()}
         >
-          <img
-            src={images[currentIndex]}
-            alt={`Image ${currentIndex + 1}`}
-            className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl ring-1 ring-white/10"
-          />
+          {(images[currentIndex]?.includes('.mp4') || images[currentIndex]?.includes('.webm') || images[currentIndex]?.includes('.ogg') || images[currentIndex]?.includes('blob:http') && !images[currentIndex]?.includes('image')) ? (
+            <video
+              src={images[currentIndex]}
+              autoPlay
+              controls
+              controlsList="nodownload"
+              playsInline
+              className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+            />
+          ) : (
+            <img
+              src={images[currentIndex]}
+              alt={`Media ${currentIndex + 1}`}
+              className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl ring-1 ring-white/10"
+            />
+          )}
         </motion.div>
       </AnimatePresence>
 
@@ -2294,7 +2607,11 @@ function ChatImageViewer({
             className={`w-12 h-12 rounded-lg border-2 transition-all cursor-pointer overflow-hidden shrink-0 ${currentIndex === i ? 'border-red-500 scale-110 shadow-lg shadow-red-500/50' : 'border-transparent opacity-50 hover:opacity-100'
               }`}
           >
-            <img src={img} className="w-full h-full object-cover" alt="" />
+            {(img?.includes('.mp4') || img?.includes('.webm') || img?.includes('.ogg') || img?.includes('blob:http') && !img?.includes('image')) ? (
+              <video src={`${img}#t=1.0`} className="w-full h-full object-cover pointer-events-none" preload="metadata" />
+            ) : (
+              <img src={img} className="w-full h-full object-cover pointer-events-none" alt="" />
+            )}
           </div>
         ))}
       </div>
@@ -2351,9 +2668,15 @@ function OrderTrackingModal({ orderId, orderRef, open, onClose }: any) {
 
         <div className="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           {loading ? (
-            <div className="py-20 flex flex-col items-center justify-center gap-4">
-              <div className="w-12 h-12 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
-              <p className="text-xs font-bold text-slate-400 animate-pulse">Syncing tracking details...</p>
+            <div className="py-20 space-y-8 animate-pulse">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-slate-100" />
+                <div className="h-4 w-40 bg-slate-100 rounded-full" />
+              </div>
+              <div className="space-y-4">
+                <div className="h-12 w-full bg-slate-50 rounded-2xl" />
+                <div className="h-24 w-full bg-slate-50 rounded-2xl" />
+              </div>
             </div>
           ) : order && targetVendor ? (
             <div className="space-y-6">

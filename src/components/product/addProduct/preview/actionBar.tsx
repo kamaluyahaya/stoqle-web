@@ -4,13 +4,21 @@ import { useAuth } from "@/src/context/authContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { useRouter } from "next/navigation";
 
-export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartClick, onShopClick, cartCount = 0, shopLogo, shopProfilePic, businessId }: any) {
+export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartClick, onShopClick, cartCount = 0, shopLogo, shopProfilePic, businessId, businessSlug, businessName }: any) {
   const router = useRouter();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const { token, user } = useAuth();
   const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
   const isOwner = currentUserBizId && businessId && Number(currentUserBizId) === Number(businessId);
   const [localCount, setLocalCount] = useState(cartCount);
+
+  const slugify = (str: string) =>
+    String(str || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
 
   const loadCount = async () => {
     if (!token) return;
@@ -59,7 +67,14 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
       <div className="flex items-center gap-1">
         <button
           onMouseDown={stop}
-          onClick={() => onShopClick ? onShopClick() : businessId && router.push(`/shop/${businessId}`)}
+          onClick={() => {
+            if (onShopClick) {
+              onShopClick();
+            } else {
+              const slug = businessSlug || (businessName ? slugify(businessName) : null);
+              if (slug) router.push(`/shop/${slug}`);
+            }
+          }}
           className="flex flex-col items-center justify-center w-14"
         >
           <div className="rounded-xl bg-white flex items-center justify-center overflow-hidden hover:shadow-sm">
@@ -90,16 +105,8 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
         </div>
 
         <div className="ml-auto flex flex-1 overflow-hidden rounded-full bg-white">
-          {isOwner ? (
-            <div className="flex-1 py-2 text-center text-xs font-bold text-slate-400 bg-slate-50 italic">
-              Owning this product
-            </div>
-          ) : (
-            <>
-              <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
-              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
-            </>
-          )}
+          <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
+          <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
         </div>
       </div>
     </div>

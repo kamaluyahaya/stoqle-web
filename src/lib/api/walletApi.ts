@@ -111,6 +111,23 @@ export async function confirmOrderReceipt(escrowId: string | number) {
     return json;
 }
 
+export async function confirmCustomerReceipt(orderId: string | number, shipmentId?: string | number) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch(`${API_BASE_URL}/api/orders/${orderId}/confirm-customer-receipt`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ shipment_id: shipmentId }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw { status: res.status, body: json };
+    return json;
+}
+
 export async function reportOrderProblem(escrowId: string | number, reason: string) {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const res = await fetch(`${API_BASE_URL}/api/wallet/escrow/report-problem`, {
@@ -189,6 +206,11 @@ export async function walletCheckoutApi(data: { amount: number; pin: string; met
     });
 
     const json = await res.json().catch(() => null);
-    if (!res.ok) throw { status: res.status, body: json };
+    if (!res.ok) {
+        if (res.status === 403 || res.status === 429) {
+            throw { status: res.status, body: json, message: "SECURITY_BLOCK:" + (json?.message || "Action restricted") };
+        }
+        throw { status: res.status, body: json };
+    }
     return json;
 }

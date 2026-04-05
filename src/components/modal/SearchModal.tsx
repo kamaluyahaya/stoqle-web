@@ -27,6 +27,25 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [view, setView] = useState<"initial" | "results">("initial");
 
+  // Lock background scroll while open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Detect if scroll is already locked by a parent modal
+    const wasAlreadyLocked = document.body.style.overflow === "hidden";
+    
+    if (!wasAlreadyLocked) {
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      // Only restore if we were the ones who locked it
+      if (!wasAlreadyLocked) {
+        document.body.style.overflow = "";
+      }
+    };
+  }, [isOpen]);
+
   // Load history & trends on open
   useEffect(() => {
     if (isOpen) {

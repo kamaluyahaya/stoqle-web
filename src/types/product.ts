@@ -115,6 +115,8 @@ export type PreviewPayload = {
   samePriceForAll: boolean;
   sharedPrice: number | null;
   businessId?: number;
+  businessSlug?: string;
+  businessName?: string;
   userId?: number;
   productImages: { file?: File | string; name?: string; url?: string }[]; // urls for previews
   productVideo?: { file?: File | string; name?: string; url?: string } | null;
@@ -391,6 +393,7 @@ export type ProductFeedItem = {
   created_at?: string;
   business_id: number;
   business_name: string;
+  business_slug?: string;
   logo?: string;
   profile_pic?: string;
   first_image?: string;

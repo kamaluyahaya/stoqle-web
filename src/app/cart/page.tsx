@@ -52,6 +52,7 @@ interface CartItem {
     use_combinations: number;
     business_name: string;
     business_id: number;
+    business_slug?: string;
     business_logo: string;
     sku_price: number | null;
     sku_code: string | null;
@@ -135,7 +136,7 @@ const ProductCard = React.memo(({
                     handleProductClick(p.product_id, false, e);
                 }
             }}
-            className="group flex flex-col rounded-[1.05rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+            className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
             style={{
                 willChange: "transform, opacity",
                 contentVisibility: "auto",
@@ -230,7 +231,10 @@ const ProductCard = React.memo(({
                                 className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (p.business_id) router.push(`/shop/${p.business_id}`);
+                                    if (p.business_id) {
+                                        const slug = p.business_slug || p.business_id;
+                                        router.push(`/shop/${slug}`);
+                                    }
                                 }}
                             >
                                 <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
@@ -283,7 +287,10 @@ const ProductCard = React.memo(({
                                 className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (p.business_id) router.push(`/shop/${p.business_id}`);
+                                    if (p.business_id) {
+                                        const slug = p.business_slug || p.business_id;
+                                        router.push(`/shop/${slug}`);
+                                    }
                                 }}
                             >
                                 <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
@@ -479,12 +486,12 @@ export default function CartPage() {
             const res = await fetchCartApi(token);
             if (res.status === 'success') {
                 const fetchedItems: CartItem[] = res.data?.items || [];
-                
+
                 // Deduplicate by cart_id to prevent "duplicate key" crashes
                 const uniqueItems = fetchedItems.filter((item, index, self) =>
                     index === self.findIndex((t) => t.cart_id === item.cart_id)
                 );
-                
+
                 setItems(uniqueItems);
 
                 const savedIds = sessionStorage.getItem("stoqle_checkout_ids");
@@ -665,6 +672,7 @@ export default function CartPage() {
             business_id: number;
             business_name: string;
             business_logo: string;
+            business_slug?: string;
             items: CartItem[];
             estimation: EstimationResult | null;
         }[] = [];
@@ -687,6 +695,7 @@ export default function CartPage() {
                     business_id: item.business_id,
                     business_name: item.business_name,
                     business_logo: item.business_logo,
+                    business_slug: item.business_slug,
                     items: [],
                     estimation: est
                 };
@@ -739,15 +748,6 @@ export default function CartPage() {
         }
     }, []);
 
-    const handleReelsClick = useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
-        if (e) setClickPos({ x: e.clientX, y: e.clientY });
-        else setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-
-        setSelectedProductId(productId);
-        setReelsModalOpen(true);
-        updateUrl(productId, false, true);
-    }, [updateUrl]);
-
     const handleProductClick = async (productId: number, arg2?: string | boolean | React.MouseEvent, e?: React.MouseEvent) => {
         if (fetchingProduct) return;
 
@@ -785,6 +785,10 @@ export default function CartPage() {
             setFetchingProduct(false);
         }
     };
+
+    const handleReelsClick = useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
+        handleProductClick(productId, businessName, e);
+    }, [handleProductClick]);
 
     useEffect(() => {
         const handleRouteChange = () => {
@@ -939,14 +943,14 @@ export default function CartPage() {
         <div className="min-h-screen bg-slate-50 pb-32">
             <header className="sticky top-0 z-[1100] bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <button 
+                    <button
                         onClick={() => {
                             if (window.history.length > 2) {
                                 router.back();
                             } else {
                                 router.push('/discover');
                             }
-                        }} 
+                        }}
                         className="p-2 hover:bg-slate-100 rounded-full transition-colors -ml-2"
                     >
                         <ChevronLeftIcon className="w-6 h-6 text-slate-800 stroke-[2.5]" />
@@ -969,7 +973,10 @@ export default function CartPage() {
                                         )}
                                     </button>
                                     <div
-                                        onClick={() => router.push(`/shop/${group.business_id}`)}
+                                        onClick={() => {
+                                            const slug = group.items[0]?.business_slug || group.business_id;
+                                            router.push(`/shop/${slug}`);
+                                        }}
                                         className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity"
                                     >
                                         <Image src={formatUrl(group.business_logo) || "/assets/images/favio.png"} alt={group.business_name} className="rounded-full object-cover border border-slate-200" width={20} height={20} />
@@ -1197,9 +1204,9 @@ export default function CartPage() {
                     </div>
                 </div>
             </div>
-            <PhoneVerificationModal 
+            <PhoneVerificationModal
                 key="phone-verification-modal-cart"
-                isOpen={phoneModalOpen} 
+                isOpen={phoneModalOpen}
                 onClose={() => setPhoneModalOpen(false)}
                 onSuccess={() => {
                     setPhoneModalOpen(false);

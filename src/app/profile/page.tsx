@@ -14,43 +14,19 @@ import EditPostModal from "../../components/modal/editPostModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
 import { toggleSocialPostLike } from "@/src/lib/api/social";
+import type { Post, User } from "@/src/lib/types";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { API_BASE_URL } from "@/src/lib/config";
 import { FaHeart, FaRegHeart, FaEllipsisV, FaEdit, FaTrash, FaShareAlt, FaThumbtack } from "react-icons/fa";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { PROFILE_CACHE } from "@/src/lib/cache";
 import { io } from "socket.io-client";
+import Link from "next/link";
 
 
 type ApiPost = any;
-
-type User = { name: string; avatar: string; id?: number | string; };
-
-type Post = {
-  id: number;
-  src?: string;
-  isVideo?: boolean;
-  isImage?: boolean;
-  caption?: string;
-  note_caption?: string;
-  text?: string;
-  subtitle?: string;
-  user: User;
-  liked: boolean;
-  likeCount: number;
-  coverType?: string;
-  noteConfig?: any;
-  rawCreatedAt?: string;
-  apiId?: number;
-  allMedia?: { url: string; id: any }[];
-  location?: string | null;
-  thumbnail?: string;
-  isPinned?: boolean;
-  pinnedAt?: string;
-  status?: string;
-};
 
 type Props = { postCount?: number };
 
@@ -68,30 +44,31 @@ const DEFAULT_BG = "/assets/images/background.png";      // fallback background
 
 // keep mapping but mark isImage too
 const mapApiPost = (p: any): Post => {
-  const apiId = p.social_post_id ?? Math.floor(Math.random() * 1e6);
+  if (!p) return { id: 0, user: { id: 0, name: '', avatar: DEFAULT_AVATAR }, liked: false, likeCount: 0 } as Post;
+  const apiId = p?.social_post_id ?? Math.floor(Math.random() * 1e6);
   let src: string | undefined = undefined;
   let thumbnail: string | undefined = undefined;
-  const images = Array.isArray(p.images) ? p.images : [];
+  const images = Array.isArray(p?.images) ? p.images : [];
 
-  if (p.cover_type === "video") {
-    const videoFile = images.find((i: any) => isVideoUrl(i.image_url));
-    const coverFile = images.find((i: any) => !!i.is_cover);
+  if (p?.cover_type === "video") {
+    const videoFile = images.find((i: any) => isVideoUrl(i?.image_url));
+    const coverFile = images.find((i: any) => !!i?.is_cover);
     src = videoFile?.image_url;
     thumbnail = coverFile?.image_url;
     if (!src) src = coverFile?.image_url;
   } else if (images.length > 0) {
-    const cover = images.find((i: any) => !!i.is_cover) ?? images[0];
+    const cover = images.find((i: any) => !!i?.is_cover) ?? images[0];
     src = cover?.image_url;
   }
 
   const allMedia = images.length > 0
-    ? images.map((i: any) => ({ url: i.image_url, id: i.social_post_image_id || i.post_image_id || i.id }))
-    : src ? [{ url: src, id: p.cover_id }] : [];
+    ? images.map((i: any) => ({ url: i?.image_url, id: i?.social_post_image_id || i?.post_image_id || i?.id }))
+    : src ? [{ url: src, id: p?.cover_id }] : [];
 
-  const isVideo = p.cover_type === "video" || isVideoUrl(src);
+  const isVideo = p?.cover_type === "video" || isVideoUrl(src);
   const isImage = !isVideo && isImageUrl(src);
-  const caption = p.text ?? p.subtitle ?? "";
-  const note_caption = p.subtitle ?? "";
+  const caption = p?.text ?? p?.subtitle ?? "";
+  const note_caption = p?.subtitle ?? "";
 
   return {
     id: apiId,
@@ -102,21 +79,41 @@ const mapApiPost = (p: any): Post => {
     caption,
     note_caption,
     user: {
-      id: p.user_id ?? p.user?.user_id ?? p.user?.id,
-      name: p.author_name ?? "---",
-      avatar: p.author_pic ?? DEFAULT_AVATAR, // use local fallback
+      id: p?.user_id ?? p?.user?.user_id ?? p?.user?.id ?? 0,
+      name: p?.author_name ?? p?.user?.name ?? p?.user?.full_name ?? "",
+      avatar: p?.author_pic ?? p?.user?.profile_pic ?? DEFAULT_AVATAR,
+      is_trusted: Number(
+        p?.author_is_trusted ??
+        p?.user?.is_trusted ??
+        p?.user?.is_verified_partner ??
+        p?.user?.is_partner ??
+        p?.user?.policy?.market_affiliation?.trusted_partner ??
+        p?.is_verified_partner ??
+        p?.is_partner ??
+        0
+      ) === 1 ||
+        !!p?.author_is_verified ||
+        !!p?.user?.is_verified_partner ||
+        !!p?.user?.is_partner ||
+        !!p?.is_verified_partner ||
+        !!p?.is_partner ||
+        !!p?.author_is_trusted,
     },
-    liked: Boolean(p.liked_by_me),
-    likeCount: p.likes_count ?? 0,
-    coverType: p.cover_type,
-    noteConfig: p.config,
-    rawCreatedAt: p.created_at,
+    liked: Boolean(p?.liked_by_me),
+    likeCount: p?.likes_count ?? 0,
+    coverType: p?.cover_type,
+    noteConfig: p?.config,
+    rawCreatedAt: p?.created_at,
     allMedia,
-    location: p.location,
+    location: p?.location,
     thumbnail,
-    isPinned: Boolean(p.is_pinned),
-    pinnedAt: p.pinned_at,
-    status: p.status,
+    isPinned: Boolean(p?.is_pinned),
+    pinnedAt: p?.pinned_at,
+    status: p?.status,
+    is_product_linked: Boolean(p?.is_product_linked),
+    linked_product: p?.linked_product,
+    original_audio_url: p?.original_audio_url,
+    original_video_url: p?.original_video_url,
   };
 };
 
@@ -181,7 +178,8 @@ const PostCard = React.memo(({
   onEdit,
   onPin,
   onShare,
-  onDelete
+  onDelete,
+  layoutId
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -198,7 +196,10 @@ const PostCard = React.memo(({
   }, []);
 
   return (
-    <article
+    <motion.article
+      layout
+      layoutId={layoutId || `post-${post.id}`}
+      transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       onClick={() => openPostWithUrl(post)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
@@ -217,11 +218,17 @@ const PostCard = React.memo(({
           </div>
         )}
 
+        {/* {!post.isVideo && post.allMedia && post.allMedia.length > 1 && (
+          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
+            <FaImages className="text-white text-[10px]" />
+          </div>
+        )} */}
+
         {post.status === 'processing' && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[3px]">
             <div className="w-9 h-9 rounded-full border-[3px] border-white/20 border-t-white animate-spin mb-2" />
             <span className="text-[11px] font-bold text-white px-3 text-center drop-shadow-md leading-tight">
-              Processing your video...
+              {post.isVideo ? "Processing your video..." : "Processing..."}
             </span>
           </div>
         )}
@@ -253,24 +260,24 @@ const PostCard = React.memo(({
             </div>
           </div>
         ) : (
-          <div className="relative w-full aspect-[4/5] overflow-hidden bg-slate-100">
+          <div className="relative w-full overflow-hidden bg-slate-100">
             <img
               src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
               alt={post.caption}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110"
             />
           </div>
         )}
       </div>
 
       <div className="p-3">
-        <p className="text-sm text-slate-800 line-clamp-2 leading-snug font-semibold mb-3">
+        <p className="text-sm text-slate-700 line-clamp-2 leading-snug mb-3">
           {post.coverType === "note" && !post.src ? post.note_caption : post.caption}
         </p>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate text-[11px] font-semibold text-slate-400 capitalize">
+            <span className="truncate text-[11px] text-slate-400 capitalize">
               {getRelativeTime(post.rawCreatedAt)}
             </span>
           </div>
@@ -366,7 +373,7 @@ const PostCard = React.memo(({
           </div>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 }, (prev, next) => {
   return prev.post.id === next.post.id &&
@@ -394,7 +401,8 @@ const ProductCard = React.memo(({
   isProductOwner = false,
   isRestored = false,
   onPin,
-  onShare
+  onShare,
+  layoutId
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -410,7 +418,49 @@ const ProductCard = React.memo(({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const isPromoActive = !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
+  const now = new Date();
+  const effectivePromo = useMemo(() => {
+    // 1. If product uses its OWN policy (use_store_default_promotions === 0), do NOT fallback to defaults
+    if (p.use_store_default_promotions === 0) {
+      // Check for product-specific PPS promos
+      if (Array.isArray(p.promotions_data)) {
+        const active = p.promotions_data.find((promo: any) => {
+          const start = promo.start ? new Date(promo.start) : (promo.start_date ? new Date(promo.start_date) : null);
+          const end = promo.end ? new Date(promo.end) : (promo.end_date ? new Date(promo.end_date) : null);
+          const isActive = promo.isActive !== false;
+          const discountVal = Number(promo.discount || promo.discount_percent || 0);
+          return isActive && discountVal > 0 && (!start || now >= start) && (!end || now <= end);
+        });
+        if (active) return { title: active.title, discount: Number(active.discount || active.discount_percent) };
+      }
+
+      // Check for product-specific PPS sale override
+      if (p.sale_discount_data && p.sale_discount_data.discount > 0) {
+        const sType = p.sale_discount_data.type;
+        const sTitle = (sType && sType !== 'percent' && sType !== 'amount') ? sType : "Sale";
+        return { title: sTitle, discount: Number(p.sale_discount_data.discount) };
+      }
+
+      // STRICT: if they have custom policy, even if inactive, we don't fallback to business defaults
+      return null;
+    }
+
+    // 2. Otherwise, use Store Default / Joined fields
+    if (p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= now)) {
+      return { title: p.promo_title, discount: p.promo_discount };
+    }
+
+    // 3. Default sale type join
+    if (p.sale_discount > 0) {
+      const sType = p.sale_type;
+      const sTitle = (sType && sType !== 'percent' && sType !== 'amount') ? sType : "Sale";
+      return { title: sTitle, discount: p.sale_discount };
+    }
+
+    return null;
+  }, [p]);
+
+  const isPromoActive = !!effectivePromo;
 
   // Animation variants
   const entryVariants = {
@@ -424,7 +474,10 @@ const ProductCard = React.memo(({
   };
 
   return (
-    <article
+    <motion.article
+      layout
+      layoutId={layoutId || `product-${p.product_id}`}
+      transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
@@ -448,7 +501,7 @@ const ProductCard = React.memo(({
               muted
               loop
               playsInline
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
             />
           ) : (
             <div className="relative w-full h-full bg-slate-50 overflow-hidden">
@@ -534,6 +587,27 @@ const ProductCard = React.memo(({
             </div>
             <span className="text-[10px] font-semibold text-slate-600 ml-0.5">{likeCount}</span>
           </div>
+        </div>
+        <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>
+          {p.title}
+        </h3>
+        <div className="mt-2 min-h-[14px] flex items-center justify-between">
+          <div className="flex flex-wrap gap-1">
+            {effectivePromo ? (
+              <span className="text-[9px] text-rose-500 border-red-500 border-[0.2px] px-1.5 py-0.5 ">
+                {effectivePromo.title ? `${effectivePromo.title}: ` : "Sale: "}{effectivePromo.discount}% OFF
+              </span>
+            ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
+              <span className="text-[9px] text-rose-500 ">
+                Only {Number(p.total_quantity)} Left
+              </span>
+            ) : p.return_shipping_subsidy ? (
+              <span className="text-[9px] text-emerald-600 border-emerald-500 border-[0.2px] px-1.5 py-0.5 ">
+                Return shipping subsidy
+              </span>
+            ) : null}
+
+          </div>
 
           <div className="relative" ref={menuRef}>
             <button
@@ -543,7 +617,7 @@ const ProductCard = React.memo(({
                 setMenuOpen(!menuOpen);
               }}
             >
-              <FaEllipsisV className="text-xs" />
+              <FaEllipsisV className="text-[10px]" />
             </button>
 
             <AnimatePresence>
@@ -572,26 +646,8 @@ const ProductCard = React.memo(({
             </AnimatePresence>
           </div>
         </div>
-        <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>
-          {p.title}
-        </h3>
-        <div className="mt-2 min-h-[14px]">
-          {isPromoActive ? (
-            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1  tracking-tighter">
-              {p.promo_discount}% OFF
-            </span>
-          ) : p.sale_type ? (
-            <span className="text-[9px] font-bold text-rose-500 border-red-500 border px-1  tracking-tighter">
-              {p.sale_discount}% Off
-            </span>
-          ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-            <span className="text-[9px] font-bold text-rose-500  tracking-tighter">
-              Only {Number(p.total_quantity)} Left
-            </span>
-          ) : null}
-        </div>
       </div>
-    </article>
+    </motion.article>
   );
 }, (prev, next) => {
   return prev.p.product_id === next.p.product_id &&
@@ -643,55 +699,62 @@ const MasonryGrid = ({
   }, [items, columns]);
 
   return (
-    <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
-      {columnData.map((colItems, colIdx) => {
-        let visibilityClass = "flex-1 flex flex-col gap-2 sm:gap-6 min-w-0";
-        if (colIdx === 2) visibilityClass += " hidden [@media(min-width:700px)]:flex";
-        if (colIdx === 3) visibilityClass += " hidden [@media(min-width:1210px)]:flex";
-        if (colIdx === 4) visibilityClass += " hidden [@media(min-width:1430px)]:flex";
+    <LayoutGroup>
 
-        return (
-          <div key={colIdx} className={visibilityClass}>
-            {colItems.map((item: any) => {
-              const isPost = type === 'post' || type === 'note' || (type === 'liked' && !item.isProduct);
-              if (isPost) {
-                return (
-                  <PostCard
-                    key={item.id}
-                    post={item}
-                    index={item.originalIndex}
-                    openPostWithUrl={openPostWithUrl}
-                    toggleLike={toggleLike}
-                    getNoteStyles={getNoteStyles}
-                    isRestored={isRestored}
-                    onDelete={onDelete}
-                    onShare={onShare}
-                    onPin={onPin}
-                    onEdit={onEdit}
-                  />
-                );
-              } else {
-                const ld = (likeData && item.product_id) ? likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 } : { liked: !!item.isLiked, count: item.likes_count || 0 };
-                return (
-                  <ProductCard
-                    key={item.product_id}
-                    p={item}
-                    index={item.originalIndex}
-                    formatUrl={formatUrl}
-                    handleProductClick={handleProductClick}
-                    handleLikeClick={handleLikeClick}
-                    isLiked={ld.liked}
-                    likeCount={ld.count}
-                    fetchingProduct={fetchingProductId === item.product_id}
-                    isRestored={isRestored}
-                  />
-                );
-              }
-            })}
-          </div>
-        );
-      })}
-    </div>
+      <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden mb-20">
+        {columnData.map((colItems, colIdx) => {
+          let visibilityClass = "flex-1 flex flex-col gap-2 sm:gap-6 min-w-0";
+          if (colIdx === 2) visibilityClass += " hidden [@media(min-width:700px)]:flex";
+          if (colIdx === 3) visibilityClass += " hidden [@media(min-width:1210px)]:flex";
+          if (colIdx === 4) visibilityClass += " hidden [@media(min-width:1430px)]:flex";
+
+          return (
+            <div key={colIdx} className={visibilityClass}>
+              {colItems.map((item: any) => {
+                const isPost = type === 'post' || type === 'note' || (type === 'liked' && !item.isProduct);
+                if (isPost) {
+                  return (
+                    <PostCard
+                      key={`${item.id}-${type}`}
+                      layoutId={`${type}-post-${item.id}`}
+                      post={item}
+                      index={item.originalIndex}
+                      openPostWithUrl={openPostWithUrl}
+                      toggleLike={toggleLike}
+                      getNoteStyles={getNoteStyles}
+                      isRestored={isRestored}
+                      onDelete={onDelete}
+                      onShare={onShare}
+                      onPin={onPin}
+                      onEdit={onEdit}
+                    />
+                  );
+                } else {
+                  const ld = (likeData && item.product_id) ? likeData[item.product_id] || { liked: !!item.isLiked, count: item.likes_count || 0 } : { liked: !!item.isLiked, count: item.likes_count || 0 };
+                  return (
+                    <ProductCard
+                      key={`${item.product_id}-${type}`}
+                      layoutId={`${type}-product-${item.product_id}`}
+                      p={item}
+                      index={item.originalIndex}
+                      formatUrl={formatUrl}
+                      handleProductClick={handleProductClick}
+                      handleLikeClick={handleLikeClick}
+                      isLiked={ld.liked}
+                      likeCount={ld.count}
+                      fetchingProduct={fetchingProductId === item.product_id}
+                      isRestored={isRestored}
+                      onPin={onPin}
+                      onShare={onShare}
+                    />
+                  );
+                }
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </LayoutGroup>
   );
 };
 
@@ -760,10 +823,21 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         return;
       }
       const mapped = mapApiPost(apiPost);
-      setMediaPosts(prev => {
-        if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
-        return [mapped, ...prev];
-      });
+      const isNote = mapped.coverType === "note";
+
+      if (isNote) {
+        setNotePosts(prev => {
+          if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+          return [mapped, ...prev];
+        });
+        PROFILE_CACHE.notePosts = [mapped, ...PROFILE_CACHE.notePosts].filter((p, i, arr) => arr.findIndex(x => String(x.id) === String(p.id)) === i);
+      } else {
+        setMediaPosts(prev => {
+          if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+          return [mapped, ...prev];
+        });
+        PROFILE_CACHE.mediaPosts = [mapped, ...PROFILE_CACHE.mediaPosts].filter((p, i, arr) => arr.findIndex(x => String(x.id) === String(p.id)) === i);
+      }
     };
     window.addEventListener("post-created", handlePostCreated);
     return () => window.removeEventListener("post-created", handlePostCreated);
@@ -808,6 +882,19 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     });
   }, [likedItems]);
 
+  const sortedVendorProducts = useMemo(() => {
+    return [...vendorProducts].sort((a, b) => {
+      const pinA = !!a.isPinned;
+      const pinB = !!b.isPinned;
+      if (pinA && !pinB) return -1;
+      if (!pinA && pinB) return 1;
+      if (pinA && pinB) {
+        return new Date(b.pinnedAt || b.pinned_at || b.created_at || 0).getTime() - new Date(a.pinnedAt || a.pinned_at || a.created_at || 0).getTime();
+      }
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [vendorProducts]);
+
   const formatUrl = (url: string) => {
     if (!url) return NO_IMAGE_PLACEHOLDER;
     if (url.startsWith("http")) return url;
@@ -836,6 +923,25 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       console.log(`[Profile] Socket connected for user ${userIdStr}`);
     });
 
+    socket.on("post_created", (newPost: any) => {
+      if (!newPost?.social_post_id) return;
+      console.log("[Profile] post_created received:", newPost?.social_post_id);
+      const mapped = mapApiPost(newPost);
+      if (String(mapped.user.id) === userIdStr) {
+        if (mapped.coverType === "note") {
+          setNotePosts(prev => {
+            if (prev.find(p => String(p.id) === String(mapped.id))) return prev;
+            return [mapped, ...prev];
+          });
+        } else {
+          setMediaPosts(prev => {
+            if (prev.find(p => String(p.id) === String(mapped.id))) return prev;
+            return [mapped, ...prev];
+          });
+        }
+      }
+    });
+
     socket.on("post_updated", (updatedPost: any) => {
       console.log("[Profile] post_updated received:", updatedPost?.social_post_id, 'status:', updatedPost?.status);
       if (!updatedPost?.social_post_id) return;
@@ -853,6 +959,14 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           ? { ...p, ...updated }
           : p
       ));
+      
+      // Update the active modal if it's viewing this post
+      setSelectedPost(prev => {
+        if (prev && String(prev.id) === String(updatedPost.social_post_id)) {
+          return { ...prev, ...updated };
+        }
+        return prev;
+      });
 
       // Also update cache
       PROFILE_CACHE.mediaPosts = PROFILE_CACHE.mediaPosts.map(p =>
@@ -870,7 +984,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [activeTabIndex, setActiveTabIndex] = useState(PROFILE_CACHE.activeTabIndex);
   const tabs = useMemo(() => {
     const base = ["Posts", "Notes"];
-    if (profileApi?.is_business_owner && profileApi?.business?.business_status === 'active') {
+    const bizStatus = String(profileApi?.business?.business_status || profileApi?.business_status || '').toLowerCase();
+    if (profileApi?.is_business_owner && ['active', 'verified', 'approved', 'approved_verified', 'published'].includes(bizStatus)) {
       base.push("Products");
     }
     base.push("Liked");
@@ -929,6 +1044,9 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           stats: d?.stats ?? null,
           recent_followers: d?.recent_followers ?? [],
           is_business_owner: Boolean(d?.is_business_owner),
+          latest_ip: d?.latest_ip ?? null,
+          latest_location: d?.latest_location ?? null,
+          is_verified_partner: Boolean(d?.is_verified_partner),
         };
         setProfileApi(normalized);
         PROFILE_CACHE.profileApi = normalized;
@@ -1002,7 +1120,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     const loadVendorProducts = async () => {
       setProductsLoading(true);
       try {
-        const res = await fetchBusinessProducts(businessId, 100);
+        const identifier = profileApi?.business?.business_slug || businessId;
+        const res = await fetchBusinessProducts(identifier, 100);
         let foundProducts = [];
         if (res?.data?.products && Array.isArray(res.data.products)) {
           foundProducts = res.data.products;
@@ -1128,7 +1247,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         setSelectedPost({
           id: postId,
           caption: "Post unavailable",
-          user: { name: "---", avatar: DEFAULT_AVATAR },
+          user: { name: "", avatar: DEFAULT_AVATAR },
           liked: false,
           likeCount: 0,
         } as Post);
@@ -1169,7 +1288,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
               setSelectedPost({
                 id: postId,
                 caption: "Post unavailable",
-                user: { name: "---", avatar: DEFAULT_AVATAR },
+                user: { name: "", avatar: DEFAULT_AVATAR },
                 liked: false,
                 likeCount: 0,
               } as Post);
@@ -1454,10 +1573,13 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       });
       if (res.ok) {
         const json = await res.json();
-        const nextPinned = json.data?.is_pinned ?? json.is_pinned;
-        const pinnedAt = json.data?.pinned_at ?? json.pinned_at ?? new Date().toISOString();
-        setMediaPosts(prev => prev.map(p => p.id === post.id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
-        setNotePosts(prev => prev.map(p => p.id === post.id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        const updated = json.data?.post || json.data || json;
+        const nextPinned = Boolean(updated.is_pinned ?? updated.isPinned ?? false);
+        const pinnedAt = updated.pinned_at || updated.pinnedAt || new Date().toISOString();
+
+        const updateFn = (prev: Post[]) => prev.map(p => p.id === post.id ? { ...p, isPinned: nextPinned, pinnedAt } : p);
+        setMediaPosts(updateFn);
+        setNotePosts(updateFn);
         setLikedItems(prev => prev.map(p => (p.id === post.id || p.apiId === post.id) ? { ...p, isPinned: nextPinned, pinnedAt } : p));
         toast.success(nextPinned ? "Post pinned" : "Post unpinned");
       }
@@ -1476,8 +1598,62 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       }).catch(() => { });
     } else {
       navigator.clipboard.writeText(postUrl);
-      alert("Link copied to clipboard!");
+      toast.success("Link copied to clipboard!");
     }
+  };
+
+  const handlePinProduct = async (product: any) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/products/${product.product_id}/pin`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const updated = json.data?.product || json.data || json;
+        const nextPinned = Boolean(updated.is_pinned ?? updated.isPinned ?? false);
+        const pinnedAt = updated.pinned_at || updated.pinnedAt || new Date().toISOString();
+
+        setVendorProducts(prev => prev.map(p => p.product_id === product.product_id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        setLikedItems(prev => prev.map(p => p.product_id === product.product_id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        toast.success(nextPinned ? "Product pinned" : "Product unpinned");
+      } else {
+        // Fallback for demo/if API doesn't exist yet
+        const nextPinned = !product.isPinned;
+        const pinnedAt = new Date().toISOString();
+        setVendorProducts(prev => prev.map(p => p.product_id === product.product_id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        setLikedItems(prev => prev.map(p => p.product_id === product.product_id ? { ...p, isPinned: nextPinned, pinnedAt } : p));
+        toast.success(nextPinned ? "Product pinned" : "Product unpinned");
+      }
+    } catch (err) {
+      console.error("Pin failed", err);
+      setVendorProducts(prev => prev.map(p => p.product_id === product.product_id ? { ...p, isPinned: !p.isPinned } : p));
+      toast.success(!product.isPinned ? "Product pinned" : "Product unpinned");
+    }
+  };
+
+  const handleShareProduct = (product: any) => {
+    const productUrl = `${window.location.origin}/market/${product.business_name}?product=${product.product_id}`;
+    if (navigator.share) {
+      navigator.share({
+        title: product.title,
+        text: `Check out this product: ${product.title}`,
+        url: productUrl
+      }).catch(() => { });
+    } else {
+      navigator.clipboard.writeText(productUrl);
+      toast.success("Link copied to clipboard!");
+    }
+  };
+
+  const onShare = (item: any) => {
+    if (item.product_id) handleShareProduct(item);
+    else handleSharePost(item);
+  };
+  const onPin = (item: any) => {
+    if (item.product_id) handlePinProduct(item);
+    else handlePinPost(item);
   };
 
   const onTouchStart = (e: React.TouchEvent) => {
@@ -1524,7 +1700,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     const business = profileApi?.business;
     const user = profileApi?.user;
     if (profileApi?.is_business_owner && business?.business_name) return business.business_name;
-    return user?.full_name ?? user?.name ?? "---";
+    return user?.full_name ?? user?.name ?? "";
   }, [profileApi]);
 
 
@@ -1586,17 +1762,24 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className="bg-white p-3 flex justify-center sticky z-50 border-slate-100"
+      className="bg-white px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50"
       style={{ top: `${navbarHeight}px` }}
     >
-      <div ref={tabsInnerRef} className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div ref={tabsInnerRef} className="flex gap-8 overflow-x-auto no-scrollbar">
         {tabs.map((t, i) => (
           <button
             key={t}
             onClick={() => setActiveTabIndex(i)}
-            className={`px-3 py-2 text-sm font-bold transition whitespace-nowrap rounded-lg ${i === activeTabIndex ? "bg-slate-100 text-black" : "text-slate-400 hover:bg-slate-100"}`}
+            className={`relative py-2 text-sm font-bold transition-colors whitespace-nowrap ${i === activeTabIndex ? "text-slate-900" : "text-slate-400 hover:text-slate-500"}`}
           >
             {t}
+            {i === activeTabIndex && (
+              <motion.div
+                layoutId="activeTabUnderline"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
           </button>
         ))}
       </div>
@@ -1615,7 +1798,17 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
               <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No image or video posts found.</p>
-
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
+                }}
+                className="mt-4 px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                </svg>
+                Post now
+              </button>
             </div>
           ) : (
             <div className="p-2 sm:p-4 post-grid-container">
@@ -1627,8 +1820,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                 getNoteStyles={getNoteStyles}
                 isRestored={isRestoring}
                 onDelete={handleDeletePost}
-                onShare={handleSharePost}
-                onPin={handlePinPost}
+                onShare={onShare}
+                onPin={onPin}
                 onEdit={handleEditPost}
               />
             </div>
@@ -1666,8 +1859,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                 getNoteStyles={getNoteStyles}
                 isRestored={isRestoring}
                 onDelete={handleDeletePost}
-                onShare={handleSharePost}
-                onPin={handlePinPost}
+                onShare={onShare}
+                onPin={onPin}
                 onEdit={handleEditPost}
               />
             </div>
@@ -1675,21 +1868,33 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         </div>
 
         {/* Products pane */}
-        {profileApi?.is_business_owner && profileApi?.business?.business_status === 'active' && (
+        {profileApi?.is_business_owner && ['active', 'verified', 'approved', 'approved_verified', 'published'].includes(String(profileApi?.business?.business_status || profileApi?.business_status || '').toLowerCase()) && (
           <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Products" ? "auto" : "0", overflow: "hidden" }}>
             {productsLoading ? (
               <ShimmerGrid count={10} />
             ) : vendorProducts.length === 0 ? (
               <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
                 <img src="/assets/images/post.png" alt="No products" className="w-40 h-40 object-contain mb-4 opacity-80" />
-                <p className="text-sm font-medium">No Products found.</p>
-
+                <p className="text-sm font-medium">No Products found, add your first product.</p>
+                <Link href="/profile/business/inventory/add-product">
+                  <button
+                    // onClick={() => {
+                    //   window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
+                    // }}
+                    className="mt-4 px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                    </svg>
+                    Add product
+                  </button>
+                </Link>
 
               </div>
             ) : (
               <div className="p-2 sm:p-4 post-grid-container">
                 <MasonryGrid
-                  items={vendorProducts}
+                  items={sortedVendorProducts}
                   type="product"
                   formatUrl={formatUrl}
                   handleProductClick={handleProductClick}
@@ -1697,6 +1902,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                   likeData={productLikeData}
                   fetchingProductId={fetchingProductId}
                   isRestored={isRestoring}
+                  onShare={onShare}
+                  onPin={onPin}
                 />
               </div>
             )}
@@ -1727,8 +1934,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                 likeData={productLikeData}
                 fetchingProductId={fetchingProductId}
                 onDelete={handleDeletePost}
-                onShare={handleSharePost}
-                onPin={handlePinPost}
+                onShare={onShare}
+                onPin={onPin}
                 onEdit={handleEditPost}
               />
             </div>
@@ -1764,7 +1971,16 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       {TabsBar}
       {TabPanes}
 
-      {selectedPost && <PostModal post={selectedPost} onClose={closeModal} onToggleLike={toggleLike} />}
+      <AnimatePresence>
+        {selectedPost && (
+          <PostModal
+            open={!!selectedPost}
+            post={selectedPost}
+            onClose={closeModal}
+            onToggleLike={toggleLike}
+          />
+        )}
+      </AnimatePresence>
 
       {productModalOpen && selectedProductPayload && (
         <ProductPreviewModal
@@ -1784,8 +2000,25 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         onClose={() => setCreateNoteOpen(false)}
         onCreated={(newPost) => {
           const mapped = mapApiPost(newPost);
-          setNotePosts((prev) => [mapped, ...prev]);
+          const isNote = mapped.coverType === "note";
+
+          if (isNote) {
+            setNotePosts((prev) => {
+              if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+              return [mapped, ...prev];
+            });
+            const noteIdx = tabs.indexOf("Notes");
+            if (noteIdx !== -1) setActiveTabIndex(noteIdx);
+          } else {
+            setMediaPosts((prev) => {
+              if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
+              return [mapped, ...prev];
+            });
+            const postIdx = tabs.indexOf("Posts");
+            if (postIdx !== -1) setActiveTabIndex(postIdx);
+          }
           setCreateNoteOpen(false);
+          toast.success("Note posted successfully");
         }}
       />
 

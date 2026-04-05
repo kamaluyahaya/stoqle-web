@@ -207,7 +207,7 @@ export default function EditBusinessProfile({
           <div className="mt-2 text-center">
             <div className="flex flex-wrap items-center justify-center gap-2">
               {/* <div className="font-semibold text-slate-900 text-lg truncate">{displayName}</div> */}
-              Business Status: <div className="text-xs font-semibold px-2 py-1 rounded-full capitalize bg-emerald-50 text-emerald-700">
+              <div className="text-xs font-semibold px-2 py-1 rounded-full capitalize bg-emerald-50 text-emerald-700">
                 {business?.business_status}
               </div>
             </div>
@@ -339,7 +339,7 @@ export default function EditBusinessProfile({
 
         {/* Editable cards */}
         <div className="mt-6 space-y-4">
-          <div className="bg-white rounded-xl shadow-sm">
+          <div className="bg-white rounded-xl ">
             <div onClick={() => openEditor("Shop Profile", KEYS.shopProfile, shopProfile)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Shop Profile</div>
@@ -349,7 +349,7 @@ export default function EditBusinessProfile({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm">
+          <div className="bg-white rounded-xl ">
             <div onClick={() => openEditor("Shipping Info", KEYS.shipping, normalizeShippingForModal(shipping))} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Shipping info</div>
@@ -367,7 +367,7 @@ export default function EditBusinessProfile({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm">
+          <div className="bg-white rounded-xl ">
             <div onClick={() => openEditor("Payment Info", KEYS.payment, payment)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Payment Info</div>
@@ -393,7 +393,7 @@ export default function EditBusinessProfile({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm">
+          <div className="bg-white rounded-xl ">
             <div onClick={() => openEditor("Market Affiliation", KEYS.market, market)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Market Affiliation</div>

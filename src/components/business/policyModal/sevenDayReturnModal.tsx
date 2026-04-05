@@ -209,7 +209,7 @@ Platform encourages sellers to provide better customer-friendly policies
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

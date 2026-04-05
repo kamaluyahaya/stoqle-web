@@ -22,6 +22,7 @@ type AuthContextValue = {
   // internal: called by LoginModal when login succeeds
   logout: () => Promise<void>;
   isHydrated: boolean;
+  refreshUser: () => Promise<void>;
   _onLoginSuccess: (user: User, token: string) => void;
   onVerificationSuccess: (user: User) => void;
 };
@@ -43,11 +44,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
 
+  const refreshUser = async () => {
+    const t = typeof window !== "undefined" ? localStorage.getItem("token") : token;
+    if (!t) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/auth/profile/me`, {
+        headers: {
+          "Authorization": `Bearer ${t}`,
+        },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const u = json.data?.user || json.data || json;
+        // The /api/auth/profile/me might return { user, business, stats ... }
+        // We want to merge or keep the most relevant user info for auth
+        // Usually, the 'user' object in state is what other components consume
+        const updatedUser = {
+          ...(json.data?.user || json.data || json),
+          isBusiness: Boolean(json.data?.is_business_owner || json.data?.business),
+          is_business_owner: Boolean(json.data?.is_business_owner),
+          business_id: json.data?.business?.business_id || json.data?.business?.id,
+          business_status: json.data?.business?.business_status || (json.data as any)?.business_status
+        };
+        setUser(updatedUser);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("user", JSON.stringify(updatedUser));
+        }
+        return updatedUser;
+      }
+    } catch (e) {
+      console.error("AuthContext refreshUser error", e);
+    }
+  };
+
   // Read localStorage only on client after mount
   useEffect(() => {
     mountedRef.current = true;
+    let t: string | null = null;
     try {
-      const t = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      t = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const uRaw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
       setToken(t);
       setUser(uRaw ? JSON.parse(uRaw) : null);
@@ -74,11 +109,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("storage", onStorage);
     setIsHydrated(true);
 
+    // Initial sync with backend to catch any status updates (e.g. business approval)
+    if (t) {
+      refreshUser();
+    }
+
     return () => {
       mountedRef.current = false;
       window.removeEventListener("storage", onStorage);
     };
   }, []);
+
+  // background refresh logic
+  useEffect(() => {
+    if (!token || !user) return;
+
+    // Periodic refresh every 60 seconds to catch status updates in the background
+    const interval = setInterval(() => {
+      refreshUser();
+    }, 60000);
+
+    // Refresh when user returns to the tab
+    const handleFocus = () => refreshUser();
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [token, !!user]);
 
   // open login and return promise that resolves true if user logged in, false otherwise
   const openLogin = (): Promise<boolean> => {
@@ -123,19 +182,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // handy wrapper
-  const ensureLoggedIn = async (): Promise<boolean> => {
-    if (mountedRef.current && token && user) return true;
+  const ensureLoggedIn = async (): Promise<User | null> => {
+    if (mountedRef.current && token && user) return user;
     return await openLogin();
   };
 
-  const ensureAccountVerified = async (): Promise<boolean> => {
+  const ensureAccountVerified = async (): Promise<User | null> => {
     // first ensure logged in
     const loggedIn = await ensureLoggedIn();
-    if (!loggedIn) return false;
- 
+    if (!loggedIn) return null;
+
+    // Refresh user from server to ensure we have the absolute latest status from DB
+    // before deciding to trigger the modal
+    const updatedUser = await refreshUser();
+    const currentUser = updatedUser || user;
+
     // then ensure phone and email
-    if (user?.phone_no && user?.email) return true;
-    return await openVerification();
+    if (currentUser?.phone_no && currentUser?.email) return currentUser;
+
+    const result = await openVerification();
+    // If openVerification returns true, we should get the latest user from state
+    // But since setUser is async, we'll return the user passed to onVerificationSuccess if possible.
+    // Actually, openVerification now resolves with the USER object.
+    return result as any;
   };
 
   // called by LoginModal after successful verification & token set in localStorage
@@ -156,7 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoginOpen(false);
 
     if (resolverRef.current) {
-      resolverRef.current.resolve(true);
+      resolverRef.current.resolve(u as any);
       resolverRef.current = null;
     }
   };
@@ -168,7 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setVerificationOpen(false);
       if (verificationResolverRef.current) {
-        verificationResolverRef.current.resolve(true);
+        verificationResolverRef.current.resolve(verifiedUser as any);
         verificationResolverRef.current = null;
       }
   };
@@ -191,6 +260,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         token,
+        isLoggedIn: !!user,
+        isBusiness: Boolean(user?.is_business_owner || user?.isBusiness),
         loginOpen,
         verificationOpen,
         openLogin,
@@ -202,6 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         _onLoginSuccess,
         logout,
         isHydrated,
+        refreshUser,
         onVerificationSuccess,
       } as any}
     >

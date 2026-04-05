@@ -1,28 +1,81 @@
 import React from "react";
 
-export default function ThumbnailList({ images, video, selectedIndex, onSelect }: { images: Array<any>; video?: any; selectedIndex: number; onSelect: (i: number) => void }) {
+export default function ThumbnailList({
+  payload,
+  images,
+  variantImages = [],
+  selectedIndex,
+  viewMode = "images",
+  onIndexChange,
+  onAllStyles
+}: {
+  payload: any;
+  images: { url?: string; name?: string }[];
+  variantImages?: { url?: string; name?: string; name_group?: string }[];
+  selectedIndex: number;
+  viewMode?: "video" | "images" | "styles";
+  onIndexChange: (index: number, mode?: "video" | "images" | "styles") => void;
+  onAllStyles?: () => void;
+}) {
+  const hasStyles = variantImages.length > 0;
+
   return (
-    <div className="flex gap-2 w-full overflow-x-auto pb-1">
-      {/* Show thumbnails only if there is more than 1 media item in total */}
-      {(images.length + (video ? 1 : 0)) > 1 && (
+    <div className="relative w-full flex items-center bg-white group/thumb">
+      {hasStyles ? (
         <>
-          {video && (
-            <button key="video" onClick={() => onSelect(-1)} onMouseDown={(e) => e.stopPropagation()} className={`flex-shrink-0 cursor-pointer rounded-sm border p-1 ${selectedIndex === -1 ? "ring-2 ring-red-500 bg-red-50" : "border-slate-100 hover:border-red-300"} overflow-hidden focus:outline-none flex flex-col items-center justify-center bg-slate-50 relative`} style={{ width: 60, height: 60 }} title={video.name ?? "Video preview"} aria-pressed={selectedIndex === -1}>
-              <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white drop-shadow-md" fill="currentColor">
-                  <path d="M5 3v18l15-9-15-9z" />
-                </svg>
-              </div>
-              {video.url && <video src={video.url} className="w-full h-full object-cover" muted playsInline />}
+          <div className="flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex gap-2.5 pb-1 px-1">
+            {variantImages.map((v, i) => {
+              const isSelected = viewMode === "styles" && i === selectedIndex;
+              return (
+                <button
+                  key={`style-${i}`}
+                  onClick={() => onIndexChange(i, "styles")}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className={`flex-shrink-0 group relative rounded-lg border-2 p-0.5 transition-all duration-300 ${isSelected
+                    ? "border-red-500 bg-red-50"
+                    : "border-transparent hover:border-slate-200"
+                    } overflow-hidden focus:outline-none`}
+                  style={{ width: 58, height: 58 }}
+                  aria-pressed={isSelected}
+                >
+                  <div className="w-full h-full rounded-[6px] overflow-hidden relative bg-slate-100">
+                    {v.url ? (
+                      <img src={v.url} alt={v.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-50 text-[9px] text-slate-400 p-2 text-center leading-tight">
+                        {v.name}
+                      </div>
+                    )}
+                    {/* Variant Name Overlay (Simplified) */}
+                    <div className={`absolute bottom-0 left-0 right-0 p-0.5 bg-black/60 backdrop-blur-[1px] transition-transform duration-300 ${isSelected ? "translate-y-0" : "translate-y-full group-hover:translate-y-0"
+                      }`}>
+                      <p className="text-[7px] font-black text-white truncate text-center leading-none">
+                        {v.name}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+
+            {/* Add extra padding at the end to allow for sticky link space */}
+            <div className="flex-shrink-0 w-24" />
+          </div>
+
+          {/* Sticky "All styles" Link on the right */}
+          <div className="absolute top-0 right-0 h-full pl-8 pr-1 flex items-center bg-gradient-to-l from-white via-white/95 to-transparent pointer-events-none">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAllStyles?.(); }}
+              className="pointer-events-auto flex flex-col items-center justify-center whitespace-nowrap active:scale-95 transition-transform"
+            >
+              <span className="text-[10px] font-black text-red-500 hover:text-red-700 transition-colors p-0.5">
+                All {variantImages.length} styles
+              </span>
             </button>
-          )}
-          {images.map((p, i) => (
-            <button key={`img-${i}`} onClick={() => onSelect(i)} onMouseDown={(e) => e.stopPropagation()} className={`flex-shrink-0 rounded-sm border cursor-pointer p-1 ${i === selectedIndex ? "ring-2 ring-red-500 bg-red-50" : "border-slate-100 hover:border-red-300"} overflow-hidden focus:outline-none bg-slate-50`} style={{ width: 60, height: 60 }} title={p.name ?? `Image ${i + 1}`} aria-pressed={i === selectedIndex}>
-              {p.url ? <img src={p.url} alt={p.name ?? `img-${i + 1}`} className="w-full h-full object-cover rounded-sm" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 p-2 break-all">{p.name ?? "file"}</div>}
-            </button>
-          ))}
+          </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

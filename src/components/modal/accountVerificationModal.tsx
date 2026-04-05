@@ -54,7 +54,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
   // Debounced availability check
   useEffect(() => {
     if (step !== "input" || !open) return;
-    
+
     const value = verifyType === "phone" ? phone : email;
     if (!value || (verifyType === "phone" && String(value).length < 7)) {
       setIsAvailable(null);
@@ -213,6 +213,8 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
     }
   };
 
+  const [pendingUpdates, setPendingUpdates] = useState<any>({});
+
   const handleVerifyOtp = async (code: string) => {
     setLoading(true);
     try {
@@ -232,13 +234,17 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
       if (res.ok) {
         toast.success(`${verifyType === "phone" ? "Phone" : "Email"} verified!`);
 
-        // Prepare updated user object
-        const updatedUser = { ...user };
-        if (verifyType === "phone") updatedUser.phone_no = `+234${phone}`;
-        else updatedUser.email = email;
+        // Update pending changes
+        const currentUpdates = { ...pendingUpdates };
+        if (verifyType === "phone") {
+          currentUpdates.phone_no = `+234${phone}`;
+        } else {
+          currentUpdates.email = email;
+        }
+        setPendingUpdates(currentUpdates);
 
         // If we still need to verify the other one, switch mode
-        if (verifyType === "phone" && !user?.email && !email) {
+        if (verifyType === "phone" && !user?.email && !email && !currentUpdates.email) {
           setVerifyType("email");
           setStep("input");
           setOtp(["", "", "", "", "", ""]);
@@ -247,8 +253,9 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
           return;
         }
 
-        // Complete the process
-        onSuccess(updatedUser);
+        // Complete the process with ALL accumulated updates
+        const finalUser = { ...user, ...currentUpdates };
+        onSuccess(finalUser);
       } else {
         toast.error(data.message || "Invalid OTP");
         setOtp(["", "", "", "", "", ""]);
@@ -265,21 +272,25 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
     <AnimatePresence>
       {open && (
         <div
-          className="fixed inset-0 z-[30000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-          onClick={onClose}
+          className="fixed inset-0 z-[200000] flex items-center justify-center p-4 bg-black/40 "
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             className="w-full max-w-md rounded-[0.5rem] bg-gray-900 border border-slate-700/50 shadow-2xl overflow-hidden relative"
           >
             {/* Header */}
             <div className="px-6 py-4 flex items-center justify-between ">
               {step === "otp" ? (
                 <button
-                  onClick={() => setStep("input")}
+                  onClick={(e) => { e.stopPropagation(); setStep("input"); }}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors"
                   title="Back"
                 >
@@ -303,7 +314,8 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
               </div>
 
               <button
-                onClick={onClose}
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                onMouseDown={(e) => e.stopPropagation()}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 title="Close"
               >

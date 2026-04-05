@@ -8,6 +8,7 @@ import { ChatProvider } from "@/src/context/chatContext";
 import { WalletProvider } from "@/src/context/walletContext";
 import { NotificationProvider } from "@/src/context/notificationContext";
 import { CartProvider } from "@/src/context/cartContext";
+import { AudioProvider } from "@/src/context/audioContext";
 
 import type { Metadata, Viewport } from "next";
 
@@ -16,8 +17,8 @@ export const metadata: Metadata = {
   description: "Experience the next generation of social commerce on Stoqle.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/assets/images/favio.png",
-    apple: "/assets/images/favio.png",
+    icon: "/assets/images/logos.png",
+    apple: "/assets/images/logos.png",
   },
   appleWebApp: {
     capable: true,
@@ -43,50 +44,52 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="bg-white text-slate-900 antialiased" suppressHydrationWarning>
         <AuthProvider>
-          <WalletProvider>
-            <NotificationProvider>
-              <ChatProvider>
-                <CartProvider>
-                  <Toaster
-                    position="top-center"
-                    theme="dark"
-                    icons={{
-                      success: null,
-                      info: null,
-                      warning: null,
-                      error: null,
-                      loading: null,
-                    }}
-                    toastOptions={{
-                      style: {
-                        borderRadius: "99px",
-                        padding: "0.6rem 1.25rem",
-                        fontSize: "0.750rem",
-                        fontWeight: "500",
-                        backgroundColor: "rgba(0, 0, 0, 0.85)",
-                        color: "#fff",
-                        backdropFilter: "blur(4px)",
-                        border: "none",
-                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                        width: "max-content",
-                        maxWidth: "90vw",
-                        margin: "0 auto",
-                      },
-                    }}
-                    style={{
-                      top: "50%",
-                      left: "50%",
-                      transform: "translate(-50%, -50%)",
-                      position: "fixed",
-                      pointerEvents: "none",
-                    }}
-                  />
+          <AudioProvider>
+            <WalletProvider>
+              <NotificationProvider>
+                <ChatProvider>
+                  <CartProvider>
+                    <Toaster
+                      position="top-center"
+                      theme="dark"
+                      icons={{
+                        success: null,
+                        info: null,
+                        warning: null,
+                        error: null,
+                        loading: null,
+                      }}
+                      toastOptions={{
+                        style: {
+                          borderRadius: "99px",
+                          padding: "0.6rem 1.25rem",
+                          fontSize: "0.750rem",
+                          fontWeight: "500",
+                          backgroundColor: "rgba(0, 0, 0, 0.85)",
+                          color: "#fff",
+                          backdropFilter: "blur(4px)",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                          width: "max-content",
+                          maxWidth: "90vw",
+                          margin: "0 auto",
+                        },
+                      }}
+                      style={{
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        position: "fixed",
+                        pointerEvents: "none",
+                      }}
+                    />
 
-                  <Shell>{children}</Shell>
-                </CartProvider>
-              </ChatProvider>
-            </NotificationProvider>
-          </WalletProvider>
+                    <Shell>{children}</Shell>
+                  </CartProvider>
+                </ChatProvider>
+              </NotificationProvider>
+            </WalletProvider>
+          </AudioProvider>
         </AuthProvider>
       </body>
     </html>

@@ -19,24 +19,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import PostModal from "./postModal";
-
-type Post = {
-  id: number;
-  src?: string;
-  allMedia?: { url: string; id: any }[];
-  isVideo?: boolean;
-  isImage?: boolean;
-  caption?: string;
-  note_caption?: string;
-  noteConfig?: any;
-  coverType?: string;
-  privacy?: string;
-  subtitle?: string;
-  user?: { name: string; avatar: string; id?: any };
-  rawCreatedAt?: string;
-  likeCount?: number;
-  liked?: boolean;
-};
+import type { Post, User } from "@/src/lib/types";
 
 type Props = {
   open: boolean;
@@ -477,14 +460,17 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
           )}
         </AnimatePresence>
 
-        {previewPost && (
-          <PostModal
-            post={previewPost}
-            onClose={() => setPreviewPost(null)}
-            onToggleLike={() => {}}
-            isPreview={true}
-          />
-        )}
+        <AnimatePresence>
+          {previewPost && (
+            <PostModal
+              open={!!previewPost}
+              post={previewPost}
+              onClose={() => setPreviewPost(null)}
+              onToggleLike={() => { }}
+              isPreview={true}
+            />
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

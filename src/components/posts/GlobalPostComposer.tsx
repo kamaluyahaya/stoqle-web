@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { createSocialPost } from "@/src/lib/api/social";
+import { createSocialPost, fetchTrendingSounds, recordSoundUsage } from "@/src/lib/api/social";
 import { useAuth } from "@/src/context/authContext";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -31,42 +31,160 @@ import {
 } from "lucide-react";
 import DefaultInput from "@/src/components/input/default-input-post";
 import CreateNoteModal from "@/src/components/notes/createNoteModal";
+import { fetchProductById } from "@/src/lib/api/productApi";
+import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import type { PreviewPayload } from "@/src/types/product";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+const FALLBACK_SOUNDS = [
+  { id: 'f1', title: "Modern Vibe", artist: "Stoqle Mix", url: "https://cdn.pixabay.com/audio/2022/10/14/audio_3d1ef96084.mp3", duration: "2:45" },
+  { id: 'f2', title: "Summer Breeze", artist: "Chill Beats", url: "https://cdn.pixabay.com/audio/2024/09/24/audio_3473130be7.mp3", duration: "1:30" },
+  { id: 'f3', title: "Urban Pulse", artist: "Rhythm Junkie", url: "https://cdn.pixabay.com/audio/2022/01/21/audio_3108306734.mp3", duration: "3:10" },
+  { id: 'f4', title: "Lofi Study", artist: "Deep Focus", url: "https://cdn.pixabay.com/audio/2022/05/27/audio_180873748b.mp3", duration: "2:15" },
+  { id: 'f5', title: "Sunset Drive", artist: "Retro Wave", url: "https://cdn.pixabay.com/audio/2023/10/26/audio_f448c41ec3.mp3", duration: "2:50" },
+];
+
+const formatUrl = (url: string) => {
+  return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+};
+
+// ----------------------
+// AudioRecorderButton Component
+// ----------------------
+function AudioRecorderButton({ onComplete, isCompact = false }: { onComplete: (blob: Blob) => void, isCompact?: boolean }) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [signalLevel, setSignalLevel] = useState(0); // 0 to 100
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Visualizer setup
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      audioCtxRef.current = audioCtx;
+      analyserRef.current = analyser;
+
+      const updateSignal = () => {
+        if (!analyserRef.current) return;
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((p, c) => p + c, 0) / dataArray.length;
+        setSignalLevel(Math.min(100, Math.pow(average / 128, 0.5) * 100));
+        animationFrameRef.current = requestAnimationFrame(updateSignal);
+      };
+      updateSignal();
+
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        onComplete(blob);
+        stream.getTracks().forEach(t => t.stop());
+        if (audioCtxRef.current) audioCtxRef.current.close();
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+    } catch (err) {
+      toast.error("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  if (isCompact) {
+    return (
+      <button
+        onClick={isRecording ? stopRecording : startRecording}
+        className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all group border-2 border-transparent ${isRecording ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-slate-50 text-slate-900 hover:bg-slate-100 hover:border-red-100'}`}
+      >
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform relative ${isRecording ? 'bg-white text-red-500' : 'bg-red-100 text-red-500 group-hover:scale-110'}`}>
+          {isRecording ? (
+            <div className="w-3.5 h-3.5 bg-red-500 rounded-sm animate-pulse" />
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          )}
+        </div>
+        <div className="text-center font-bold">
+          <p className="text-[11px] leading-tight">{isRecording ? (recordingTime > 0 ? `${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, "0")}` : "0:00") : "Voice Note"}</p>
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={isRecording ? stopRecording : startRecording}
+      className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all group ${isRecording ? 'bg-red-500 text-white' : 'bg-slate-50 text-slate-900 hover:bg-slate-100'}`}
+    >
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform relative ${isRecording ? 'bg-white text-red-500' : 'bg-red-100 text-red-500 group-hover:scale-110'}`}>
+        {isRecording ? (
+          <>
+            <div className="absolute inset-0 rounded-full bg-red-100/50 scale-[1.5] animate-ping opacity-20" />
+            <div className="w-3.5 h-3.5 bg-red-500 rounded-sm" />
+          </>
+        ) : (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+        )}
+      </div>
+      <div className="flex-1 text-left min-w-0">
+        <p className={`text-sm font-bold ${isRecording ? 'text-white' : 'text-slate-900'}`}>{isRecording ? "Stop Recording" : "Record Voice"}</p>
+        <div className="flex items-center gap-2 mt-1">
+          {isRecording ? (
+            <div className="flex items-end gap-[1px] h-3 w-20">
+              {[...Array(12)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  animate={{
+                    height: `${Math.max(10, signalLevel * (0.3 + Math.random() * 0.7))}%`
+                  }}
+                  transition={{ duration: 0.1 }}
+                  className="w-1 bg-white/60 rounded-full"
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-slate-400">Up to 60 seconds</p>
+          )}
+          {isRecording && <span className="text-[10px] font-mono text-white/80">{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 // ----------------------
 // VideoProcessingModal (Trimming & Merging)
 // ----------------------
-function VideoProcessingModal({ progress }: { progress: number }) {
-  return (
-    <div className="fixed inset-0 z-[100000] bg-slate-900/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center overscroll-none">
-      <div className="relative w-32 h-32 mb-8">
-        <div className="absolute inset-0 rounded-full border-4 border-slate-800" />
-        <motion.div
-          className="absolute inset-0 rounded-full border-4 border-t-red-500"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center font-bold text-2xl text-white">
-          {Math.min(99, Math.round(progress))}%
-        </div>
-      </div>
-
-      <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">Post Studio</h2>
-      <p className="text-slate-400 max-w-sm leading-relaxed text-sm">
-        Optimizing and merging your media into a single high-quality reel...
-        Please stay on this page.
-      </p>
-
-      <div className="mt-10 w-full max-w-xs h-1.5 bg-slate-800 rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ type: "spring", damping: 25, stiffness: 50 }}
-        />
-      </div>
-    </div>
-  );
-}
 
 // ----------------------
 // VideoPreviewModal (Phone Interface)
@@ -83,6 +201,9 @@ function VideoPreviewModal({
   setInterleavedMedia,
   isLoading = false,
   uploadProgress = 0,
+  audioFile = null,
+  setAudioFile = () => { },
+  sound_id = null,
 }: {
   images: File[];
   imagePreviews: string[];
@@ -93,23 +214,46 @@ function VideoPreviewModal({
   onPosted: () => void;
   isLoading?: boolean;
   uploadProgress?: number;
+  audioFile?: File | null;
+  setAudioFile: (f: File | null) => void;
   setInterleavedMedia: React.Dispatch<React.SetStateAction<{ type: 'image' | 'video', file: File, preview: string }[]>>;
+  sound_id?: number | null;
   onSubmitPayload: (payload: {
     type: "video" | "mixed";
     video: File;
     images?: File[];
+    audio?: File | null;
     text?: string;
     subtitle?: string;
     privacy?: "public" | "private" | "friends";
     media_order?: { name: string, type: 'image' | 'video' }[];
+    linked_product_id?: number | null;
+    sound_id?: number | null;
   }) => void;
 }) {
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const audioRefElement = useRef<HTMLAudioElement | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (audioFile) {
+      const url = URL.createObjectURL(audioFile);
+      setAudioUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setAudioUrl(null);
+    }
+  }, [audioFile]);
   const [text, setText] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "private" | "friends">("public");
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [isProductPreviewOpen, setIsProductPreviewOpen] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
   const [previewPost, setPreviewPost] = useState<any>(null);
-  const { user } = useAuth();
+  const { user, isBusiness, token } = (useAuth() as any);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true); // auto-start preview
   const [isMuted, setIsMuted] = useState(true); // start muted for autoPlay compatibility; user can unmute
@@ -181,7 +325,7 @@ function VideoPreviewModal({
       setCurrentIndex(0);
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
-        if (isPlaying) videoRef.current.play().catch(() => {});
+        if (isPlaying) videoRef.current.play().catch(() => { });
       }
     }
   }, [interleavedMedia, segmentOffsets, effectiveVideoDuration, isPlaying]);
@@ -199,7 +343,7 @@ function VideoPreviewModal({
             // Video element is mounted — restart it directly
             internalTransitionRef.current = true;
             videoRef.current.currentTime = 0;
-            videoRef.current.play().catch(() => {});
+            videoRef.current.play().catch(() => { });
           } else {
             // Video element is currently unmounted (we were on an image slide).
             // Set a flag so it plays as soon as it mounts.
@@ -233,7 +377,7 @@ function VideoPreviewModal({
           setCurrentIndex(foundIndex);
           // If we transitioned TO a video slide, ensure it plays
           if (interleavedMedia[foundIndex]?.type === 'video' && videoRef.current) {
-            videoRef.current.play().catch(() => {});
+            videoRef.current.play().catch(() => { });
           }
           // If we transitioned AWAY from a video slide, pause it silently
           if (interleavedMedia[currentIndex]?.type === 'video' && interleavedMedia[foundIndex]?.type !== 'video' && videoRef.current) {
@@ -288,8 +432,24 @@ function VideoPreviewModal({
       media_order: interleavedMedia.map(m => ({
         name: m.file.name,
         type: m.type
-      }))
+      })),
+      linked_product_id: selectedProduct?.product_id || null,
+      audio: audioFile,
+      sound_id: sound_id || null
     });
+  };
+
+  const onProductPreview = async () => {
+    if (!selectedProduct) return;
+    try {
+      const res = await fetchProductById(selectedProduct.product_id, token);
+      if (res?.data?.product) {
+        setPreviewPayload(mapProductToPreviewPayload(res.data.product, formatUrl));
+        setIsProductPreviewOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -365,7 +525,7 @@ function VideoPreviewModal({
                         // If a pending play was requested while the element was unmounted, start now
                         if (pendingPlayRef.current) {
                           pendingPlayRef.current = false;
-                          e.currentTarget.play().catch(() => {});
+                          e.currentTarget.play().catch(() => { });
                         }
                       }}
                       onTimeUpdate={handleTimeUpdate}
@@ -612,6 +772,17 @@ function VideoPreviewModal({
           )}
         </AnimatePresence>
 
+        {/* Product Selector Modal */}
+        <AnimatePresence>
+          {isProductModalOpen && (
+            <ProductSelectorModal
+              onClose={() => setIsProductModalOpen(false)}
+              onSelect={setSelectedProduct}
+              selectedId={selectedProduct?.product_id || null}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Upload Progress Overlay */}
         <AnimatePresence>
           {isLoading && (
@@ -619,7 +790,7 @@ function VideoPreviewModal({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center space-y-4"
+              className="absolute inset-0 z-[400] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center space-y-4"
             >
               <div className="relative w-24 h-24">
                 <svg className="w-full h-full transform -rotate-90">
@@ -654,16 +825,188 @@ function VideoPreviewModal({
           )}
         </AnimatePresence>
 
-        <div className="p-6 flex gap-3 pb-10 sm:pb-6 mt-auto border-t border-slate-100">
-          <button
-            onClick={submit}
-            disabled={isLoading}
-            className="flex-1 py-3 rounded-full bg-red-500 text-white text-sm hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? "Publishing..." : "Publish Post"}
-          </button>
+        <AnimatePresence>
+          {showAudioMenu && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowAudioMenu(false)}
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[120] rounded-[inherit]"
+              />
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[130] p-6 space-y-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-slate-400">Add Music / Voice</h3>
+                  <button onClick={() => setShowAudioMenu(false)}>
+                    <XMarkIcon className="w-4 h-4 text-slate-400" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => document.getElementById('music-upload-video')?.click()}
+                  className="w-full flex items-center gap-4 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-900">Upload from device</p>
+                    <p className="text-[10px] text-slate-400">Choose music file (trimmed to 30s)</p>
+                  </div>
+                </button>
+
+                <AudioRecorderButton
+                  onComplete={(blob) => {
+                    const file = new File([blob], "voice_note.webm", { type: "audio/webm" });
+                    setAudioFile(file);
+                    setShowAudioMenu(false);
+                    toast.success("Voice note added!");
+                  }}
+                />
+
+                <input
+                  id="music-upload-video"
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setAudioFile(file);
+                      setShowAudioMenu(false);
+                      toast.success("Music added!");
+                    }
+                  }}
+                />
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        <div className="p-4 sm:p-6 pb-10 sm:pb-6 mt-auto border-t border-slate-100 space-y-3">
+          {audioFile && (
+            <div className="flex items-center gap-3 p-2 bg-red-50 rounded-2xl border border-red-100 animate-in slide-in-from-bottom-2 mb-2">
+              <div className="w-10 h-10 rounded-lg bg-red-500 flex items-center justify-center text-white shrink-0">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Added Audio</p>
+                <p className="text-xs font-bold text-red-600 truncate">{audioFile.name}</p>
+              </div>
+              <button onClick={() => setAudioFile(null)} className="p-2 hover:bg-red-100 rounded-full transition-colors">
+                <XMarkIcon className="w-4 h-4 text-red-400" />
+              </button>
+              {audioUrl && (
+                <audio src={audioUrl} autoPlay loop className="hidden" ref={audioRefElement} />
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-center mb-1">
+            <button
+              onClick={() => setShowAudioMenu(true)}
+              className="text-[11px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 flex items-center gap-1.5 py-1"
+            >
+              <PlusIcon className="w-3.5 h-3.5" />
+              {audioFile ? "Change Music" : "Add Music / Voice"}
+            </button>
+          </div>
+
+          {/* Selected Product Thumbnail Visibility */}
+          {selectedProduct && (
+            <div
+              onClick={onProductPreview}
+              className="flex items-center gap-3 p-2 bg-slate-50 rounded-2xl border border-slate-100 animate-in slide-in-from-bottom-2 fade-in duration-300 cursor-pointer hover:bg-slate-100 transition-colors group/linked"
+            >
+              <div className="w-10 h-10 rounded-lg overflow-hidden bg-white border border-slate-200 flex-shrink-0 relative">
+                <img
+                  src={formatUrl(selectedProduct.first_image)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = NO_IMAGE_PLACEHOLDER;
+                  }}
+                  className="w-full h-full object-cover"
+                  alt="linked"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover/linked:bg-black/10 flex items-center justify-center transition-all">
+                  <EyeIcon className="w-3 h-3 text-white opacity-0 group-hover/linked:opacity-100" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Linked Product</p>
+                <p className="text-xs font-bold text-slate-900 truncate leading-tight mb-0.5">{selectedProduct.title}</p>
+                <p className="text-[10px] font-black text-red-500 leading-none">
+                  ₦{Number(selectedProduct.min_variant_price || selectedProduct.min_sku_price || selectedProduct.price).toLocaleString()}
+                </p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedProduct(null); }}
+                className="p-1.5 hover:bg-slate-200 rounded-full transition-colors"
+                title="Remove Link"
+              >
+                <XMarkIcon className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            {/* Link Product Button (Visible for Active Business Accounts) */}
+            {(Boolean(isBusiness) || Boolean(user?.business_id)) && (
+              !user?.business_status ||
+              ['active', 'verified', 'approved', 'approved_verified', 'published'].includes(String(user?.business_status || '').toLowerCase()) ||
+              ['active', 'verified', 'approved'].includes(String(user?.status || '').toLowerCase())
+            ) && (
+                <button
+                  onClick={() => setIsProductModalOpen(true)}
+                  className={`flex-shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full border transition-all active:scale-95 group ${selectedProduct
+                    ? "bg-red-50 border-red-200 text-red-600"
+                    : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
+                    }`}
+                >
+                  <PlusIcon className={`w-4 h-4 ${selectedProduct ? "text-red-500" : "text-slate-400 group-hover:text-red-500"}`} />
+                  <span className="text-xs font-bold">
+                    {selectedProduct ? "Linked" : "Link Product"}
+                  </span>
+                </button>
+              )}
+
+            <button
+              onClick={submit}
+              disabled={isLoading}
+              className="flex-1 py-3 rounded-full bg-red-500 text-white text-xs sm:text-sm font-bold hover:bg-red-600 active:scale-95 transition-all shadow-xl shadow-red-100 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isLoading ? "Publishing..." : "Publish Post"}
+            </button>
+          </div>
         </div>
 
+        {/* Product Selector Modal for Videos */}
+        <AnimatePresence>
+          {isProductModalOpen && (
+            <ProductSelectorModal
+              onClose={() => setIsProductModalOpen(false)}
+              onSelect={setSelectedProduct}
+              selectedId={selectedProduct?.product_id || null}
+            />
+          )}
+        </AnimatePresence>
+
+        {isProductPreviewOpen && previewPayload && (
+          <ProductPreviewModal
+            open={isProductPreviewOpen}
+            payload={previewPayload}
+            zIndex={2000000}
+            onClose={() => {
+              setIsProductPreviewOpen(false);
+              setPreviewPayload(null);
+            }}
+          />
+        )}
       </motion.div>
     </div>
   );
@@ -684,6 +1027,8 @@ function ImagePreviewModal({
   isLoading = false,
   uploadProgress = 0,
   initialStep = 0,
+  audioFile = null,
+  setAudioFile = () => { },
 }: {
   imageFiles: File[];
   imagePreviews: string[];
@@ -692,9 +1037,12 @@ function ImagePreviewModal({
     type: "image" | "video" | "mixed";
     images?: File[];
     video?: File;
+    audio?: File | null;
     text?: string;
     subtitle?: string;
     privacy?: "public" | "private" | "friends";
+    linked_product_id?: number | null;
+    sound_id?: number | null;
   }) => void;
   removeImageAt: (index: number) => void;
   setImages: (f: File[]) => void;
@@ -703,17 +1051,109 @@ function ImagePreviewModal({
   isLoading?: boolean;
   uploadProgress?: number;
   initialStep?: number;
+  audioFile?: File | null;
+  setAudioFile: (f: File | null) => void;
 }) {
+  const [showAudioList, setShowAudioList] = useState(false);
+  const [selectedPopularSound, setSelectedPopularSound] = useState<any | null>(null);
+  const [hasUserModifiedAudio, setHasUserModifiedAudio] = useState(false);
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const [step, setStep] = useState(initialStep);
   const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (audioFile) {
+      const url = URL.createObjectURL(audioFile);
+      setAudioUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else if (selectedPopularSound) {
+      setAudioUrl(selectedPopularSound.file_url || selectedPopularSound.url || null);
+    } else {
+      setAudioUrl(null);
+    }
+  }, [audioFile, selectedPopularSound]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (audioUrl && step === 0) {
+      audioRef.current.play().catch(err => {
+        console.log("Auto-play blocked by browser. Interaction may be required.", err);
+      });
+    } else {
+      audioRef.current.pause();
+      // Optional: only reset if moving away or if audio changed
+      if (step !== 0) audioRef.current.currentTime = 0;
+    }
+  }, [audioUrl, step]);
+
+  // Auto-advance slideshow (3s) when multiple images exist
+  useEffect(() => {
+    if (step !== 0 || imagePreviews.length <= 1) return;
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % imagePreviews.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [step, imagePreviews.length]);
+
   const [text, setText] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "private" | "friends">("public");
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [isProductPreviewOpen, setIsProductPreviewOpen] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [previewPost, setPreviewPost] = useState<any>(null);
-  const { user } = useAuth();
+  const { user, isBusiness, token } = (useAuth() as any);
+
+  const [dbSounds, setDbSounds] = useState<any[]>([]);
+
+  // Fetch trending sounds on mount
+  useEffect(() => {
+    fetchTrendingSounds(token)
+      .then(sounds => {
+        if (sounds && sounds.length > 0) {
+          // Mark these as community sounds
+          setDbSounds(sounds.map((s: any) => ({ ...s, isCommunity: true })));
+        } else {
+          setDbSounds(FALLBACK_SOUNDS);
+        }
+      })
+      .catch(() => setDbSounds(FALLBACK_SOUNDS));
+  }, [token]);
+
+  const selectPopularSound = async (sound: any, isManual = true) => {
+    if (isManual) setHasUserModifiedAudio(true);
+    setSelectedPopularSound(sound);
+
+    // If it's a library sound, we link by ID. 
+    // If it's a fallback or doesn't have an ID in our DB, we must download and send as file.
+    if (sound.isCommunity) {
+      setAudioFile(null);
+    } else {
+      try {
+        const audioUrl = sound.file_url || sound.url;
+        const res = await fetch(audioUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `${sound.title}.mp3`, { type: "audio/mpeg" });
+        setAudioFile(file);
+      } catch (err) {
+        console.error("Failed to fetch fallback sound", err);
+      }
+    }
+  };
+
+  // Auto-select sound for image posts
+  useEffect(() => {
+    if (imagePreviews.length > 0 && !audioFile && !selectedPopularSound && dbSounds.length > 0 && !hasUserModifiedAudio) {
+      selectPopularSound(dbSounds[0], false);
+    }
+  }, [imagePreviews.length, audioFile, selectedPopularSound, dbSounds, hasUserModifiedAudio]);
 
   useEffect(() => {
     document.body.classList.add("overflow-hidden");
@@ -760,54 +1200,68 @@ function ImagePreviewModal({
       images: imageFiles,
       text,
       subtitle,
-      privacy
+      privacy,
+      linked_product_id: selectedProduct?.product_id || null,
+      audio: audioFile,
+      sound_id: selectedPopularSound?.id || null
     });
   };
 
+  const onProductPreview = async () => {
+    if (!selectedProduct) return;
+    try {
+      const res = await fetchProductById(selectedProduct.product_id, token);
+      if (res?.data?.product) {
+        setPreviewPayload(mapProductToPreviewPayload(res.data.product, formatUrl));
+        setIsProductPreviewOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[100000] flex items-end sm:items-center justify-center p-0" role="dialog" aria-modal="true">
-      <motion.div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        onClick={onClose}
-      />
+    <>
+      <div className="fixed inset-0 z-[100000] flex items-end sm:items-center justify-center p-0" role="dialog" aria-modal="true">
+        <motion.div
+          className="absolute inset-x-0 inset-y-0 bg-black/60 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={onClose}
+        />
 
-      <motion.div
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.8 }}
-        className="relative w-full max-w-lg bg-white h-[100dvh] sm:h-auto sm:max-h-[95vh] rounded-none sm:rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden"
-      >
-        {/* Header */}
-        <div className="px-4 py-3 flex items-center justify-between relative border-b border-slate-50">
-          <div className="w-10">
-            {step === 1 && (
-              <button onClick={() => setStep(0)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-                <ChevronLeftIcon className="w-6 h-6 text-slate-900" />
+        <motion.div
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.8 }}
+          className="relative w-full max-w-lg bg-white h-[100dvh] sm:h-auto sm:max-h-[95vh] rounded-none sm:rounded-[0.5rem] shadow-2xl z-10 flex flex-col overflow-hidden"
+        >
+          {/* Header */}
+          <div className="px-4 py-3 flex items-center justify-between relative border-b border-slate-50 flex-shrink-0">
+            <div className="w-10">
+              {step === 1 && (
+                <button onClick={() => setStep(0)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                  <ChevronLeftIcon className="w-6 h-6 text-slate-900" />
+                </button>
+              )}
+            </div>
+            <h2 className="text-sm font-bold text-slate-900 absolute left-1/2 -translate-x-1/2">
+              {step === 0 ? "Post Preview" : "Create Post"}
+            </h2>
+            <div className="w-10 flex justify-end">
+              <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                <XMarkIcon className="w-5 h-5 text-slate-500" />
               </button>
-            )}
+            </div>
           </div>
 
-          <h2 className="text-sm font-bold text-slate-900 absolute left-1/2 -translate-x-1/2">
-            {step === 0 ? "Post Preview" : "Create Post"}
-          </h2>
-
-          <div className="w-10 flex justify-end">
-            <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-              <XMarkIcon className="w-5 h-5 text-slate-500" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto space-y-6 scrollbar-hide">
-          {step === 0 ? (
-            <div className="flex flex-col h-full">
-              <div className="flex-1 flex flex-col justify-center min-h-0 bg-slate-50">
-                <div className="relative group aspect-square max-w-full mx-auto overflow-hidden">
+          <div className="flex-1 overflow-y-auto space-y-6 scrollbar-hide">
+            {step === 0 ? (
+              <div className="flex flex-col h-full min-h-0">
+                <div className="flex-1 flex flex-col justify-center min-h-0 bg-slate-50 relative group aspect-square max-w-full mx-auto overflow-hidden">
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={index}
@@ -827,40 +1281,13 @@ function ImagePreviewModal({
                         }
                       }}
                       src={imagePreviews[index]}
-                      className="w-full h-full object-cover cursor-grab active:cursor-grabbing"
-                      alt={`slide-${index}`}
+                      className="w-full h-full object-cover cursor-pointer"
                     />
                   </AnimatePresence>
 
-                  {/* Cover Indicator */}
-                  <div className="absolute top-4 left-4 z-40">
-                    {coverIndex === index ? (
-                      <div className="px-3 py-1.5 bg-slate-900/80 backdrop-blur-md rounded-full text-white text-[10px] font-black shadow-2xl flex items-center gap-2 border border-white/20">
-                        <CheckIcon className="w-3.5 h-3.5" strokeWidth={3} />
-                        COVER PHOTO
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setCoverIndex(index);
-                          // Also reorder imageFiles so the selected image becomes first
-                          const newFiles = [...imageFiles];
-                          const [picked] = newFiles.splice(index, 1);
-                          newFiles.unshift(picked);
-                          setImages(newFiles);
-                          setIndex(0);
-                        }}
-                        className="px-3 py-1.5 bg-white/90 backdrop-blur-lg rounded-full text-slate-900 text-[10px] font-black shadow-xl flex items-center gap-2 hover:bg-white transition-all active:scale-95 border border-slate-200"
-                      >
-                        SET AS COVER
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Navigation */}
                   {imagePreviews.length > 1 && (
                     <>
-                      <div className="absolute p-4 inset-y-0 left-0 right-0 flex items-center justify-between px-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-300">
                         <button
                           onClick={() => setIndex((i) => Math.max(0, i - 1))}
                           disabled={index === 0}
@@ -882,146 +1309,375 @@ function ImagePreviewModal({
                     </>
                   )}
                 </div>
-              </div>
 
-              <div className="space-y-6 mt-auto p-6">
-                {/* Thumbnail Strip */}
-                <div className="flex gap-2 overflow-x-auto py-2 no-scrollbar">
-                  {imagePreviews.map((src, i) => (
-                    <div key={i} className="relative flex-shrink-0">
+                <div className="space-y-6 p-6 pb-24">
+                  {/* Background Music Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Music / Voice</h3>
                       <button
-                        onClick={() => setIndex(i)}
-                        className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-300 ${index === i
-                          ? "ring-2 ring-red-500 ring-offset-2 scale-105"
-                          : "opacity-40 hover:opacity-70"
-                          }`}
+                        onClick={() => setShowAudioList(true)}
+                        className="text-[10px] font-black text-red-500 hover:text-red-600 transition-colors"
                       >
-                        <img src={src} className="w-full h-full object-cover" alt={`thumb-${i}`} />
-                        {i === 0 && (
-                          <div className="absolute top-1 left-1 px-1 rounded-md bg-red-500 text-[6px] text-white font-bold">Cover</div>
-                        )}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeImageAt(i);
-                        }}
-                        className="absolute -top-1 -right-1 h-5 w-5 bg-black/40 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-white hover:bg-red-500 transition-all ring-1 ring-white/20 z-10"
-                      >
-                        <XMarkIcon className="w-3 h-3" />
+                        {(audioFile || selectedPopularSound) ? "Change Sound" : "Music Library"}
                       </button>
                     </div>
-                  ))}
-                  {imagePreviews.length < 5 && (
-                    <button
-                      onClick={() => document.getElementById("global-add-more")?.click()}
-                      className="relative w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all flex-shrink-0"
-                    >
-                      <PlusIcon className="w-6 h-6" />
-                    </button>
-                  )}
-                </div>
 
-                <button
-                  onClick={() => setStep(1)}
-                  className="w-full py-3.5 rounded-full bg-red-500 text-white text-sm font-bold hover:bg-red-600 shadow-xl shadow-red-200 active:scale-95 transition-all"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col h-full p-6 pt-0 space-y-6">
-              {/* Images Summary */}
-              <div className="flex gap-2 overflow-x-auto py-4 no-scrollbar border-b border-slate-50">
-                {imagePreviews.map((src, i) => (
-                  <div key={i} className="relative flex-shrink-0">
-                    <div
-                      onClick={() => {
-                        setLightboxIndex(i);
-                        setLightboxOpen(true);
-                      }}
-                      className={`w-14 h-14 rounded-xl overflow-hidden cursor-pointer transition-all ${i === 0 ? "ring-2 ring-red-500 scale-105" : "opacity-80 hover:opacity-100"}`}
-                    >
-                      <img src={src} className="w-full h-full object-cover" alt={`f-thumb-${i}`} />
-                      {i === 0 && (
-                        <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center pointer-events-none">
-                          <CheckIcon className="w-6 h-6 text-white drop-shadow-lg" />
+                    {(audioFile || selectedPopularSound) ? (
+                      <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border border-red-100 group transition-all animate-in fade-in slide-in-from-bottom-1">
+                        <div className="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-200 shrink-0">
+                          <PlusIcon className="w-5 h-5 rotate-45" />
                         </div>
-                      )}
-                    </div>
-                    {i === 0 && (
-                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-[6px] text-white font-black px-1 rounded uppercase tracking-tighter">Cover</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-red-600 truncate">{selectedPopularSound?.title || audioFile?.name}</p>
+                          <p className="text-[9px] font-medium text-red-400 truncate">{selectedPopularSound?.creator_name || selectedPopularSound?.artist_name || "Custom Sound"}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setAudioFile(null);
+                            setSelectedPopularSound(null);
+                            setHasUserModifiedAudio(true);
+                          }}
+                          className="p-2 bg-red-100 rounded-full text-red-400 hover:bg-red-200 transition-colors"
+                        >
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowAudioList(true)}
+                        className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 hover:border-red-200 hover:bg-slate-50 transition-all group"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-red-50 group-hover:text-red-500 transition-colors">
+                          <PlusIcon className="w-5 h-5" />
+                        </div>
+                        <span className="text-xs font-bold text-left text-slate-500">Pick trending music or record a voice note</span>
+                      </button>
                     )}
                   </div>
-                ))}
-                {imagePreviews.length < 5 && (
+
+                  {/* Thumbnail Strip */}
+                  <div className="flex gap-2 overflow-x-auto py-2 no-scrollbar">
+                    {imagePreviews.map((src, i) => (
+                      <div key={i} className="relative flex-shrink-0">
+                        <button
+                          onClick={() => setIndex(i)}
+                          className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-300 ${index === i
+                            ? "ring-2 ring-red-500 ring-offset-2 scale-105"
+                            : "opacity-40 hover:opacity-70"
+                            }`}
+                        >
+                          <img src={src} className="w-full h-full object-cover" alt={`thumb-${i}`} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeImageAt(i);
+                          }}
+                          className="absolute -top-1 -right-1 h-5 w-5 bg-black/40 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-white hover:bg-red-500 transition-all ring-1 ring-white/20 z-10"
+                        >
+                          <XMarkIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {imagePreviews.length < 5 && (
+                      <button
+                        onClick={() => document.getElementById("global-add-more")?.click()}
+                        className="relative w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all flex-shrink-0"
+                      >
+                        <PlusIcon className="w-6 h-6" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-slate-50 z-20 max-w-lg mx-auto w-full">
+                    <button
+                      onClick={() => setStep(1)}
+                      className="w-full py-4 rounded-full bg-red-500 text-white text-sm font-bold hover:bg-red-600 shadow-xl shadow-red-200 active:scale-95 transition-all"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col h-full p-6 pt-0 space-y-6">
+                {/* Images Summary */}
+                <div className="flex gap-2 overflow-x-auto py-4 no-scrollbar border-b border-slate-50">
+                  {imagePreviews.map((src, i) => (
+                    <div key={i} className="relative flex-shrink-0">
+                      <div
+                        onClick={() => {
+                          setLightboxIndex(i);
+                          setLightboxOpen(true);
+                        }}
+                        className={`w-14 h-14 rounded-xl overflow-hidden cursor-pointer transition-all ${i === 0 ? "ring-2 ring-red-500 scale-105" : "opacity-80 hover:opacity-100"}`}
+                      >
+                        <img src={src} className="w-full h-full object-cover" alt={`f-thumb-${i}`} />
+                        {i === 0 && (
+                          <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center pointer-events-none">
+                            <CheckIcon className="w-6 h-6 text-white drop-shadow-lg" />
+                          </div>
+                        )}
+                      </div>
+                      {i === 0 && (
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-[6px] text-white font-black px-1 rounded uppercase tracking-tighter">Cover</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-4">
+                  <DefaultInput
+                    type="textarea"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Share what's on your mind..."
+                  />
+                  <DefaultInput
+                    value={subtitle}
+                    onChange={(e) => setSubtitle(e.target.value)}
+                    placeholder="Add a subtitle (optional)"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
                   <button
-                    onClick={() => document.getElementById("global-add-more")?.click()}
-                    className="relative w-14 h-14 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all flex-shrink-0"
+                    onClick={() => setIsPrivacyModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
                   >
-                    <PlusIcon className="w-5 h-5" />
+                    {privacy === 'public' ? <LockOpenIcon className="w-4 h-4" /> : privacy === 'private' ? <LockClosedIcon className="w-4 h-4" /> : <UsersIcon className="w-4 h-4" />}
+                    <span className="text-xs font-bold capitalize">{privacy}</span>
                   </button>
-                )}
-              </div>
 
-              <div className="space-y-4">
-                <DefaultInput
-                  type="textarea"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Add some title..."
+                  <button
+                    onClick={() => setPreviewPost({
+                      id: `preview-image-${Date.now()}`,
+                      src: imagePreviews[coverIndex],
+                      isImage: true,
+                      isVideo: false,
+                      allMedia: imagePreviews.map((url, i) => ({ url, id: i })),
+                      user: {
+                        name: user?.full_name || user?.name || "You",
+                        avatar: user?.profile_pic || user?.avatar || "",
+                        id: user?.user_id || user?.id || 0
+                      },
+                      caption: text || "",
+                      liked: false,
+                      likeCount: 0,
+                      original_audio_url: audioUrl,
+                      rawCreatedAt: new Date().toISOString()
+                    })}
+                    className="p-3 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 transition-all"
+                  >
+                    <EyeIcon className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="mt-auto space-y-4 pb-6">
+                  {/* Linked Product Visibility */}
+                  {selectedProduct && (
+                    <div
+                      onClick={onProductPreview}
+                      className="flex items-center gap-3 p-2 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors group/linked"
+                    >
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-white border border-slate-200">
+                        <img src={formatUrl(selectedProduct.first_image)} className="w-full h-full object-cover" alt="product" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Linked Product</p>
+                        <p className="text-xs font-bold text-slate-900 truncate leading-tight mb-0.5">{selectedProduct.title}</p>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedProduct(null); }}
+                        className="p-1.5 hover:bg-slate-200 rounded-full transition-colors"
+                      >
+                        <XMarkIcon className="w-4 h-4 text-slate-400" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    {(Boolean(isBusiness) || Boolean(user?.business_id)) && (
+                      !user?.business_status ||
+                      ['active', 'verified', 'approved', 'approved_verified', 'published'].includes(String(user?.business_status || '').toLowerCase()) ||
+                      ['active', 'verified', 'approved'].includes(String(user?.status || '').toLowerCase())
+                    ) && (
+                        <button
+                          onClick={() => setIsProductModalOpen(true)}
+                          className={`flex-shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full border transition-all active:scale-95 group ${selectedProduct
+                            ? "bg-red-50 border-red-200 text-red-600"
+                            : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
+                            }`}
+                        >
+                          <PlusIcon className={`w-4 h-4 ${selectedProduct ? "text-red-500" : "text-slate-400 group-hover:text-red-500"}`} />
+                          <span className="text-xs font-bold">{selectedProduct ? "Linked" : "Link Product"}</span>
+                        </button>
+                      )}
+
+                    <button
+                      onClick={submit}
+                      disabled={isLoading}
+                      className="flex-1 py-3.5 rounded-full bg-red-500 text-white font-bold text-sm shadow-xl shadow-red-200 hover:bg-red-600 disabled:opacity-50 transition-all active:scale-95"
+                    >
+                      {isLoading ? "Publishing..." : "Publish Post"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <AnimatePresence>
+            {isProductModalOpen && (
+              <ProductSelectorModal
+                onClose={() => setIsProductModalOpen(false)}
+                onSelect={setSelectedProduct}
+                selectedId={selectedProduct?.product_id || null}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {showAudioList && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowAudioList(false)}
+                  className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-[120]"
                 />
-                <DefaultInput
-                  value={subtitle}
-                  onChange={(e) => setSubtitle(e.target.value)}
-                  placeholder="Add sub-title (optional)"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setIsPrivacyModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
+                <motion.div
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[0.5rem] shadow-2xl z-[130] p-6 flex flex-col max-h-[80%]"
                 >
-                  {privacy === 'public' ? <LockOpenIcon className="w-4 h-4" /> : privacy === 'private' ? <LockClosedIcon className="w-4 h-4" /> : <UsersIcon className="w-4 h-4" />}
-                  <span className="text-xs font-bold capitalize">{privacy}</span>
-                </button>
+                  <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                    <div className="flex flex-col">
+                      <h3 className="text-sm font-black text-slate-900">Music Library</h3>
+                      <p className="text-[10px] text-slate-400 font-medium">Select a vibe for your images</p>
+                    </div>
+                    <button onClick={() => setShowAudioList(false)}>
+                      <XMarkIcon className="w-5 h-5 text-slate-400" />
+                    </button>
+                  </div>
 
-                <button
-                  onClick={() => setPreviewPost({
-                    id: `preview-image-${Date.now()}`,
-                    src: imagePreviews[coverIndex],
-                    isImage: true,
-                    isVideo: false,
-                    allMedia: imagePreviews.map((url, i) => ({ url, id: i })),
-                    user: {
-                      name: user?.full_name || user?.name || "You",
-                      avatar: user?.profile_pic || user?.avatar || "",
-                      id: user?.user_id || user?.id || 0
-                    },
-                    caption: text || "",
-                    liked: false,
-                    likeCount: 0,
-                    rawCreatedAt: new Date().toISOString()
-                  })}
-                  className="p-3 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 transition-all"
-                >
-                  <EyeIcon className="w-5 h-5" />
-                </button>
+                  <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar pb-6">
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Upload Option */}
+                      <button
+                        onClick={() => document.getElementById('popular-upload')?.click()}
+                        className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group border-2 border-transparent hover:border-red-100"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <PlusIcon className="w-5 h-5" />
+                        </div>
+                        <div className="text-center font-bold">
+                          <p className="text-[11px] text-slate-900">Upload MP3</p>
+                        </div>
+                      </button>
+
+                      {/* Voice Note Option */}
+                      <AudioRecorderButton
+                        isCompact
+                        onComplete={(blob) => {
+                          const file = new File([blob], "voice_note.webm", { type: "audio/webm" });
+                          setAudioFile(file);
+                          setSelectedPopularSound(null);
+                          setHasUserModifiedAudio(true);
+                          setShowAudioList(false);
+                          toast.success("Voice note added!");
+                        }}
+                      />
+                    </div>
+
+                    <div className="h-px bg-slate-50 my-2" />
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Trending Tracks</p>
+
+                    {dbSounds.map((sound) => (
+                      <button
+                        key={sound.id}
+                        onClick={() => {
+                          selectPopularSound(sound, true);
+                          setShowAudioList(false);
+                        }}
+                        className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all border-2 ${selectedPopularSound?.id === sound.id
+                          ? "bg-red-50 border-red-200"
+                          : "bg-white border-slate-50 hover:bg-slate-50"
+                          }`}
+                      >
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all overflow-hidden ${selectedPopularSound?.id === sound.id ? "bg-red-500 text-white" : "bg-slate-100 text-slate-400"
+                          }`}>
+                          {sound.creator_avatar ? (
+                            <img src={sound.creator_avatar} className="w-full h-full object-cover opacity-60" alt="creator" />
+                          ) : (
+                            <FilmIcon className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={`text-sm font-bold truncate ${selectedPopularSound?.id === sound.id ? "text-red-600" : "text-slate-900"}`}>{sound.title}</p>
+                            {sound.isCommunity && (
+                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded uppercase tracking-tighter shrink-0 border border-blue-100">Library</span>
+                            )}
+                            {(sound.times_used > 50) && (
+                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-[8px] font-black rounded uppercase tracking-tighter shrink-0 border border-red-100 italic">Hot</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-medium">{sound.creator_name || sound.artist_name || sound.artist} {sound.duration ? `• ${sound.duration}` : ""}</p>
+                        </div>
+                        {selectedPopularSound?.id === sound.id && (
+                          <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                            <CheckIcon className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input id="popular-upload" type="file" accept="audio/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setAudioFile(file);
+                      setSelectedPopularSound(null);
+                      setHasUserModifiedAudio(true);
+                      setShowAudioList(false);
+                      toast.success("Custom music added!");
+                    }
+                  }} />
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {isProductPreviewOpen && previewPayload && (
+            <ProductPreviewModal
+              open={isProductPreviewOpen}
+              payload={previewPayload}
+              zIndex={2000000}
+              onClose={() => {
+                setIsProductPreviewOpen(false);
+                setPreviewPayload(null);
+              }}
+            />
+          )}
+
+          <audio ref={audioRef} src={audioUrl || undefined} loop />
+
+          {/* Overlays / Progress */}
+          {isLoading && (
+            <div className="absolute inset-0 z-[400] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center">
+              <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-2xl shadow-red-200 animate-pulse">
+                {uploadProgress}%
               </div>
-
-              <button
-                onClick={submit}
-                disabled={isLoading}
-                className="w-full py-4 rounded-full bg-red-500 text-white font-bold text-sm shadow-xl shadow-red-200 hover:bg-red-600 disabled:opacity-50 transition-all active:scale-95"
-              >
-                {isLoading ? "Publishing..." : "Publish Post"}
-              </button>
+              <p className="mt-4 text-xs font-black text-slate-900 uppercase tracking-widest text-center">Publishing Post</p>
+              <p className="mt-1 text-[10px] text-slate-400 font-medium text-center px-10">Please wait while we process your media...</p>
             </div>
           )}
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
 
       <input
         id="global-add-more"
@@ -1035,7 +1691,7 @@ function ImagePreviewModal({
       <AnimatePresence>
         {isPrivacyModalOpen && (
           <div className="absolute inset-0 z-[100] flex items-end justify-center overflow-hidden rounded-none sm:rounded-2xl">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPrivacyModalOpen(false)} className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPrivacyModalOpen(false)} className="absolute inset-0 bg-black/40" />
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 380, damping: 38 }} className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-3 shadow-2xl">
               <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Audience</p>
               {['public', 'private', 'friends'].map((p) => (
@@ -1049,18 +1705,15 @@ function ImagePreviewModal({
         )}
       </AnimatePresence>
 
-      {/* Overlays / Progress */}
-      {isLoading && (
-        <div className="absolute inset-0 z-[200] bg-white/60 backdrop-blur-md flex flex-col items-center justify-center">
-          <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl animate-pulse">
-            {uploadProgress}%
-          </div>
-          <p className="mt-4 text-xs font-bold text-slate-400">Uploading Post</p>
-        </div>
-      )}
-
       {previewPost && (
-        <PostModal post={previewPost} isPreview onClose={() => setPreviewPost(null)} onToggleLike={() => { }} />
+        <PostModal
+          open={!!previewPost}
+          post={previewPost}
+          isPreview
+          onClose={() => setPreviewPost(null)}
+          onToggleLike={() => { }}
+          zIndex={2000000}
+        />
       )}
 
       <Lightbox
@@ -1070,7 +1723,7 @@ function ImagePreviewModal({
         on={{ view: ({ index }) => setLightboxIndex(index) }}
         slides={imagePreviews.map(src => ({ src }))}
         portal={{ root: typeof document !== "undefined" ? document.body : undefined }}
-        styles={{ root: { zIndex: 110000 } }}
+        styles={{ root: { zIndex: 3000000 } }}
         render={{
           controls: () => (
             /* Set as Cover Button (Top Right-ish like ProductMedia) */
@@ -1088,7 +1741,7 @@ function ImagePreviewModal({
                   setLightboxIndex(0);
                   toast.success("Set ✅");
                 }}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white text-[10px] font-bold transition-all flex items-center gap-2 border border-white/20"
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-full text-white text-[10px] font-bold transition-all flex items-center gap-2 border border-white/20"
               >
                 <CheckIcon className="w-3.5 h-3.5" />
                 Set as cover
@@ -1108,7 +1761,7 @@ function ImagePreviewModal({
                     setLightboxIndex(nextIndex);
                   }
                 }}
-                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all backdrop-blur-md rounded-full text-red-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-red-500/30"
+                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all rounded-full text-red-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-red-500/30"
               >
                 <TrashIcon className="w-4 h-4" />
                 Delete Image
@@ -1117,7 +1770,7 @@ function ImagePreviewModal({
           )
         }}
       />
-    </div>
+    </>
   );
 }
 
@@ -1128,8 +1781,6 @@ export default function GlobalPostComposer() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
 
   const [imageModalStep, setImageModalStep] = useState(0);
@@ -1139,6 +1790,8 @@ export default function GlobalPostComposer() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [interleavedMedia, setInterleavedMedia] = useState<{ type: 'image' | 'video', file: File, preview: string }[]>([]);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
 
   const ffmpegRef = useRef<any>(null);
 
@@ -1289,10 +1942,13 @@ export default function GlobalPostComposer() {
     type: "image" | "video" | "mixed";
     images?: File[];
     video?: File;
+    audio?: File | null;
     text?: string;
     subtitle?: string;
     privacy?: "public" | "private" | "friends";
     media_order?: { name: string, type: 'image' | 'video' }[];
+    linked_product_id?: number | null;
+    sound_id?: number | null;
   }) => {
     setIsLoading(true);
     setProgress(0);
@@ -1301,6 +1957,14 @@ export default function GlobalPostComposer() {
       if (!activeToken) {
         toast.error("You must be logged in to post");
         auth.openLogin();
+        setIsLoading(false);
+        return;
+      }
+
+      // Check for phone and email before allowing post
+      const isVerified = await auth.ensureAccountVerified();
+      if (!isVerified) {
+        setIsLoading(false);
         return;
       }
 
@@ -1309,8 +1973,20 @@ export default function GlobalPostComposer() {
       formData.append("subtitle", payload.subtitle || "");
       formData.append("privacy", payload.privacy || "public");
 
+      if (payload.linked_product_id) {
+        formData.append("linked_product_id", String(payload.linked_product_id));
+      }
+
       if (payload.media_order) {
         formData.append("media_order", JSON.stringify(payload.media_order));
+      }
+
+      if (payload.audio) {
+        formData.append("audio_file", payload.audio);
+      }
+
+      if (payload.sound_id) {
+        formData.append("sound_id", String(payload.sound_id));
       }
 
       // Handle Content
@@ -1334,8 +2010,13 @@ export default function GlobalPostComposer() {
         video.src = vUrl;
         video.crossOrigin = "anonymous";
         await new Promise((resolve) => {
-          video.onloadeddata = resolve;
-          video.currentTime = 1; // Seek to 1s
+          video.onloadedmetadata = () => {
+            // If duration is available, pick 3s or middle of video
+            const seekTime = Math.min(3, video.duration > 0 ? video.duration / 2 : 0);
+            video.currentTime = seekTime;
+          };
+          video.onseeked = resolve;
+          video.load();
         });
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth;
@@ -1349,18 +2030,15 @@ export default function GlobalPostComposer() {
         URL.revokeObjectURL(vUrl);
       }
 
-      // Show processing modal during upload for video content
-      if (payload.type === "video" || payload.type === "mixed") {
-        setIsProcessing(true);
-        setIsVideoModalOpen(false); // Close preview, show processing
+      if (payload.sound_id) {
+        recordSoundUsage(payload.sound_id, activeToken).catch(() => { });
       }
 
       await createSocialPost(formData, activeToken, (p: number) => {
-        setProcessingProgress(p);
+        setProgress(p);
       });
 
       // Cleanup & Close
-      setIsProcessing(false);
       setIsVideoModalOpen(false);
       setIsImageModalOpen(false);
       setIsNoteOpen(false);
@@ -1373,14 +2051,13 @@ export default function GlobalPostComposer() {
       window.dispatchEvent(new CustomEvent("post-created"));
     } catch (err: any) {
       toast.error(err.message || "Failed to publish post");
-      setIsProcessing(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className={(isCameraOpen || isImageModalOpen || isNoteOpen || isProcessing || isVideoModalOpen) ? "pointer-events-auto" : "pointer-events-none"}>
+    <div className={(isCameraOpen || isImageModalOpen || isNoteOpen || isVideoModalOpen) ? "pointer-events-auto" : "pointer-events-none"}>
       <input
         ref={fileInputRef}
         type="file"
@@ -1397,7 +2074,6 @@ export default function GlobalPostComposer() {
         />
       )}
 
-      {isProcessing && <VideoProcessingModal progress={processingProgress} />}
 
       <AnimatePresence>
         {isVideoModalOpen && videoFile && videoPreview && (
@@ -1408,6 +2084,8 @@ export default function GlobalPostComposer() {
             videoPreview={videoPreview}
             interleavedMedia={interleavedMedia}
             setInterleavedMedia={setInterleavedMedia}
+            audioFile={audioFile}
+            setAudioFile={setAudioFile}
             onClose={() => {
               setIsVideoModalOpen(false);
               setImages([]);
@@ -1429,6 +2107,8 @@ export default function GlobalPostComposer() {
             imageFiles={images}
             imagePreviews={imagePreviews}
             initialStep={imageModalStep}
+            audioFile={audioFile}
+            setAudioFile={setAudioFile}
             onClose={() => setIsImageModalOpen(false)}
             onSubmitPayload={handleSubmit}
             setImages={setImages}
@@ -1449,6 +2129,159 @@ export default function GlobalPostComposer() {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ----------------------
+// ProductSelectorModal
+// ----------------------
+function ProductSelectorModal({
+  onClose,
+  onSelect,
+  selectedId
+}: {
+  onClose: () => void;
+  onSelect: (product: any | null) => void;
+  selectedId: number | null;
+}) {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { token } = useAuth();
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/products/unlinked/linking`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setProducts(json.data?.products || []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch products for linking", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
+  }, [token]);
+
+  const [isProductPreviewOpen, setIsProductPreviewOpen] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
+  const [fetchingPreviewId, setFetchingPreviewId] = useState<number | null>(null);
+
+  const onProductPreview = async (e: React.MouseEvent, productId: number) => {
+    e.stopPropagation();
+    if (fetchingPreviewId) return;
+    try {
+      setFetchingPreviewId(productId);
+      const res = await fetchProductById(productId, token);
+      if (res?.data?.product) {
+        const payload = mapProductToPreviewPayload(res.data.product, formatUrl);
+        setPreviewPayload(payload);
+        setIsProductPreviewOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFetchingPreviewId(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200000] flex items-end sm:items-center justify-center p-0">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        className="relative w-full max-w-lg bg-white h-[80vh] sm:h-[600px] rounded-t-[0.5rem] sm:rounded-[0.5rem] shadow-2xl z-10 flex flex-col overflow-hidden"
+      >
+        <div className="px-4 py-4 flex items-center justify-between border-b border-slate-50">
+          <h3 className="text-sm font-bold text-slate-900">Link a Product</h3>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+            <XMarkIcon className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-full space-y-3">
+              <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs font-medium text-slate-400">Loading your products...</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 px-8">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                <FilmIcon className="w-8 h-8" />
+              </div>
+              <p className="text-xs text-slate-400">Only published products that are not yet linked to a post will appear here.</p>
+            </div>
+          ) : (
+            products.map((p) => {
+              const displayPrice = p.min_variant_price || p.min_sku_price || p.price;
+              return (
+                <button
+                  key={p.product_id}
+                  onClick={() => {
+                    onSelect(selectedId === p.product_id ? null : p);
+                    onClose();
+                  }}
+                  className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all border-2 ${selectedId === p.product_id
+                    ? "border-red-500 bg-red-50/50"
+                    : "border-slate-50 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200"
+                    }`}
+                >
+                  <div
+                    onClick={(e) => onProductPreview(e, p.product_id)}
+                    className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0 relative group"
+                  >
+                    {p.first_image ? (
+                      <img src={formatUrl(p.first_image)} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-300">
+                        <FilmIcon className="w-6 h-6" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all">
+                      {fetchingPreviewId === p.product_id ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <EyeIcon className="w-4 h-4 text-white opacity-0 group-hover:opacity-100" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{p.title}</p>
+                    <p className="text-xs font-black text-red-500">
+                      ₦{Number(displayPrice).toLocaleString()}
+                      {(p.min_variant_price || p.min_sku_price) && <span className="text-[10px] font-medium ml-1">Starts at</span>}
+                    </p>
+                  </div>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${selectedId === p.product_id ? "bg-red-500 text-white" : "bg-slate-200 text-transparent"
+                    }`}>
+                    <CheckIcon className="w-4 h-4" />
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {isProductPreviewOpen && previewPayload && (
+          <ProductPreviewModal
+            open={isProductPreviewOpen}
+            payload={previewPayload}
+            zIndex={3000000}
+            onClose={() => {
+              setIsProductPreviewOpen(false);
+              setPreviewPayload(null);
+            }}
+          />
+        )}
+      </motion.div>
     </div>
   );
 }

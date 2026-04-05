@@ -13,6 +13,8 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
   const [job, setJob] = useState("");
   const [school, setSchool] = useState("");
   const [profilePic, setProfilePic] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone_no, setPhoneNo] = useState("");
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -50,6 +52,8 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
           setJob(u.job ?? "");
           setSchool(u.school ?? "");
           setProfilePic(u.profile_pic ?? "");
+          setEmail(u.email ?? "");
+          setPhoneNo(u.phone_no ?? "");
         }
       })
       .catch((err) => console.error("useEditUserProfile fetch error:", err))
@@ -67,14 +71,14 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
     // Optimistic update
     switch (key) {
       case "name_id":
-        try { const p = JSON.parse(val); setFullName(p.full_name ?? ""); } catch {}
+        try { const p = JSON.parse(val); setFullName(p.full_name ?? ""); } catch { }
         break;
-      case "bio":       setBio(val); break;
-      case "gender":    setGender(val); break;
-      case "dob":       setDob(val); break;
-      case "location":  setLocation(val); break;
-      case "job":       setJob(val); break;
-      case "school":    setSchool(val); break;
+      case "bio": setBio(val); break;
+      case "gender": setGender(val); break;
+      case "dob": setDob(val); break;
+      case "location": setLocation(val); break;
+      case "job": setJob(val); break;
+      case "school": setSchool(val); break;
       case "details":
         try {
           const p = JSON.parse(val);
@@ -83,7 +87,7 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
           setLocation(p.location ?? "");
           setJob(p.job ?? "");
           setSchool(p.school ?? "");
-        } catch {}
+        } catch { }
         break;
     }
 
@@ -91,14 +95,14 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
     const payload: Record<string, any> = {};
     switch (key) {
       case "name_id":
-        try { const p = JSON.parse(val); payload.full_name = p.full_name ?? ""; } catch {}
+        try { const p = JSON.parse(val); payload.full_name = p.full_name ?? ""; } catch { }
         break;
-      case "bio":       payload.bio = val; break;
-      case "gender":    payload.gender = val || null; break;
-      case "dob":       payload.dob = val || null; break;
-      case "location":  payload.location = val || null; break;
-      case "job":       payload.job = val || null; break;
-      case "school":    payload.school = val || null; break;
+      case "bio": payload.bio = val; break;
+      case "gender": payload.gender = val || null; break;
+      case "dob": payload.dob = val || null; break;
+      case "location": payload.location = val || null; break;
+      case "job": payload.job = val || null; break;
+      case "school": payload.school = val || null; break;
       case "details":
         try {
           const p = JSON.parse(val);
@@ -107,7 +111,7 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
           payload.location = p.location || null;
           payload.job = p.job || null;
           payload.school = p.school || null;
-        } catch {}
+        } catch { }
         break;
     }
 
@@ -138,7 +142,7 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
   }
 
   return {
-    fullName, bio, gender, dob, location, job, school, profilePic,
+    fullName, bio, gender, dob, location, job, school, profilePic, email, phone_no,
     isLoading, isSyncing, modalOpen, modalProps,
     openEditor, setModalOpen, saveEditorValue,
     setProfilePic,

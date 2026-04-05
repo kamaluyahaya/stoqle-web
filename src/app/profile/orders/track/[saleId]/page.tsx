@@ -6,6 +6,9 @@ import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import { ChevronLeft, MapPin, Navigation, User, Clock, Package, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmCustomerReceipt } from "@/src/lib/api/walletApi";
+import { useWallet } from "@/src/context/walletContext";
+import Swal from "sweetalert2";
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
@@ -36,11 +39,12 @@ export default function TrackingPage() {
     const params = useParams();
     const router = useRouter();
     const { token } = useAuth();
+    const { refreshWallet } = useWallet();
     const saleId = params.saleId as string;
 
-    const [riderLocation, setRiderLocation] = useState<{ 
-        latitude: number; 
-        longitude: number; 
+    const [riderLocation, setRiderLocation] = useState<{
+        latitude: number;
+        longitude: number;
         rider_name: string;
         rider_phone?: string;
         order_status?: string;
@@ -103,11 +107,11 @@ export default function TrackingPage() {
                     // Try to find a neighborhood or locality for a more human-readable name
                     const neighborhood = results.find((r: any) => r.types.includes("neighborhood") || r.types.includes("sublocality") || r.types.includes("locality"));
                     const fullAddress = neighborhood ? neighborhood.formatted_address : results[0].formatted_address;
-                    
+
                     // Split and take first two significant parts for a clean display (e.g. "Malali, Kaduna")
                     const parts = fullAddress.split(',');
                     const displayAddress = parts.length > 1 ? `${parts[0].trim()}, ${parts[1].trim()}` : parts[0].trim();
-                    
+
                     setCurrentAddress(displayAddress);
                 } else if (status === "REQUEST_DENIED") {
                     console.error("Geocoding API denied. Please check API restrictions on your key.");
@@ -127,7 +131,7 @@ export default function TrackingPage() {
                 disableDefaultUI: true,
                 zoomControl: true,
                 // Explicitly set styles to null to ensure all default labels (streets, POIs) are SHOWN
-                styles: null 
+                styles: null
             });
 
             directionsRendererRef.current = new google.maps.DirectionsRenderer({
@@ -148,7 +152,7 @@ export default function TrackingPage() {
 
         const riderPos = { lat: Number(data.latitude), lng: Number(data.longitude) };
         const destPos = data.destination ? { lat: Number(data.destination.latitude), lng: Number(data.destination.longitude) } : null;
-        
+
         const isDefaultGabon = Math.abs(riderPos.lat - 1.303) < 0.001 && Math.abs(riderPos.lng - 11.303) < 0.001;
         const bounds = new google.maps.LatLngBounds();
 
@@ -253,7 +257,7 @@ export default function TrackingPage() {
             } else {
                 googleMapRef.current.fitBounds(bounds, {
                     top: 100,
-                    bottom: 250, 
+                    bottom: 250,
                     left: 50,
                     right: 50
                 });
@@ -286,19 +290,19 @@ export default function TrackingPage() {
                     </div>
                 </div>
                 {riderLocation?.rider_phone && (
-                   <a 
-                     href={`tel:${riderLocation.rider_phone}`}
-                     className="bg-blue-600 text-white p-3 rounded-2xl shadow-lg active:scale-95 transition"
-                   >
-                     <Navigation className="rotate-45" size={20} />
-                   </a>
+                    <a
+                        href={`tel:${riderLocation.rider_phone}`}
+                        className="bg-blue-600 text-white p-3 rounded-2xl shadow-lg active:scale-95 transition"
+                    >
+                        <Navigation className="rotate-45" size={20} />
+                    </a>
                 )}
             </div>
 
             {/* Map Container */}
             <div className="flex-1 relative overflow-hidden">
                 <div ref={mapRef} className="w-full h-full" />
-                
+
                 {isLoading && (
                     <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4 z-20">
                         <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
@@ -316,7 +320,7 @@ export default function TrackingPage() {
                         <button onClick={() => fetchRiderLocation()} className="px-8 py-3 bg-black text-white rounded-2xl font-bold text-xs   shadow-lg">Retry</button>
                     </div>
                 )}
-                
+
                 {isRefreshing && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-slate-100 flex items-center gap-2 z-10">
                         <Loader2 size={12} className="text-blue-600 animate-spin" />
@@ -356,8 +360,8 @@ export default function TrackingPage() {
                                     <span className="text-[8px] font-bold  ">Location</span>
                                 </div>
                                 <p className="text-[10px] font-bold text-slate-900 line-clamp-2 h-7 overflow-hidden">
-                                    {Math.abs(Number(riderLocation.latitude) - 1.303) < 0.001 
-                                        ? "Detecting signal..." 
+                                    {Math.abs(Number(riderLocation.latitude) - 1.303) < 0.001
+                                        ? "Detecting signal..."
                                         : currentAddress || "On the way"}
                                 </p>
                             </div>
@@ -371,14 +375,50 @@ export default function TrackingPage() {
                                 </p>
                             </div>
                         </div>
-                        
-                        <a 
-                          href={`tel:${riderLocation.rider_phone}`}
-                          className="flex items-center justify-center gap-2 w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-[10px]   shadow-xl active:scale-95 transition"
+
+                        <a
+                            href={`tel:${riderLocation.rider_phone}`}
+                            className="flex items-center justify-center gap-2 w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-[10px] shadow-xl active:scale-95 transition"
                         >
-                          <User size={14} />
-                          Call {riderLocation.rider_name.split(' ')[0]}
+                            <User size={14} />
+                            Call {riderLocation.rider_name.split(' ')[0]}
                         </a>
+
+                        {riderLocation.order_status?.toLowerCase() === 'out_for_delivery' && (
+                            <button
+                                onClick={async () => {
+                                    const { isConfirmed } = await Swal.fire({
+                                        title: 'Confirm Delivery',
+                                        text: 'Did you receive this order? Confirming will release payment to the vendor.',
+                                        icon: 'question',
+                                        showCancelButton: true,
+                                        confirmButtonColor: '#10B981',
+                                        cancelButtonColor: '#94A3B8',
+                                        confirmButtonText: 'Yes, Received',
+                                        cancelButtonText: 'Not Yet',
+                                        customClass: {
+                                            popup: 'rounded-[1.5rem] p-6',
+                                            confirmButton: 'rounded-xl px-6 py-3 font-bold text-xs',
+                                            cancelButton: 'rounded-xl px-6 py-3 font-bold text-xs'
+                                        }
+                                    });
+
+                                    if (!isConfirmed) return;
+
+                                    try {
+                                        await confirmCustomerReceipt(saleId);
+                                        toast.success("Delivery confirmed! Money released to vendor.");
+                                        fetchRiderLocation();
+                                        refreshWallet();
+                                    } catch (err: any) {
+                                        toast.error(err?.body?.message || "Failed to confirm receipt");
+                                    }
+                                }}
+                                className="flex items-center justify-center gap-2 w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-[10px] shadow-xl active:scale-95 transition"
+                            >
+                                Confirm Received
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

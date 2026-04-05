@@ -1077,7 +1077,7 @@ export default function BalanceModal({
                               </p>
                               <div className="space-y-3">
                                 {txDetails.order_items.map((item: any) => (
-                                  <div key={item.order_id} className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-100">
+                                  <div key={item.id} className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-100">
                                     <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
                                       {item.product_image ? (
                                         <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />

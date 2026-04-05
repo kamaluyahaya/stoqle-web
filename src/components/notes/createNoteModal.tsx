@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/src/context/authContext";
+import Swal from "sweetalert2";
 import DefaultInput from "@/src/components/input/default-input-post";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,7 +15,8 @@ import {
   LockClosedIcon,
   UsersIcon
 } from "@heroicons/react/24/outline";
-import { getCurrentLocationName, getCachedLocationName } from "@/src/lib/location";
+import { API_BASE_URL } from "@/src/lib/config";
+import { getCurrentLocationName, getCachedLocationName, getCurrentCoordinates } from "@/src/lib/location";
 
 type Visibility = "public" | "private" | "friends";
 
@@ -280,7 +282,10 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
       const cfg = buildConfigPayload();
 
       // Capture current location for the note
-      const freshLocation = await getCurrentLocationName();
+      const [freshLocation, freshCoords] = await Promise.all([
+        getCurrentLocationName(),
+        getCurrentCoordinates()
+      ]);
       const location = freshLocation || getCachedLocationName();
 
       const body: any = {
@@ -290,9 +295,12 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
         privacy: visibility,
         cover_type: "note",
         location: location || null,
+        latitude: freshCoords?.latitude || null,
+        longitude: freshCoords?.longitude || null,
       };
 
-      const res = await fetch(`${base.replace(/\/$/, "")}/api/social/`, {
+      // Call the backend directly — IP extraction is handled by the Express backend using getClientIp(req)
+      const res = await fetch(`${API_BASE_URL}/api/social`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -302,15 +310,28 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.message || json?.error || "Failed to create note");
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 429) {
+          Swal.fire({
+            title: "Security Alert",
+            text: json?.message || json?.error || "Action restricted by security engine.",
+            icon: "error",
+            confirmButtonColor: "#e11d48",
+          });
+          setPosting(false);
+          return;
+        }
+        throw new Error(json?.message || json?.error || "Failed to create note");
+      }
 
-      if (onCreated) onCreated(json?.data?.post ?? json?.post ?? json);
+      const p = json?.data?.post || json?.post || json;
+      window.dispatchEvent(new CustomEvent("post-created", { detail: p }));
 
-      // reset & close
-      setText("");
-      setTitle("");
-      setSelectedConfig(backgrounds[0] ?? null);
-      setStep(0);
+      if (onCreated) {
+        onCreated(p);
+        return;
+      }
+
       toast.success("Note posted successfully");
       router.push("/profile?tab=Notes");
       onClose();
@@ -638,7 +659,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={() => setIsPrivacyModalOpen(false)}
-                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-slate-900/60"
                       />
                       <motion.div
                         initial={{ y: "100%" }}
