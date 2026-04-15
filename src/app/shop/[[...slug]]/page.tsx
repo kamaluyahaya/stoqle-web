@@ -4,12 +4,15 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
+import { formatUrl } from "@/src/lib/utils/media";
 import { fetchBusinessProducts, fetchProductById, logUserActivity } from "@/src/lib/api/productApi";
 import ShopHeader from "@/src/components/shop/shopHeader";
+import { formatDuration } from "@/src/lib/utils/product/duration";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import ShimmerGrid from "@/src/components/shimmer";
 import type { PreviewPayload } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import { useCache } from "@/src/context/cacheContext";
 
 // Icons for bottom navigation
 import { HomeIcon, ListBulletIcon, CalendarDaysIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
@@ -20,9 +23,13 @@ const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 export default function VendorShopPage() {
     const params = useParams();
-    const slug = params?.slug;
+    const slugArr = params?.slug as string[] | undefined;
+    const bizSlug = slugArr?.[0];
+    const initialProductSlug = slugArr?.[1];
+
     const router = useRouter();
     const auth = useAuth();
+    const { getCachedShop, setCachedShop, getScrollPosition, setScrollPosition, getActiveTab, setActiveTab } = useCache();
 
     const [profileApi, setProfileApi] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -42,7 +49,7 @@ export default function VendorShopPage() {
     // Product Modal State
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [productModalOpen, setProductModalOpen] = useState(false);
-    const [fetchingProduct, setFetchingProduct] = useState(false);
+    const [fetchingProduct, setFetchingProduct] = useState<number | string | null>(null);
     const [clickPos, setClickPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [columns, setColumns] = useState(2);
     const [hasUnviewedReleases, setHasUnviewedReleases] = useState(false);
@@ -53,8 +60,8 @@ export default function VendorShopPage() {
     }, [products]);
 
     useEffect(() => {
-        if (!slug || !newestReleaseId) return;
-        const lastSeen = localStorage.getItem(`shop_last_seen_${slug}`);
+        if (!bizSlug || !newestReleaseId) return;
+        const lastSeen = localStorage.getItem(`shop_last_seen_${bizSlug}`);
         if (!lastSeen || Number(lastSeen) < newestReleaseId) {
             setHasUnviewedReleases(true);
         } else {
@@ -63,10 +70,10 @@ export default function VendorShopPage() {
 
         // If currently on New release tab, mark as seen
         if (activeNav === "New release") {
-            localStorage.setItem(`shop_last_seen_${slug}`, String(newestReleaseId));
+            localStorage.setItem(`shop_last_seen_${bizSlug}`, String(newestReleaseId));
             setHasUnviewedReleases(false);
         }
-    }, [slug, newestReleaseId, activeNav]);
+    }, [bizSlug, newestReleaseId, activeNav]);
 
     useEffect(() => {
         const updateColumns = () => {
@@ -81,35 +88,59 @@ export default function VendorShopPage() {
         return () => window.removeEventListener('resize', updateColumns);
     }, []);
 
-    const formatUrl = (url: string) => {
-        if (!url) return NO_IMAGE_PLACEHOLDER;
-        let formatted = url;
-        if (!url.startsWith("http")) {
-            formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
-        }
-        return encodeURI(formatted);
-    };
+    // Record scroll position
+    useEffect(() => {
+        const handleScroll = () => {
+            if (bizSlug) setScrollPosition(`shop_${bizSlug}`, window.scrollY);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [bizSlug]);
 
-    // Fetch Business Profile (using userId from some mapping or assume businessId is enough?)
-    // Actually, we need to fetch by businessId. Let's assume our profile API can handle businessId 
-    // or we need a new endpoint. 
+    // Restore scroll position after loading
+    useEffect(() => {
+        if (!loading && bizSlug) {
+            const pos = getScrollPosition(`shop_${bizSlug}`);
+            if (pos > 0) {
+                // Wait for a bit for content to render
+                setTimeout(() => window.scrollTo(0, pos), 50);
+            }
+        }
+    }, [loading, bizSlug]);
+
+
+
+    // Fetch Business Profile 
     useEffect(() => {
         async function loadShop() {
-            if (!slug) return;
+            if (!bizSlug) return;
+
+            const cached = getCachedShop(bizSlug);
+            if (cached) {
+                setProducts(cached.products);
+                setProfileApi(cached.profile);
+                setLoading(false);
+
+                // Restore tab state if needed
+                const savedTab = getActiveTab(`shop_${bizSlug}_nav`);
+                if (savedTab) setActiveNav(savedTab as any);
+
+                return;
+            }
+
             setLoading(true);
             try {
-                // Here we ideally need a way to get the owner userId from slug to use existing profile API
-                // or a specific business fetch API. For now, let's try to fetch products first.
-                const res = await fetch(`${API_BASE_URL}/api/products/business/${slug}?limit=100`);
+                const res = await fetch(`${API_BASE_URL}/api/products/business/${bizSlug}?limit=100`);
                 const data = await res.json();
                 const foundProducts = (data?.status === "success" && Array.isArray(data?.data?.products)) ? data.data.products : [];
                 setProducts(foundProducts);
 
-                // Let's also try to get business details.
-                const bizRes = await fetch(`${API_BASE_URL}/api/business/${slug}`);
+                const bizRes = await fetch(`${API_BASE_URL}/api/business/${bizSlug}`);
                 const bizData = await bizRes.json();
                 if (bizData.ok && bizData.data) {
                     setProfileApi(bizData.data);
+                    // Cache the data
+                    setCachedShop(bizSlug, bizData.data, foundProducts);
                 }
             } catch (err) {
                 console.error("Shop load error:", err);
@@ -118,27 +149,39 @@ export default function VendorShopPage() {
             }
         }
         loadShop();
-    }, [slug]);
+    }, [bizSlug]);
 
-    const updateUrl = (productId: number | null, replace: boolean = false) => {
+    // Save active nav state
+    useEffect(() => {
+        if (bizSlug) setActiveTab(`shop_${bizSlug}_nav`, activeNav);
+    }, [activeNav, bizSlug]);
+
+    const updateUrl = (productId: number | string | null, replace: boolean = false, productSlug?: string) => {
         const urlParams = new URLSearchParams(window.location.search);
-        if (productId) {
+        let newUrl = `/shop/${bizSlug}`;
+
+        if (productSlug) {
+            newUrl += `/${productSlug}`;
+            urlParams.delete("product_id");
+        } else if (productId) {
             urlParams.set("product_id", String(productId));
         } else {
             urlParams.delete("product_id");
         }
+
         const search = urlParams.toString();
-        const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}`;
-        if (newUrl !== window.location.pathname + window.location.search) {
+        const finalUrl = newUrl + (search ? `?${search}` : "");
+
+        if (finalUrl !== window.location.pathname + window.location.search) {
             if (replace) {
-                window.history.replaceState(window.history.state, "", newUrl);
+                window.history.replaceState(window.history.state, "", finalUrl);
             } else {
-                window.history.pushState(window.history.state, "", newUrl);
+                window.history.pushState(window.history.state, "", finalUrl);
             }
         }
     };
 
-    const handleProductClick = async (productId: number, arg2?: string | boolean | React.MouseEvent, e?: React.MouseEvent) => {
+    const handleProductClick = async (productId: number | string, arg2?: string | boolean | React.MouseEvent, e?: React.MouseEvent, bSlug?: string, isSocial?: boolean, ps?: string) => {
         if (fetchingProduct) return;
 
         let actualEvent: React.MouseEvent | undefined;
@@ -157,19 +200,27 @@ export default function VendorShopPage() {
             setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
         }
 
-        updateUrl(productId, replaceUrl);
-        setFetchingProduct(true);
+        const isNumericId = typeof productId === 'number' || (typeof productId === 'string' && /^\d+$/.test(productId));
+        const pid = isNumericId ? Number(productId) : null;
+        const identifier = ps || (isNumericId ? pid : productId);
+        if (!identifier) return;
+
+        updateUrl(pid, replaceUrl, ps);
+        setFetchingProduct(identifier);
         try {
-            const res = await fetchProductById(productId);
+            const res = await fetchProductById(identifier, auth.token);
             if (res?.data?.product) {
                 const dbProduct = res.data.product;
                 const mapped = mapProductToPreviewPayload(dbProduct, formatUrl);
                 setSelectedProductPayload(mapped);
                 setProductModalOpen(true);
-                logUserActivity({ product_id: productId, action_type: 'view', category: dbProduct.category }, auth.token);
+                logUserActivity({ product_id: dbProduct.product_id, action_type: 'view', category: dbProduct.category }, auth.token);
+
+                // Ensure URL has slug
+                updateUrl(dbProduct.product_id, true, dbProduct.slug || dbProduct.product_slug);
             }
         } catch (e) { console.error(e); }
-        finally { setFetchingProduct(false); }
+        finally { setFetchingProduct(null); }
     };
 
     // Deep linking and Back button support
@@ -178,10 +229,18 @@ export default function VendorShopPage() {
             const urlParams = new URLSearchParams(window.location.search);
             const productId = urlParams.get("product_id");
 
+            const currentPath = window.location.pathname;
+            const segments = currentPath.startsWith('/shop') ? currentPath.slice(6).split('/').filter(Boolean) : [];
+            const currentSlug = segments.length >= 2 ? segments[1] : null;
+
             if (productId) {
                 const pid = Number(productId);
                 if (!productModalOpen && !fetchingProduct && selectedProductPayload?.productId !== pid) {
-                    handleProductClick(pid, true); // Use replace when triggered by route change
+                    handleProductClick(pid, true);
+                }
+            } else if (currentSlug) {
+                if (!productModalOpen && !fetchingProduct && selectedProductPayload?.slug !== currentSlug) {
+                    handleProductClick("", true, undefined, undefined, false, currentSlug);
                 }
             } else if (productModalOpen) {
                 setProductModalOpen(false);
@@ -303,32 +362,72 @@ export default function VendorShopPage() {
         return Object.values(groupsMap).sort((a, b) => b.timestamp - a.timestamp);
     }, [products]);
 
-    const renderProductItem = (p: any) => (
-        <article
-            key={p.product_id}
-            onClick={(e) => handleProductClick(p.product_id, e)}
-            className="bg-white rounded-[0.5rem] overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
-        >
-            <div className="relative aspect-square bg-slate-100 relative">
-                <Image
-                    src={formatUrl(p.first_image || p.image_url)}
-                    alt={p.title}
-                    fill
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    className="object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                {p.product_video && (
-                    <div className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full">
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z" /></svg>
+    const renderProductItem = (p: any) => {
+        const promo = p.promo_discount || p.sale_discount;
+        const hasReturnSubsidy = p.return_shipping_subsidy || profileApi?.policy?.returns?.return_shipping_subsidy === 1;
+        const hasSevenDayReturn = p.seven_day_no_reason || profileApi?.policy?.returns?.seven_day_no_reason === 1;
+        const shippingAvg = (p.shipping_policies || profileApi?.policy?.shipping || profileApi?.policy?.shipping_duration || []).find((s: any) => s.kind === "avg" || s.type === "avg");
+        const shippingDuration = shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : null;
+
+        return (
+            <article
+                key={p.product_id}
+                onClick={(e) => handleProductClick(p.product_id, e, undefined, undefined, false, p.slug || p.product_slug)}
+                className="bg-white rounded-[0.5rem] overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
+            >
+                <div className="relative aspect-square bg-slate-100">
+                    <Image
+                        src={formatUrl(p.first_image || p.image_url)}
+                        alt={p.title}
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        className="object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                    {p.product_video && (
+                        <div className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full">
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5.14v14l11-7-11-7z" /></svg>
+                        </div>
+                    )}
+                </div>
+                <div className="p-2">
+                    <h3 className="text-[11px] font-bold text-slate-700 line-clamp-1 truncate">{p.title}</h3>
+                    <div className="mt-1 flex items-center gap-1.5 h-4">
+                        {promo > 0 ? (
+                            <>
+                                <span className="text-xs font-bold text-slate-900">₦{Math.round(Number(p.price || 0) * (1 - promo / 100)).toLocaleString()}</span>
+                                <span className="text-[10px] text-red-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
+                            </>
+                        ) : (
+                            <span className="text-xs font-bold text-slate-900">₦{Number(p.price || 0).toLocaleString()}</span>
+                        )}
                     </div>
-                )}
-            </div>
-            <div className="p-2">
-                <h3 className="text-[11px] font-bold text-slate-700 line-clamp-1 truncate">{p.title}</h3>
-                <p className="text-xs font-bold text-slate-900 mt-1">₦{Number(p.price || 0).toLocaleString()}</p>
-            </div>
-        </article>
-    );
+                    <div className="mt-2 flex flex-wrap gap-1 min-h-[14px]">
+                        {promo > 0 ? (
+                            <span className="text-[9px] text-rose-500 border-red-500 border-[0.2px] px-1.5 py-0.5 ">
+                                {p.promo_title || p.sale_type || "Sale"} {promo}% OFF
+                            </span>
+                        ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
+                            <span className="text-[9px] text-rose-500 font-bold uppercase tracking-tight">
+                                Only {Number(p.total_quantity)} Left
+                            </span>
+                        ) : hasSevenDayReturn ? (
+                            <span className="text-[9px] text-blue-600 border-blue-500 border-[0.2px] px-1.5 py-0.5 ">
+                                7-day no reason return
+                            </span>
+                        ) : hasReturnSubsidy ? (
+                            <span className="text-[9px] text-emerald-600 border-emerald-500 border-[0.2px] px-1.5 py-0.5 ">
+                                Return shipping subsidy
+                            </span>
+                        ) : shippingDuration ? (
+                            <span className="text-[9px] text-emerald-600 border-emerald-500  ">
+                                Ships in {shippingDuration}
+                            </span>
+                        ) : null}
+                    </div>
+                </div>
+            </article>
+        );
+    };
 
     return (
         <div className="min-h-dvh bg-white pb-24">
@@ -345,15 +444,24 @@ export default function VendorShopPage() {
                 {activeNav === "Home" && (
                     <>
                         <div className="flex gap-4 border-slate-200 overflow-x-auto no-scrollbar mb-4 p-2">
-                            {["Featured", "Best Sellers", "Latest", "Prices"].map((t: any) => (
-                                <button
-                                    key={t}
-                                    onClick={() => setHomeTab(t)}
-                                    className={`pb-2 text-sm font-bold transition-all whitespace-nowrap ${homeTab === t ? "text-red-500 border-b-2 border-red-500" : "text-slate-500"}`}
-                                >
-                                    {t}
-                                </button>
-                            ))}
+                            {loading ? (
+                                <>
+                                    <div className="h-4 w-16 bg-slate-100 animate-pulse rounded my-2" />
+                                    <div className="h-4 w-16 bg-slate-100 animate-pulse rounded my-2" />
+                                    <div className="h-4 w-16 bg-slate-100 animate-pulse rounded my-2" />
+                                    <div className="h-4 w-16 bg-slate-100 animate-pulse rounded my-2" />
+                                </>
+                            ) : (
+                                ["Featured", "Best Sellers", "Latest", "Prices"].map((t: any) => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setHomeTab(t)}
+                                        className={`pb-2 text-sm font-bold transition-all whitespace-nowrap ${homeTab === t ? "text-red-500 border-b-2 border-red-500" : "text-slate-500"}`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))
+                            )}
                         </div>
 
                         {loading ? <ShimmerGrid count={8} /> : (
@@ -372,15 +480,24 @@ export default function VendorShopPage() {
                     <div className="flex gap-4 h-[calc(100vh-280px)]">
                         {/* Left sidebar - Sidebar stays left even on mobile but we'll use a narrow column */}
                         <div className="w-1/4 min-w-[100px] border-r border-slate-200 overflow-y-auto pr-2 no-scrollbar">
-                            {categoriesList.map(cat => (
-                                <button
-                                    key={cat}
-                                    onClick={() => setSelectedCategory(cat)}
-                                    className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-red-50 text-red-600" : "text-slate-600 hover:bg-slate-100"}`}
-                                >
-                                    {cat}
-                                </button>
-                            ))}
+                            {loading ? (
+                                <div className="space-y-4 pt-4">
+                                    <div className="h-4 w-full bg-slate-100 animate-pulse rounded" />
+                                    <div className="h-4 w-5/6 bg-slate-100 animate-pulse rounded" />
+                                    <div className="h-4 w-full bg-slate-100 animate-pulse rounded" />
+                                    <div className="h-4 w-4/6 bg-slate-100 animate-pulse rounded" />
+                                </div>
+                            ) : (
+                                categoriesList.map(cat => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setSelectedCategory(cat)}
+                                        className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-red-50 text-red-600" : "text-slate-600 hover:bg-slate-100"}`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))
+                            )}
                         </div>
                         {/* Right products */}
                         <div className="flex-1 overflow-y-auto no-scrollbar">
@@ -452,21 +569,21 @@ export default function VendorShopPage() {
                     {activeNav === "Categories" ? <ListBulletIconSolid className="w-4 h-4 text-red-500" /> : <ListBulletIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
                     <span className={`text-[10px] font-bold ${activeNav === "Categories" ? "text-red-500" : "text-slate-400"}`}>Categories</span>
                 </button>
-                <button 
-                  onClick={() => {
-                    setActiveNav("New release");
-                    if (newestReleaseId) {
-                      localStorage.setItem(`shop_last_seen_${slug}`, String(newestReleaseId));
-                      setHasUnviewedReleases(false);
-                    }
-                  }} 
-                  className="flex flex-col items-center gap-1 group"
+                <button
+                    onClick={() => {
+                        setActiveNav("New release");
+                        if (newestReleaseId) {
+                            localStorage.setItem(`shop_last_seen_${bizSlug}`, String(newestReleaseId));
+                            setHasUnviewedReleases(false);
+                        }
+                    }}
+                    className="flex flex-col items-center gap-1 group"
                 >
                     <div className="relative">
-                      {activeNav === "New release" ? <CalendarDaysIconSolid className="w-4 h-4 text-red-500" /> : <CalendarDaysIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
-                      {hasUnviewedReleases && activeNav !== "New release" && (
-                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-[1.5px] border-white ring-1 ring-red-500/20" />
-                      )}
+                        {activeNav === "New release" ? <CalendarDaysIconSolid className="w-4 h-4 text-red-500" /> : <CalendarDaysIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+                        {hasUnviewedReleases && activeNav !== "New release" && (
+                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-[1.5px] border-white ring-1 ring-red-500/20" />
+                        )}
                     </div>
                     <span className={`text-[10px] font-bold ${activeNav === "New release" ? "text-red-500" : "text-slate-400"}`}>New release</span>
                 </button>
@@ -478,14 +595,28 @@ export default function VendorShopPage() {
                     payload={selectedProductPayload}
                     origin={clickPos}
                     onClose={() => {
-                        setProductModalOpen(false);
-                        setSelectedProductPayload(null);
-                        updateUrl(null);
+                        const params = new URLSearchParams(window.location.search);
+                        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+                        // If we are on a product-specific URL, use back() to return cleanly
+                        if (params.has('product_id') || pathSegments.length > 2) {
+                            router.back();
+                        } else {
+                            // Otherwise just close and ensure URL is clean via replace
+                            setProductModalOpen(false);
+                            setSelectedProductPayload(null);
+                            updateUrl(null, true);
+                        }
                     }}
                     onShopClick={() => {
-                        setProductModalOpen(false);
-                        setSelectedProductPayload(null);
-                        updateUrl(null);
+                        const params = new URLSearchParams(window.location.search);
+                        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+                        if (params.has('product_id') || pathSegments.length > 2) {
+                            router.back();
+                        } else {
+                            setProductModalOpen(false);
+                            setSelectedProductPayload(null);
+                            updateUrl(null, true);
+                        }
                     }}
                     onProductClick={handleProductClick}
                 />

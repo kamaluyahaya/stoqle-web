@@ -10,9 +10,18 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onCropComplete: (croppedImage: Blob) => void;
+  aspect?: number;
+  cropShape?: 'rect' | 'round';
 }
 
-export default function ProfileCropperModal({ image, isOpen, onClose, onCropComplete }: Props) {
+export default function ProfileCropperModal({ 
+  image, 
+  isOpen, 
+  onClose, 
+  onCropComplete,
+  aspect = 1,
+  cropShape = 'round'
+}: Props) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
@@ -92,7 +101,9 @@ export default function ProfileCropperModal({ image, isOpen, onClose, onCropComp
       >
         <div className="relative w-full max-w-lg aspect-square bg-[#1a1a1a] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-white/10 z-10 bg-[#1a1a1a]/80 backdrop-blur">
-            <h3 className="text-white font-bold">Crop Profile Picture</h3>
+            <h3 className="text-white font-bold">
+              {cropShape === 'round' ? 'Crop Profile Picture' : 'Crop Background Photo'}
+            </h3>
             <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
               <XMarkIcon className="w-6 h-6" />
             </button>
@@ -103,8 +114,8 @@ export default function ProfileCropperModal({ image, isOpen, onClose, onCropComp
               image={image}
               crop={crop}
               zoom={zoom}
-              aspect={1}
-              cropShape="round"
+              aspect={aspect}
+              cropShape={cropShape}
               showGrid={false}
               onCropChange={onCropChange}
               onCropComplete={onCropCompleteCallback}
@@ -114,7 +125,7 @@ export default function ProfileCropperModal({ image, isOpen, onClose, onCropComp
 
           <div className="p-6 bg-[#1a1a1a] flex flex-col gap-4 z-10">
             <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-xs font-bold text-white/40 uppercase tracking-widest">
+              <div className="flex justify-between text-xs font-bold text-white/40  tracking-widest">
                 <span>Zoom</span>
                 <span>{Math.round(zoom * 100)}%</span>
               </div>
@@ -134,7 +145,7 @@ export default function ProfileCropperModal({ image, isOpen, onClose, onCropComp
               onClick={handleSet}
               className="w-full py-3.5 bg-white text-black font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all shadow-xl"
             >
-              Set Profile Picture
+              Set Photo
             </button>
           </div>
         </div>

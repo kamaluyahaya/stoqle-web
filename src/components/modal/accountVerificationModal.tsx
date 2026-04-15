@@ -454,7 +454,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                       ) : (
                         <button
                           onClick={handleSendOtp}
-                          className="text-red-500 text-xs font-bold hover:text-red-400 transition-colors uppercase tracking-widest"
+                          className="text-red-500 text-xs font-bold hover:text-red-400 transition-colors  tracking-widest"
                         >
                           Resend New Code
                         </button>

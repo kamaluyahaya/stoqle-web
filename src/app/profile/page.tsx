@@ -23,6 +23,7 @@ import { FaHeart, FaRegHeart, FaEllipsisV, FaEdit, FaTrash, FaShareAlt, FaThumbt
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { PROFILE_CACHE } from "@/src/lib/cache";
 import { io } from "socket.io-client";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 import Link from "next/link";
 
 
@@ -201,7 +202,7 @@ const PostCard = React.memo(({
       layoutId={layoutId || `post-${post.id}`}
       transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       onClick={() => openPostWithUrl(post)}
-      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col sm:rounded-xl rounded-md bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
         {post.isPinned && (
@@ -261,10 +262,13 @@ const PostCard = React.memo(({
           </div>
         ) : (
           <div className="relative w-full overflow-hidden bg-slate-100">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+            </div>
             <img
               src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
               alt={post.caption}
-              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110"
+              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110 relative z-[1]"
             />
           </div>
         )}
@@ -480,9 +484,12 @@ const ProductCard = React.memo(({
       transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
-      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col sm:rounded-xl rounded-md bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-100 overflow-hidden post-media">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+        </div>
         {p.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
@@ -492,7 +499,7 @@ const ProductCard = React.memo(({
           initial={entryVariants.initial}
           animate={entryVariants.animate}
           transition={entryVariants.transition}
-          className="w-full h-full"
+          className="w-full h-full relative z-[1]"
         >
           {p.product_video ? (
             <video
@@ -501,10 +508,19 @@ const ProductCard = React.memo(({
               muted
               loop
               playsInline
-              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
             />
           ) : (
             <div className="relative w-full h-full bg-slate-50 overflow-hidden">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+              </div>
+              {/* Placeholder frame indicator */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
+                </div>
+              </div>
               <style jsx global>{`
                             @keyframes fadeIn {
                                 from { opacity: 0; }
@@ -514,7 +530,7 @@ const ProductCard = React.memo(({
               <img
                 src={formatUrl(p.first_image)}
                 alt={p.title}
-                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110"
+                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110 relative z-[1]"
                 onLoad={(e) => {
                   (e.target as HTMLImageElement).style.animation = "fadeIn 0.6s ease-in-out forwards";
                 }}
@@ -538,13 +554,7 @@ const ProductCard = React.memo(({
           )}
         </motion.div>
 
-        {/* Placeholder frame indicator */}
-        <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
-          <div className="flex flex-col items-center gap-2 opacity-20">
-            <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-            <span className="text-[10px] font-bold  text-slate-400 ">Opening...</span>
-          </div>
-        </div>
+
       </div>
 
       <div className="p-3">
@@ -711,7 +721,7 @@ const MasonryGrid = ({
           return (
             <div key={colIdx} className={visibilityClass}>
               {colItems.map((item: any) => {
-                const isPost = type === 'post' || type === 'note' || (type === 'liked' && !item.isProduct);
+                const isPost = type === 'post' || type === 'note' || type === 'linked' || (type === 'liked' && !item.isProduct);
                 if (isPost) {
                   return (
                     <PostCard
@@ -772,7 +782,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
   const [editPostOpen, setEditPostOpen] = useState(false);
   const [postToEdit, setPostToEdit] = useState<Post | null>(null);
-  const [navbarHeight, setNavbarHeight] = useState(0);
+  const [navbarHeight, setNavbarHeight] = useState(56);
+  const [isMiniHeaderVisible, setIsMiniHeaderVisible] = useState(false);
   const tabsWrapperRef = useRef<HTMLDivElement>(null);
   const tabsInnerRef = useRef<HTMLDivElement>(null);
 
@@ -782,14 +793,14 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [fetchingProduct, setFetchingProduct] = useState(false);
-  const [productLikeData, setProductLikeData] = useState<Record<number, { liked: boolean, count: number }>>(PROFILE_CACHE.productLikeData);
-  const [fetchingProductId, setFetchingProductId] = useState<number | null>(null);
+  const [productLikeData, setProductLikeData] = useState<Record<number | string, { liked: boolean, count: number }>>(PROFILE_CACHE.productLikeData);
+  const [fetchingProductId, setFetchingProductId] = useState<number | string | null>(null);
   const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
   const [socialModalOpen, setSocialModalOpen] = useState(false);
   const [activeSocialTab, setActiveSocialTab] = useState<"friends" | "followers" | "following" | "recommend" | "liked">("followers");
 
-  const [likedItems, setLikedItems] = useState<any[]>([]);
-  const [likedLoading, setLikedLoading] = useState(false);
+  const [likedItems, setLikedItems] = useState<any[]>(PROFILE_CACHE.likedItems || []);
+  const [likedLoading, setLikedLoading] = useState(PROFILE_CACHE.likedItems?.length === 0);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // On mount: check sessionStorage for a pending post and inject it optimistically
@@ -866,6 +877,16 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       return new Date(b.rawCreatedAt || 0).getTime() - new Date(a.rawCreatedAt || 0).getTime();
     });
   }, [notePosts]);
+
+  // Derived: all posts (media + notes) that have a linked product
+  const sortedLinkedPosts = useMemo(() => {
+    const allPosts = [...mediaPosts, ...notePosts].filter(p => p.is_product_linked);
+    return [...allPosts].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.rawCreatedAt || 0).getTime() - new Date(a.rawCreatedAt || 0).getTime();
+    });
+  }, [mediaPosts, notePosts]);
 
   const sortedLikedItems = useMemo(() => {
     return [...likedItems].sort((a, b) => {
@@ -959,7 +980,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           ? { ...p, ...updated }
           : p
       ));
-      
+
       // Update the active modal if it's viewing this post
       setSelectedPost(prev => {
         if (prev && String(prev.id) === String(updatedPost.social_post_id)) {
@@ -988,9 +1009,13 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     if (profileApi?.is_business_owner && ['active', 'verified', 'approved', 'approved_verified', 'published'].includes(bizStatus)) {
       base.push("Products");
     }
+    // Show "Linked Post" tab only when the user has at least one post with a linked product
+    if (sortedLinkedPosts.length > 0) {
+      base.push("Linked Post");
+    }
     base.push("Liked");
     return base;
-  }, [profileApi?.is_business_owner, profileApi?.business?.business_status]);
+  }, [profileApi?.is_business_owner, profileApi?.business?.business_status, sortedLinkedPosts.length]);
 
   useEffect(() => {
     const tabName = searchParams.get("tab");
@@ -1002,7 +1027,52 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
   useEffect(() => {
     PROFILE_CACHE.activeTabIndex = activeTabIndex;
-  }, [activeTabIndex]);
+
+    // Only reset scroll if we are already scrolled past the content area
+    const timer = setTimeout(() => {
+      if (tabsWrapperRef.current) {
+        const contentTop = tabsWrapperRef.current.offsetTop - (navbarHeight || 56);
+
+        // If current scroll is further down than the tabs top, snap back to tabs top
+        if (window.scrollY > contentTop) {
+          window.scrollTo({
+            top: contentTop,
+            behavior: "instant" as any
+          });
+        }
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [activeTabIndex, navbarHeight]);
+
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  // Scroll listener for MiniHeader & sticky logic sync
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsMiniHeaderVisible(window.scrollY > 0);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useLayoutEffect(() => {
+    const updateNavbarHeight = () => {
+      const navbar = document.querySelector("header, [role='banner'], .main-navbar") as HTMLElement | null;
+      if (navbar) {
+        setNavbarHeight(navbar.offsetHeight);
+        document.documentElement.style.setProperty('--navbar-height', `${navbar.offsetHeight}px`);
+      }
+    };
+    updateNavbarHeight();
+    window.addEventListener("resize", updateNavbarHeight);
+    window.addEventListener("scroll", updateNavbarHeight, { passive: true });
+    return () => {
+      window.removeEventListener("resize", updateNavbarHeight);
+      window.removeEventListener("scroll", updateNavbarHeight);
+    };
+  }, []);
 
   // history push tracking for modal
   const pushedRef = useRef(false);
@@ -1015,9 +1085,12 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-
     async function loadProfile() {
-      setProfileLoading(true);
+      if (PROFILE_CACHE.profileApi) {
+        setProfileLoading(false);
+      } else {
+        setProfileLoading(true);
+      }
       setProfileError(null);
       try {
         const base = process.env.NEXT_PUBLIC_API_URL || "";
@@ -1050,6 +1123,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         };
         setProfileApi(normalized);
         PROFILE_CACHE.profileApi = normalized;
+        PROFILE_CACHE.lastFetchedAt = Date.now();
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to fetch profile:", err);
@@ -1071,8 +1145,13 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     if (tabs[activeTabIndex] !== "Liked") return;
 
     let cancelled = false;
+
     async function loadLikedItems() {
-      setLikedLoading(true);
+      if (PROFILE_CACHE.likedItems && PROFILE_CACHE.likedItems.length > 0) {
+        setLikedLoading(false);
+      } else {
+        setLikedLoading(true);
+      }
       try {
         const token = localStorage.getItem("token");
         const headers = {
@@ -1100,6 +1179,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         });
 
         setLikedItems(merged);
+        PROFILE_CACHE.likedItems = merged;
+        PROFILE_CACHE.lastLikedFetchedAt = Date.now();
       } catch (err) {
         console.error("Failed to load liked items:", err);
       } finally {
@@ -1118,7 +1199,11 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     if (!businessId || !isOwner) return;
 
     const loadVendorProducts = async () => {
-      setProductsLoading(true);
+      if (PROFILE_CACHE.vendorProducts && PROFILE_CACHE.vendorProducts.length > 0) {
+        setProductsLoading(false);
+      } else {
+        setProductsLoading(true);
+      }
       try {
         const identifier = profileApi?.business?.business_slug || businessId;
         const res = await fetchBusinessProducts(identifier, 100);
@@ -1156,9 +1241,13 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-
     async function loadPosts() {
-      setPostsLoading(true);
+      if (PROFILE_CACHE.mediaPosts.length > 0 || PROFILE_CACHE.notePosts.length > 0) {
+        setPostsLoading(false);
+        setIsRestoring(false);
+      } else {
+        setPostsLoading(true);
+      }
       setPostsError(null);
       try {
         const base = process.env.NEXT_PUBLIC_API_URL || "";
@@ -1199,6 +1288,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         setNotePosts(notes.slice(0, postCount));
         PROFILE_CACHE.mediaPosts = media.slice(0, postCount);
         PROFILE_CACHE.notePosts = notes.slice(0, postCount);
+        // lastFetchedAt is set at loadProfile, meaning both will refresh synchronously.
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to load posts:", err);
@@ -1470,7 +1560,14 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     }
   };
 
-  const handleProductClick = async (productId: number, businessName?: string, e?: React.MouseEvent) => {
+  const handleProductClick = async (
+    productId: string | number,
+    businessName?: string,
+    e?: any,
+    businessSlug?: string,
+    isSocialPost?: boolean,
+    productSlug?: string
+  ) => {
     if (fetchingProductId) return;
     if (e) setClickPos({ x: e.clientX, y: e.clientY });
     else setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -1597,7 +1694,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         url: postUrl
       }).catch(() => { });
     } else {
-      navigator.clipboard.writeText(postUrl);
+      copyToClipboard(postUrl);
       toast.success("Link copied to clipboard!");
     }
   };
@@ -1642,7 +1739,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         url: productUrl
       }).catch(() => { });
     } else {
-      navigator.clipboard.writeText(productUrl);
+      copyToClipboard(productUrl);
       toast.success("Link copied to clipboard!");
     }
   };
@@ -1762,8 +1859,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className="bg-white px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50"
-      style={{ top: `${navbarHeight}px` }}
+      className={`bg-white rounded px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50`}
+      style={{ top: isMiniHeaderVisible ? "56px" : `${navbarHeight}px` }}
     >
       <div ref={tabsInnerRef} className="flex gap-8 overflow-x-auto no-scrollbar">
         {tabs.map((t, i) => (
@@ -1910,6 +2007,43 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           </div>
         )}
 
+        {/* Linked Post pane */}
+        {sortedLinkedPosts.length > 0 && (
+          <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Linked Post" ? "auto" : "0", overflow: "hidden" }}>
+            {postsLoading ? (
+              <ShimmerGrid count={10} />
+            ) : sortedLinkedPosts.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
+                <img src="/assets/images/post.png" alt="No linked posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
+                <p className="text-sm font-medium">No posts with linked products yet.</p>
+              </div>
+            ) : (
+              <div className="p-2 sm:p-4 post-grid-container">
+                <div className="mb-4 px-1 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-100 rounded-full px-3 py-1">
+                    <svg className="w-3.5 h-3.5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M13.828 10.172a4 4 0 0 0-5.656 0l-4 4a4 4 0 1 0 5.656 5.656l1.102-1.101m-.758-4.899a4 4 0 0 0 5.656 0l4-4a4 4 0 0 0-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    {sortedLinkedPosts.length} post{sortedLinkedPosts.length !== 1 ? 's' : ''} with linked products
+                  </span>
+                </div>
+                <MasonryGrid
+                  items={sortedLinkedPosts}
+                  type="linked"
+                  openPostWithUrl={openPostWithUrl}
+                  toggleLike={toggleLike}
+                  getNoteStyles={getNoteStyles}
+                  isRestored={isRestoring}
+                  onDelete={handleDeletePost}
+                  onShare={onShare}
+                  onPin={onPin}
+                  onEdit={handleEditPost}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Liked Items pane */}
         <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Liked" ? "auto" : "0", overflow: "hidden" }}>
           {likedLoading ? (
@@ -1950,6 +2084,17 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       <Header
         profileApi={profileApi}
         displayName={displayName}
+        products={vendorProducts}
+        onVisitShop={() => {
+          const business = profileApi?.business;
+          if (business) {
+            let slug = business.business_slug;
+            if (!slug && business.business_name) {
+              slug = business.business_name.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+            }
+            if (slug) router.push(`/shop/${slug}`);
+          }
+        }}
         onLogout={async () => {
           try {
             await auth.logout();

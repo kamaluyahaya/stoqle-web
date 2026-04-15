@@ -145,7 +145,7 @@ export default function RightMenus() {
       <HoverMenu
         label="Business Cooperation"
         items={[
-          { id: "biz-1", label: "Merchant onboarding", href: "/business/onboarding" },
+          { id: "biz-1", label: "Merchant onboarding", href: "/profile/business/onboarding" },
           { id: "biz-2", label: Boolean(user?.is_business_owner || user?.business_name || user?.business_id || user?.isBusiness) ? "My shop" : "Become a vendor", href: "/profile/business/business-status" },
           { id: "biz-3", label: "Partner with Us", href: "/profile/business/business-status" },
           { id: "biz-4", label: "Delivery Partnership", href: "/profile/business/business-status" },

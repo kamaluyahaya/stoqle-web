@@ -120,7 +120,7 @@ export default function InventoryReportPage() {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-white">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-4" />
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Generating Report...</p>
+                <p className="text-slate-400 font-bold  tracking-widest text-xs">Generating Report...</p>
             </div>
         );
     }
@@ -153,9 +153,9 @@ export default function InventoryReportPage() {
                         <div className="flex flex-col md:flex-row justify-between items-start gap-10 border-b-4 border-slate-900 pb-10 mb-10">
                             <div className="flex items-start gap-6 w-full">
                                 <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shrink-0 border-4 border-slate-100 no-print-shadow overflow-hidden shadow-lg shadow-slate-100">
-                                    <img 
-                                        src={formatUrl(business?.business_logo || user?.profile_pic || "/assets/logo/logo.png")} 
-                                        alt="Business Logo" 
+                                    <img
+                                        src={formatUrl(business?.business_logo || user?.profile_pic || "/assets/logo/logo.png")}
+                                        alt="Business Logo"
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             const target = e.target as HTMLImageElement;
@@ -167,13 +167,13 @@ export default function InventoryReportPage() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center justify-between gap-6 mb-4">
                                         <div className="space-y-1">
-                                            <h1 className="text-3xl font-black tracking-tighter text-slate-900 uppercase leading-none">
+                                            <h1 className="text-3xl font-black tracking-tighter text-slate-900  leading-none">
                                                 {business?.business_name || user?.business_name || user?.name || "Merchant Inventory"}
                                             </h1>
-                                            <p className="text-[10px] font-black text-indigo-600 tracking-[0.3em] uppercase opacity-80">Inventory Ledger • {business?.business_category || "Profile"}</p>
+                                            <p className="text-[10px] font-black text-indigo-600 tracking-[0.3em]  opacity-80">Inventory Ledger • {business?.business_category || "Profile"}</p>
                                         </div>
                                     </div>
-                                    <div className="text-[11px] text-slate-500 font-bold space-y-1.5 uppercase tracking-wide border-t border-slate-100 pt-4">
+                                    <div className="text-[11px] text-slate-500 font-bold space-y-1.5  tracking-wide border-t border-slate-100 pt-4">
                                         <div className="flex flex-wrap items-start justify-between gap-4">
                                             <p className="max-w-xl leading-relaxed">{formatAddress(business?.business_address) || formatAddress(user?.business_address) || user?.address || "Registered Address Pending"}</p>
                                             <div className="bg-slate-900 text-white px-3 py-1.5 rounded-xl flex items-center gap-3 shadow-lg no-print-shadow shrink-0">
@@ -204,27 +204,27 @@ export default function InventoryReportPage() {
                         <div className="mb-10 page-break-avoid">
                             <div className="flex items-center gap-2 mb-4">
                                 <div className="h-4 w-1 bg-indigo-600 rounded-full" />
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Live Summary</h3>
+                                <h3 className="text-xs font-black text-slate-400  tracking-[0.2em]">Live Summary</h3>
                             </div>
                             <div className="grid grid-cols-5 gap-0 border border-slate-200 rounded-2xl overflow-hidden divide-x divide-slate-100 shadow-sm shadow-slate-50">
                                 <div className="p-4 bg-slate-50/30">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 leading-none">Total Items</p>
+                                    <p className="text-[9px] font-black text-slate-400  tracking-widest mb-1.5 leading-none">Total Items</p>
                                     <p className="text-lg font-black text-slate-900 tracking-tight">{stats.totalItems}</p>
                                 </div>
                                 <div className="p-4">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 leading-none">Total Stock</p>
+                                    <p className="text-[9px] font-black text-slate-400  tracking-widest mb-1.5 leading-none">Total Stock</p>
                                     <p className="text-lg font-black text-slate-900 tracking-tight">{stats.totalQuantity}</p>
                                 </div>
                                 <div className="p-4 bg-slate-50/30">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 leading-none">Reserved</p>
+                                    <p className="text-[9px] font-black text-slate-400  tracking-widest mb-1.5 leading-none">Reserved</p>
                                     <p className="text-lg font-black text-amber-600 tracking-tight">+{stats.totalReserved}</p>
                                 </div>
                                 <div className="p-4">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 leading-none">Low Stock</p>
+                                    <p className="text-[9px] font-black text-slate-400  tracking-widest mb-1.5 leading-none">Low Stock</p>
                                     <p className={`text-lg font-black tracking-tight ${stats.lowStock > 0 ? 'text-indigo-600' : 'text-slate-900'}`}>{stats.lowStock}</p>
                                 </div>
                                 <div className="p-4 bg-slate-50/30">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 leading-none">Out Of Stock</p>
+                                    <p className="text-[9px] font-black text-slate-400  tracking-widest mb-1.5 leading-none">Out Of Stock</p>
                                     <p className={`text-lg font-black tracking-tight ${stats.outOfStock > 0 ? 'text-red-600' : 'text-slate-900'}`}>{stats.outOfStock}</p>
                                 </div>
                             </div>
@@ -234,18 +234,18 @@ export default function InventoryReportPage() {
                         <div className="mb-12">
                             <div className="flex items-center gap-2 mb-4">
                                 <div className="h-4 w-1 bg-indigo-600 rounded-full" />
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Detailed Ledger</h3>
+                                <h3 className="text-xs font-black text-slate-400  tracking-[0.2em]">Detailed Ledger</h3>
                             </div>
                             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-slate-50 border-b border-slate-200">
-                                            <th className="px-5 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[40%]">Product / SKU</th>
-                                            <th className="px-5 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
-                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Stock</th>
-                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Hold</th>
-                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Net</th>
-                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-slate-400  tracking-widest w-[40%]">Product / SKU</th>
+                                            <th className="px-5 py-4 text-[10px] font-black text-slate-400  tracking-widest">Category</th>
+                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400  tracking-widest">Stock</th>
+                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400  tracking-widest">Hold</th>
+                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400  tracking-widest">Net</th>
+                                            <th className="px-2 py-4 text-left text-[10px] font-black text-slate-400  tracking-widest">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -262,74 +262,74 @@ export default function InventoryReportPage() {
                                                                 />
                                                             </div>
                                                             <div className="space-y-0.5">
-                                                                <p className="text-[11px] font-black text-slate-900 uppercase leading-none tracking-tight">{p.name}</p>
-                                                                <p className="text-[9px] font-bold text-slate-400 tracking-[0.1em] uppercase">{p.product_sku || "NO SKU"}</p>
+                                                                <p className="text-[11px] font-black text-slate-900  leading-none tracking-tight">{p.name}</p>
+                                                                <p className="text-[9px] font-bold text-slate-400 tracking-[0.1em] ">{p.product_sku || "NO SKU"}</p>
                                                             </div>
                                                         </div>
                                                     </td>
-                                                        <td className="px-5 py-4">
-                                                            <span className="text-[9px] font-black text-indigo-500 bg-indigo-50/50 px-2 py-1 rounded-md uppercase tracking-wider">{p.category}</span>
+                                                    <td className="px-5 py-4">
+                                                        <span className="text-[9px] font-black text-indigo-500 bg-indigo-50/50 px-2 py-1 rounded-md  tracking-wider">{p.category}</span>
+                                                    </td>
+                                                    <td className="px-2 py-4 text-left text-xs font-black text-slate-700">{p.total_quantity}</td>
+                                                    <td className="px-2 py-4 text-left text-xs font-black text-amber-600">
+                                                        {p.reserved > 0 ? `+${p.reserved}` : "0"}
+                                                    </td>
+                                                    <td className="px-2 py-4 text-left">
+                                                        <span className={`text-xs font-black ${p.available <= 0 ? 'text-red-600' : 'text-slate-900 underline decoration-indigo-200 underline-offset-4'}`}>
+                                                            {p.available}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-4 text-left">
+                                                        {p.available <= 0 ? (
+                                                            <span className="text-[9px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full  tracking-widest">Critical</span>
+                                                        ) : p.available <= (p.low_stock_alert || 5) ? (
+                                                            <span className="text-[9px] font-black text-slate-900 bg-amber-400 px-2 py-0.5 rounded-full  tracking-widest">Low</span>
+                                                        ) : (
+                                                            <span className="text-[9px] font-black text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full  tracking-widest">Healthy</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                                {p.variants && p.variants.length > 0 && (
+                                                    <tr className="bg-slate-50 border-l-2 border-indigo-500 print:bg-slate-50">
+                                                        <td className="pl-12 py-2 text-[9px] font-black text-indigo-500  tracking-[0.15em]">Variant Ledger</td>
+                                                        <td className="px-5 py-2 text-[8px] font-bold text-slate-400  tracking-widest">Reference</td>
+                                                        <td className="px-2 py-2 text-left text-[8px] font-black text-slate-400  tracking-widest">Units</td>
+                                                        <td className="px-2 py-2 text-left text-[8px] font-black text-slate-400  tracking-widest">Hold</td>
+                                                        <td className="px-2 py-2 text-left text-[8px] font-black text-slate-400  tracking-widest">Net</td>
+                                                        <td className="px-2 py-2 text-left"></td>
+                                                    </tr>
+                                                )}
+                                                {p.variants && p.variants.length > 0 && p.variants.map((v) => (
+                                                    <tr key={v.id} className="bg-slate-50/20 border-l-2 border-slate-200">
+                                                        <td className="pl-12 py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-6 h-6 rounded bg-white overflow-hidden border border-slate-100 shrink-0">
+                                                                    <img
+                                                                        src={formatUrl(v.image_url || p.image_url)}
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                </div>
+                                                                <span className="text-[10px] font-bold text-slate-600  tracking-tight">{v.name}</span>
+                                                            </div>
                                                         </td>
-                                                        <td className="px-2 py-4 text-left text-xs font-black text-slate-700">{p.total_quantity}</td>
-                                                        <td className="px-2 py-4 text-left text-xs font-black text-amber-600">
-                                                            {p.reserved > 0 ? `+${p.reserved}` : "0"}
+                                                        <td className="px-5 py-3">
+                                                            <span className="text-[8px] font-bold text-indigo-400 bg-indigo-50 px-1.5 py-0.5 rounded  tracking-widest">{v.sku || "VAR-SKU"}</span>
                                                         </td>
-                                                        <td className="px-2 py-4 text-left">
-                                                            <span className={`text-xs font-black ${p.available <= 0 ? 'text-red-600' : 'text-slate-900 underline decoration-indigo-200 underline-offset-4'}`}>
-                                                                {p.available}
-                                                            </span>
+                                                        <td className="px-2 py-3 text-left text-[11px] font-bold text-slate-500">{v.total_quantity}</td>
+                                                        <td className="px-2 py-3 text-left text-[11px] font-bold text-amber-500/70">
+                                                            {v.reserved > 0 ? `+${v.reserved}` : "0"}
                                                         </td>
-                                                        <td className="px-2 py-4 text-left">
-                                                            {p.available <= 0 ? (
-                                                                <span className="text-[9px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full uppercase tracking-widest">Critical</span>
-                                                            ) : p.available <= (p.low_stock_alert || 5) ? (
-                                                                <span className="text-[9px] font-black text-slate-900 bg-amber-400 px-2 py-0.5 rounded-full uppercase tracking-widest">Low</span>
-                                                            ) : (
-                                                                <span className="text-[9px] font-black text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full uppercase tracking-widest">Healthy</span>
-                                                            )}
+                                                        <td className="px-2 py-3 text-left text-[11px] font-black text-slate-600">{v.available}</td>
+                                                        <td className="px-2 py-3 text-left">
+                                                            <div className={`w-1.5 h-1.5 rounded-full inline-block ${v.available <= 0 ? 'bg-red-500' :
+                                                                v.available <= (v.low_stock_alert || 5) ? 'bg-amber-400' :
+                                                                    'bg-emerald-300'
+                                                                }`} />
                                                         </td>
                                                     </tr>
-                                                    {p.variants && p.variants.length > 0 && (
-                                                        <tr className="bg-slate-50 border-l-2 border-indigo-500 print:bg-slate-50">
-                                                            <td className="pl-12 py-2 text-[9px] font-black text-indigo-500 uppercase tracking-[0.15em]">Variant Ledger</td>
-                                                            <td className="px-5 py-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest">Reference</td>
-                                                            <td className="px-2 py-2 text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Units</td>
-                                                            <td className="px-2 py-2 text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Hold</td>
-                                                            <td className="px-2 py-2 text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Net</td>
-                                                            <td className="px-2 py-2 text-left"></td>
-                                                        </tr>
-                                                    )}
-                                                    {p.variants && p.variants.length > 0 && p.variants.map((v) => (
-                                                        <tr key={v.id} className="bg-slate-50/20 border-l-2 border-slate-200">
-                                                            <td className="pl-12 py-3">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-6 h-6 rounded bg-white overflow-hidden border border-slate-100 shrink-0">
-                                                                        <img
-                                                                            src={formatUrl(v.image_url || p.image_url)}
-                                                                            className="w-full h-full object-cover"
-                                                                        />
-                                                                    </div>
-                                                                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">{v.name}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-5 py-3">
-                                                                <span className="text-[8px] font-bold text-indigo-400 bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-widest">{v.sku || "VAR-SKU"}</span>
-                                                            </td>
-                                                            <td className="px-2 py-3 text-left text-[11px] font-bold text-slate-500">{v.total_quantity}</td>
-                                                            <td className="px-2 py-3 text-left text-[11px] font-bold text-amber-500/70">
-                                                                {v.reserved > 0 ? `+${v.reserved}` : "0"}
-                                                            </td>
-                                                            <td className="px-2 py-3 text-left text-[11px] font-black text-slate-600">{v.available}</td>
-                                                            <td className="px-2 py-3 text-left">
-                                                                <div className={`w-1.5 h-1.5 rounded-full inline-block ${v.available <= 0 ? 'bg-red-500' :
-                                                                    v.available <= (v.low_stock_alert || 5) ? 'bg-amber-400' :
-                                                                        'bg-emerald-300'
-                                                                    }`} />
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </React.Fragment>
-                                            ))}
+                                                ))}
+                                            </React.Fragment>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -338,14 +338,14 @@ export default function InventoryReportPage() {
                         {/* Footer (Web view) */}
                         <div className="border-t-2 border-slate-900 pt-8 mt-auto no-print">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-slate-400">
-                                <div className="text-[9px] font-black uppercase tracking-[0.2em] space-y-1">
+                                <div className="text-[9px] font-black  tracking-[0.2em] space-y-1">
                                     <p>Generated by <span className="text-indigo-600">Stoqle Dashboard</span></p>
                                     <p>© {new Date().getFullYear()} Stoqle Technology. All rights reserved.</p>
                                 </div>
                                 <div className="text-[9px] font-bold italic max-w-sm">
                                     Disclaimer: This report reflects stock values at the precise time of generation. Discrepancies may occur due to ongoing transactions or database lag.
                                 </div>
-                                <div className="text-[10px] font-black bg-slate-900 text-white px-3 py-1 rounded-full uppercase tracking-widest">
+                                <div className="text-[10px] font-black bg-slate-900 text-white px-3 py-1 rounded-full  tracking-widest">
                                     Page 1 of 1
                                 </div>
                             </div>
@@ -356,7 +356,7 @@ export default function InventoryReportPage() {
 
             {/* Print Pagination Footer (Only visible on print) */}
             <div className="hidden print:block fixed bottom-0 left-0 right-0 p-8 bg-white border-t border-slate-100">
-                <div className="flex justify-between items-center text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                <div className="flex justify-between items-center text-[8px] font-black text-slate-400  tracking-[0.3em]">
                     <div>
                         STOQLE INVENTORY AUDIT • {business?.business_name || user?.business_name || user?.name}
                     </div>

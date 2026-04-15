@@ -35,8 +35,9 @@ import { fetchProductById } from "@/src/lib/api/productApi";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import type { PreviewPayload } from "@/src/types/product";
+import { API_BASE_URL } from "@/src/lib/config";
+import ProductSelectorModal from "@/src/components/product/ProductSelectorModal";
 const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 const FALLBACK_SOUNDS = [
   { id: 'f1', title: "Modern Vibe", artist: "Stoqle Mix", url: "https://cdn.pixabay.com/audio/2022/10/14/audio_3d1ef96084.mp3", duration: "2:45" },
@@ -47,7 +48,13 @@ const FALLBACK_SOUNDS = [
 ];
 
 const formatUrl = (url: string) => {
-  return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+  if (!url) return NO_IMAGE_PLACEHOLDER;
+  if (url.startsWith("http")) return url;
+  
+  const base = (API_BASE_URL || "").replace(/\/$/, "");
+  // Backend images usually need /public prefix if not absolute
+  const path = url.startsWith("/public") ? url : (url.startsWith("/") ? `/public${url}` : `/public/${url}`);
+  return `${base}${path}`;
 };
 
 // ----------------------
@@ -497,32 +504,26 @@ function VideoPreviewModal({
                     />
                   ) : (
                     <motion.video
-                      key="preview-video"
+                      key={videoPreview}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       ref={videoRef}
-                      src={videoPreview}
                       className={`w-full h-full ${videoAspectRatio && videoAspectRatio < 0.8 ? "object-cover" : "object-contain"}`}
                       autoPlay={isPlaying}
                       muted={isMuted}
                       playsInline
                       onPlay={() => setIsPlaying(true)}
                       onPause={(e) => {
-                        // Skip if this was an internal programmatic pause (slide transition or loop reset)
                         if (internalTransitionRef.current) {
                           internalTransitionRef.current = false;
                           return;
                         }
-                        // Skip if the video just reached its natural end — onEnded will handle advancing.
-                        // (Browsers fire onPause before onEnded when video reaches the end.)
                         if (e.currentTarget.ended) {
                           return;
                         }
-                        // Genuine user-initiated pause — stop the simulation
                         setIsPlaying(false);
                       }}
                       onCanPlay={(e) => {
-                        // If a pending play was requested while the element was unmounted, start now
                         if (pendingPlayRef.current) {
                           pendingPlayRef.current = false;
                           e.currentTarget.play().catch(() => { });
@@ -535,7 +536,9 @@ function VideoPreviewModal({
                         setVideoAspectRatio(v.videoWidth / v.videoHeight);
                         setVideoDuration(v.duration);
                       }}
-                    />
+                    >
+                      <source src={videoPreview} type={video?.type || "video/mp4"} />
+                    </motion.video>
                   )}
                 </AnimatePresence>
 
@@ -650,13 +653,14 @@ function VideoPreviewModal({
 
           {/* Media Sequence Reorder Strip */}
           <div className="space-y-2">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Reel Sequence</h3>
+            <h3 className="text-[10px] font-black text-slate-400  tracking-widest px-1">Reel Sequence</h3>
             <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar px-1">
               {interleavedMedia.map((m, i) => (
                 <div key={i} className={`relative flex-shrink-0 group ${currentIndex === i ? 'scale-105' : 'opacity-70'}`}>
                   <div className={`w-14 h-14 rounded-xl overflow-hidden shadow-lg border-2 transition-all ${currentIndex === i ? 'border-red-500' : 'border-slate-100'}`}>
                     {m.type === 'video' ? (
                       <video src={m.preview} className="w-full h-full object-cover" muted playsInline />
+
                     ) : (
                       <img src={m.preview} className="w-full h-full object-cover" alt={`part-${i}`} />
                     )}
@@ -896,7 +900,7 @@ function VideoPreviewModal({
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Added Audio</p>
+                <p className="text-[10px] font-black text-red-400  tracking-widest">Added Audio</p>
                 <p className="text-xs font-bold text-red-600 truncate">{audioFile.name}</p>
               </div>
               <button onClick={() => setAudioFile(null)} className="p-2 hover:bg-red-100 rounded-full transition-colors">
@@ -911,7 +915,7 @@ function VideoPreviewModal({
           <div className="flex items-center justify-center mb-1">
             <button
               onClick={() => setShowAudioMenu(true)}
-              className="text-[11px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 flex items-center gap-1.5 py-1"
+              className="text-[11px] font-black  tracking-widest text-red-500 hover:text-red-600 flex items-center gap-1.5 py-1"
             >
               <PlusIcon className="w-3.5 h-3.5" />
               {audioFile ? "Change Music" : "Add Music / Voice"}
@@ -938,7 +942,7 @@ function VideoPreviewModal({
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Linked Product</p>
+                <p className="text-[10px] font-black text-slate-400  tracking-widest leading-tight">Linked Product</p>
                 <p className="text-xs font-bold text-slate-900 truncate leading-tight mb-0.5">{selectedProduct.title}</p>
                 <p className="text-[10px] font-black text-red-500 leading-none">
                   ₦{Number(selectedProduct.min_variant_price || selectedProduct.min_sku_price || selectedProduct.price).toLocaleString()}
@@ -1314,7 +1318,7 @@ function ImagePreviewModal({
                   {/* Background Music Section */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between px-1">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Music / Voice</h3>
+                      <h3 className="text-[10px] font-black text-slate-400  tracking-widest">Add Music / Voice</h3>
                       <button
                         onClick={() => setShowAudioList(true)}
                         className="text-[10px] font-black text-red-500 hover:text-red-600 transition-colors"
@@ -1421,7 +1425,7 @@ function ImagePreviewModal({
                         )}
                       </div>
                       {i === 0 && (
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-[6px] text-white font-black px-1 rounded uppercase tracking-tighter">Cover</div>
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-[6px] text-white font-black px-1 rounded  tracking-tighter">Cover</div>
                       )}
                     </div>
                   ))}
@@ -1482,10 +1486,10 @@ function ImagePreviewModal({
                       className="flex items-center gap-3 p-2 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors group/linked"
                     >
                       <div className="w-10 h-10 rounded-lg overflow-hidden bg-white border border-slate-200">
-                        <img src={formatUrl(selectedProduct.first_image)} className="w-full h-full object-cover" alt="product" />
+                        <img src={formatUrl(selectedProduct.first_image || selectedProduct.image_url || selectedProduct.thumbnail || selectedProduct.image)} className="w-full h-full object-cover" alt="product" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Linked Product</p>
+                        <p className="text-[10px] font-black text-slate-400  tracking-widest leading-tight">Linked Product</p>
                         <p className="text-xs font-bold text-slate-900 truncate leading-tight mb-0.5">{selectedProduct.title}</p>
                       </div>
                       <button
@@ -1594,7 +1598,7 @@ function ImagePreviewModal({
                     </div>
 
                     <div className="h-px bg-slate-50 my-2" />
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Trending Tracks</p>
+                    <p className="text-[9px] font-black text-slate-400  tracking-widest px-1">Trending Tracks</p>
 
                     {dbSounds.map((sound) => (
                       <button
@@ -1620,10 +1624,10 @@ function ImagePreviewModal({
                           <div className="flex items-center gap-2">
                             <p className={`text-sm font-bold truncate ${selectedPopularSound?.id === sound.id ? "text-red-600" : "text-slate-900"}`}>{sound.title}</p>
                             {sound.isCommunity && (
-                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded uppercase tracking-tighter shrink-0 border border-blue-100">Library</span>
+                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded  tracking-tighter shrink-0 border border-blue-100">Library</span>
                             )}
                             {(sound.times_used > 50) && (
-                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-[8px] font-black rounded uppercase tracking-tighter shrink-0 border border-red-100 italic">Hot</span>
+                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-[8px] font-black rounded  tracking-tighter shrink-0 border border-red-100 italic">Hot</span>
                             )}
                           </div>
                           <p className="text-[10px] text-slate-400 font-medium">{sound.creator_name || sound.artist_name || sound.artist} {sound.duration ? `• ${sound.duration}` : ""}</p>
@@ -1672,7 +1676,7 @@ function ImagePreviewModal({
               <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-2xl shadow-red-200 animate-pulse">
                 {uploadProgress}%
               </div>
-              <p className="mt-4 text-xs font-black text-slate-900 uppercase tracking-widest text-center">Publishing Post</p>
+              <p className="mt-4 text-xs font-black text-slate-900  tracking-widest text-center">Publishing Post</p>
               <p className="mt-1 text-[10px] text-slate-400 font-medium text-center px-10">Please wait while we process your media...</p>
             </div>
           )}
@@ -1693,7 +1697,7 @@ function ImagePreviewModal({
           <div className="absolute inset-0 z-[100] flex items-end justify-center overflow-hidden rounded-none sm:rounded-2xl">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPrivacyModalOpen(false)} className="absolute inset-0 bg-black/40" />
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 380, damping: 38 }} className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-3 shadow-2xl">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Audience</p>
+              <p className="text-xs font-black text-slate-400  tracking-widest mb-2">Audience</p>
               {['public', 'private', 'friends'].map((p) => (
                 <button key={p} onClick={() => { setPrivacy(p as any); setIsPrivacyModalOpen(false); }} className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${privacy === p ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-600'}`}>
                   <span className="font-bold capitalize">{p === 'friends' ? 'Friends only' : p}</span>
@@ -2133,155 +2137,3 @@ export default function GlobalPostComposer() {
   );
 }
 
-// ----------------------
-// ProductSelectorModal
-// ----------------------
-function ProductSelectorModal({
-  onClose,
-  onSelect,
-  selectedId
-}: {
-  onClose: () => void;
-  onSelect: (product: any | null) => void;
-  selectedId: number | null;
-}) {
-  const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { token } = useAuth();
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/products/unlinked/linking`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const json = await res.json();
-          setProducts(json.data?.products || []);
-        }
-      } catch (e) {
-        console.error("Failed to fetch products for linking", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProducts();
-  }, [token]);
-
-  const [isProductPreviewOpen, setIsProductPreviewOpen] = useState(false);
-  const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
-  const [fetchingPreviewId, setFetchingPreviewId] = useState<number | null>(null);
-
-  const onProductPreview = async (e: React.MouseEvent, productId: number) => {
-    e.stopPropagation();
-    if (fetchingPreviewId) return;
-    try {
-      setFetchingPreviewId(productId);
-      const res = await fetchProductById(productId, token);
-      if (res?.data?.product) {
-        const payload = mapProductToPreviewPayload(res.data.product, formatUrl);
-        setPreviewPayload(payload);
-        setIsProductPreviewOpen(true);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setFetchingPreviewId(null);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200000] flex items-end sm:items-center justify-center p-0">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      <motion.div
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        className="relative w-full max-w-lg bg-white h-[80vh] sm:h-[600px] rounded-t-[0.5rem] sm:rounded-[0.5rem] shadow-2xl z-10 flex flex-col overflow-hidden"
-      >
-        <div className="px-4 py-4 flex items-center justify-between border-b border-slate-50">
-          <h3 className="text-sm font-bold text-slate-900">Link a Product</h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
-            <XMarkIcon className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-full space-y-3">
-              <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs font-medium text-slate-400">Loading your products...</p>
-            </div>
-          ) : products.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 px-8">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
-                <FilmIcon className="w-8 h-8" />
-              </div>
-              <p className="text-xs text-slate-400">Only published products that are not yet linked to a post will appear here.</p>
-            </div>
-          ) : (
-            products.map((p) => {
-              const displayPrice = p.min_variant_price || p.min_sku_price || p.price;
-              return (
-                <button
-                  key={p.product_id}
-                  onClick={() => {
-                    onSelect(selectedId === p.product_id ? null : p);
-                    onClose();
-                  }}
-                  className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all border-2 ${selectedId === p.product_id
-                    ? "border-red-500 bg-red-50/50"
-                    : "border-slate-50 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200"
-                    }`}
-                >
-                  <div
-                    onClick={(e) => onProductPreview(e, p.product_id)}
-                    className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0 relative group"
-                  >
-                    {p.first_image ? (
-                      <img src={formatUrl(p.first_image)} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-300">
-                        <FilmIcon className="w-6 h-6" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-all">
-                      {fetchingPreviewId === p.product_id ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <EyeIcon className="w-4 h-4 text-white opacity-0 group-hover:opacity-100" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{p.title}</p>
-                    <p className="text-xs font-black text-red-500">
-                      ₦{Number(displayPrice).toLocaleString()}
-                      {(p.min_variant_price || p.min_sku_price) && <span className="text-[10px] font-medium ml-1">Starts at</span>}
-                    </p>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${selectedId === p.product_id ? "bg-red-500 text-white" : "bg-slate-200 text-transparent"
-                    }`}>
-                    <CheckIcon className="w-4 h-4" />
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        {isProductPreviewOpen && previewPayload && (
-          <ProductPreviewModal
-            open={isProductPreviewOpen}
-            payload={previewPayload}
-            zIndex={3000000}
-            onClose={() => {
-              setIsProductPreviewOpen(false);
-              setPreviewPayload(null);
-            }}
-          />
-        )}
-      </motion.div>
-    </div>
-  );
-}

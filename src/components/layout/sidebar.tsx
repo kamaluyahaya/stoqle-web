@@ -474,6 +474,7 @@ export default function Sidebar({ navHeight, width }: Props) {
                 <ul className="flex flex-col gap-1">
                   <SubmenuRow label="Terms of Service" href="/legal/terms" />
                   <SubmenuRow label="Privacy Policy" href="/legal/privacy" />
+                  <SubmenuRow label="Community Guidelines" href="/community-guidelines" />
                 </ul>
               )}
 

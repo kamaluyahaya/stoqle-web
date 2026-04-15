@@ -140,7 +140,7 @@ export default function VariantEntryModal({
                   <div className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-4 text-slate-600 font-bold text-sm">
                     {quantity || 0} Units
                   </div>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase">Managed in Inventory</p>
+                  <p className="text-[9px] text-slate-400 font-bold">Managed in Inventory</p>
                 </div>
               ) : (
                 <NumberInput label="Quantity" value={quantity} onChange={setQuantity} placeholder="Units in stock" />

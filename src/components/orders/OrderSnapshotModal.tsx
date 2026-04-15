@@ -75,7 +75,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                         <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-gradient-to-r from-rose-50/50 to-white">
                             <div>
                                 <h2 className="text-lg font-black text-slate-900 tracking-tight">Order Snapshot</h2>
-                                <p className="text-[10px] text-rose-500 font-bold tracking-widest uppercase mt-0.5">Purchased Terms & Policies</p>
+                                <p className="text-[10px] text-rose-500 font-bold tracking-widest  mt-0.5">Purchased Terms & Policies</p>
                             </div>
                             <button
                                 onClick={onClose}
@@ -109,7 +109,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
 
                             {/* Pricing Summary */}
                             <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl text-white">
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] mb-3 opacity-60">Purchased Price Summary</h4>
+                                <h4 className="text-[10px] font-black  tracking-[0.2em] mb-3 opacity-60">Purchased Price Summary</h4>
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="opacity-70">Original Unit Price</span>
@@ -128,8 +128,8 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                     <div className="h-px bg-white/10 my-2" />
                                     <div className="flex justify-between items-center">
                                         <div className="flex flex-col">
-                                            <span className="text-[11px] font-black uppercase tracking-widest">Total Transaction</span>
-                                            <span className="text-[9px] opacity-40 font-bold uppercase tracking-tighter">Unit Price: ₦{Number(finalUnitPrice).toLocaleString()}</span>
+                                            <span className="text-[11px] font-black  tracking-widest">Total Transaction</span>
+                                            <span className="text-[9px] opacity-40 font-bold  tracking-tighter">Unit Price: ₦{Number(finalUnitPrice).toLocaleString()}</span>
                                         </div>
                                         <span className="text-xl font-black text-rose-400">₦{Number(finalUnitPrice * (item.quantity || 1)).toLocaleString()}</span>
                                     </div>
@@ -142,15 +142,15 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                     <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
                                         <Truck size={16} />
                                     </div>
-                                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Shipping Commitment</h4>
+                                    <h4 className="text-[11px] font-black text-slate-900  tracking-widest">Shipping Commitment</h4>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Promise</p>
+                                        <p className="text-[10px] text-slate-400 font-bold  mb-1 text-center">Promise</p>
                                         <p className="text-sm font-bold text-slate-900 text-center">{snap?.policies?.shipping?.promise || item.shipping_promise || 'Standard'}</p>
                                     </div>
                                     <div className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Avg. Duration</p>
+                                        <p className="text-[10px] text-slate-400 font-bold  mb-1 text-center">Avg. Duration</p>
                                         <p className="text-sm font-bold text-slate-900 text-center">{snap?.policies?.shipping?.avg || item.shipping_avg || 'Standard'}</p>
                                     </div>
                                 </div>
@@ -165,7 +165,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                     <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
                                         <Zap size={16} />
                                     </div>
-                                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Active Discounts</h4>
+                                    <h4 className="text-[11px] font-black text-slate-900  tracking-widest">Active Discounts</h4>
                                 </div>
 
                                 <div className="space-y-3">
@@ -178,7 +178,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                                 </div>
                                                 <p className="text-[11px] text-slate-500">Store-wide or item-specific campaign active during checkout.</p>
                                                 {p.time_remaining_at_purchase && (
-                                                    <p className="text-[9px] font-black text-rose-400 uppercase mt-2">
+                                                    <p className="text-[9px] font-black text-rose-400  mt-2">
                                                         Purchased {p.time_remaining_at_purchase} before expiration
                                                     </p>
                                                 )}
@@ -197,7 +197,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                     ) : (
                                         <div className="p-5 border-2 border-dashed border-slate-100 rounded-2xl flex flex-col items-center text-center">
                                             <ShieldCheck className="text-slate-200 mb-2" size={24} />
-                                            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Price Snapshot</p>
+                                            <p className="text-[11px] text-slate-400 font-bold  tracking-wider mb-1">Price Snapshot</p>
                                             <p className="text-xs text-slate-500 leading-relaxed font-medium">This product has no discount apply to it.</p>
                                         </div>
                                     )}
@@ -210,7 +210,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                     <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
                                         <RefreshCcw size={16} />
                                     </div>
-                                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Return Terms</h4>
+                                    <h4 className="text-[11px] font-black text-slate-900  tracking-widest">Return Terms</h4>
                                 </div>
 
                                 <div className="space-y-3">

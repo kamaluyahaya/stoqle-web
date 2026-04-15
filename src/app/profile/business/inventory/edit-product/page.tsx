@@ -45,6 +45,7 @@ export default function EditProductPage() {
   const [quantity, setQuantity] = useState<number | "">("");
   const [businessId, setBusinessId] = useState<string | number>("");
   const [hasVariants, setHasVariants] = useState(false);
+  const [productType, setProductType] = useState<'simple' | 'variant' | null>(null);
 
   const [productImages, setProductImages] = useState<(File | string)[]>([]);
   const [productVideo, setProductVideo] = useState<File | string | null>(null);
@@ -111,6 +112,8 @@ export default function EditProductPage() {
     returnShippingSubsidy: false,
     sevenDayNoReasonReturn: true,
     rapidRefund: false,
+    lateShipmentCompensation: false,
+    fakeOnePayFour: false,
     returnWindow: 3,
   });
 
@@ -171,6 +174,7 @@ export default function EditProductPage() {
       setQuantity(baseInv ? baseInv.quantity : (data.quantity || 0));
 
       setHasVariants(!!data.has_variants);
+      setProductType(data.has_variants ? 'variant' : 'simple');
       setUseCombinations(!!data.use_combinations);
 
       // Media
@@ -277,6 +281,8 @@ export default function EditProductPage() {
           returnShippingSubsidy: !!ps.return_shipping_subsidy,
           sevenDayNoReasonReturn: !!ps.seven_day_no_reason_return,
           rapidRefund: !!ps.rapid_refund,
+          lateShipmentCompensation: !!ps.late_shipment,
+          fakeOnePayFour: !!ps.fake_one_pay_four,
           returnWindow: ps.return_window || 3,
         });
 
@@ -452,6 +458,7 @@ export default function EditProductPage() {
       setSubmitting(true);
       await convertToVariantProduct(productId, token);
       setConversionSuccess(true);
+      setProductType('variant');
       // Wait a moment then reload
       setTimeout(() => {
         resetModals();
@@ -470,6 +477,7 @@ export default function EditProductPage() {
       setSubmitting(true);
       await convertToSimpleProduct(productId, selectedPrimaryVariantId, token);
       setConversionSuccess(true);
+      setProductType('simple');
       // Wait a moment then reload
       setTimeout(() => {
         resetModals();
@@ -483,6 +491,7 @@ export default function EditProductPage() {
   };
 
   const onToggleHasVariants = async (checked: boolean) => {
+    if (checked === hasVariants) return;
     if (checked) {
       handleCheckSafety(); // Check safety in background for variant conversion too
       setShowConvertToVariantModal(true);
@@ -790,197 +799,214 @@ export default function EditProductPage() {
               </div>
             </div>
 
-            {/* 2. Pricing & Stock (Only for simple products) */}
-            {!hasVariants && (
-              <div className="bg-white border border-slate-200  overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                  <div className="p-1.5 bg-green-100 rounded-lg text-green-600">
-                    <Tag className="w-4 h-4" />
-                  </div>
-                  <h2 className="text-sm font-bold text-slate-800">Pricing & Base Inventory</h2>
-                </div>
-                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <NumberInput label="Retail Price (NGN)" value={price} onChange={setPrice} placeholder="0.00" required />
-                    <p className="text-[10px] text-slate-400 font-medium italic">Base price for customers</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700">In Hand Quantity</label>
-                      <div className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-500">Read Only</div>
-                    </div>
-                    <div className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-4 text-slate-600 font-bold opacity-75">
-                      {quantity} Units available
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-medium">To adjust stock, use the Inventory History table.</p>
-                  </div>
-                </div>
+            {/* 1.5 Product Type Selection */}
+            <div className="bg-white overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-slate-400" />
+                <h2 className="text-sm font-bold text-slate-800">Product Type</h2>
               </div>
-            )}
+              <div className="p-6 grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => onToggleHasVariants(false)}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'simple' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <span className="text-sm  tracking-tight">Simple Product</span>
+                  <p className="text-[10px] font-medium text-center opacity-70">Single price and fixed stock quantity</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onToggleHasVariants(true)}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'variant' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <span className="text-sm  tracking-tight">Variant Product</span>
+                  <p className="text-[10px] font-medium text-center opacity-70">Multiple sizes, colors or options</p>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Pricing & Stock (Only for simple products) */}
+            <AnimatePresence>
+              {productType === 'simple' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-white border border-slate-200 overflow-hidden shadow-sm"
+                >
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                    <div className="p-1.5 bg-green-100 rounded-lg text-green-600">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-sm font-bold text-slate-800">Pricing & Base Inventory</h2>
+                  </div>
+                  <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <NumberInput label="Retail Price (NGN)" value={price} onChange={setPrice} placeholder="0.00" required />
+                      <p className="text-[10px] text-slate-400 font-medium italic">Base price for customers</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700">In Hand Quantity</label>
+                        <div className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-500">Read Only</div>
+                      </div>
+                      <div className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl flex items-center px-4 text-slate-600 font-bold opacity-75">
+                        {quantity} Units available
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-medium">To adjust stock, use the Inventory History table.</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* 3. Variant Management */}
-            <div className={`bg-white  border border-slate-200  overflow-hidden transition-all`}>
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-
-                  <h2 className="text-sm font-bold text-slate-800">Variations</h2>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer relative">
-                    <input type="checkbox" checked={hasVariants} onChange={(e) => onToggleHasVariants(e.target.checked)} className="appearance-none w-4 h-4 rounded-full border-2 border-red-500 checked:bg-red-500 checked:border-red-500 focus:ring-2 focus:ring-red-400 relative" />
-                    <span className={`absolute left-1.5 top-1.0 w-1 h-2 pointer-events-none transform rotate-45 border-r-2 border-b-2 border-white transition-all ${hasVariants ? "scale-100" : "scale-0"}`} />
-                    <span className="text-sm select-none">Has variants</span>
-                  </label>
-
-                  {hasVariants && (
-                    <button
-                      onClick={addVariantGroup}
-                      disabled={variantGroups.length >= 2}
-                      className="px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-30 transition-all shadow-md active:scale-95"
-                    >
-                      + Add Group
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {!hasVariants ? (
-                <div className="p-8 text-center bg-slate-50/30 rounded-2xl border-2 border-dashed border-slate-200 m-6 flex flex-col items-center gap-4">
-                  <div className="w-12 h-12 bg-white rounded-full  flex items-center justify-center text-slate-400">
-                    <Package className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-slate-900">This is a Simple Product</p>
-                    <p className="text-xs text-slate-500 max-w-xs mx-auto">Want to offer different sizes, colors, or materials for this item?</p>
-                  </div>
-                  <button
-                    onClick={() => onToggleHasVariants(true)}
-                    className="px-6 py-2.5 rounded-2xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all shadow-lg active:scale-95 flex items-center gap-2"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    Convert to Variant Product
-                  </button>
-                </div>
-              ) : (
-                <div className="p-6 space-y-8">
-                  {/* Pricing Strategy */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-slate-50 rounded-[0.5px] border border-slate-100">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-slate-900 mb-1">Pricing Strategy</span>
-                      <span className="text-[10px] text-slate-400 font-medium">Choose how variants are priced across the group</span>
+            <AnimatePresence>
+              {productType === 'variant' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-white border border-slate-200 overflow-hidden shadow-sm"
+                >
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-bold text-slate-800">Variations</h2>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200">
-                      <button
-                        onClick={() => seedAndApplySharedPrice(true)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-red-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
-                      >
-                        Single Price
-                      </button>
-                      <button
-                        onClick={() => seedAndApplySharedPrice(false)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-red-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
-                      >
-                        Different price
-                      </button>
+                    <div className="flex items-center gap-3">
+                      {hasVariants && (
+                        <button
+                          onClick={addVariantGroup}
+                          disabled={variantGroups.length >= 2}
+                          className="px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-30 transition-all shadow-md active:scale-95"
+                        >
+                          + Add Group
+                        </button>
+                      )}
                     </div>
-                    {samePriceForAll && (
-                      <div className="flex-1 max-w-[150px]">
-                        <input
-                          type="number"
-                          value={sharedPrice ?? ""}
-                          onChange={(e) => setSharedPrice(e.target.value === "" ? null : Number(e.target.value))}
-                          className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-red-100 outline-none"
-                          placeholder="Shared Price"
-                        />
+                  </div>
+
+                  <div className="p-6 space-y-8">
+                    {/* Pricing Strategy */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-slate-50 rounded-[0.5px] border border-slate-100">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-900 mb-1">Pricing Strategy</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Choose how variants are priced across the group</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200">
+                        <button
+                          onClick={() => seedAndApplySharedPrice(true)}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-red-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                        >
+                          Single Price
+                        </button>
+                        <button
+                          onClick={() => seedAndApplySharedPrice(false)}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-red-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                        >
+                          Different price
+                        </button>
+                      </div>
+                      {samePriceForAll && (
+                        <div className="flex-1 max-w-[150px]">
+                          <input
+                            type="number"
+                            value={sharedPrice ?? ""}
+                            onChange={(e) => setSharedPrice(e.target.value === "" ? null : Number(e.target.value))}
+                            className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-red-100 outline-none"
+                            placeholder="Shared Price"
+                          />
+                        </div>
+                      )}
+                    </div>
 
-                  {variantGroups.map((g, idx) => (
-                    <VariantGroupCard
-                      key={g.id}
-                      groupIndex={idx}
-                      group={g}
-                      onUpdateTitle={updateVariantGroupTitle}
-                      onSetAllowImages={setGroupAllowImages}
-                      onAddEntry={(groupId) => {
-                        setEditing({ groupId });
-                        const showQuantity = idx === 0;
-                        const existingNames = g.entries.map(e => e.name.toLowerCase());
-                        setModalOptions({ allowImages: g.allowImages, showQuantity, existingNames });
-                        setModalOpen(true);
-                      }}
-                      onRemoveGroup={removeVariantGroup}
-                    >
-                      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
-                        {g.entries.map((e) => (
-                          <VariantEntryCard
-                            key={e.id}
-                            entry={e}
-                            allowImages={g.allowImages}
-                            useCombinations={useCombinations}
+                    {variantGroups.map((g, idx) => (
+                      <VariantGroupCard
+                        key={g.id}
+                        groupIndex={idx}
+                        group={g}
+                        onUpdateTitle={updateVariantGroupTitle}
+                        onSetAllowImages={setGroupAllowImages}
+                        onAddEntry={(groupId) => {
+                          setEditing({ groupId });
+                          const showQuantity = idx === 0;
+                          const existingNames = g.entries.map(e => e.name.toLowerCase());
+                          setModalOptions({ allowImages: g.allowImages, showQuantity, existingNames });
+                          setModalOpen(true);
+                        }}
+                        onRemoveGroup={variantGroups.length > 1 ? removeVariantGroup : undefined}
+                      >
+                        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 mt-4">
+                          {g.entries.map((e) => (
+                            <VariantEntryCard
+                              key={e.id}
+                              entry={e}
+                              allowImages={g.allowImages}
+                              useCombinations={useCombinations}
+                              samePriceForAll={samePriceForAll}
+                              sharedPrice={sharedPrice}
+                              onRemove={() => removeVariantEntry(g.id, e.id)}
+                              onEdit={() => {
+                                setEditing({ groupId: g.id, entry: e });
+                                const showQuantity = idx === 0;
+                                const existingNames = g.entries.filter(ee => ee.id !== e.id).map(ee => ee.name.toLowerCase());
+                                setModalOptions({ allowImages: g.allowImages, showQuantity, existingNames });
+                                setModalOpen(true);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </VariantGroupCard>
+                    ))}
+
+                    {/* Combo Toggle */}
+                    <div className="pt-6 border-t border-dashed border-slate-200">
+                      <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all duration-200">
+                        <div className="flex items-center gap-4">
+                          <div className="relative">
+                            <input
+                              type="checkbox"
+                              checked={useCombinations}
+                              onChange={(e) => {
+                                if (e.target.checked && variantGroups.length < 2) {
+                                  toast.info("Requires at least 2 variant groups.");
+                                  return;
+                                }
+                                setUseCombinations(e.target.checked);
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-800 tracking-tight">Advanced Combination Logic</span>
+                            <span className="text-[10px] font-medium text-slate-500 tracking-widest ">Pricing & Stock per combo</span>
+                          </div>
+                        </div>
+                      </label>
+
+                      {useCombinations && (
+                        <div className="mt-6 pb-4">
+                          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
+                            <Info className="w-4 h-4 shrink-0" />
+                            <p className="text-[10px] font-bold leading-tight">Quantities are read-only here. To adjust specific SKU stock, use the inventory management panel.</p>
+                          </div>
+                          <VariantSkuSection
+                            skus={skus}
+                            setSkus={setSkus}
                             samePriceForAll={samePriceForAll}
                             sharedPrice={sharedPrice}
-                            onRemove={() => removeVariantEntry(g.id, e.id)}
-                            onEdit={() => {
-                              setEditing({ groupId: g.id, entry: e });
-                              const showQuantity = idx === 0;
-                              const existingNames = g.entries.filter(ee => ee.id !== e.id).map(ee => ee.name.toLowerCase());
-                              setModalOptions({ allowImages: g.allowImages, showQuantity, existingNames });
-                              setModalOpen(true);
-                            }}
+                            readOnlyStock={true}
+                            variantGroups={variantGroups}
                           />
-                        ))}
-                      </div>
-                    </VariantGroupCard>
-                  ))}
-
-                  {/* Combo Toggle */}
-                  <div className="pt-6 border-t border-dashed border-slate-200">
-                    <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all duration-200">
-                      <div className="flex items-center gap-4">
-                        <div className="relative">
-                          <input
-                            type="checkbox"
-                            checked={useCombinations}
-                            onChange={(e) => {
-                              if (e.target.checked && variantGroups.length < 2) {
-                                toast.info("Requires at least 2 variant groups.");
-                                return;
-                              }
-                              setUseCombinations(e.target.checked);
-                            }}
-                            className="sr-only peer"
-                          />
-                          <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-slate-800 tracking-tight">Advanced Combination Logic</span>
-                          <span className="text-[10px] font-medium text-slate-500 tracking-widest uppercase">Pricing & Stock per combo</span>
-                        </div>
-                      </div>
-                    </label>
-
-                    {useCombinations && (
-                      <div className="mt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
-                          <Info className="w-4 h-4 shrink-0" />
-                          <p className="text-[10px] font-bold leading-tight">Quantities are read-only here. To adjust specific SKU stock, use the inventory management panel.</p>
-                        </div>
-                        <VariantSkuSection
-                          skus={skus}
-                          setSkus={setSkus}
-                          samePriceForAll={samePriceForAll}
-                          sharedPrice={sharedPrice}
-                          readOnlyStock={true}
-                          variantGroups={variantGroups}
-                        />
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
 
             {/* 4. Product Parameters */}
             <div className="bg-white border border-slate-200  overflow-hidden">
@@ -993,7 +1019,7 @@ export default function EditProductPage() {
                 </div>
                 <button
                   onClick={() => { setEditingParam(null); setParamModalOpen(true); }}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 uppercase tracking-tighter"
+                  className="text-xs font-bold text-purple-600 hover:text-purple-700  tracking-tighter"
                 >
                   + Add Spec
                 </button>
@@ -1155,7 +1181,7 @@ export default function EditProductPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Blocking Orders ({safetyCheckResult.activeOrders?.length || 0})</p>
+                        <p className="text-[10px] font-bold text-slate-400  tracking-widest px-1">Blocking Orders ({safetyCheckResult.activeOrders?.length || 0})</p>
                         <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
                           {safetyCheckResult.activeOrders?.map((ord: any) => (
                             <div key={ord.order_id} className="p-3 flex items-center justify-between">
@@ -1262,7 +1288,7 @@ export default function EditProductPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Blocking Orders ({safetyCheckResult.activeOrders?.length || 0})</p>
+                          <p className="text-[10px] font-bold text-slate-400  tracking-widest px-1">Blocking Orders ({safetyCheckResult.activeOrders?.length || 0})</p>
                           <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-slate-50/50">
                             {safetyCheckResult.activeOrders?.map((ord: any) => (
                               <div key={ord.id} className="p-3 flex items-center justify-between">

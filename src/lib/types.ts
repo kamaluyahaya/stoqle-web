@@ -2,7 +2,9 @@
 export type User = {
   id: number | string;
   name: string;
+  username?: string;
   avatar?: string;
+  author_handle?: string;
   is_trusted?: boolean;
   is_partner?: boolean;
 };
@@ -18,6 +20,7 @@ export type APIComment = {
   is_first_comment: number;
   author_name: string;
   author_pic?: string;
+  author_handle?: string;
   author_is_trusted?: boolean;
   is_partner?: boolean;
   likes_count: number;
@@ -38,6 +41,9 @@ export type Post = {
   caption?: string;
   note_caption?: string;
   user: User;
+  author_handle?: string;
+  author_name?: string;
+  author_pic?: string;
   liked: boolean;
   liked_by_me?: boolean;
   liked_by_user?: boolean;

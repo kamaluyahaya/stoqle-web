@@ -19,6 +19,8 @@ type ProductPolicyProps = {
     returnShippingSubsidy: boolean;
     sevenDayNoReasonReturn: boolean;
     rapidRefund: boolean;
+    lateShipmentCompensation: boolean;
+    fakeOnePayFour: boolean;
     returnWindow: number;
   };
   setReturnPolicy: (v: any) => void;
@@ -226,6 +228,18 @@ export default function ProductPolicySettings({
                 onChange={(v) => updateReturnPolicy('rapidRefund', v)}
                 onInfoClick={() => setShowRapidRefundInfo(true)}
               />
+              <PolicyToggle
+                label="Late shipment compensation"
+                sub="Coupon or refund if shipment is delayed"
+                checked={returnPolicy.lateShipmentCompensation}
+                onChange={(v) => updateReturnPolicy('lateShipmentCompensation', v)}
+              />
+              <PolicyToggle
+                label="Fake one pay four"
+                sub="4x compensation for counterfeit items"
+                checked={returnPolicy.fakeOnePayFour}
+                onChange={(v) => updateReturnPolicy('fakeOnePayFour', v)}
+              />
             </div>
           </motion.div>
         )}
@@ -294,7 +308,7 @@ export default function ProductPolicySettings({
             </div>
 
             <div className="pt-2">
-              <label className="text-xs font-semibold text-slate-500 mb-1 block uppercase">Coverage Radius (KM)</label>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block ">Coverage Radius (KM)</label>
               <div className="flex items-center gap-3">
                 <input
                   type="range"
@@ -345,7 +359,7 @@ export default function ProductPolicySettings({
           >
             {/* Campaigns */}
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase mb-3">Join Seasonal Campaigns</p>
+              <p className="text-xs font-bold text-slate-500  mb-3">Join Seasonal Campaigns</p>
               <div className="flex flex-wrap gap-2">
                 {availableCampaigns.map((camp: Occasion) => {
                   const isJoined = promotions.some(p => p.occasion === camp.name);
@@ -452,7 +466,7 @@ export default function ProductPolicySettings({
 
             {/* Sale Discount */}
             <div className="pt-2 border-t border-slate-50">
-              {/* <p className="text-xs font-bold text-slate-500 uppercase mb-3">Direct Product Discount</p> */}
+              {/* <p className="text-xs font-bold text-slate-500  mb-3">Direct Product Discount</p> */}
               <div className="flex flex-col sm:flex-row items-center gap-4">
                 <DefaultSelect
                   title="Discount Type"
@@ -522,7 +536,7 @@ function PolicyToggle({ label, sub, checked, onChange, onInfoClick }: { label: s
       <label className="inline-flex items-center cursor-pointer ml-4">
         <input
           type="checkbox"
-          checked={checked}
+          checked={!!checked}
           onChange={(e) => onChange(e.target.checked)}
           className="sr-only"
         />

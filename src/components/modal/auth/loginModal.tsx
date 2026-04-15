@@ -52,18 +52,17 @@ export default function LoginModal({ isOpen, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if body is already locked by another modal
-    const originalStyle = window.getComputedStyle(document.body).overflow;
-
     if (isOpen) {
-      document.body.style.overflow = "hidden";
+      document.body.classList.add("overflow-hidden");
+    } else {
+      // If we are closing, we should only remove it if there are no other modal wrappers visible
+      // that might still need it. However, since many modals use this class,
+      // it's safer to just let the most parent modal handle it, or use a cleanup.
     }
 
     return () => {
-      // Only restore if the original wasn't already hidden
-      if (originalStyle !== "hidden") {
-        document.body.style.overflow = "";
-      }
+      // Robust cleanup: remove the class when component unmounts or isOpen becomes false
+      document.body.classList.remove("overflow-hidden");
     };
   }, [isOpen]);
 

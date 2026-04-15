@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/src/lib/config";
 import { useAuth } from "@/src/context/authContext";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 import { useWallet } from "@/src/context/walletContext";
 import { ChevronLeft, ChevronDown, ChevronUp, MessageCircle, Package, MapPin, Search, ChevronRight, CheckCircle, AlertTriangle, Clock, X, Star, Info, SlidersHorizontal, XCircle, Truck, Copy, Camera, CheckCircle2, Send } from "lucide-react";
 
@@ -281,8 +282,8 @@ export default function MyOrdersPage() {
     useEffect(() => {
         // Register global function for the dispute modal link
         (window as any).closeSwalAndShowPolicy = () => {
-             Swal.close();
-             setIsReturnPolicyModalOpen(true);
+            Swal.close();
+            setIsReturnPolicyModalOpen(true);
         };
 
         return () => {
@@ -409,8 +410,8 @@ export default function MyOrdersPage() {
     };
 
     const groupOrder = [
-        'Today', 'Yesterday', '2days ago', '3days ago', 
-        'Last 7 days', '2Weeks ago', '3weeks ago', 
+        'Today', 'Yesterday', '2days ago', '3days ago',
+        'Last 7 days', '2Weeks ago', '3weeks ago',
         'Last Month', '2month ago', 'Continuesly'
     ];
 
@@ -427,7 +428,7 @@ export default function MyOrdersPage() {
         try {
             // Priority: item.snapshot_data (parsed backend) -> item.product_snapshot (raw string) -> item.return_policy (computed backend)
             const snapData = item.snapshot_data || (item.product_snapshot ? (typeof item.product_snapshot === 'string' ? JSON.parse(item.product_snapshot) : item.product_snapshot) : null);
-            
+
             if (snapData && snapData.return_policy) {
                 const p = snapData.return_policy;
                 policy.seven_day_no_reason_return = p.seven_day_no_reason_return === true || p.seven_day_no_reason_return === 1;
@@ -753,7 +754,7 @@ export default function MyOrdersPage() {
         const isReturn = selectedOrderForReport.status === 'delivered';
         const confirmResult = await Swal.fire({
             title: isReturn ? 'Confirm Return request?' : 'Confirm dispute report?',
-            text: isReturn 
+            text: isReturn
                 ? "Are you sure you want to request a return and refund for this item? The payment will be held until the admin reviews your case."
                 : "Are you sure you want to report a problem with this shipment? The vendor's payment will be put on hold immediately.",
             icon: 'warning',
@@ -765,8 +766,8 @@ export default function MyOrdersPage() {
             background: '#ffffff',
             customClass: {
                 popup: 'rounded-[1.5rem] border-0 box-shadow-none',
-                confirmButton: 'rounded-full px-6 py-2.5 font-bold uppercase tracking-wide text-xs active:scale-95 transition-all',
-                cancelButton: 'rounded-full px-6 py-2.5 font-bold uppercase tracking-wide text-xs active:scale-95 transition-all'
+                confirmButton: 'rounded-full px-6 py-2.5 font-bold  tracking-wide text-xs active:scale-95 transition-all',
+                cancelButton: 'rounded-full px-6 py-2.5 font-bold  tracking-wide text-xs active:scale-95 transition-all'
             }
         });
 
@@ -833,33 +834,33 @@ export default function MyOrdersPage() {
 
     const handleViewDispute = (ship: Shipment) => {
         const isReleased = ship.escrow_status === 'released' || ['delivered', 'completed'].includes(ship.status?.toLowerCase() || '');
-        
+
         Swal.fire({
             title: '<span style="font-weight:900;">Dispute Details ⚠️</span>',
             html: `
                 <div style="text-align: left; padding: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <div style="flex: 1;">
-                            <p style="font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px;">Status</p>
+                            <p style="font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: ; margin-bottom: 4px;">Status</p>
                             <p style="font-size: 14px; font-weight: 700; color: #e11d48;">Under Review</p>
                         </div>
                         <div style="flex: 1; text-align: right;">
-                            <p style="font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px;">Date Filed</p>
+                            <p style="font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: ; margin-bottom: 4px;">Date Filed</p>
                             <p style="font-size: 13px; font-weight: 600; color: #1e293b;">${ship.dispute_date ? new Date(ship.dispute_date).toLocaleDateString() : 'N/A'}</p>
                         </div>
                     </div>
                     
                     <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-                        <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: uppercase; margin-bottom: 4px;">Your Reason</p>
+                        <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: ; margin-bottom: 4px;">Your Reason</p>
                         <p style="font-size: 13px; font-weight: 600; color: #9f1239;">${ship.dispute_explanation || ship.dispute_reason || 'No specific reason found.'}</p>
                     </div>
 
                     <p style="font-size: 13px; color: #475569; line-height: 1.6;">
                         Our administration team is currently investigating your claim. We may contact you or the vendor for further evidence if required. 
-                        ${isReleased 
-                            ? "Since this order was already marked as delivered, the payment has been released to the vendor. We are currently coordinating with them to facilitate a resolution or refund where applicable."
-                            : "<b>Funds are held in escrow</b> and will not be released until a resolution is reached."
-                        }
+                        ${isReleased
+                    ? "Since this order was already marked as delivered, the payment has been released to the vendor. We are currently coordinating with them to facilitate a resolution or refund where applicable."
+                    : "<b>Funds are held in escrow</b> and will not be released until a resolution is reached."
+                }
                     </p>
 
                     <p style="font-size: 13px; color: #1e293b; font-weight: 700; margin-top: 12px; line-height: 1.6;">
@@ -886,7 +887,7 @@ export default function MyOrdersPage() {
             confirmButtonColor: '#0f172a',
             customClass: {
                 popup: 'rounded-[1.5rem]',
-                confirmButton: 'rounded-full px-8 py-3 font-bold text-xs uppercase'
+                confirmButton: 'rounded-full px-8 py-3 font-bold text-xs '
             }
         });
     };
@@ -1650,7 +1651,7 @@ export default function MyOrdersPage() {
                                                                                         </div>
 
                                                                                         <div className="flex items-center justify-end gap-2 w-full flex-wrap">
-                                                                                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${getStatusColor(ship.status)}`}>
+                                                                                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold  tracking-wider ${getStatusColor(ship.status)}`}>
                                                                                                 {ship.status?.replace(/_/g, ' ')}
                                                                                             </span>
                                                                                             {['out_for_delivery', 'pending_admin_review'].includes(ship.status?.toLowerCase() || '') && !['disputed', 'held'].includes(ship.escrow_status || '') && (
@@ -1699,7 +1700,7 @@ export default function MyOrdersPage() {
 
                                                                                             {ship.status?.toLowerCase() === 'out_for_delivery' && (
                                                                                                 ['disputed', 'held'].includes(ship.escrow_status || '') ? (
-                                                                                                    <button 
+                                                                                                    <button
                                                                                                         onClick={() => handleViewDispute(ship)}
                                                                                                         className="h-7 px-3 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-bold text-[9px] flex items-center gap-1.5 self-center hover:bg-rose-100 transition active:scale-95"
                                                                                                     >
@@ -1730,7 +1731,7 @@ export default function MyOrdersPage() {
                                                                                                     )}
 
                                                                                                     {['disputed', 'held'].includes(ship.escrow_status || '') ? (
-                                                                                                        <button 
+                                                                                                        <button
                                                                                                             onClick={() => handleViewDispute(ship)}
                                                                                                             className="text-[9px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 flex items-center gap-1.5 self-center hover:bg-rose-100 transition active:scale-95"
                                                                                                         >
@@ -1841,7 +1842,7 @@ export default function MyOrdersPage() {
                                 <h3 className="text-md font-black text-slate-900  text-center">
                                     {selectedOrderForReport.status === 'delivered' ? 'Return & Refund Request' : 'Report Delivery Problem'}
                                 </h3>
-                                <p className="text-[10px] font-bold text-rose-500 tracking-widest uppercase mt-1">Dispute for Order #{selectedOrderForReport!.sale_id}</p>
+                                <p className="text-[10px] font-bold text-rose-500 tracking-widest  mt-1">Dispute for Order #{selectedOrderForReport!.sale_id}</p>
                             </div>
                             <button onClick={() => { setIsReportModalOpen(false); setAgreedToPolicy(false); }} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-all hover:bg-rose-500 hover:text-white">
                                 <X size={20} />
@@ -1852,7 +1853,7 @@ export default function MyOrdersPage() {
                             <div className="bg-rose-50/50 border border-rose-100/50 p-6 rounded-[0.5rem] space-y-3">
                                 <div className="flex items-center gap-3 text-rose-600">
                                     <AlertTriangle size={20} className="shrink-0" />
-                                    <h4 className="font-black text-[10px] uppercase tracking-widest ">Important Note</h4>
+                                    <h4 className="font-black text-[10px]  tracking-widest ">Important Note</h4>
                                 </div>
                                 <p className="text-[11px] text-rose-800/70 font-bold leading-relaxed">
                                     This request will be reviewed by administrators. Payment will remain on hold until resolved.
@@ -1880,7 +1881,7 @@ export default function MyOrdersPage() {
 
                                 {reportReason.includes("Other") && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Additional Explanation</label>
+                                        <label className="text-[10px] font-black text-slate-400  tracking-widest ml-1">Additional Explanation</label>
                                         <textarea
                                             value={reportExplanation}
                                             onChange={(e) => setReportExplanation(e.target.value)}
@@ -1891,7 +1892,7 @@ export default function MyOrdersPage() {
                                 )}
 
                                 <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Media Proof (Min 1 Image)</label>
+                                    <label className="text-[10px] font-black text-slate-400  tracking-widest ml-1">Media Proof (Min 1 Image)</label>
                                     <div className="grid grid-cols-4 gap-3">
                                         {reportImages.map((img, idx) => (
                                             <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-sm animate-in zoom-in-90">
@@ -1925,7 +1926,7 @@ export default function MyOrdersPage() {
 
                                 {/* Policy Agreement */}
                                 <div className="flex items-start gap-4 p-5 bg-rose-50 border border-rose-100 rounded-3xl mx-1 animate-in fade-in slide-in-from-bottom duration-500">
-                                    <div 
+                                    <div
                                         onClick={() => setAgreedToPolicy(!agreedToPolicy)}
                                         className={`w-6 h-6 rounded-lg border-2 shrink-0 flex items-center justify-center cursor-pointer transition-all duration-300 ${agreedToPolicy ? 'bg-rose-600 border-rose-600 shadow-lg shadow-rose-200' : 'bg-white border-slate-200'}`}
                                     >
@@ -1942,7 +1943,7 @@ export default function MyOrdersPage() {
                             <button
                                 disabled={isActionLoading === selectedOrderForReport!.sale_id || !reportReason || (reportReason.includes("Other") && !reportExplanation) || reportImages.length === 0 || !agreedToPolicy}
                                 onClick={submitReport}
-                                className="w-full py-4 bg-rose-600 text-white rounded-full text-xs font-black uppercase tracking-widest shadow-2xl shadow-rose-200 active:scale-[0.98] disabled:opacity-30 disabled:active:scale-100 transition-all flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-rose-600 text-white rounded-full text-xs font-black  tracking-widest shadow-2xl shadow-rose-200 active:scale-[0.98] disabled:opacity-30 disabled:active:scale-100 transition-all flex items-center justify-center gap-2"
                             >
                                 {isActionLoading === selectedOrderForReport!.sale_id ? (
                                     <div className="flex items-center gap-3">
@@ -2177,12 +2178,12 @@ export default function MyOrdersPage() {
 
                             <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Secure Delivery Code</h3>
                             <p className="text-xs font-medium text-slate-500 leading-relaxed mb-6">
-                                Reference: <strong className="text-slate-800 uppercase">{selectedDeliveryOrderRef}</strong>
+                                Reference: <strong className="text-slate-800 ">{selectedDeliveryOrderRef}</strong>
                             </p>
 
                             <div className="bg-slate-50 border-2 border-slate-100 rounded-xl p-6 w-full mb-6 cursor-pointer"
                                 onClick={() => {
-                                    navigator.clipboard.writeText(selectedDeliveryCode || 'N/A');
+                                    copyToClipboard(selectedDeliveryCode || 'N/A');
                                     toast.success('Code copied to clipboard!');
                                 }}
                             >
@@ -2195,7 +2196,7 @@ export default function MyOrdersPage() {
                             <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl text-left flex gap-3 text-rose-700 w-full mb-2">
                                 <XCircle size={16} className="shrink-0 mt-0.5" />
                                 <div className="text-[10px] font-bold leading-relaxed">
-                                    <span className="uppercase tracking-widest text-rose-800 font-black text-[9px] mb-1 block">Critical Warning</span>
+                                    <span className=" tracking-widest text-rose-800 font-black text-[9px] mb-1 block">Critical Warning</span>
                                     Do <strong>NOT</strong> disclose this 4-digit code to the vendor or rider until you have successfully received AND inspected your complete order in good condition. Handing over this code confirms delivery and authorizes payment!
                                 </div>
                             </div>

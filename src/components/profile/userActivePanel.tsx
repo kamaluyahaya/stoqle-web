@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/src/lib/config";
 
 const DEFAULT_AVATAR = "/assets/images/favio.png";
+const DEFAULT_BANNER = "/assets/images/background.png";
 
 type ModalKey = "name_id" | "bio" | "gender" | "dob" | "job" | "school" | "location" | "delivery_address" | null;
 
@@ -29,8 +30,8 @@ export default function UserActivePanel() {
     auth?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
 
   const {
-    fullName, bio, gender, dob, location, job, school, profilePic, email, phone_no,
-    isLoading, isSyncing, saveEditorValue, setProfilePic,
+    fullName, bio, gender, dob, location, job, school, profilePic, bgPhotoUrl, email, phone_no,
+    isLoading, isSyncing, saveEditorValue, setProfilePic, setBgPhotoUrl,
   } = useEditUserProfile({ userId: user?.user_id || user?.id, token });
 
   // Keep auth context in sync with the most recent profile data
@@ -38,10 +39,10 @@ export default function UserActivePanel() {
     const hasChanges = (email && email !== user?.email) || (phone_no && phone_no !== user?.phone_no);
     if (hasChanges) {
       if (auth?.onVerificationSuccess) {
-        auth.onVerificationSuccess({ 
-          ...user, 
-          email: email || user?.email, 
-          phone_no: phone_no || user?.phone_no 
+        auth.onVerificationSuccess({
+          ...user,
+          email: email || user?.email,
+          phone_no: phone_no || user?.phone_no
         });
       }
     }
@@ -50,6 +51,7 @@ export default function UserActivePanel() {
   const [activeModal, setActiveModal] = useState<ModalKey>(null);
   const [cropperImage, setCropperImage] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [croppingType, setCroppingType] = useState<"profile" | "background">("profile");
   const [uploadingProfile, setUploadingProfile] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showFullEmail, setShowFullEmail] = useState(false);
@@ -91,6 +93,22 @@ export default function UserActivePanel() {
     input.onchange = (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
+      setCroppingType("profile");
+      const reader = new FileReader();
+      reader.onload = () => { setCropperImage(reader.result as string); setShowCropper(true); };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleBgClick = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setCroppingType("background");
       const reader = new FileReader();
       reader.onload = () => { setCropperImage(reader.result as string); setShowCropper(true); };
       reader.readAsDataURL(file);
@@ -102,19 +120,34 @@ export default function UserActivePanel() {
     if (!token) return;
     setUploadingProfile(true);
     const formData = new FormData();
-    formData.append("profile_pic", croppedBlob, "profile.jpg");
+    const isProfile = croppingType === "profile";
+    const endpoint = isProfile ? "profile-pic" : "bg-photo";
+    const fieldName = isProfile ? "profile_pic" : "bg_photo";
+
+    formData.append(fieldName, croppedBlob, `${fieldName}.jpg`);
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/profile/profile-pic`, {
+      const res = await fetch(`${API_BASE_URL}/api/profile/${endpoint}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      if (!res.ok) throw new Error("Failed to update profile pic");
+      if (!res.ok) throw new Error(`Failed to update ${isProfile ? "profile pic" : "background photo"}`);
       const json = await res.json();
-      const newPicUrl = json.data?.user?.profile_pic || json.data?.profile_pic;
-      if (newPicUrl) setProfilePic(newPicUrl);
-      if (auth?.onVerificationSuccess) auth.onVerificationSuccess({ ...user, profile_pic: newPicUrl });
-      toast.success("Profile picture updated!");
+      const newUrl = isProfile
+        ? (json.data?.user?.profile_pic || json.data?.profile_pic)
+        : (json.data?.user?.bg_photo_url || json.data?.bg_photo_url);
+
+      if (newUrl) {
+        if (isProfile) {
+          setProfilePic(newUrl);
+          if (auth?.onVerificationSuccess) auth.onVerificationSuccess({ ...user, profile_pic: newUrl });
+        } else {
+          setBgPhotoUrl(newUrl);
+          if (auth?.onVerificationSuccess) auth.onVerificationSuccess({ ...user, bg_photo_url: newUrl });
+        }
+      }
+      toast.success(`${capFirst(isProfile ? "profile" : "background")} photo updated!`);
     } catch (err: any) {
       toast.error(err.message || "Upload failed");
     } finally {
@@ -149,6 +182,14 @@ export default function UserActivePanel() {
 
   const currentPic = profilePic || user?.profile_pic || DEFAULT_AVATAR;
 
+  const resolveBanner = (url: string) => {
+    if (!url) return DEFAULT_BANNER;
+    if (url.startsWith("http") || url.startsWith("/")) return url;
+    return `${API_BASE_URL}/public/${url}`;
+  };
+
+  const currentBg = resolveBanner(bgPhotoUrl || user?.bg_photo_url || "");
+
   const formatDob = (raw: string) => {
     if (!raw) return null;
     try { return new Date(raw).toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" }); }
@@ -175,17 +216,36 @@ export default function UserActivePanel() {
     <div className="pb-10 bg-slate-100 p-4 min-h-screen">
       <div className="space-y-3 pt-4">
 
-        {/* Profile Picture — no name/ID below */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative cursor-pointer active:scale-95 transition-transform" onClick={handleProfileClick}>
-            <div className="w-32 h-32 rounded-full bg-white p-1 shadow-md overflow-hidden border-2 border-white">
-              <img src={currentPic} alt="Profile" className="w-full h-full rounded-full object-cover" />
+        {/* Profile Pictures Section */}
+        <div className="flex flex-col gap-6 pt-2">
+          {/* Profile Picture */}
+          <div className="flex flex-col items-center">
+            <div className="relative cursor-pointer active:scale-95 transition-transform" onClick={handleProfileClick}>
+              <div className="w-28 h-28 rounded-full bg-white p-1 shadow-md overflow-hidden border-2 border-white">
+                <img src={currentPic} alt="Profile" className="w-full h-full rounded-full object-cover" />
+              </div>
+              <div className="absolute inset-1 rounded-full bg-black/20 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaCamera size={20} className="opacity-80" />
+              </div>
+              <div className="absolute bottom-1 right-1 w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-md">
+                <FaCamera size={12} />
+              </div>
             </div>
-            <div className="absolute inset-1 rounded-full bg-black/30 flex items-center justify-center text-white">
-              <FaCamera size={24} className="opacity-80" />
+          </div>
+
+          {/* Background Photo Card */}
+          <div
+            className="px-5 py-2 bg-white rounded-xl border border-slate-100   flex items-center justify-between cursor-pointer active:bg-slate-50 transition-all"
+            onClick={handleBgClick}
+          >
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[12px] text-slate-600 ">Background Photo</span>
             </div>
-            <div className="absolute bottom-1 right-2 w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-md">
-              <span className="text-xl leading-none font-bold mt-[-2px]">+</span>
+            <div className="relative w-16 h-10 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 shadow-sm shrink-0">
+              <img src={currentBg} alt="Background" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                <FaCamera size={10} className="text-white/90" />
+              </div>
             </div>
           </div>
         </div>
@@ -404,6 +464,8 @@ export default function UserActivePanel() {
           image={cropperImage}
           onCropComplete={handleCropComplete}
           onClose={() => setShowCropper(false)}
+          aspect={croppingType === "profile" ? 1 : 16 / 9}
+          cropShape={croppingType === "profile" ? "round" : "rect"}
         />
       )}
 

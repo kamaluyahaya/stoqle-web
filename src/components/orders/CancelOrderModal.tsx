@@ -79,7 +79,7 @@ export default function CancelOrderModal({
                         <div className="p-6 border-b border-slate-50 flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Cancel Request</h3>
-                                <p className="text-[10px] text-rose-500 font-bold tracking-widest uppercase mt-0.5">Order #{saleId}</p>
+                                <p className="text-[10px] text-rose-500 font-bold tracking-widest  mt-0.5">Order #{saleId}</p>
                             </div>
                             <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200">
                                 <X size={20} />
@@ -147,7 +147,7 @@ export default function CancelOrderModal({
 
                                     {reason === 'OTHER' && (
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Provide details</label>
+                                            <label className="text-[10px] font-black  text-slate-400 tracking-wider">Provide details</label>
                                             <textarea
                                                 value={explanation}
                                                 onChange={(e) => setExplanation(e.target.value)}

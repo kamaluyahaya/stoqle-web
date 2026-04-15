@@ -216,7 +216,11 @@ export default function ReviewListModal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden">
+        <div 
+          className="fixed inset-0 z-[600000] flex items-center justify-center overflow-hidden"
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -244,7 +248,7 @@ export default function ReviewListModal({
                   <XMarkIcon className="w-6 h-6 text-slate-800" />
                 </button>
                 <div>
-                  <h2 className="text-lg font-extrabold text-slate-900 leading-tight text-center">Customer Reviews</h2>
+                  <h2 className="text-md font-extrabold text-slate-900 leading-tight text-center">Customer Reviews</h2>
                 </div>
               </div>
             </div>
@@ -296,7 +300,7 @@ export default function ReviewListModal({
                     <div className="flex items-center gap-3">
                       <div
                         className="w-11 h-11 rounded-full overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer ring-offset-2 ring-red-500 hover:ring-2 transition-all"
-                        onClick={() => router.push(`/user/profile/${review.user_id}`)}
+                        onClick={() => router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`)}
                       >
                         <img
                           src={formatUrl(review.profile_pic || "")}
@@ -307,7 +311,7 @@ export default function ReviewListModal({
                       <div className="min-w-0">
                         <div
                           className="text-[13px] font-bold text-slate-500 truncate cursor-pointer hover:text-red-600 transition-colors"
-                          onClick={() => router.push(`/user/profile/${review.user_id}`)}
+                          onClick={() => router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`)}
                         >
                           {review.full_name}
                         </div>
@@ -406,12 +410,20 @@ export default function ReviewListModal({
                       <div className="mt-6 space-y-4 border-l-2 border-slate-50 pl-4">
                         {review.replies.map((reply) => (
                           <div key={reply.reply_id} className="flex items-start gap-3 group/reply">
-                            <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-200">
+                            <div 
+                              className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-200 cursor-pointer"
+                              onClick={() => router.push(reply.username ? `/${reply.username}` : `/user/profile/${reply.user_id}`)}
+                            >
                               <img src={formatUrl(reply.author_pic || "")} alt={reply.author_name} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
-                                <span className="text-xs font-bold text-slate-800">{reply.author_name}</span>
+                                <span 
+                                  className="text-xs font-bold text-slate-800 cursor-pointer hover:text-red-600"
+                                  onClick={() => router.push(reply.username ? `/${reply.username}` : `/user/profile/${reply.user_id}`)}
+                                >
+                                  {reply.author_name}
+                                </span>
                                 {Number(reply.user_id) === Number(businessData?.business?.user_id) && (
                                   <span className="text-[8px] font-black bg-red-50 text-red-600 px-1 py-0.5 rounded tracking-tighter">Vendor</span>
                                 )}
@@ -444,6 +456,8 @@ export default function ReviewListModal({
                 shopLogo={businessData?.business?.logo}
                 shopProfilePic={businessData?.business?.profile_pic}
                 businessId={payload?.businessId}
+                quantity={payload?.quantity}
+                hasVariants={payload?.hasVariants}
               />
             </div>
           </motion.div>

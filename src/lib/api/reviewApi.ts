@@ -9,6 +9,7 @@ export interface Review {
   comment: string | null;
   created_at: string;
   full_name: string;
+  username?: string;
   profile_pic: string | null;
   likes_count?: number;
   liked_by_user?: boolean;
@@ -23,6 +24,7 @@ export interface ReviewReply {
   created_at: string;
   author_name: string;
   author_pic: string | null;
+  username?: string;
 }
 
 export const fetchProductReviews = async (productId: number | string): Promise<{ reviews: Review[] }> => {

@@ -824,7 +824,7 @@ export default function CheckoutPage() {
                                 {group.shipments.length > 1 && (
                                     <div className="px-5 flex items-center gap-3">
                                         <div className="h-px flex-1 bg-slate-100"></div>
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Shipment {sIdx + 1}</span>
+                                        <span className="text-[10px] font-black text-slate-400  tracking-widest whitespace-nowrap">Shipment {sIdx + 1}</span>
                                         <div className="h-px flex-1 bg-slate-100"></div>
                                     </div>
                                 )}

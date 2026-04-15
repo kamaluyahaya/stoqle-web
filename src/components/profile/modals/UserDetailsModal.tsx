@@ -69,18 +69,17 @@ export default function UserDetailsModal({ open, initialValue, onClose, onSave }
                 ✕
               </button>
             </div>
-            
+
             <div className="space-y-4 overflow-y-auto flex-1 pb-6 px-1">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Gender</label>
+                <label className="text-xs font-bold text-slate-500 tracking-widest block">Gender</label>
                 <div className="flex gap-2">
                   {['male', 'female', 'other'].map(g => (
                     <button
                       key={g}
                       onClick={() => setGender(g)}
-                      className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition ${
-                        gender === g ? "bg-rose-500 text-white shadow-md shadow-rose-200" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                      }`}
+                      className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition ${gender === g ? "bg-rose-500 text-white shadow-md shadow-rose-200" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        }`}
                     >
                       {g.charAt(0).toUpperCase() + g.slice(1)}
                     </button>

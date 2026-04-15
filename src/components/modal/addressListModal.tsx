@@ -125,7 +125,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                     <div className="flex items-center gap-2">
                                         <span className="font-bold text-slate-900">{addr.full_name}</span>
                                         {addr.is_default && (
-                                            <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Default</span>
+                                            <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold  tracking-wider">Default</span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1">

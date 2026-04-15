@@ -56,6 +56,8 @@ export function mapPolicyToPrefs(policy: any): Record<string, string> {
     return_shipping_subsidy: !!(policy.returns?.return_shipping_subsidy ?? policy.return_shipping_subsidy),
     seven_day_no_reason_return: !!(policy.returns?.seven_day_no_reason ?? policy.seven_day_no_reason_return),
     rapid_refund: !!(policy.returns?.rapid_refund ?? policy.rapid_refund),
+    late_shipment_compensation: !!(policy.returns?.late_shipment ?? policy.late_shipment_compensation),
+    fake_one_pay_four: !!(policy.returns?.fake_one_pay_four ?? policy.fake_one_pay_four),
     additional_info: policy.returns?.additional_info ?? policy.additional_info ?? "",
   };
 

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
+import { formatUrl } from "@/src/lib/utils/media";
 import LoginModal from "../../components/modal/auth/loginModal";
 import { StarIcon } from "@heroicons/react/24/solid";
 
@@ -15,6 +16,7 @@ import {
     ShareIcon,
 } from "@heroicons/react/24/outline";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import NextImage from "next/image";
 
@@ -25,8 +27,6 @@ type ShopHeaderProps = {
     onSearchChange?: (val: string) => void;
 };
 
-const DEFAULT_AVATAR = "/assets/images/favio.png";
-const DEFAULT_BG = "/assets/images/background.png";
 
 export default function ShopHeader({ profileApi, displayName, searchTerm, onSearchChange }: ShopHeaderProps) {
     const router = useRouter();
@@ -140,14 +140,24 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
         }
     };
 
-    const formatUrl = (url: string) => {
-        if (!url) return null;
-        if (url.startsWith("http")) return url;
-        return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
-    };
 
-    const bgPhoto = formatUrl(profileApi?.user?.bg_photo_url || business?.bg_photo_url) || DEFAULT_BG;
-    const logo = formatUrl(business?.business_logo) || formatUrl(business?.logo) || formatUrl(profileApi?.user?.profile_pic) || formatUrl(business?.profile_pic) || DEFAULT_AVATAR;
+    const bgPhoto = formatUrl(
+        profileApi?.bg_photo_url ||
+        profileApi?.user?.bg_photo_url ||
+        profileApi?.business?.bg_photo_url ||
+        business?.bg_photo_url
+    );
+
+    const logo = formatUrl(
+        business?.business_logo ||
+        profileApi?.business_logo ||
+        profileApi?.user?.profile_pic ||
+        profileApi?.profile_pic ||
+        business?.logo ||
+        profileApi?.logo
+    );
+
+    const isLoading = !profileApi;
 
     // rating calculation
     const rating = Number(stats?.rating ?? stats?.avg_rating ?? (policy?.customer_service?.good_reviews_threshold ? (policy.customer_service.good_reviews_threshold / 20) : 5.0));
@@ -165,7 +175,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
             } catch (err) { }
         } else {
             // fallback to clipboard
-            navigator.clipboard.writeText(window.location.href);
+            copyToClipboard(window.location.href);
             alert("Link copied to clipboard!");
         }
     };
@@ -211,14 +221,14 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                     boxShadow: scrolled ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 }}
                 className={`fixed top-0 left-0 lg:left-[300px] right-0 z-[100] px-4 flex items-center justify-between transition-[left] duration-300 ${scrolled
-                        ? "pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-2 h-14"
-                        : "pt-[calc(env(safe-area-inset-top,0px)+10px)] pb-3 h-16"
+                    ? "pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-2 h-14"
+                    : "pt-[calc(env(safe-area-inset-top,0px)+10px)] pb-3 h-16"
                     }`}
             >
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={() => {
-                            if (window.history.length > 1) {
+                            if (typeof window !== "undefined" && document.referrer.includes(window.location.host)) {
                                 router.back();
                             } else {
                                 router.push('/discover');
@@ -264,7 +274,11 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                                 <MagnifyingGlassIcon className="w-3.5 h-3.5 text-slate-100 shrink-0" />
                                 <input
                                     type="text"
-                                    autoFocus
+                                    ref={(el) => {
+                                        if (el && showSearch) {
+                                            el.focus();
+                                        }
+                                    }}
                                     value={searchTerm}
                                     onChange={(e) => onSearchChange?.(e.target.value)}
                                     placeholder={`Search in ${displayName}`}
@@ -341,11 +355,13 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
             </motion.div>
 
             {/* Background with Content Overlay */}
-            <div className="relative h-[280px] md:h-80 w-full overflow-hidden">
-                <NextImage src={bgPhoto} alt="Shop Background" fill priority className="object-cover" />
+            <div className={`relative h-[280px] md:h-80 w-full overflow-hidden ${isLoading ? 'bg-slate-100' : ''}`}>
+                {!isLoading && bgPhoto && (
+                    <NextImage src={bgPhoto} alt="Shop Background" fill priority className="object-cover" />
+                )}
 
                 {/* Dark shadow overlay from bottom to top */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10" />
+                {!isLoading && <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10" />}
 
                 {/* Content Container - Positioned ON TOP of the image */}
                 <div className="absolute inset-x-0 top-0 z-10 pb-6 px-4 pt-[env(safe-area-inset-top)]">
@@ -354,7 +370,11 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                             {/* Logo */}
                             <div
                                 className="flex-none cursor-pointer hover:opacity-90 transition-opacity active:scale-95"
-                                onClick={() => profileUserId && router.push(`/user/profile/${profileUserId}`)}
+                                onClick={() => {
+                                    const handle = business?.business_slug || profileApi?.user?.username || profileApi?.username;
+                                    if (handle) router.push(`/${handle}`);
+                                    else if (profileUserId) router.push(`/user/profile/${profileUserId}`);
+                                }}
                             >
                                 <div className="h-20 w-20 sm:h-24 sm:w-24 md:h-36 md:w-36 rounded-full overflow-hidden border-4 border-white shadow-2xl bg-white relative">
                                     <NextImage
@@ -368,56 +388,64 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                                 </div>
                             </div>
 
-                            <div className="flex-1 pb-1 mt-3 sm:mt-5 min-w-0">
-                                <h1
-                                    className="text-[clamp(9px,3.8vw,36px)] font-extrabold text-white drop-shadow-lg tracking-tight whitespace-nowrap leading-tight max-w-full flex items-center gap-2 cursor-pointer hover:text-white/90"
-                                    onClick={() => profileUserId && router.push(`/user/profile/${profileUserId}`)}
-                                >
-                                    {displayName}
-                                    {Number(profileApi?.policy?.market_affiliation?.trusted_partner) === 1 && (
-                                        <CheckBadgeIcon className="w-5 h-5 text-blue-500 fill-current drop-shadow-md shrink-0" />
+                            {!isLoading && (
+                                <div className="flex-1 pb-1 mt-3 sm:mt-5 min-w-0">
+                                    <h1
+                                        className="text-[clamp(9px,3.8vw,36px)] font-extrabold text-white drop-shadow-lg tracking-tight whitespace-nowrap leading-tight max-w-full flex items-center gap-2 cursor-pointer hover:text-white/90"
+                                        onClick={() => {
+                                            const handle = business?.business_slug || profileApi?.user?.username || profileApi?.username;
+                                            if (handle) router.push(`/${handle}`);
+                                            else if (profileUserId) router.push(`/user/profile/${profileUserId}`);
+                                        }}
+                                    >
+                                        {displayName}
+                                        {Number(profileApi?.policy?.market_affiliation?.trusted_partner) === 1 && (
+                                            <CheckBadgeIcon className="w-5 h-5 text-blue-500 fill-current drop-shadow-md shrink-0" />
+                                        )}
+                                    </h1>
+                                    {business?.previous_business_name && (
+                                        <p className="text-[10px] text-white/70 italic mt-1 mb-1 drop-shadow-md">
+                                            Previously known as {business.previous_business_name}
+                                        </p>
                                     )}
-                                </h1>
-                                {business?.previous_business_name && (
-                                    <p className="text-[10px] text-white/70 italic mt-1 mb-1 drop-shadow-md">
-                                        Previously known as {business.previous_business_name}
-                                    </p>
-                                )}
-                                <div className="flex items-center gap-3 mt-2">
-                                    <div className="flex items-start">
-                                        <span className="text-[10px] font-bold text-white/80  tracking-widest drop-shadow-md">Followers {followersCount.toLocaleString()}+</span>
-                                    </div>
-
-                                    {/* Sold Count */}
-                                    <div className="flex items-center gap-1.5 border-l border-white/20 pl-3">
-                                        <span className="text-[10px] font-bold text-white/80 tracking-widest drop-shadow-md">Sold {totalSold.toLocaleString()}+</span>
-                                    </div>
-
-                                    {/* Rating */}
-                                    <div className="flex items-center gap-1.5 border-l border-white/20 pl-3">
-                                        <div className="flex items-center">
-                                            {[...Array(5)].map((_, i) => (
-                                                <StarIcon
-                                                    key={i}
-                                                    className={`w-3 h-3 drop-shadow-sm ${i < Math.floor(rating) ? "text-yellow-400" : (i < rating ? "text-yellow-400/80" : "text-white/20")}`}
-                                                />
-                                            ))}
+                                    <div className="flex items-center gap-3 mt-2">
+                                        <div className="flex items-start">
+                                            <span className="text-[10px] font-bold text-white/80  tracking-widest drop-shadow-md">Followers {followersCount.toLocaleString()}+</span>
                                         </div>
-                                        <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">{rating.toFixed(1)} ({totalReviews})</span>
+
+                                        {/* Sold Count */}
+                                        <div className="flex items-center gap-1.5 border-l border-white/20 pl-3">
+                                            <span className="text-[10px] font-bold text-white/80 tracking-widest drop-shadow-md">Sold {totalSold.toLocaleString()}+</span>
+                                        </div>
+
+                                        {/* Rating */}
+                                        <div className="flex items-center gap-1.5 border-l border-white/20 pl-3">
+                                            <div className="flex items-center">
+                                                {[...Array(5)].map((_, i) => (
+                                                    <StarIcon
+                                                        key={i}
+                                                        className={`w-3 h-3 drop-shadow-sm ${i < Math.floor(rating) ? "text-yellow-400" : (i < rating ? "text-yellow-400/80" : "text-white/20")}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <span className="text-[10px] font-bold text-white tracking-widest drop-shadow-md">{rating.toFixed(1)} ({totalReviews})</span>
+                                        </div>
+                                    </div>
+
+                                    {/* DESKTOP: Business Policies (Shown under followers) */}
+                                    <div className="hidden md:flex items-center flex-nowrap  mt-4 overflow-x-auto no-scrollbar pb-1 w-full translate-z-0">
+                                        {renderPolicies()}
                                     </div>
                                 </div>
-
-                                {/* DESKTOP: Business Policies (Shown under followers) */}
-                                <div className="hidden md:flex items-center flex-nowrap  mt-4 overflow-x-auto no-scrollbar pb-1 w-full translate-z-0">
-                                    {renderPolicies()}
-                                </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* MOBILE: Business Policies (Shown under the whole row) */}
-                        <div className="md:hidden flex items-center flex-nowrap overflow-x-auto no-scrollbar pb-1 w-full translate-z-0">
-                            {renderPolicies()}
-                        </div>
+                        {!isLoading && (
+                            <div className="md:hidden flex items-center flex-nowrap overflow-x-auto no-scrollbar pb-1 w-full translate-z-0">
+                                {renderPolicies()}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

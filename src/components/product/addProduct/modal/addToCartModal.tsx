@@ -99,6 +99,19 @@ export default function AddToCartModal({
     const [phoneModalOpen, setPhoneModalOpen] = useState(false);
     const [variantViewModes, setVariantViewModes] = useState<Record<string, 'gallery' | 'list'>>({});
 
+    const [isMobile, setIsMobile] = useState(() => {
+        if (typeof window !== "undefined") {
+            return window.innerWidth < 1024;
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
     // Sync state if prop changes or when modal is opened
     useEffect(() => {
         if (open) {
@@ -670,7 +683,7 @@ export default function AddToCartModal({
                     confirmButtonColor: "#f43f5e", // rose-500
                     cancelButtonColor: "#94a3b8", // slate-400
                     customClass: {
-                        popup: "rounded-[2rem]",
+                        popup: "rounded-[0.5rem]",
                         confirmButton: "rounded-xl font-bold px-6 py-3",
                         cancelButton: "rounded-xl font-bold px-6 py-3"
                     }
@@ -715,7 +728,7 @@ export default function AddToCartModal({
                 confirmButtonText: "OK",
                 confirmButtonColor: "#f43f5e", // rose-500
                 customClass: {
-                    popup: "rounded-[2rem]",
+                    popup: "rounded-[0.5rem]",
                     confirmButton: "rounded-xl font-bold px-6 py-3",
                 }
             });
@@ -731,7 +744,7 @@ export default function AddToCartModal({
                 confirmButtonText: "I understand",
                 confirmButtonColor: "#f43f5e",
                 customClass: {
-                    popup: "rounded-[2rem]",
+                    popup: "rounded-[0.5rem]",
                     confirmButton: "rounded-xl font-bold px-6 py-3",
                 }
             });
@@ -822,7 +835,7 @@ export default function AddToCartModal({
                                             confirmButtonColor: "#f43f5e", // rose-500
                                             cancelButtonColor: "#94a3b8", // slate-400
                                             customClass: {
-                                                popup: "rounded-[2rem]",
+                                                popup: "rounded-[0.5rem]",
                                                 confirmButton: "rounded-xl font-bold px-6 py-3",
                                                 cancelButton: "rounded-xl font-bold px-6 py-3"
                                             }
@@ -944,7 +957,7 @@ export default function AddToCartModal({
             {open && payload && (
                 <div
                     key="add-to-cart-container"
-                    className="fixed inset-0 z-[20000] flex items-end sm:items-center justify-center p-0 outline-none"
+                    className="fixed inset-0 z-[600000] flex items-end sm:items-center justify-center p-0 outline-none"
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
                     role="dialog"
@@ -978,14 +991,19 @@ export default function AddToCartModal({
                     />
 
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.3 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.3 }}
-                        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                        initial={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
+                        animate={isMobile ? { y: 0, opacity: 1 } : { opacity: 1, scale: 1 }}
+                        exit={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
+                        transition={
+                            isMobile
+                                ? { type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] } // Ultra-fast hardware native ease out
+                                : { type: "spring", damping: 25, stiffness: 400, mass: 0.8 } // Snappier desktop spring
+                        }
                         onMouseDown={(e) => e.stopPropagation()}
                         onTouchStart={(e) => e.stopPropagation()}
                         style={{
-                            transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center"
+                            transformOrigin: isMobile ? "center" : (origin ? `${origin.x}px ${origin.y}px` : "center"),
+                            willChange: "transform, opacity"
                         }}
                         className={`relative w-full max-w-lg bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] shadow-2xl z-10 ${currentActionType === 'buy' ? 'h-full' : 'h-[80vh]'} sm:h-auto max-h-[90vh] flex flex-col overflow-hidden`}
                     >
@@ -1234,9 +1252,16 @@ export default function AddToCartModal({
                                                                     <div className="text-[10px] text-red-500 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{e.name}</div>
                                                                 </div>
 
-                                                                {stock <= 3 && !isOutOfStock && (
-                                                                    <div className="absolute -top-1.5 right-1 z-30 bg-white text-[6px] text-red-500 px-1 font-semibold rounded-[2px] border-[0.5px] shadow-sm ring-1 ring-white">
+                                                                {/* STOCK FLAG FOR LIST MODE */}
+                                                                {!isOutOfStock && stock <= 3 && (
+                                                                    <div className="absolute -top-1.5 -right-1 z-30 bg-white text-[6px] text-red-500 px-1 font-semibold rounded-[0.5rem] border-[0.5px] shadow-sm ring-1 ring-white">
                                                                         {stock} left
+                                                                    </div>
+                                                                )}
+
+                                                                {isOutOfStock && (
+                                                                    <div className="absolute -top-1.5 -right-1 z-30 bg-slate-100 text-[6px] text-slate-500 px-1 font-bold rounded-[0.5rem] border-[0.5px]  ring-1 ring-white">
+                                                                        Sold Out
                                                                     </div>
                                                                 )}
 
@@ -1272,10 +1297,8 @@ export default function AddToCartModal({
                                                             )}
 
                                                             {isOutOfStock && (
-                                                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 rounded-xl">
-                                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter shadow-sm bg-white/90 px-1 py-0.5 rounded border border-slate-200">
-                                                                        Sold Out
-                                                                    </span>
+                                                                <div className="absolute -top-1.5 -right-1 z-30 bg-slate-100 text-[8px] text-slate-500 border-[0.5px] px-1.5 py-0.5 rounded-sm  ring-1 ring-white">
+                                                                    Sold Out
                                                                 </div>
                                                             )}
 
@@ -1324,15 +1347,21 @@ export default function AddToCartModal({
                                                                     return { ...prev, [g.id]: e.id };
                                                                 });
                                                             }}
-                                                            className={`relative px-4 py-2 rounded-lg border-[0.5px] text-[11px] font-black transition-all  flex items-center gap-2 ${isSelected
+                                                            className={`relative px-4 py-2 rounded-lg border-[0.5px] text-[11px]  transition-all  flex items-center gap-2 ${isSelected
                                                                 ? "border-red-500 bg-red-50 text-red-600 shadow-red-100"
                                                                 : "border-white bg-slate-100 text-slate-700 hover:border-slate-200"
-                                                                } ${isOutOfStock ? "opacity-30 line-through cursor-pointer" : "cursor-pointer"
+                                                                } ${isOutOfStock ? "opacity-40 cursor-pointer" : "cursor-pointer"
                                                                 }`}
                                                         >
+                                                            {/* SOLD OUT BADGE FOR TEXT BUTTONS */}
+                                                            {isOutOfStock && (
+                                                                <div className="absolute -top-1.5 -right-1.5 z-30 bg-slate-100 text-[7px] text-slate-500 px-1.5 py-0.5 rounded-sm  border-[0.5px]  ring-1 ring-white">
+                                                                    Sold Out
+                                                                </div>
+                                                            )}
                                                             {/* STOCK FLAG FOR TEXT BUTTONS */}
                                                             {!isOutOfStock && stock <= 3 && (
-                                                                <div className="absolute -top-2 -right-1 z-30 text-[7px] text-red-500 px-2 rounded-sm font-semibold bg-white border-[0.5px] ring-1 ring-white">
+                                                                <div className="absolute -top-2 -right-1 z-30 text-[7px] text-red-500 px-2 rounded-sm  bg-white border-[0.5px] ring-1 ring-white">
                                                                     {stock} left
                                                                 </div>
                                                             )}
@@ -1378,7 +1407,7 @@ export default function AddToCartModal({
 
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="text-slate-500 font-medium">Shipping Fee</span>
-                                            <span className="text-emerald-600 font-bold uppercase tracking-wider">Free</span>
+                                            <span className="text-emerald-600 font-bold  tracking-wider">Free shipping</span>
                                         </div>
 
                                         {/* Total Savings */}

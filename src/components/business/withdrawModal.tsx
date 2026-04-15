@@ -139,6 +139,39 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
         }
     }, [isOpen, activePaymentJson, isPaymentDirty, activeTab]);
 
+    // Polling for instant status change if it was queued/pending
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (showSuccessAlert && withdrawalStatus?.type === 'pending' && withdrawalStatus?.withdrawal_id) {
+            console.log(`[WithdrawModal] Starting polling for wdr#${withdrawalStatus.withdrawal_id}`);
+            interval = setInterval(async () => {
+                try {
+                    const token = localStorage.getItem("token");
+                    const res = await fetch(`${API_BASE_URL}/api/wallet/withdrawals/${withdrawalStatus.withdrawal_id}/sync`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    console.log(`[WithdrawModal] Polling wdr#${withdrawalStatus.withdrawal_id} status:`, data.data?.request?.status);
+
+                    if (data.status === 'success' && data.data?.request?.status === 'completed') {
+                        console.log(`[WithdrawModal] wdr#${withdrawalStatus.withdrawal_id} COMPLETED. Updating UI.`);
+                        setWithdrawalStatus((prev: any) => ({
+                            ...prev,
+                            type: 'success',
+                            message: "Transfer successful! Your account has been credited."
+                        }));
+                        clearInterval(interval);
+                        // Refresh history too
+                        fetchHistory();
+                    }
+                } catch (e) {
+                    console.error("[WithdrawModal] Polling error", e);
+                }
+            }, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [showSuccessAlert, withdrawalStatus?.type, withdrawalStatus?.withdrawal_id]);
+
     const handleProceed = () => {
         const numAmount = parseFloat(amount);
         if (!amount || isNaN(numAmount) || numAmount < 50) {
@@ -186,10 +219,13 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                 if (onBalanceUpdate) onBalanceUpdate(newBal);
 
                 // Set status for alert
-                setWithdrawalStatus({
+                const statusObj = {
                     message: data.message || "Withdrawal successful!",
-                    type: data.request?.status === 'completed' ? 'success' : 'pending'
-                });
+                    type: data.data?.request?.status === 'completed' ? 'success' : 'pending',
+                    withdrawal_id: data.data?.request?.withdrawal_id
+                };
+                console.log("[WithdrawModal] Created withdrawalStatus:", statusObj);
+                setWithdrawalStatus(statusObj);
 
                 // Show Success Alert
                 setShowSuccessAlert(true);
@@ -251,7 +287,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                             History
                                         </button>
                                     </div>
-                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Available: ₦{availableBalance.toLocaleString()}</p>
+                                    <p className="text-[10px] font-black text-emerald-500  tracking-widest mt-1">Available: ₦{availableBalance.toLocaleString()}</p>
                                 </div>
                                 <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition text-slate-400">
                                     <FaTimes size={20} />
@@ -264,7 +300,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                         {isLoading ? (
                                             <div className="flex flex-col items-center justify-center py-10 space-y-4">
                                                 <div className="w-10 h-10 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verifying Account...</p>
+                                                <p className="text-[10px] font-black text-slate-400  tracking-[0.2em]">Verifying Account...</p>
                                             </div>
                                         ) : (!account || account.isStaged) ? (
                                             <div className="text-center space-y-6">
@@ -299,13 +335,13 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                         <FaUniversity size={80} />
                                                     </div>
                                                     <div className="relative z-10">
-                                                        <div className="text-[10px] font-black opacity-50 uppercase tracking-[0.2em] mb-4">Destination Account</div>
+                                                        <div className="text-[10px] font-black opacity-50  tracking-[0.2em] mb-4">Destination Account</div>
                                                         <div className="space-y-1">
                                                             <h4 className="text-lg font-black tracking-tight">{account.account_name}</h4>
                                                             <p className="text-sm font-bold opacity-70">**** **** {account.account_number?.slice(-4)}</p>
                                                         </div>
                                                         <div className="mt-8 flex items-center justify-between">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full">{account.bank_name}</span>
+                                                            <span className="text-[10px] font-black  tracking-widest bg-white/20 px-3 py-1 rounded-full">{account.bank_name}</span>
                                                             <button onClick={onEditAccount} className="text-[10px] font-black bg-emerald-500 text-white px-4 py-1.5 rounded-full hover:bg-emerald-400 transition">CHANGE</button>
                                                         </div>
                                                     </div>
@@ -351,15 +387,15 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
 
                                                 <div className="bg-slate-50 rounded-[1rem] p-8 border border-slate-100 space-y-6">
                                                     <div className="flex justify-between items-center pb-6 border-b border-slate-200/60">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Withdrawal Amount</span>
+                                                        <span className="text-[10px] font-black text-slate-400  tracking-widest">Withdrawal Amount</span>
                                                         <span className="text-xl font-black text-slate-900">₦{parseFloat(amount).toLocaleString()}</span>
                                                     </div>
                                                     <div className="flex justify-between items-center pb-6 border-b border-slate-200/60">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fee</span>
-                                                        <span className="text-sm font-black text-emerald-600 uppercase tracking-widest">Free</span>
+                                                        <span className="text-[10px] font-black text-slate-400  tracking-widest">Fee</span>
+                                                        <span className="text-sm font-black text-emerald-600  tracking-widest">Free</span>
                                                     </div>
                                                     <div className="flex justify-between items-start">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Destination</span>
+                                                        <span className="text-[10px] font-black text-slate-400  tracking-widest mt-1">Destination</span>
                                                         <div className="text-right space-y-0.5">
                                                             <p className="text-sm font-black text-slate-900">{account.account_name}</p>
                                                             <p className="text-[11px] font-bold text-slate-500">{account.bank_name}</p>
@@ -416,12 +452,16 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
 
                                                 <div className="bg-slate-50 rounded-[2.5rem] p-8 border border-white space-y-4 shadow-inner">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount Sent</span>
+                                                        <span className="text-[10px] font-black text-slate-400  tracking-widest">Amount Sent</span>
                                                         <span className="text-xl font-black text-slate-900">₦{parseFloat(amount).toLocaleString()}</span>
                                                     </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Destination</span>
-                                                        <span className="text-xs font-black text-slate-900 uppercase tracking-widest">{account?.bank_name}</span>
+                                                    <div className="flex justify-between items-start pt-2 border-t border-slate-100">
+                                                        <span className="text-[10px] font-black text-slate-400  tracking-widest mt-1">Destination</span>
+                                                        <div className="text-right space-y-0.5">
+                                                            <p className="text-sm font-black text-slate-900">{account?.account_name}</p>
+                                                            <p className="text-[11px] font-bold text-slate-500">{account?.bank_name}</p>
+                                                            <p className="text-[10px] font-medium text-slate-400 tracking-tight">{account?.account_number}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -455,7 +495,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                 <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
                                                     <FaCreditCard size={24} className="text-slate-200" />
                                                 </div>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No withdrawal history found</p>
+                                                <p className="text-[10px] font-black text-slate-400  tracking-widest">No withdrawal history found</p>
                                             </div>
                                         ) : (
                                             history.map((item) => (
@@ -463,7 +503,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                     <div className="space-y-1">
                                                         <div className="flex items-center gap-2">
                                                             <h4 className="font-black text-slate-900">₦{Number(item.amount).toLocaleString()}</h4>
-                                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${item.status === 'completed' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                                                            <span className={`text-[8px] font-black  px-2 py-0.5 rounded-full border ${item.status === 'completed' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
                                                                 item.status === 'rejected' ? 'text-rose-600 bg-rose-50 border-rose-100' :
                                                                     'text-amber-600 bg-amber-50 border-amber-100 animate-pulse'
                                                                 }`}>
@@ -472,14 +512,14 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                         </div>
                                                         <p className="text-[10px] font-bold text-slate-400">{item.bank_name} • {item.account_number}</p>
                                                         {item.paystack_status && (
-                                                            <p className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1.5 mt-1">
+                                                            <p className="text-[9px] font-black text-slate-500  flex items-center gap-1.5 mt-1">
                                                                 <span className="w-1 h-1 rounded-full bg-slate-400" />
                                                                 Paystack: <span className={item.paystack_status === 'failed' ? 'text-rose-500' : item.paystack_status === 'success' ? 'text-emerald-500' : 'text-blue-500'}>{item.paystack_status}</span>
                                                             </p>
                                                         )}
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                                                        <p className="text-[10px] font-black text-slate-400  tracking-tighter">
                                                             {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                                         </p>
                                                         {(item.status === 'processing' || item.status === 'pending') && (

@@ -28,6 +28,7 @@ export default function EditBusinessProfile({
   wallet = null,
   pendingOrdersCount = 0,
   customerDeliveredCount = 0,
+  onRefresh,
 }: {
   apiBase?: string;
   business?: any | null;
@@ -35,6 +36,7 @@ export default function EditBusinessProfile({
   wallet?: any | null;
   pendingOrdersCount?: number;
   customerDeliveredCount?: number;
+  onRefresh?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -153,18 +155,105 @@ export default function EditBusinessProfile({
     return shippingJson ?? "";
   }
 
-  // helper to decide whether to show the "Updated" badge for a given key
-  // helper to decide whether to show the "Updated" badge for a given key
-  const showUpdated = (key: string) => {
-    return Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
+  // ── Policy-set detection ────────────────────────────────────────────
+  // Maps each KEYS.xxx to its live state value so we can inspect whether
+  // the server already has meaningful data for it.
+  const policyValueMap: Record<string, string> = {
+    [KEYS.shopProfile]: shopProfile,
+    [KEYS.shipping]: shipping,
+    [KEYS.refunds]: refunds,
+    [KEYS.payment]: payment,
+    [KEYS.customerService]: customerService,
+    [KEYS.address]: address,
+    [KEYS.market]: market,
+    [KEYS.promo]: promo,
+    [KEYS.discount]: discount,
   };
 
+  /**
+   * Returns true when the server-loaded value for a key indicates that the
+   * vendor has already configured that policy section.
+   * Each key has slightly different semantics so we inspect the parsed JSON.
+   */
+  const isPolicySet = (key: string): boolean => {
+    const raw = policyValueMap[key] ?? "";
+    if (!raw || raw === "null" || raw === "undefined" || raw === "\"\"" || raw.trim() === "") return false;
+    try {
+      const parsed = JSON.parse(raw);
+      // Arrays (promo, discount, shipping durations)
+      if (Array.isArray(parsed)) return parsed.length > 0;
+      if (parsed && typeof parsed === "object") {
+        switch (key) {
+          case KEYS.shipping:
+            // consider set if there is at least one shipping duration OR a delivery notice
+            return (
+              (Array.isArray(parsed.shipping_duration) && parsed.shipping_duration.length > 0) ||
+              Boolean(parsed.delivery_notice)
+            );
+          case KEYS.refunds:
+            // consider set if any flag is true OR additional_info is present
+            return (
+              parsed.return_shipping_subsidy === true ||
+              parsed.seven_day_no_reason_return === true ||
+              parsed.rapid_refund === true ||
+              parsed.late_shipment_compensation === true ||
+              parsed.fake_one_pay_four === true ||
+              Boolean(parsed.additional_info)
+            );
+          case KEYS.payment:
+            // consider set if account number is present
+            return Boolean(parsed.acct_no);
+          case KEYS.customerService:
+            return Boolean(parsed.cs_reply_time) || Boolean(parsed.default_welcome_message);
+          case KEYS.address:
+            return Boolean(parsed.address_line_1) || Boolean(parsed.city);
+          case KEYS.market:
+            return Boolean(parsed.from_market);
+          case KEYS.shopProfile:
+            return Boolean(parsed.business_name) || Boolean(parsed.bio);
+          default:
+            // For unknown keys: object is set if it has any own-value keys
+            return Object.values(parsed).some((v) => v !== null && v !== undefined && v !== "");
+        }
+      }
+      // primitive non-empty string
+      return String(parsed).trim().length > 0;
+    } catch {
+      return raw.trim().length > 0;
+    }
+  };
 
+  /**
+   * renderStatus:
+   * - "Saved ✓"   emerald  → user just saved this key in the current session
+   * - "Update"    green    → key is already configured on the server
+   * - "Not set"   amber    → key has never been saved to the server
+   */
   const renderStatus = (key: string) => {
-    return showUpdated(key) ? (
-      <span className="text-emerald-600 font-medium">Updated</span>
-    ) : (
-      <span className="text-slate-400">Edit</span>
+    const justSaved = Array.isArray(dirtyKeys) && dirtyKeys.includes(key);
+    if (justSaved) {
+      return (
+        <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-xs">
+          <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          Saved
+        </span>
+      );
+    }
+    if (isPolicySet(key)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-green-600 font-semibold text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+          Update
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-amber-500 font-semibold text-xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+        Not set
+      </span>
     );
   };
 
@@ -234,30 +323,30 @@ export default function EditBusinessProfile({
               <div className="flex items-center gap-12 px-4">
                 {pendingOrdersCount > 0 ? (
                   <>
-                    <span className="text-[10px] text-orange-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-[10px] text-orange-700 font-bold  tracking-wider flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                       ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible. Click here to view.
                     </span>
-                    <span className="text-[10px] text-orange-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-[10px] text-orange-700 font-bold  tracking-wider flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                       ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible. Click here to view.
                     </span>
-                    <span className="text-[10px] text-orange-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-[10px] text-orange-700 font-bold  tracking-wider flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                       ⚠️ You have ({pendingOrdersCount}) new {pendingOrdersCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible. Click here to view.
                     </span>
                   </>
                 ) : (
                   <>
-                    <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-[10px] text-blue-700 font-bold  tracking-wider flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                       📦 You have ({customerDeliveredCount}) {customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment to vendor.
                     </span>
-                    <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-[10px] text-blue-700 font-bold  tracking-wider flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                       📦 You have ({customerDeliveredCount}) {customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment to vendor.
                     </span>
-                    <span className="text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-[10px] text-blue-700 font-bold  tracking-wider flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                       📦 You have ({customerDeliveredCount}) {customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment to vendor.
                     </span>
@@ -576,7 +665,8 @@ export default function EditBusinessProfile({
             });
 
             await saveEditorValue(KEYS.shopProfile, JSON.stringify(textData));
-            window.location.reload(); // Refresh to show new images/name
+            toast.success("Shop profile updated successfully!");
+            if (onRefresh) onRefresh();
           } catch (e: any) {
             console.error("Upload failed", e);
             toast.error(e.message || "Failed to upload profile");

@@ -6,12 +6,13 @@ import {
   LifebuoyIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
+import { formatDuration } from "@/src/lib/utils/product/duration";
 
 type PolicyListProps = {
   businessData: any;
   loading?: boolean;
   error?: string | null;
-  openPolicyModal: (title: string, body: string) => void;
+  openPolicyModal: (title: string, body: string, type?: "shipping" | "policy") => void;
   payload?: any;
   selectedOptions?: Record<string, string>;
   onSelectClick?: () => void;
@@ -20,49 +21,6 @@ type PolicyListProps = {
   storedAddress?: any;
 };
 
-/** Convert numeric value + unit into a friendly string.
- * Examples:
- *   formatDuration(48, 'hours') => '2 days'
- *   formatDuration(49, 'hours') => '2 days 1 hour'
- *   formatDuration(3, 'days') => '3 days'
- *   formatDuration(36, 'hours') when unit='hours' => '1 day 12 hours'
- */
-function formatDuration(value: number | string | undefined | null, unit?: string) {
-  if (value == null) return "unknown duration";
-
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value);
-
-  const u = String(unit ?? "").toLowerCase().trim();
-
-  if (u === "km") return `${n} km`;
-
-  // normalize unit to hours or days
-  if (u.startsWith("d")) {
-    // value is days
-    const days = Math.floor(n);
-    const hours = Math.round((n - days) * 24);
-    if (hours === 0) return `${days} ${days === 1 ? "day" : "days"}`;
-    return `${days} ${days === 1 ? "day" : "days"} ${hours} ${hours === 1 ? "hour" : "hours"}`;
-  }
-
-  // treat everything else as hours
-  const totalMinutes = Math.round(n * 60);
-  if (totalMinutes < 60) return `${totalMinutes} ${totalMinutes === 1 ? "minute" : "minutes"}`;
-
-  const days = Math.floor(totalMinutes / (24 * 60));
-  const remainingMinutes = totalMinutes % (24 * 60);
-  const hours = Math.floor(remainingMinutes / 60);
-  const mins = remainingMinutes % 60;
-
-  let parts = [];
-  if (days > 0) parts.push(`${days} ${days === 1 ? "day" : "days"}`);
-  if (hours > 0) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
-  if (mins > 0) parts.push(`${mins} ${mins === 1 ? "minute" : "minutes"}`);
-
-  if (parts.length === 0) return "less than a minute";
-  return parts.join(" ");
-}
 
 export default function PolicyList({
   businessData,
@@ -93,6 +51,12 @@ export default function PolicyList({
         return_shipping_subsidy: over?.returnShippingSubsidy !== undefined
           ? (over.returnShippingSubsidy ? 1 : 0)
           : (storeReturns.return_shipping_subsidy ?? 0),
+        late_shipment: over?.lateShipmentCompensation !== undefined
+          ? (over.lateShipmentCompensation ? 1 : 0)
+          : (storeReturns.late_shipment ?? 0),
+        fake_one_pay_four: over?.fakeOnePayFour !== undefined
+          ? (over.fakeOnePayFour ? 1 : 0)
+          : (storeReturns.fake_one_pay_four ?? 0),
         return_window: over?.returnWindow ?? storeReturns.return_window ?? 3,
         additional_info: over?.additionalInfo ?? storeReturns.additional_info
       };
@@ -194,7 +158,7 @@ export default function PolicyList({
     policy?.address?.city,
     policy?.address?.state,
   ].filter(Boolean);
-  const fromText = addressParts.join(", ") || "Unknown";
+  const fromText = addressParts.join(", ");
 
   // Build a shipping-focused modal body
   const buildShippingInfoBody = () => {
@@ -217,10 +181,6 @@ export default function PolicyList({
       lines.push("");
       lines.push(`Delivery coverage: We can deliver up to ${deliveryRadius.value} km from our store.`);
     }
-
-    lines.push("");
-    lines.push("Delivery notice:");
-    lines.push(deliveryNotice ? String(deliveryNotice) : "No delivery notice provided.");
 
     lines.push("");
     lines.push("Delay compensation:");
@@ -259,10 +219,48 @@ export default function PolicyList({
 
   const buildReturnSubsidyBody = () => {
     const lines: string[] = [];
-    lines.push(`Return shipping subsidy: ${returns?.return_shipping_subsidy === 1 ? "Supported" : "Not supported"}`);
-    if (returns?.rapid_refund === 1) lines.push("Rapid refund: Supported");
-    if (returns?.additional_info) {
+
+    // 7-day return
+    if (returns?.seven_day_no_reason === 1) {
+      lines.push("7-day no reason return:");
+      lines.push("When the corresponding conditions are met, consumers can apply for a \"7-day no-reason return\".");
       lines.push("");
+    } else {
+      lines.push("No return without a valid reason:");
+      lines.push("This product does not support a \"7-day no-reason return\". A valid reason (e.g. damaged goods, wrong item) is required for all returns.");
+      lines.push("");
+    }
+
+    // Rapid refund
+    if (returns?.rapid_refund === 1) {
+      lines.push("Rapid refund:");
+      lines.push("Under qualifying conditions, users with good credit can receive immediate refunds when applying for a [Pre-shipment Refund] or after [submitting a return request and shipping the returned item].");
+      lines.push("");
+    }
+
+    // Shipping subsidy
+    if (returns?.return_shipping_subsidy === 1) {
+      lines.push("Return shipping subsidy:");
+      lines.push("Provided by the seller, returns and exchanges can enjoy free first weight (within one kilogram) for delivery methods provided by the platform, such as door-to-door pickup. If you choose to ship back on your own, the shipping cost will be subsidized according to the first weight standard.");
+      lines.push("");
+    }
+
+    // Late shipment
+    if (returns?.late_shipment === 1) {
+      lines.push("Late shipment compensation:");
+      lines.push("If the order is not shipped within the promised fulfillment time, you will receive compensation for the delay.");
+      lines.push("");
+    }
+
+    // Fake one pay four
+    if (returns?.fake_one_pay_four === 1) {
+      lines.push("Fake one pay four:");
+      lines.push("If the product is proven to be a counterfeit, the seller is committed to providing a refund of four times the original purchase price.");
+      lines.push("");
+    }
+
+    if (returns?.additional_info) {
+      lines.push("Additional Policy Details:");
       lines.push(String(returns.additional_info));
     }
     return lines.join("\n");
@@ -276,7 +274,7 @@ export default function PolicyList({
         <li>
           <button
             type="button"
-            onClick={() => openPolicyModal("Shipping Information", buildShippingInfoBody())}
+            onClick={() => openPolicyModal("Shipping Information", buildShippingInfoBody(), "shipping")}
             className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
             aria-haspopup="dialog"
           >
@@ -292,11 +290,15 @@ export default function PolicyList({
                   <div
                     className="mt-1 flex flex-col group cursor-pointer"
                   >
-                    <span className="text-[11px] text-slate-400 group-hover:text-red-500 transition-colors leading-snug truncate">
-                      {fromText}
-                    </span>
+                    {fromText && (
+                      <span className="text-[11px] text-slate-400 group-hover:text-red-500 transition-colors leading-snug truncate">
+                        {fromText}
+                      </span>
+                    )}
                     <span className="font-medium text-[10px] text-slate-500 mt-0.5">
-                      {estimation?.is_available ? `${estimation.distance_km} km away | Free shipping` : storedAddress ? `· ${estimation?.message || "Calculating..."}` : "· Set address to see distance | Free shipping"}
+                      {deliveryRadius ? `Free delivery up to ${deliveryRadius.value} km ` : "· Free delivery within Kaduna axis"}
+                      {estimation?.is_available && ` · ${estimation.distance_km} km away`}
+                      {!estimation?.is_available && storedAddress && ` | ${estimation?.message || "Outside coverage"}`}
                     </span>
                   </div>
                 </div>
@@ -310,7 +312,7 @@ export default function PolicyList({
         <li>
           <button
             type="button"
-            onClick={() => openPolicyModal("Return shipping subsidy", buildReturnSubsidyBody())}
+            onClick={() => openPolicyModal("Service Description", buildReturnSubsidyBody(), "policy")}
             className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
             aria-haspopup="dialog"
           >
@@ -318,41 +320,25 @@ export default function PolicyList({
               <div className="flex items-start gap-2 min-w-0">
                 <ArrowPathIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
                 <div className="min-w-0">
-                  <div className={`font-medium truncate text-slate-700`}>
-                    {/* {returns?.return_shipping_subsidy === 1 ? "Return shipping subsidy · Rapid refund" : "No return shipping subsidy"} */}
-                    {returns?.return_shipping_subsidy === 1 && returns?.seven_day_no_reason === 1 && returns?.rapid_refund === 1 ? (
-                      <div className="truncate">
-                        Return shipping subsidy | 7-days no reason return | Rapid Refund
-                      </div>
-                    ) : returns?.return_shipping_subsidy === 1 && returns?.seven_day_no_reason === 1 ? (
-                      <div className="truncate">
-                        Return shipping subsidy | 7-days no reason return
-                      </div>
-                    ) : returns?.return_shipping_subsidy === 1 && returns?.rapid_refund === 1 ? (
-                      <div className="truncate">
-                        Return shipping subsidy | Rapid Refund
-                      </div>
-                    ) : returns?.seven_day_no_reason === 1 && returns?.rapid_refund === 1 ? (
-                      <div className="truncate">
-                        7-days no reason return | Rapid Refund
-                      </div>
-                    ) : returns?.return_shipping_subsidy === 1 ? (
-                      <div className="">
-                        Return shipping subsidy
-                      </div>
-                    ) : returns?.seven_day_no_reason === 1 ? (
-                      <div className="truncate">
-                        Vendor support 7-days no reason return
-                      </div>
-                    ) : returns?.rapid_refund === 1 ? (
-                      <div className="">
-                        Rapid Refund
-                      </div>
-                    ) : (
-                      <div className="truncate">
-                        No return shipping subsidy | No rapid refund | Does not support 7-days no reason return
-                      </div>
-                    )}
+                  <div className={`font-medium truncate text-slate-600`}>
+                    {(() => {
+                      const active = [];
+                      if (returns?.return_shipping_subsidy === 1) active.push("Return shipping subsidy");
+                      if (returns?.seven_day_no_reason === 1) active.push("7-day no reason return");
+                      if (returns?.rapid_refund === 1) active.push("Rapid refund");
+                      if (returns?.late_shipment === 1) active.push("Late shipment compensation");
+                      if (returns?.fake_one_pay_four === 1) active.push("Fake one pay four");
+
+                      if (active.length > 0) {
+                        return <div className="truncate">{active.join(" | ")}</div>;
+                      }
+
+                      return (
+                        <div className="truncate text-slate-400">
+                          Product has no return subsidy
+                        </div>
+                      );
+                    })()}
                   </div>
                   {returns?.additional_info && <div className="text-xs text-slate-500 mt-1 truncate">{String(returns.additional_info)}</div>}
                 </div>
@@ -376,7 +362,7 @@ export default function PolicyList({
                 <div className="flex items-start gap-2 min-w-0">
                   <ClockIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
                   <div className="min-w-0">
-                    <div className="font-medium text-slate-700 truncate flex">Selected: <div className="bg-slate-200 px-2 ml-2 flex rounded">{selectedText}</div></div>
+                    <div className="font-medium text-slate-600 truncate flex">Selected: <div className="bg-slate-200 px-2 ml-2 flex rounded">{selectedText}</div></div>
                   </div>
                 </div>
               </div>
@@ -392,7 +378,7 @@ export default function PolicyList({
           <li>
             <button
               type="button"
-              onClick={() => openPolicyModal("Returns — notes", String(returns.additional_info))}
+              onClick={() => openPolicyModal("Returns — notes", String(returns.additional_info), "policy")}
               className="w-full flex items-center gap-3 py-1 rounded-md hover:bg-slate-50 text-left"
             >
               <div className="min-w-0 flex-1">

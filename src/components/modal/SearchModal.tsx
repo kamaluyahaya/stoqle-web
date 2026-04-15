@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
 import { ChevronLeftIcon, ClockIcon, XMarkIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
-import { fetchSearchSuggestions, fetchTrendingSearches, fetchRecentSearches, fetchUnifiedSearch } from "@/src/lib/api/searchApi";
+import { fetchSearchSuggestions, fetchTrendingSearches, fetchRecentSearches } from "@/src/lib/api/searchApi";
 import { useRouter } from "next/navigation";
 import debounce from "lodash/debounce";
 
@@ -15,85 +15,123 @@ interface SearchModalProps {
   initialQuery?: string;
 }
 
+// --- BLINK-EYE CACHE ENGINE ---
+// Synchronous module-level cache to ensure zero-wait rendering
+let BLINK_HISTORY: string[] = [];
+let BLINK_TRENDS: any[] = [];
+let IS_FETCHED = false;
+
+if (typeof window !== "undefined") {
+  try {
+    const savedHistory = localStorage.getItem("stoqle_search_history");
+    const savedTrends = localStorage.getItem("stoqle_search_trends");
+    if (savedHistory) BLINK_HISTORY = JSON.parse(savedHistory).slice(0, 5);
+    if (savedTrends) BLINK_TRENDS = JSON.parse(savedTrends).slice(0, 10);
+  } catch (e) {
+    console.warn("Search blink-cache failed", e);
+  }
+}
+
 export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = "" }: SearchModalProps) {
   const { token, user } = useAuth();
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Initialize with empty arrays to match server-side rendering
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [trendingSearches, setTrendingSearches] = useState<any[]>([]);
+  
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [results, setResults] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [view, setView] = useState<"initial" | "results">("initial");
 
-  // Lock background scroll while open
+  // --- HYDRATION SYNC ---
+  // Sync with module-level cache after mount to avoid SSR mismatch
   useEffect(() => {
-    if (!isOpen) return;
+    if (BLINK_HISTORY.length > 0) setSearchHistory(BLINK_HISTORY);
+    if (BLINK_TRENDS.length > 0) setTrendingSearches(BLINK_TRENDS);
+  }, []);
 
-    // Detect if scroll is already locked by a parent modal
-    const wasAlreadyLocked = document.body.style.overflow === "hidden";
-    
-    if (!wasAlreadyLocked) {
-      document.body.style.overflow = "hidden";
-    }
-
-    return () => {
-      // Only restore if we were the ones who locked it
-      if (!wasAlreadyLocked) {
-        document.body.style.overflow = "";
-      }
-    };
-  }, [isOpen]);
-
-  // Load history & trends on open
+  // --- HARDWARE ACCELERATED FOCUS ENGINE ---
   useEffect(() => {
     if (isOpen) {
-      if (initialQuery) setSearchQuery(initialQuery);
+      document.body.style.overflow = "hidden";
+      // Force instant focus using a small delay to ensure DOM is ready for interaction
+      // but without waiting for Next.js reconcile cycle
+      const rafId = requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(rafId);
+    } else {
+      document.body.style.overflow = "auto";
+      inputRef.current?.blur();
+    }
+  }, [isOpen]);
 
-      if (token) {
-        fetchRecentSearches(token)
-          .then(res => setSearchHistory(res.data.slice(0, 5)))
-          .catch(() => {
-            const saved = localStorage.getItem("stoqle_search_history");
-            if (saved) setSearchHistory(JSON.parse(saved).slice(0, 5));
-          });
-      } else {
-        const saved = localStorage.getItem("stoqle_search_history");
-        if (saved) setSearchHistory(JSON.parse(saved).slice(0, 5));
+  // --- ZERO-WAIT DATA PREFETCHING ---
+  // Revalidate cache in the background regardless of modal state
+  useEffect(() => {
+    const revalidate = async () => {
+      if (IS_FETCHED) return;
+      
+      // 1. Silent Trends Fetch
+      try {
+        const res = await fetchTrendingSearches();
+        const trends = res.data.slice(0, 10);
+        setTrendingSearches(trends);
+        BLINK_TRENDS = trends;
+        localStorage.setItem("stoqle_search_trends", JSON.stringify(trends));
+      } catch (err) {
+        if (trendingSearches.length === 0) {
+          setTrendingSearches(["Trending Shoes", "Office wear", "Home Decor", "Electronics"]);
+        }
       }
 
-      fetchTrendingSearches()
-        .then(res => setTrendingSearches(res.data))
-        .catch(() => setTrendingSearches(["Trending Shoes", "Office wear", "Home Decor", "Electronics"]));
-    } else {
-      // Clear data when modal is closed
-      setSearchQuery("");
-      setResults(null);
-      setSuggestions([]);
-      setView("initial");
-    }
-  }, [isOpen, token]);
+      // 2. Silent History Fetch
+      if (token) {
+        try {
+          const res = await fetchRecentSearches(token);
+          const history = res.data.slice(0, 5);
+          setSearchHistory(history);
+          BLINK_HISTORY = history;
+          localStorage.setItem("stoqle_search_history", JSON.stringify(history));
+        } catch (err) {}
+      }
+      
+      IS_FETCHED = true;
+    };
+
+    revalidate();
+  }, [token]);
+
+  // Sync initial query
+  useEffect(() => {
+    if (initialQuery && isOpen) setSearchQuery(initialQuery);
+  }, [initialQuery, isOpen]);
 
   // Debounced Suggestion Fetching
   const debouncedSuggest = useCallback(
     debounce((query: string) => {
-      if (query.length < 2) {
+      if (query.trim().length < 1) {
         setSuggestions([]);
         return;
       }
       setIsSuggesting(true);
       fetchSearchSuggestions(query)
-        .then(res => setSuggestions(res.data))
+        .then(res => {
+          if (res?.data) setSuggestions(res.data);
+        })
         .catch(console.error)
         .finally(() => setIsSuggesting(false));
-    }, 300),
+    }, 200), // Slightly faster debounce
     []
   );
 
   useEffect(() => {
-    if (searchQuery.length >= 2 && view === "initial") {
-      setIsSuggesting(true);
+    if (searchQuery.trim().length >= 1 && view === "initial") {
       debouncedSuggest(searchQuery);
     } else {
       setSuggestions([]);
@@ -105,14 +143,12 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
     const finalQuery = queryToSearch || searchQuery;
     if (!finalQuery.trim()) return;
 
-    // Map suggestion type to TabType
     let targetTab = "all";
     if (type === "user") targetTab = "users";
     else if (type === "product" || type === "shop") targetTab = "products";
     else if (type === "post") targetTab = "posts";
     else if (type === "location") targetTab = "location";
 
-    // Also track in history
     const newHistory = [finalQuery, ...searchHistory.filter(s => s !== finalQuery)].slice(0, 5);
     setSearchHistory(newHistory);
     localStorage.setItem("stoqle_search_history", JSON.stringify(newHistory));
@@ -133,13 +169,22 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
   };
 
   const renderInitialView = () => (
-    <div className="flex-1 overflow-auto p-5 space-y-10">
+    <div className="flex-1 overflow-auto p-5 space-y-10 custom-scrollbar">
       {searchQuery.trim().length > 0 ? (
-        /* Autocomplete Suggestions Section (Only show when typing) */
         suggestions.length > 0 ? (
-          <div>
-            <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Suggestions</h5>
-            <div className="space-y-4">
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: { opacity: 0 },
+              show: {
+                opacity: 1,
+                transition: { staggerChildren: 0.05 }
+              }
+            }}
+          >
+            <h5 className="text-[10px] font-bold text-slate-400 tracking-widest mb-4 uppercase">Suggestions</h5>
+            <div className="space-y-1">
               {suggestions.map((s, i) => {
                 const highlightText = (text: string, query: string) => {
                   if (!query.trim()) return text;
@@ -154,124 +199,170 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
                 };
 
                 return (
-                  <div
+                  <motion.div
                     key={i}
-                    className="flex items-center gap-3 cursor-pointer group min-w-0"
-                    onClick={() => handleRecentClick(s.text, s.type)}
+                    variants={{
+                      hidden: { opacity: 0, x: -10 },
+                      show: { opacity: 1, x: 0 }
+                    }}
+                    className="flex items-center gap-3 p-3 rounded-2xl cursor-pointer group hover:bg-slate-50 active:bg-slate-100 transition-all min-w-0"
+                    onClick={() => {
+                      if (s.type === 'user' && s.username) router.push(`/${s.username}`);
+                      else if (s.type === 'shop' && s.business_slug) router.push(`/${s.business_slug}`);
+                      else handleRecentClick(s.text, s.type);
+                    }}
                   >
-                    <MagnifyingGlassIcon className="w-4 h-4 text-slate-300 group-hover:text-red-500 shrink-0" />
-                    <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900 truncate flex-1">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-white group-hover:shadow-sm transition-all">
+                      <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 group-hover:text-red-500 shrink-0" />
+                    </div>
+                    <span className="text-[14px] font-medium text-slate-600 group-hover:text-slate-900 truncate flex-1">
                       {highlightText(s.text, searchQuery)}
                     </span>
-                    <span className="text-[9px] bg-slate-50 text-slate-400 px-1.5 py-0.5 rounded uppercase shrink-0">{s.type}</span>
-                  </div>
+                    <span className="text-[9px] font-bold uppercase tracking-tighter bg-slate-100 text-slate-400 px-2 py-1 rounded-lg shrink-0">{s.type}</span>
+                  </motion.div>
                 );
               })}
             </div>
-          </div>
+          </motion.div>
         ) : isSuggesting ? (
           <div className="flex flex-col items-center justify-center p-10 text-center opacity-50">
-            <ClockIcon className="w-10 h-10 text-slate-200 mb-2 animate-pulse" />
-            <p className="text-xs text-slate-400 font-medium">Looking for matches...</p>
-          </div>
-        ) : searchQuery.length < 2 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center opacity-50">
-            <p className="text-xs text-slate-400 font-medium italic">Keep typing to see suggestions...</p>
+            <div className="relative w-12 h-12 mb-4">
+              <div className="absolute inset-0 border-4 border-red-100 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-red-500 rounded-full border-t-transparent animate-spin"></div>
+            </div>
+            <p className="text-xs text-slate-400 font-bold tracking-tight">Searching the universe...</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <div className="w-20 h-20 mb-4 flex items-center justify-center">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center p-12 text-center"
+          >
+            <div className="w-24 h-24 mb-6 flex items-center justify-center bg-slate-50 rounded-full">
               <img
                 src="/assets/images/search-icon.png"
                 alt="No results"
-                className="w-full h-full object-contain opacity-40 grayscale-[0.5]"
+                className="w-12 h-12 object-contain opacity-20 grayscale"
               />
             </div>
-            <p className="text-sm font-bold text-slate-900">No suggestions for "{searchQuery}"</p>
-            <p className="text-[11px] text-slate-400 mt-1">Try a different keyword or check spelling</p>
-          </div>
+            <p className="text-md font-black text-slate-900">No matches found</p>
+            <p className="text-[12px] text-slate-400 mt-2 max-w-[200px] leading-relaxed">We couldn't find anything for "{searchQuery}". Try different keywords.</p>
+          </motion.div>
         )
       ) : (
         <>
-          {/* Recent Search Section (Only show when input is empty) */}
           {searchHistory.length > 0 && (
-            <div>
-              <h5 className="flex items-center gap-2 italic text-xs font-bold text-red-500 font-mono tracking-widest mb-4">
-                Recent Search
-              </h5>
-              <div className="space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h5 className="flex items-center gap-2 text-[10px] font-black text-red-500 uppercase tracking-[0.2em]">
+                  Recent Activity
+                </h5>
+                <button 
+                  onClick={() => {
+                    setSearchHistory([]);
+                    localStorage.removeItem("stoqle_search_history");
+                  }}
+                  className="text-[10px] font-bold text-slate-300 hover:text-slate-500 transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 {searchHistory.map(s => (
                   <div
                     key={s}
-                    className="flex items-center justify-between py-1.5 border-b border-slate-50 cursor-pointer"
+                    className="flex items-center gap-2 pl-4 pr-2 py-2 bg-slate-50 hover:bg-slate-100 active:scale-95 rounded-full cursor-pointer transition-all border border-slate-100 group"
                     onClick={() => handleRecentClick(s)}
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
-                      <ClockIcon className="w-4 h-4 text-slate-300 shrink-0" />
-                      <span className="text-sm text-slate-600 font-medium truncate">{s}</span>
-                    </div>
+                    <span className="text-[13px] text-slate-600 font-bold">{s}</span>
                     <button
                       onClick={(e) => handleRemoveHistory(s, e)}
-                      className="p-1 hover:bg-slate-50 rounded-full transition-colors"
+                      className="p-1 hover:bg-white rounded-full transition-colors shadow-sm opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0"
                     >
-                      <XMarkIcon className="w-4 h-4 text-slate-300" />
+                      <XMarkIcon className="w-3 h-3 text-slate-400" />
                     </button>
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           )}
 
-          {/* Trending Search Section */}
-          <div>
-            <h5 className="flex items-center gap-2 italic text-md font-black italic tracking-[0.15em] mb-6 bg-gradient-to-r from-orange-500 via-red-500 to-red-700 bg-clip-text text-transparent">
-              🔥 Trending Search
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <h5 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.25em] mb-6 bg-gradient-to-r from-orange-500 via-red-500 to-red-700 bg-clip-text text-transparent">
+              🔥 Trending Now
             </h5>
-            <div className="space-y-4">
-              {trendingSearches.slice(0, 10).map((s, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between group cursor-pointer"
-                  onClick={() => handleRecentClick(s.query, s.type)}
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className={`w-5 text-[15px] font-black italic transition-colors flex-shrink-0 ${idx === 0 ? 'text-orange-600' :
-                      idx === 1 ? 'text-orange-500' :
-                        idx === 2 ? 'text-amber-500' :
-                          'text-slate-300'
-                      }`}>
-                      {idx + 1}
-                    </span>
-                    <div className="w-10 h-10 rounded bg-slate-50 overflow-hidden border border-slate-100 flex-shrink-0 flex items-center justify-center">
-                      {s.image ? (
-                        <img
-                          src={s.image.startsWith('http') ? s.image : `https://stoqle.com/${s.image}`}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-xs font-bold text-slate-300 uppercase">
-                          {s.display_name?.[0] || 'S'}
+            <div className="grid grid-cols-1 gap-2">
+              {trendingSearches.length > 0 ? (
+                trendingSearches.slice(0, 10).map((s, idx) => (
+                  <motion.div
+                    key={idx}
+                    whileHover={{ x: 5 }}
+                    className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 group cursor-pointer transition-all border border-transparent hover:border-slate-100"
+                    onClick={() => {
+                      const handle = s.username || s.business_slug;
+                      if (handle) router.push(`/${handle}`);
+                      else handleRecentClick(s.query, s.type);
+                    }}
+                  >
+                    <div className="flex items-center gap-4 min-w-0 flex-1">
+                      <div className="relative">
+                        <span className={`absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black italic shadow-sm z-10 ${
+                          idx === 0 ? 'bg-orange-600 text-white' :
+                          idx === 1 ? 'bg-orange-500 text-white' :
+                          idx === 2 ? 'bg-amber-500 text-white' :
+                          'bg-slate-100 text-slate-400'
+                        }`}>
+                          {idx + 1}
                         </span>
-                      )}
+                        <div className="w-12 h-12 rounded-xl bg-slate-50 overflow-hidden border border-slate-100 flex-shrink-0 flex items-center justify-center group-hover:shadow-md transition-all stagger-image">
+                          {s.image ? (
+                            <img
+                              src={s.image.startsWith('http') ? s.image : `https://stoqle.com/${s.image}`}
+                              alt=""
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            />
+                          ) : (
+                            <span className="text-sm font-black text-slate-300 ">
+                              {s.display_name?.[0] || 'S'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[14px] font-black text-slate-900 truncate group-hover:text-red-500 transition-colors">
+                          {s.display_name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                          {s.type}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-slate-900 truncate group-hover:text-red-500 transition-colors">
-                        {s.display_name}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter truncate">
-                        {s.type}
-                      </p>
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm group-hover:bg-red-50 group-hover:border-red-100 transition-all">
+                      <MagnifyingGlassIcon className="w-3 h-3 text-slate-300 group-hover:text-red-500" />
+                      <span className="text-[11px] font-black text-slate-600 group-hover:text-red-600">{s.total || 0}</span>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 p-3 animate-pulse opacity-50">
+                    <div className="w-12 h-12 bg-slate-100 rounded-xl" />
+                    <div className="flex-1 space-y-2">
+                      <div className="w-1/2 h-3 bg-slate-100 rounded" />
+                      <div className="w-1/4 h-2 bg-slate-50 rounded" />
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
-                    <MagnifyingGlassIcon className="w-2.5 h-2.5 text-slate-400" />
-                    <span className="text-[10px] font-black text-slate-600">{s.total || 0}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
-          </div>
+          </motion.div>
         </>
       )}
     </div>
@@ -286,10 +377,9 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
         </div>
       ) : results ? (
         <>
-          {/* Grouped Results */}
           {results.products?.length > 0 && (
             <section>
-              <h6 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 ml-1">Products</h6>
+              <h6 className="text-[10px] font-black tracking-[0.2em] text-slate-400 mb-3 ml-1">Products</h6>
               <div className="space-y-4">
                 {results.products.map((p: any) => (
                   <div key={p.id} className="flex items-center gap-3 p-1.5 bg-slate-50/50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group" onClick={() => handleRecentClick(p.name, 'product')}>
@@ -301,7 +391,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                         />
                       ) : (
-                        <span className="text-[10px] font-bold text-slate-300 uppercase">{p.name?.[0] || 'P'}</span>
+                        <span className="text-[10px] font-bold text-slate-300 ">{p.name?.[0] || 'P'}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -316,7 +406,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
 
           {results.shops?.length > 0 && (
             <section>
-              <h6 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 ml-1">Shops</h6>
+              <h6 className="text-[10px] font-black tracking-[0.2em] text-slate-400 mb-3 ml-1">Shops</h6>
               <div className="grid grid-cols-2 gap-3">
                 {results.shops.map((s: any) => (
                   <div key={s.id} className="flex items-center gap-3 p-2 border border-slate-100 rounded-xl hover:shadow-sm transition-all cursor-pointer bg-white" onClick={() => handleRecentClick(s.name, 'shop')}>
@@ -343,16 +433,17 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
 
           {results.users?.length > 0 && (
             <section>
-              <h6 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 ml-1">People</h6>
+              <h6 className="text-[10px] font-black tracking-[0.2em] text-slate-400 mb-3 ml-1">People</h6>
               <div className="space-y-3">
                 {results.users.map((u: any) => (
                   <div
                     key={u.id}
                     className="flex items-center gap-3 p-1 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
                     onClick={() => {
+                      const handle = u.username;
                       const profilePath = (user?.id === u.id || user?.user_id === u.id)
                         ? "/profile"
-                        : `/user/profile/${u.id}`;
+                        : handle ? `/${handle}` : `/user/profile/${u.id}`;
                       router.push(profilePath);
                       onClose();
                     }}
@@ -387,7 +478,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
               <p className="text-[12px] text-slate-500 mt-1">We couldn't find anything matching "{searchQuery}"</p>
               <button
                 onClick={() => setView("initial")}
-                className="mt-6 text-xs font-bold text-red-600 uppercase tracking-widest"
+                className="mt-6 text-xs font-bold text-red-600 tracking-widest"
               >
                 Clear Search
               </button>
@@ -399,74 +490,92 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
   );
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, scale: 1.02 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.02 }}
-          className="fixed inset-0 z-[100000] bg-white flex flex-col"
+    <motion.div
+      initial="closed"
+      animate={isOpen ? "open" : "closed"}
+      variants={{
+        open: { 
+          opacity: 1, 
+          y: 0,
+          pointerEvents: "auto",
+          visibility: "visible",
+          transition: {
+            type: "spring",
+            damping: 25,
+            stiffness: 400,
+            opacity: { duration: 0.15 }
+          }
+        },
+        closed: { 
+          opacity: 0, 
+          y: 30,
+          pointerEvents: "none",
+          transition: {
+            type: "spring",
+            damping: 30,
+            stiffness: 500,
+            opacity: { duration: 0.1 }
+          },
+          transitionEnd: {
+            visibility: "hidden"
+          }
+        }
+      }}
+      style={{ willChange: "transform, opacity" }}
+      className="fixed inset-0 z-[600000] bg-white flex flex-col"
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+    >
+      <div className="h-14 flex items-center px-2 gap-2 border-b border-slate-50 bg-white sticky top-0 z-20">
+        <button
+          onClick={() => {
+            if (view === "results") {
+              setView("initial");
+              setResults(null);
+            } else {
+              onClose();
+            }
+          }}
+          className="p-2 flex items-center justify-center rounded-full active:bg-slate-50 transition-colors"
         >
-          <div className="h-14 flex items-center px-2 gap-2 border-b border-slate-50 bg-white  sticky top-0 z-20">
+          <ChevronLeftIcon className="w-6 h-6 text-slate-900 stroke-[2.5]" />
+        </button>
+
+        <div className="flex-1 bg-slate-100 h-10 rounded-full flex items-center pl-4 pr-1 gap-2 border border-slate-200/50">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Search products, brands, people..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            className="bg-transparent border-none outline-none text-[13px] w-full text-slate-900 font-medium placeholder:text-slate-400"
+          />
+          {searchQuery && (
             <button
               onClick={() => {
-                if (view === "results") {
-                  setView("initial");
-                  setResults(null);
-                } else {
-                  onClose();
-                }
+                setSearchQuery("");
+                setView("initial");
+                setResults(null);
               }}
-              className="p-2 flex items-center justify-center rounded-full active:bg-slate-50 transition-colors"
+              className="p-1.5 hover:bg-slate-200 rounded-full transition-colors mr-1"
             >
-              <ChevronLeftIcon className="w-6 h-6 text-slate-900 stroke-[2.5]" />
+              <XMarkIcon className="w-3 h-3 text-slate-400" />
             </button>
+          )}
+          <button
+            onClick={() => handleSearch()}
+            disabled={isLoading}
+            className="bg-red-600 text-white text-[11px] font-black px-5 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 tracking-tighter disabled:opacity-50"
+          >
+            {isLoading ? "..." : "Search"}
+          </button>
+        </div>
+      </div>
 
-            <div className="flex-1 bg-slate-100 h-10 rounded-full flex items-center pl-4 pr-1 gap-2 border border-slate-200/50">
-              <input
-                autoFocus
-                type="text"
-                placeholder="Search products, brands, people..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="bg-transparent border-none outline-none text-[13px] w-full text-slate-900 font-medium placeholder:text-slate-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => {
-                    setSearchQuery("");
-                    setView("initial");
-                    setResults(null);
-                  }}
-                  className="p-1.5 hover:bg-slate-200 rounded-full transition-colors mr-1"
-                >
-                  <XMarkIcon className="w-3 h-3 text-slate-400" />
-                </button>
-              )}
-              <button
-                onClick={() => handleSearch()}
-                disabled={isLoading}
-                className="bg-red-600 text-white text-[11px] font-black px-5 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 uppercase tracking-tighter disabled:opacity-50"
-              >
-                {isLoading ? "..." : "Search"}
-              </button>
-            </div>
-          </div>
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={view}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className="flex-1 flex flex-col min-h-0"
-            >
-              {view === "initial" ? renderInitialView() : renderResultsView()}
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      <div className="flex-1 flex flex-col min-h-0">
+         {view === "initial" ? renderInitialView() : renderResultsView()}
+      </div>
+    </motion.div>
   );
 }

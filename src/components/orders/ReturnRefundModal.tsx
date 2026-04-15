@@ -219,7 +219,7 @@ export default function ReturnRefundModal({
                         <div className="p-6 border-b border-slate-50 flex items-center justify-between shrink-0">
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Return & Refund</h3>
-                                <p className="text-[10px] text-rose-500 font-bold tracking-widest uppercase mt-0.5">Order #{saleId}</p>
+                                <p className="text-[10px] text-rose-500 font-bold tracking-widest  mt-0.5">Order #{saleId}</p>
                             </div>
                             <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200">
                                 <X size={20} />
@@ -229,7 +229,7 @@ export default function ReturnRefundModal({
                         {/* Banner */}
                         <div className={`px-6 py-3 shrink-0 flex items-center gap-3 ${isSevenDay ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                             {isSevenDay ? <ShieldCheck size={16} /> : <AlertTriangle size={16} />}
-                            <p className="text-[10px] font-black uppercase tracking-wider">
+                            <p className="text-[10px] font-black  tracking-wider">
                                 {isSevenDay ? "🎯 7-Day No-Reason Return Supported" : "⚠️ Issue-based Return Window Only"}
                             </p>
                         </div>
@@ -252,7 +252,7 @@ export default function ReturnRefundModal({
                                                     <span className="text-xl">{cat.icon}</span>
                                                     <div className="text-left">
                                                         <p className={`text-xs font-black sm:text-sm ${cat.color}`}>{cat.label}</p>
-                                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">{cat.reasons.length} options available</p>
+                                                        <p className="text-[9px] text-slate-400 font-bold  tracking-tight mt-0.5">{cat.reasons.length} options available</p>
                                                     </div>
                                                 </div>
                                                 <ChevronRight size={16} className={cat.color} />
@@ -264,7 +264,7 @@ export default function ReturnRefundModal({
                                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between">
-                                            <button 
+                                            <button
                                                 onClick={() => setStep(1)}
                                                 className="text-[10px] font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"
                                             >
@@ -272,11 +272,11 @@ export default function ReturnRefundModal({
                                             </button>
                                             <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg">Step 2 of 2</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
                                             <span className="text-xl">{selectedCategory?.icon}</span>
                                             <div>
-                                                <p className={`text-[10px] font-black uppercase tracking-widest ${selectedCategory?.color}`}>{selectedCategory?.label}</p>
+                                                <p className={`text-[10px] font-black  tracking-widest ${selectedCategory?.color}`}>{selectedCategory?.label}</p>
                                                 <p className="text-[11px] font-bold text-slate-900 mt-0.5">Select specific reason below</p>
                                             </div>
                                         </div>
@@ -297,7 +297,7 @@ export default function ReturnRefundModal({
                                     {(selectedReason || selectedCategory?.id === 'other') && (
                                         <div className="space-y-3 pt-2">
                                             <div className="flex items-center justify-between px-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Additional Explanation</label>
+                                                <label className="text-[10px] font-black  text-slate-400 tracking-wider">Additional Explanation</label>
                                                 <span className="text-[9px] text-slate-300 font-bold italic">{selectedCategory?.id === 'other' ? 'Required' : 'Optional'}</span>
                                             </div>
                                             <textarea
@@ -325,7 +325,7 @@ export default function ReturnRefundModal({
                             <button
                                 disabled={loading || step === 1 || !selectedReason || (selectedCategory?.id === 'other' && !explanation)}
                                 onClick={handleConfirm}
-                                className="w-full py-4 bg-slate-900 text-white rounded-full text-[11px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-black transition-all disabled:opacity-30 disabled:grayscale"
+                                className="w-full py-4 bg-slate-900 text-white rounded-full text-[11px] font-black  tracking-widest shadow-xl shadow-slate-200 hover:bg-black transition-all disabled:opacity-30 disabled:grayscale"
                             >
                                 {loading ? 'Processing Request...' : 'Submit Request'}
                             </button>

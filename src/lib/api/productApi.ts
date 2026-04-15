@@ -164,25 +164,40 @@ export async function toggleProductLike(productId: number | string, token: strin
   return json;
 }
 
-export async function logUserActivity(activity: { product_id?: number | string, action_type: 'view' | 'like' | 'cart' | 'purchase', category?: string }, token?: string | null) {
-  const headers: any = { 
-    "Content-Type": "application/json",
-    "Accept": "application/json" 
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
+export function logUserActivity(
+  activity: { product_id?: number | string; action_type: 'view' | 'like' | 'cart' | 'purchase'; category?: string; business_id?: number | string },
+  token?: string | null
+): Promise<void> {
+  return new Promise((resolve) => {
+    const doLog = () => {
+      const headers: any = {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/activity/log`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(activity)
-    });
-    return await res.json().catch(() => null);
-  } catch (err) {
-    console.error("Failed to log activity", err);
-    return null;
-  }
+      fetch(`${API_BASE_URL}/api/activity/log`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(activity),
+        // keepalive ensures the request survives page unload / navigation
+        keepalive: true,
+      }).catch(() => {}); // always silent — never throw
+
+      resolve();
+    };
+
+    // On devices that support it, schedule during idle time
+    // so this NEVER competes with rendering or user interaction
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(doLog, { timeout: 2000 });
+    } else {
+      // Fallback: defer 100ms to stay off the critical path
+      setTimeout(doLog, 100);
+    }
+  });
 }
+
 
 export async function fetchBusinessCategories() {
   const res = await fetch(`${API_BASE_URL}/api/meta/business-categories`, {

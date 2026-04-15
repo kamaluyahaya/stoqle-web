@@ -25,7 +25,7 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
 
     const handleOtpChange = (val: string, index: number) => {
         if (!/^\d*$/.test(val)) return;
-        
+
         const newOtp = [...otp];
         newOtp[index] = val.slice(-1);
         setOtp(newOtp);
@@ -37,9 +37,9 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
 
         // Auto submit if all 6 filled
         if (index === 5 && val && newOtp.every(d => d !== "")) {
-           // We don't auto-submit here so the user can verify, or we can. 
-           // In PinModal it auto-submits. Let's auto-submit for better UX.
-           onSuccess(newOtp.join(""));
+            // We don't auto-submit here so the user can verify, or we can. 
+            // In PinModal it auto-submits. Let's auto-submit for better UX.
+            onSuccess(newOtp.join(""));
         }
     };
 
@@ -52,7 +52,7 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
     const handleSubmit = () => {
         const fullOtp = otp.join("");
         if (fullOtp.length === 6) {
-           onSuccess(fullOtp);
+            onSuccess(fullOtp);
         }
     };
 
@@ -83,10 +83,10 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
                                         <FaShieldAlt size={24} />
                                     </div>
                                     <div className="space-y-1">
-                                      <h4 className="text-xl font-black text-slate-900 tracking-tight">Security Code</h4>
-                                      <p className="text-xs text-slate-500 font-semibold tracking-tight leading-relaxed max-w-[240px] mx-auto">
-                                        Enter the 6-digit code sent to your registered <span className="text-blue-600">{channel}</span>
-                                      </p>
+                                        <h4 className="text-xl font-black text-slate-900 tracking-tight">Security Code</h4>
+                                        <p className="text-xs text-slate-500 font-semibold tracking-tight leading-relaxed max-w-[240px] mx-auto">
+                                            Enter the 6-digit code sent to your registered <span className="text-blue-600">{channel}</span>
+                                        </p>
                                     </div>
                                 </div>
                                 <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition text-slate-400">
@@ -113,27 +113,27 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
                                 </div>
 
                                 {errorMessage && (
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         className="bg-red-50 border border-red-100 p-4 rounded-3xl flex items-start gap-3"
                                     >
                                         <FaExclamationTriangle className="text-red-500 mt-0.5 shrink-0" size={14} />
-                                        <p className="text-[11px] font-bold text-red-600 leading-relaxed uppercase tracking-tight">{errorMessage}</p>
+                                        <p className="text-[11px] font-bold text-red-600 leading-relaxed  tracking-tight">{errorMessage}</p>
                                     </motion.div>
                                 )}
 
-                                <button 
+                                <button
                                     onClick={handleSubmit}
                                     disabled={isLoading || otp.join("").length < 6}
-                                    className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-800 transition shadow-lg disabled:opacity-30 disabled:grayscale"
+                                    className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black text-xs  tracking-[0.2em] hover:bg-slate-800 transition shadow-lg disabled:opacity-30 disabled:grayscale"
                                 >
                                     {isLoading ? "Verifying..." : "Confirm Verification"}
                                 </button>
                             </div>
 
                             <div className="text-center pt-2">
-                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-loose max-w-[300px] mx-auto">
+                                <p className="text-[10px] font-black text-slate-300  tracking-widest leading-loose max-w-[300px] mx-auto">
                                     Stoqle staff will never request an otp from you. do not disclose it to anyone.
                                 </p>
                             </div>

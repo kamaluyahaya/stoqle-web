@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { PreviewPayload } from "@/src/types/product";
 import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon, ShareIcon, ClockIcon, ArrowPathIcon, XMarkIcon, ArrowUpOnSquareIcon, StarIcon } from "@heroicons/react/24/outline";
+import SmartShareButton from '@/src/components/share/SmartShareButton';
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { Review, fetchProductReviews } from "@/src/lib/api/reviewApi";
 import { FaChevronRight } from "react-icons/fa";
@@ -13,17 +15,22 @@ import ThumbnailList from "../preview/thumbnailList";
 import PolicyList from "../preview/policyList";
 import ActionBar from "../preview/actionBar";
 import PolicyModal from "./policyModalPreview";
+import ShippingModal from "./shippingModalPreview";
 import AddToCartModal from "./addToCartModal";
 import ReviewListModal from "./reviewListModal";
-import { ProductFeedItem } from "@/src/types/product";
+import { ProductFeedItem, ReturnPolicy } from "@/src/types/product";
 import { API_BASE_URL } from "@/src/lib/config";
-import { fetchBusinessProducts, fetchMarketFeed, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
+import { fetchBusinessProducts, fetchMarketFeed, fetchPersonalizedFeed, logUserActivity } from "@/src/lib/api/productApi";
 import { useCallback } from "react";
+import { Info } from "lucide-react";
+import ReturnShippingSubsidyModal from "@/src/components/business/policyModal/returnShippingSubsidyModal";
 import { useRouter } from "next/navigation";
+import { addToCartApi } from "@/src/lib/api/cartApi";
 import { useAuth } from "@/src/context/authContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchUserAddresses, UserAddress } from "@/src/lib/api/addressApi";
+import { formatDuration } from "@/src/lib/utils/product/duration";
 import SearchModal from "@/src/components/modal/SearchModal";
 import SearchResultsModal from "@/src/components/modal/SearchResultsModal";
 import Swal from "sweetalert2";
@@ -51,6 +58,8 @@ export default function ProductPreviewModal({
   onShopClick,
   origin,
   zIndex,
+  ignoreRouterBack,
+  isFetching,
 }: {
   open: boolean;
   payload: PreviewPayload | null;
@@ -60,12 +69,14 @@ export default function ProductPreviewModal({
   onAddToCart?: (payload?: PreviewPayload) => void;
   onBuyNow?: (payload?: PreviewPayload) => void;
   onOpenChat?: () => void;
-  onProductClick?: (productId: number, businessName?: string) => void;
-  onReelsClick?: (productId: number, businessName?: string) => void;
+  onProductClick?: (productId: number | string, businessName?: string, e?: any, businessSlug?: string, isSocialPost?: boolean, productSlug?: string) => void;
+  onReelsClick?: (productId: number | string, businessName?: string, e?: any, businessSlug?: string, productSlug?: string) => void;
   onCartClick?: () => void;
   onShopClick?: () => void;
   origin?: { x: number; y: number };
   zIndex?: number;
+  ignoreRouterBack?: boolean;
+  isFetching?: boolean;
 }) {
   //
   // --- Hooks (always declared in the same order, unconditionally) ---
@@ -91,10 +102,41 @@ export default function ProductPreviewModal({
   const asideScrollRef = useRef<HTMLDivElement | null>(null);
   const lastScrollY = useRef(0);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
-  const [policyModalData, setPolicyModalData] = useState<{ title: string; body: string } | null>(null);
+  const [policyModalData, setPolicyModalData] = useState<{ title: string; body: string; type?: "shipping" | "policy" } | null>(null);
+
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    handleResize(); // Initial check
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // promo countdown state (declare before effects)
   const [promoRemaining, setPromoRemaining] = useState<string | null>(null);
+  const [isSubsidyModalOpen, setIsSubsidyModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const wasAlreadyLocked = document.body.classList.contains("overflow-hidden") ||
+      window.getComputedStyle(document.body).overflow === "hidden";
+
+    if (!wasAlreadyLocked) {
+      document.body.classList.add("overflow-hidden");
+    }
+
+    return () => {
+      if (!wasAlreadyLocked) {
+        document.body.classList.remove("overflow-hidden");
+      }
+    };
+  }, [open]);
 
   // Variant selection state (now used by AddToCartModal, but kept here for initial prep if needed)
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -112,17 +154,36 @@ export default function ProductPreviewModal({
   const policy = businessData?.policy ?? null;
 
   const effectiveReturnPolicy = useMemo(() => {
+    // 1. Explicit Overrides
     if (payload?.policyOverrides && !payload.policyOverrides.useStoreDefaultReturn) {
       const over = payload.policyOverrides.returnPolicy;
       return {
         seven_day_no_reason: (over?.['7dayNoReasonReturn'] || over?.sevenDayNoReasonReturn) ? 1 : 0,
         rapid_refund: over?.rapidRefund ? 1 : 0,
         return_shipping_subsidy: over?.returnShippingSubsidy ? 1 : 0,
+        late_shipment: over?.lateShipmentCompensation ? 1 : 0,
+        fake_one_pay_four: over?.fakeOnePayFour ? 1 : 0,
         return_window: over?.returnWindow ?? 3
       };
     }
-    return policy?.returns ?? {};
-  }, [payload?.policyOverrides, policy]);
+
+    // 2. Direct Product Properties (Priority before store general policy if present)
+    const p = payload as any;
+    if (p?.late_shipment !== undefined || p?.fake_one_pay_four !== undefined || p?.seven_day_no_reason !== undefined) {
+      return {
+        ...policy?.returns,
+        seven_day_no_reason: p.seven_day_no_reason ?? policy?.returns?.seven_day_no_reason,
+        rapid_refund: p.rapid_refund ?? policy?.returns?.rapid_refund,
+        return_shipping_subsidy: p.return_shipping_subsidy ?? policy?.returns?.return_shipping_subsidy,
+        late_shipment: p.late_shipment ?? policy?.returns?.late_shipment,
+        fake_one_pay_four: p.fake_one_pay_four ?? policy?.returns?.fake_one_pay_four,
+        return_window: p.return_window ?? policy?.returns?.return_window ?? 3
+      };
+    }
+
+    // 3. Fallback to Store General Policy
+    return policy?.returns ?? ({} as ReturnPolicy);
+  }, [payload, policy]);
 
   const effectiveShippingPolicies = useMemo(() => {
     if (payload?.policyOverrides && !payload.policyOverrides.useStoreDefaultShipping) {
@@ -149,6 +210,17 @@ export default function ProductPreviewModal({
     }
     return policy?.sales_discounts ?? [];
   }, [payload?.policyOverrides, policy]);
+
+  const displayAvgDuration = useMemo(() => {
+    if (estimation && !estimation.is_available) return null;
+    if (estimation?.is_available && estimation.estimated_delivery_time.getTime() > 0) {
+      const now = new Date();
+      const diffMs = estimation.estimated_delivery_time.getTime() - now.getTime();
+      return formatDuration(Math.max(0, diffMs / (1000 * 60 * 60)), "hours");
+    }
+    const shippingAvg = effectiveShippingPolicies.find((s: any) => s.kind === "avg" || s.type === "avg");
+    return shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : "8 hours";
+  }, [estimation, effectiveShippingPolicies]);
 
   const avgShipping = useMemo(() => effectiveShippingPolicies.find(s => (s as any).kind === 'avg'), [effectiveShippingPolicies]);
   const customerService = useMemo(() => businessData?.policy?.customer_service, [businessData]);
@@ -233,6 +305,17 @@ export default function ProductPreviewModal({
   }, [open]);
 
   useEffect(() => {
+    if (open && payload?.productId) {
+      logUserActivity({
+        product_id: Number(payload.productId),
+        action_type: 'view',
+        category: payload.category
+      }, token || undefined).catch(() => { });
+    }
+  }, [open, payload?.productId, payload?.category, token]);
+
+
+  useEffect(() => {
     if (!open || !token) return;
 
     // Try to get default address from DB
@@ -292,7 +375,7 @@ export default function ProductPreviewModal({
   }, [open, payload, businessData, storedAddress, effectiveShippingPolicies]);
 
   // --- Derived values (safe if payload is null) ---
-  const images = payload?.productImages ?? [];
+  const images = useMemo(() => payload?.productImages ?? [], [payload?.productImages]);
   // If selectedIndex is -1, it means the video is selected, so main should be null to let MediaViewer show video
   const main = selectedIndex === -1 ? null : (images[selectedIndex] ?? (images.length > 0 ? images[0] : null));
 
@@ -677,21 +760,153 @@ export default function ProductPreviewModal({
 
   const handleIndexChange = useCallback((idx: number, mode?: "video" | "images" | "styles") => {
     const finalMode = mode || viewMode;
-    if (mode) setViewMode(mode);
+    if (mode && mode !== viewMode) setViewMode(mode);
     setSelectedIndex(idx);
 
     // Auto-select variant if switching to/browsing styles
     if (finalMode === "styles" && variantEntriesWithImages[idx]) {
       const v = variantEntriesWithImages[idx];
-      setSelectedOptions(prev => ({
-        ...prev,
-        [v.groupId]: v.id
-      }));
+      if (selectedOptions[v.groupId] !== v.id) {
+        setSelectedOptions((prev) => ({
+          ...prev,
+          [v.groupId]: v.id,
+        }));
+      }
     }
-  }, [viewMode, variantEntriesWithImages]);
+  }, [viewMode, variantEntriesWithImages, selectedOptions]);
 
-  const handleAddToCartClick = (e?: React.MouseEvent) => {
+  const animateToCart = (startingElement: HTMLElement) => {
+    const cartIcon = document.getElementById("cart-icon-ref");
+    if (!cartIcon || !payload) return;
+
+    const startRect = startingElement.getBoundingClientRect();
+    const cartRect = cartIcon.getBoundingClientRect();
+
+    const productImg = payload.productImages?.[0]?.url || "/assets/images/favio.png";
+
+    const flyer = document.createElement("div");
+    const animId = `fly_${Date.now()}`;
+    const style = document.createElement("style");
+
+    // Parabolic arc using transforms for better performance and reliability
+    style.innerHTML = `
+      @keyframes ${animId} {
+        0% {
+          transform: translate(${startRect.left}px, ${startRect.top}px) scale(1) rotate(0deg);
+          width: ${startRect.width}px;
+          height: ${startRect.height}px;
+          opacity: 1;
+        }
+        35% {
+          transform: translate(${startRect.left + (cartRect.left - startRect.left) * 0.3}px, ${startRect.top - 250}px) scale(1.2) rotate(-15deg);
+          opacity: 1;
+        }
+        100% {
+          transform: translate(${cartRect.left + 10}px, ${cartRect.top + 10}px) scale(0.2) rotate(720deg);
+          width: 40px;
+          height: 40px;
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    flyer.style.position = "fixed";
+    flyer.style.top = "0";
+    flyer.style.left = "0";
+    flyer.style.width = `${startRect.width}px`;
+    flyer.style.height = `${startRect.height}px`;
+    flyer.style.zIndex = "200000";
+    flyer.style.backgroundImage = `url("${formatUrl(productImg)}")`;
+    flyer.style.backgroundColor = "#f43f5e"; // Fallback color
+    flyer.style.backgroundSize = "cover";
+    flyer.style.backgroundPosition = "center";
+    flyer.style.borderRadius = "12px";
+    flyer.style.pointerEvents = "none";
+    flyer.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.5)";
+    flyer.style.border = "2px solid white";
+    flyer.style.animation = `${animId} 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) forwards`;
+
+    document.body.appendChild(flyer);
+
+    setTimeout(() => {
+      flyer.remove();
+      style.remove();
+
+      // Impact feedback
+      cartIcon.classList.add("scale-115");
+      const cartBtn = cartIcon.querySelector('button');
+      if (cartBtn) {
+        cartBtn.style.color = "#f43f5e";
+        cartBtn.style.transform = "translateY(-2px)";
+      }
+
+      setTimeout(() => {
+        cartIcon.classList.remove("scale-115");
+        if (cartBtn) {
+          cartBtn.style.color = "";
+          cartBtn.style.transform = "";
+        }
+      }, 500);
+    }, 1200);
+  };
+
+  const handleAddToCartClick = async (e?: React.MouseEvent) => {
+    const startingEl = e?.currentTarget as HTMLElement;
     if (!payload) return;
+
+    // Direct Add to Cart if no variants
+    const hasVariants = payload.variantGroups && payload.variantGroups.length > 0;
+    if (!hasVariants) {
+      const loggedIn = await auth.ensureLoggedIn();
+      if (!loggedIn) return;
+
+      const currentUserId = user?.user_id || user?.id || user?.id_signup;
+      const currentBizId = user?.business_id || user?.business?.business_id || user?.business?.id;
+      const productUserId = payload.userId || (payload as any).user_id || businessData?.business?.user_id;
+      const productBizId = payload.businessId || (payload as any).business_id || businessData?.business?.business_id;
+
+      if ((currentUserId && productUserId && Number(currentUserId) === Number(productUserId)) ||
+        (currentBizId && productBizId && Number(currentBizId) === Number(productBizId))) {
+        Swal.fire({
+          title: "Not Allowed",
+          text: "You cannot purchase your own products.",
+          icon: "warning",
+          confirmButtonText: "I understand",
+          confirmButtonColor: "#f43f5e",
+          customClass: {
+            popup: "rounded-[2rem]",
+            confirmButton: "rounded-xl font-bold px-6 py-3",
+          }
+        });
+        return;
+      }
+
+      try {
+        await addToCartApi({
+          product_id: Number(payload.productId),
+          quantity: 1,
+        }, token!);
+
+        if (startingEl) {
+          animateToCart(startingEl);
+        }
+
+        toast.success("Added to cart successfully!");
+        window.dispatchEvent(new CustomEvent("cart-updated"));
+
+        // Sync across tabs
+        const channel = new BroadcastChannel('stoqle_cart_sync');
+        channel.postMessage('update');
+        channel.close();
+
+        logUserActivity({ product_id: payload.productId, action_type: 'cart', category: payload.category }, token!);
+        return;
+      } catch (err: any) {
+        toast.error(err?.body?.message || "Failed to add to cart");
+        return;
+      }
+    }
 
     if (e) setCartClickPos({ x: e.clientX, y: e.clientY });
     else setCartClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -884,12 +1099,17 @@ export default function ProductPreviewModal({
     return () => clearInterval(interval);
   }, [isPromotionActive, promotion?.end_date, promotion?.end]);
 
-  if (!open || !payload) return null;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!open || !payload || !mounted) return null;
 
   const stop = (e: React.MouseEvent | React.TouchEvent) => e.stopPropagation();
 
-  const openPolicyModal = (title: string, body: string) => {
-    setPolicyModalData({ title, body });
+  const openPolicyModal = (title: string, body: string, type: "shipping" | "policy" = "policy") => {
+    setPolicyModalData({ title, body, type });
     setPolicyModalOpen(true);
   };
 
@@ -914,12 +1134,12 @@ export default function ProductPreviewModal({
   //
   // --- render ---
   //
-  return (
+  return createPortal(
     <>
       <div
         role="dialog"
         aria-modal="true"
-        className={`fixed inset-0 flex items-center justify-center px-0 py-0 lg:p-4 ${!zIndex ? 'z-[9999]' : ''}`}
+        className={`fixed inset-0 flex items-center justify-center px-0 py-0 lg:p-4 ${!zIndex ? 'z-[500001]' : ''}`}
         style={zIndex ? { zIndex } : {}}
         onMouseDown={(e) => { e.stopPropagation(); onClose(); }}
         onTouchStart={(e) => { e.stopPropagation(); onClose(); }}
@@ -928,23 +1148,26 @@ export default function ProductPreviewModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
           className="absolute inset-0 bg-black/65 backdrop-blur-sm"
           aria-hidden
         />
 
         <motion.div
           style={{
-            transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center"
+            transformOrigin: !isMobile && origin ? `${origin.x}px ${origin.y}px` : "center",
+            willChange: "transform, opacity"
           }}
-          initial={{ opacity: 0, scale: 0.3 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.3 }}
-          transition={{
-            type: "spring",
-            damping: 30,
-            stiffness: 300
-          }}
+          initial={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
+          animate={isMobile ? { y: 0, opacity: 1 } : { opacity: 1, scale: 1 }}
+          exit={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
+          transition={
+            isMobile
+              ? { type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] } // Ultra-fast hardware native ease out
+              : { type: "spring", damping: 25, stiffness: 400, mass: 0.8 } // Snappier desktop spring
+          }
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           className="relative z-10 w-full h-full lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] flex flex-col items-center justify-center"
         >
           {/* Desktop Close Button (Outside but close to modal) */}
@@ -960,6 +1183,122 @@ export default function ProductPreviewModal({
           </button>
 
           <div
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            className={`lg:hidden absolute top-0 inset-x-0 z-[100] transition-all duration-75`}
+            style={{
+              backgroundColor: `rgba(255, 255, 255, ${appBarOpacity})`,
+              boxShadow: appBarOpacity > 0.8 ? '0 4px 6px -1px rgb(0 0 0 / 0.1)' : 'none'
+            }}
+          >
+            <div className="flex items-center px-4 h-14 gap-3">
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  if (params.has('product_id')) {
+                    router.back();
+                  } else {
+                    onClose();
+                  }
+                }}
+                aria-label="Back"
+                className="h-9 w-9 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+                style={{
+                  backgroundColor: appBarOpacity > 0.5 ? 'transparent' : 'rgba(0, 0, 0, 0.25)',
+                  backdropFilter: appBarOpacity > 0.5 ? 'none' : 'blur(12px)',
+                  color: appBarOpacity > 0.5 ? 'rgb(30, 41, 59)' : 'white'
+                }}
+              >
+                <ChevronLeftIcon className="w-6 h-6 stroke-2" />
+              </button>
+
+              {/* Centered Search Area with Sliding Background Expansion */}
+              <div className="flex-1 flex justify-end items-center h-14 overflow-hidden relative">
+                <motion.div
+                  onClick={handleSearchTrigger}
+                  animate={{
+                    width: appBarOpacity >= 0.5 ? "100%" : "36px",
+                    backgroundColor: appBarOpacity >= 0.5 ? "rgb(241 245 249)" : "rgba(0, 0, 0, 0.25)",
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="h-9 rounded-full flex items-center cursor-pointer relative overflow-hidden"
+                  style={{
+                    backdropFilter: appBarOpacity >= 0.5 ? 'none' : 'blur(12px)',
+                  }}
+                >
+                  <div
+                    className="flex items-center px-2.5 gap-2 w-full h-full"
+                    style={{
+                      justifyContent: appBarOpacity >= 0.5 ? 'flex-start' : 'center'
+                    }}
+                  >
+                    <MagnifyingGlassIcon
+                      className={`transition-all duration-300 flex-shrink-0 ${appBarOpacity >= 0.5 ? "w-4 h-4 text-slate-400" : "w-5 h-5 text-white"
+                        }`}
+                    />
+
+                    {appBarOpacity >= 0.5 && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="text-slate-400 text-sm truncate whitespace-nowrap"
+                      >
+                        Search stoqle...
+                      </motion.span>
+                    )}
+                  </div>
+                </motion.div>
+              </div>
+
+              <div className="flex items-center flex-shrink-0 rounded-full" style={{
+                backgroundColor: appBarOpacity > 0.5 ? 'transparent' : 'rgba(0, 0, 0, 0.25)',
+                backdropFilter: appBarOpacity > 0.5 ? 'none' : 'blur(12px)',
+                color: appBarOpacity > 0.5 ? 'rgb(30, 41, 59)' : 'white'
+              }}>
+                <SmartShareButton
+                  productId={payload?.productId ?? 0}
+                  title={payload?.title}
+                  token={token}
+                  variant="icon"
+
+                />
+              </div>
+            </div>
+
+            {appBarOpacity > 0.8 && (
+              <div
+                className="flex items-center px-2 overflow-x-auto no-scrollbar pb-1 animate-in fade-in slide-in-from-top-2 duration-500"
+                style={{ opacity: (appBarOpacity - 0.8) * 5 }}
+              >
+
+                <div className="flex items-center">
+                  {["Overview", "Reviews", "Details", "Explore"].map((tab) => {
+                    const id = tab.toLowerCase();
+                    const active = activeTab === id;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => scrollToSection(id)}
+                        className={`flex-shrink-0 px-4 py-3 text-xs font-bold transition-all relative ${active ? "text-slate-900" : "text-slate-500"
+                          }`}
+                      >
+                        {tab}
+                        {active && (
+                          <motion.div
+                            layoutId="activeTabUnderline"
+                            className="absolute bottom-0 left-4 right-4 h-0.5 bg-red-500 rounded-full"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div
             ref={modalRef}
             onMouseDown={stop}
             onTouchStart={stop}
@@ -968,120 +1307,6 @@ export default function ProductPreviewModal({
             className="relative w-full h-full bg-slate-100 flex flex-col overflow-y-auto lg:flex lg:flex-row lg:w-full lg:h-full lg:rounded-2xl shadow-2xl"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
-
-
-            <div
-              className={`lg:hidden fixed top-0 inset-x-0 z-[100] transition-all duration-75`}
-              style={{
-                backgroundColor: `rgba(255, 255, 255, ${appBarOpacity})`,
-                boxShadow: 'none'
-              }}
-            >
-              <div className="flex items-center px-4 h-14 gap-3">
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => {
-                    const params = new URLSearchParams(window.location.search);
-                    if (params.has('product_id')) {
-                      router.back();
-                    } else {
-                      onClose();
-                    }
-                  }}
-                  aria-label="Back"
-                  className="h-9 w-9 rounded-full flex items-center justify-center transition-all flex-shrink-0"
-                  style={{
-                    backgroundColor: appBarOpacity > 0.5 ? 'transparent' : 'rgba(0, 0, 0, 0.25)',
-                    backdropFilter: appBarOpacity > 0.5 ? 'none' : 'blur(12px)',
-                    color: appBarOpacity > 0.5 ? 'rgb(30, 41, 59)' : 'white'
-                  }}
-                >
-                  <ChevronLeftIcon className="w-6 h-6 stroke-2" />
-                </button>
-
-                {/* Centered Search Area with Sliding Background Expansion */}
-                <div className="flex-1 flex justify-end items-center h-14 overflow-hidden relative">
-                  <motion.div
-                    onClick={handleSearchTrigger}
-                    animate={{
-                      width: appBarOpacity >= 0.5 ? "100%" : "36px",
-                      backgroundColor: appBarOpacity >= 0.5 ? "rgb(241 245 249)" : "rgba(0, 0, 0, 0.25)",
-                    }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    className="h-9 rounded-full flex items-center cursor-pointer relative overflow-hidden"
-                    style={{
-                      backdropFilter: appBarOpacity >= 0.5 ? 'none' : 'blur(12px)',
-                    }}
-                  >
-                    <div
-                      className="flex items-center px-2.5 gap-2 w-full h-full"
-                      style={{
-                        justifyContent: appBarOpacity >= 0.5 ? 'flex-start' : 'center'
-                      }}
-                    >
-                      <MagnifyingGlassIcon
-                        className={`transition-all duration-300 flex-shrink-0 ${appBarOpacity >= 0.5 ? "w-4 h-4 text-slate-400" : "w-5 h-5 text-white"
-                          }`}
-                      />
-
-                      {appBarOpacity >= 0.5 && (
-                        <motion.span
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className="text-slate-400 text-sm truncate whitespace-nowrap"
-                        >
-                          Search stoqle...
-                        </motion.span>
-                      )}
-                    </div>
-                  </motion.div>
-                </div>
-
-                <div className="flex items-center flex-shrink-0">
-                  <button
-                    className="h-9 w-9 rounded-full flex items-center justify-center transition-all flex-shrink-0"
-                    style={{
-                      backgroundColor: appBarOpacity > 0.5 ? 'transparent' : 'rgba(0, 0, 0, 0.25)',
-                      backdropFilter: appBarOpacity > 0.5 ? 'none' : 'blur(12px)',
-                      color: appBarOpacity > 0.5 ? 'rgb(30, 41, 59)' : 'white'
-                    }}
-                  >
-                    <ArrowUpOnSquareIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {appBarOpacity > 0.8 && (
-                <div
-                  className="flex items-center px-2 overflow-x-auto no-scrollbar pb-1 animate-in fade-in slide-in-from-top-2 duration-500"
-                  style={{ opacity: (appBarOpacity - 0.8) * 5 }}
-                >
-
-                  <div className="flex items-center">
-                    {["Overview", "Reviews", "Details", "Explore"].map((tab) => {
-                      const id = tab.toLowerCase();
-                      const active = activeTab === id;
-                      return (
-                        <button
-                          key={tab}
-                          onClick={() => scrollToSection(id)}
-                          className={`flex-shrink-0 px-4 py-3 text-xs font-bold transition-all relative ${active ? "text-slate-900" : "text-slate-500"
-                            }`}
-                        >
-                          {tab}
-                          {active && (
-                            <motion.div
-                              layoutId="activeTabUnderline"
-                              className="absolute bottom-0 left-4 right-4 h-0.5 bg-red-500 rounded-full"
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* LEFT: media */}
             <div
@@ -1167,17 +1392,28 @@ export default function ProductPreviewModal({
                   <div className="flex items-start gap-3 ">
                     <div className="flex items-center gap-3 w-full">
                       <div className="w-full">
-                        <div className="text-lg font-semibold text-slate-900">
-                          {businessData?.policy?.market_affiliation?.trusted_partner === 1 && (
-                            <span className="bg-emerald-700 text-white text-xs px-2 py-1 rounded-sm align-center mr-2">
-                              Verified Partner
-                            </span>
-                          )}
-                          {payload.title || "Untitled product"}
+                        <div className="text-lg font-semibold text-slate-900 mb-1">
+                          {payload.title || "Product details"}
                         </div>
 
+                        {businessData?.policy?.market_affiliation?.trusted_partner === 1 && (
+                          <div className="mb-2">
+                             <span className="bg-emerald-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-sm">
+                                Verified Partner
+                              </span>
+                          </div>
+                        )}
 
-                        <div className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{payload.description}</div>
+                        <div className="text-sm font-bold text-slate-900">Description</div>
+                        {isFetching && !payload.description ? (
+                          <div className="space-y-2 mt-2">
+                            <div className="h-3.5 bg-slate-100 animate-pulse rounded-md w-full"></div>
+                            <div className="h-3.5 bg-slate-100 animate-pulse rounded-md w-5/6"></div>
+                            <div className="h-3.5 bg-slate-100 animate-pulse rounded-md w-2/3"></div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{payload.description}</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1185,8 +1421,12 @@ export default function ProductPreviewModal({
 
 
                   {effectiveReturnPolicy?.return_shipping_subsidy === 1 && (
-                    <div className="inline-block font-bold rounded-sm text-sm p-2 text-emerald-700 bg-emerald-50">
+                    <div
+                      className="inline-flex items-center gap-1.5 font-bold rounded-sm text-sm p-2 text-emerald-700 bg-emerald-50 cursor-pointer hover:bg-emerald-100 transition-colors"
+                      onClick={() => setIsSubsidyModalOpen(true)}
+                    >
                       Return shipping subsidy
+                      <Info className="w-3.5 h-3.5" />
                     </div>
                   )}
 
@@ -1206,6 +1446,18 @@ export default function ProductPreviewModal({
                       }
                     }}
                   />
+                  <div>
+                    {isFetching && payload.hasVariants && (!payload.variantGroups || payload.variantGroups.length === 0) && (
+                      <div className="mt-2 space-y-4">
+                        <div className="h-4 bg-slate-100 animate-pulse rounded w-24"></div>
+                        <div className="flex gap-2">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="w-12 h-8 bg-slate-100 animate-pulse rounded-md"></div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
 
@@ -1246,7 +1498,7 @@ export default function ProductPreviewModal({
                                 className="w-5 h-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  router.push(`/user/profile/${review.user_id}`);
+                                  router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`);
                                 }}
                               >
                                 <img
@@ -1260,7 +1512,7 @@ export default function ProductPreviewModal({
                                   className="text-[12px] text-slate-500 truncate cursor-pointer hover:text-red-500 transition-colors"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    router.push(`/user/profile/${review.user_id}`);
+                                    router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`);
                                   }}
                                 >
                                   {review.full_name}
@@ -1293,18 +1545,22 @@ export default function ProductPreviewModal({
                   <div className="flex items-center justify-between gap-3">
                     <div
                       className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => businessData?.business?.user_id && router.push(`/user/profile/${businessData.business.user_id}`)}
+                      onClick={() => {
+                        const handle = businessData?.business?.business_slug || businessData?.business?.user_id;
+                        if (handle) router.push(`/${handle}`);
+                        else if (businessData?.business?.user_id) router.push(`/user/profile/${businessData.business.user_id}`);
+                      }}
                     >
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center flex-shrink-0">
                         <img
-                          src={businessData?.business?.business_logo || businessData?.business?.logo || businessData?.business?.profile_pic || "/assets/images/favio.png"}
+                          src={businessData?.business?.business_logo || businessData?.business?.logo || businessData?.business?.profile_pic || payload?.businessLogo || payload?.vendorAvatar || "/assets/images/favio.png"}
                           alt="Shop Logo"
                           className="h-full w-full object-cover"
                         />
                       </div>
                       <div className="leading-tight min-w-0 flex-1">
                         <div className="font-semibold text-slate-900 text-[clamp(10px,3.5vw,12px)] whitespace-nowrap overflow-hidden">
-                          {businessData?.business?.business_name ?? businessData?.business?.full_name ?? ""}
+                          {businessData?.business?.business_name ?? businessData?.business?.full_name ?? payload?.businessName ?? ""}
                         </div>
 
                         <div className="flex items-center gap-1 mt-0.5">
@@ -1378,15 +1634,19 @@ export default function ProductPreviewModal({
 
                           return (
                             <div key={p.product_id} className="group cursor-pointer" onClick={() => {
-                              if (p.product_video) {
+                              // Only open reels if it's a social video with a linked product; otherwise stay in preview
+                              if (p.product_video && (p as any).linked_product) {
                                 saveModalState();
-                                if (onReelsClick) onReelsClick(p.product_id, businessData?.business?.business_name);
+                                if (onReelsClick) onReelsClick(p.product_id, businessData?.business?.business_name, null, businessData?.business?.business_slug, p.slug);
                                 else {
                                   const bizName = businessData?.business?.business_name || "store";
                                   const bizSlug = businessData?.business?.business_slug || slugify(bizName);
-                                  router.push(`/market/${bizSlug}?product_id=${p.product_id}&reels=true`);
+                                  const prodSlug = p.slug;
+                                  router.push(`/market/${bizSlug}${prodSlug ? `/${prodSlug}` : ''}?product_id=${p.product_id}&reels=true`);
                                 }
-                              } else if (onProductClick) onProductClick(p.product_id, businessData?.business?.business_name);
+                              } else if (onProductClick) {
+                                onProductClick(p.product_id, businessData?.business?.business_name, null, businessData?.business?.business_slug, false, p.slug);
+                              }
                             }}>
                               <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
                                 {p.first_image ? <img src={formatUrl(p.first_image)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>}
@@ -1445,11 +1705,11 @@ export default function ProductPreviewModal({
                       <div className="flex items-center justify-between mb-4 pb-2">
                         <h4 className="text-[13px] font-bold text-slate-600">Product Images</h4>
                       </div>
-                      <div className="space-y-4">
+                      <div className="">
                         {payload.productImages.map((img, index) => {
                           if (!img?.url) return null;
                           return (
-                            <div key={index} className="w-full flex justify-center bg-slate-50 rounded-lg overflow-hidden">
+                            <div key={index} className="w-full flex justify-center bg-slate-50  overflow-hidden">
                               <img src={img.url} alt={img.name ?? `${payload.title} image ${index + 1}`} className="w-full h-auto object-contain" loading="lazy" />
                             </div>
                           );
@@ -1477,14 +1737,18 @@ export default function ProductPreviewModal({
 
                         return (
                           <div key={p.product_id} className="group cursor-pointer" onClick={() => {
-                            if (p.product_video) {
+                            // Only open reels if it's a social video with a linked product; otherwise stay in preview
+                            if (p.product_video && (p as any).linked_product) {
                               saveModalState();
-                              if (onReelsClick) onReelsClick(p.product_id, p.business_name);
+                              if (onReelsClick) onReelsClick(p.product_id, p.business_name, null, p.business_slug, p.slug);
                               else {
-                                const bizSlug = slugify(p.business_name || "store");
-                                router.push(`/market/${bizSlug}?product_id=${p.product_id}&reels=true`);
+                                const bizSlug = p.business_slug || slugify(p.business_name || "store");
+                                const prodSlug = p.slug;
+                                router.push(`/market/${bizSlug}${prodSlug ? `/${prodSlug}` : ''}?product_id=${p.product_id}&reels=true`);
                               }
-                            } else if (onProductClick) onProductClick(p.product_id, p.business_name);
+                            } else if (onProductClick) {
+                              onProductClick(p.product_id, p.business_name, null, p.business_slug, false, p.slug);
+                            }
                           }}>
                             <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
                               {p.first_image ? <img src={formatUrl(p.first_image)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>}
@@ -1556,20 +1820,34 @@ export default function ProductPreviewModal({
                 businessId={payload?.businessId}
                 businessSlug={payload?.businessSlug}
                 businessName={payload?.businessName}
+                quantity={payload?.quantity}
+                hasVariants={payload?.hasVariants}
               />
             </aside>
           </div>
         </motion.div>
       </div>
 
-      <PolicyModal
-        key="policy-modal"
-        open={policyModalOpen}
-        title={policyModalData?.title ?? null}
-        body={policyModalData?.body ?? null}
-        onClose={closePolicyModal}
-        onAddressChange={handlePolicyAddressChange}
-      />
+      {policyModalData?.type === "shipping" ? (
+        <ShippingModal
+          key="shipping-modal"
+          open={policyModalOpen}
+          title={policyModalData?.title ?? null}
+          body={policyModalData?.body ?? null}
+          deliveryNotice={businessData?.policy?.core?.delivery_notice}
+          estimateDuration={displayAvgDuration}
+          onClose={closePolicyModal}
+          onAddressChange={handlePolicyAddressChange}
+        />
+      ) : (
+        <PolicyModal
+          key="policy-modal"
+          open={policyModalOpen}
+          title={policyModalData?.title ?? null}
+          body={policyModalData?.body ?? null}
+          onClose={closePolicyModal}
+        />
+      )}
       <AddToCartModal
         key="add-to-cart-modal"
         open={cartModalOpen}
@@ -1626,6 +1904,12 @@ export default function ProductPreviewModal({
         }}
         initialQuery={searchQuery}
       />
-    </>
+
+      <ReturnShippingSubsidyModal
+        open={isSubsidyModalOpen}
+        onClose={() => setIsSubsidyModalOpen(false)}
+      />
+    </>,
+    document.body
   );
 }

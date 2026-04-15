@@ -19,8 +19,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/src/context/authContext";
-import VideoPlayer from "@/src/components/posts/videoPlayer";
+import MobileVideoPlayer from "@/src/components/posts/mobileVideoPlayer";
+import LargeScreenVideoPlayer from "@/src/components/posts/largeScreenVideoPlayer";
 import ImageViewer from "./imageViewer";
 
 import { toast } from "sonner";
@@ -48,6 +50,7 @@ import { fetchProductById } from "@/src/lib/api/productApi";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import type { PreviewPayload } from "@/src/types/product";
 import { useAudio } from "@/src/context/audioContext";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 import { CommentOverlay } from "./CommentOverlay";
 
 import type { Post, User, APIComment } from "@/src/lib/types";
@@ -63,6 +66,7 @@ type Props = {
   targetUserId?: string | number | null;
   isProductLinkedOnly?: boolean;
   zIndex?: number;
+  onActivePostChange?: (post: any) => void;
 };
 
 const NO_IMAGE_PLACEHOLDER = "https://via.placeholder.com/1600x1200?text=No+Image";
@@ -166,7 +170,7 @@ const VolumeHUD = React.memo(() => {
 });
 
 
-export default function PostModal({ post, onClose: onCloseProp, open, onToggleLike, userToken, isPreview = false, origin, targetUserId, isProductLinkedOnly = false, zIndex }: Props) {
+export default function PostModal({ post, onClose: onCloseProp, open, onToggleLike, userToken, isPreview = false, origin, targetUserId, isProductLinkedOnly = false, zIndex, onActivePostChange }: Props) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const prevPostIdRef = useRef<string | number | null>(null);
@@ -317,28 +321,31 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     if (!isMobileReels) return;
     const currentIdStr = `${activePostId}_${currentReelIndex}`;
 
-    // SYNC LIVE RANKING: Instance-aware identity check
-    const idChanged = prevPostIdRef.current !== currentIdStr;
-    if (!idChanged) {
-      // Background list update? Just ensure next buffer preparation
-      const nextItem = reelsList[currentReelIndex + 1];
-      if (nextItem) {
-        import("@/src/lib/videoPlaybackManager").then(({ videoPlaybackManager }) => {
-          videoPlaybackManager.prepare(`${nextItem.id}_${currentReelIndex + 1}`);
-        });
-      }
-      return;
+    // identity changed
+    prevPostIdRef.current = currentIdStr;
+
+    // 4. Notify Parent of active post change for URL updates
+    const currentPost = reelsList[currentReelIndex];
+    if (currentPost && onActivePostChange) {
+      onActivePostChange(currentPost);
     }
 
-    // 1. NUCLEAR STOP: Instantly kill ALL sound/video in DOM before playing new one
-    stopAllVideos();
-
-    // 2. HARD LOCK RESET
+    // 1. HARD LOCK RESET for new reel
     userManualPauseRef.current = false;
     setIsPaused(false);
 
-    // 3. FLUSH RANKING METRICS: Using the canonical ID for DB consistency
-    if (prevPostIdRef.current) {
+    // 2. SYNC WITH MANAGER: Prepare next reel buffer
+    // Playback itself is now handled by the VideoPlayer component's isActive effect 
+    // which includes the necessary Safari stabilization delays.
+    import("@/src/lib/videoPlaybackManager").then(({ videoPlaybackManager }) => {
+      const nextItem = reelsList[currentReelIndex + 1];
+      if (nextItem) {
+        videoPlaybackManager.prepare(`${nextItem.id}_${currentReelIndex + 1}`);
+      }
+    });
+
+    // 3. FLUSH PREVIOUS REEL RANKING METRICS
+    if (prevPostIdRef.current && prevPostIdRef.current !== currentIdStr) {
       const prevIdCanonical = String(prevPostIdRef.current).split('_')[0];
       const metrics = interactionTrackerRef.current[prevIdCanonical];
       if (metrics && metrics.start_time > 0) {
@@ -356,18 +363,6 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
         });
       }
     }
-    prevPostIdRef.current = currentIdStr;
-
-    // 4. Instant Cutoff & New Activation (Direct Sync with Manager)
-    import("@/src/lib/videoPlaybackManager").then(({ videoPlaybackManager }) => {
-      if (userManualPauseRef.current) return;
-      videoPlaybackManager.authorizeAndPlay(currentIdStr);
-
-      const nextItem = reelsList[currentReelIndex + 1];
-      if (nextItem) {
-        videoPlaybackManager.prepare(String(nextItem.id));
-      }
-    });
 
   }, [activePostId, isMobileReels, reelsList, currentReelIndex]);
 
@@ -586,6 +581,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  // Ref mirror — always fresh in closures (no stale-state race on mobile touch events)
+  const commentTextRef = useRef("");
   const sheetTextareaRef = useRef<HTMLTextAreaElement>(null);
   const desktopTextareaRef = useRef<HTMLTextAreaElement>(null);
   const reelTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -595,6 +592,63 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [burstingCommentId, setBurstingCommentId] = useState<number | null>(null);
   const [expandedParents, setExpandedParents] = useState<number[]>([]);
   const [viewerProfileUserId, setViewerProfileUserId] = useState<string | number | undefined>(undefined);
+  const [lockHeight, setLockHeight] = useState<string | number>("100%");
+  const [videoPortHeight, setVideoPortHeight] = useState<string | number>("100%");
+  const [commentSheetHeight, setCommentSheetHeight] = useState<string | number>("0%");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      const h = window.innerHeight;
+      setLockHeight(h);
+      // Initialize heights based on current state
+      if (showCommentsSheet) {
+        setVideoPortHeight(h * 0.25);
+        setCommentSheetHeight(h * 0.75);
+      } else {
+        setVideoPortHeight(h);
+        setCommentSheetHeight(0);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const baseH = typeof lockHeight === "number" ? lockHeight : window.innerHeight;
+      if (showCommentsSheet) {
+        setVideoPortHeight(baseH * 0.25);
+        setCommentSheetHeight(baseH * 0.75);
+      } else {
+        setVideoPortHeight(baseH);
+        // We keep commentSheetHeight at its last value so AnimatePresence can animate it out
+      }
+    }
+  }, [showCommentsSheet, lockHeight]);
+
+  // KEYBOARD AWARENESS: Track visual viewport to keep input above keyboard on mobile
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+
+    const handleResize = () => {
+      const vv = window.visualViewport;
+      if (!vv || !modalRef.current) return;
+      const h = window.innerHeight - vv.height;
+
+      if (h > 50) { // Threshold to detect actual keyboard
+        modalRef.current.style.setProperty('--kb-pad', `${h + 8}px`);
+      } else {
+        modalRef.current.style.setProperty('--kb-pad', 'env(safe-area-inset-bottom, 16px)');
+      }
+    };
+
+    window.visualViewport.addEventListener("resize", handleResize);
+    window.visualViewport.addEventListener("scroll", handleResize);
+    handleResize(); // Initial check
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("scroll", handleResize);
+    };
+  }, []);
+
   const [currentMediaIndex, setCurrentMediaIndex] = useState(() => {
     if (allMedia && allMedia.length > 0 && post.src) {
       const idx = allMedia.findIndex(m => m.url === post.src);
@@ -619,10 +673,10 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       const audio = backgroundAudioRef.current;
       audio.volume = globalVolume;
       audio.muted = globalMute;
-      
+
       if (!isPaused) {
         // Force reload to ensure the new source is picked up especially if it was null before
-        audio.load(); 
+        audio.load();
         audio.play().catch(e => console.warn("[PostModal] Playback blocked or interrupted:", e));
       } else {
         audio.pause();
@@ -681,7 +735,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
           });
 
           if (response?.posts?.length > 0) {
-            bgReservoirRef.current = [...bgReservoirRef.current, ...response.posts];
+            const videoOnlyPosts = response.posts.filter((p: any) => p.isVideo);
+            bgReservoirRef.current = [...bgReservoirRef.current, ...videoOnlyPosts];
             activeCursorRef.current = response.nextCursor;
           }
         } catch (e) {
@@ -722,13 +777,10 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
   const handleCopyLink = useCallback((p: Post) => {
     const url = `${window.location.origin}/social/post/${p.id}`;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
-        toast.success("Link copied to clipboard!");
-      });
-    } else {
-      toast.error("Copy to clipboard not supported");
-    }
+    copyToClipboard(url).then((success) => {
+      if (success) toast.success("Link copied to clipboard!");
+      else toast.error("Failed to copy link");
+    });
   }, []);
 
   const handleDownload = useCallback(async (src?: string) => {
@@ -902,11 +954,21 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
   useEffect(() => {
     if (isClosing) return;
-    document.body.classList.add("overflow-hidden");
+
+    const wasAlreadyLocked = document.body.classList.contains("overflow-hidden") ||
+      window.getComputedStyle(document.body).overflow === "hidden";
+
+    if (!wasAlreadyLocked) {
+      document.body.classList.add("overflow-hidden");
+    }
+
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
+
     return () => {
-      document.body.classList.remove("overflow-hidden");
+      if (!wasAlreadyLocked) {
+        document.body.classList.remove("overflow-hidden");
+      }
       document.removeEventListener("keydown", onKey);
     };
   }, [onClose, isClosing]);
@@ -971,7 +1033,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     } finally {
       setLoadingComments(false);
     }
-  }, [isPreview, isMobileReels, reelsList, currentReelIndex, post.id]);
+  }, [isPreview, isMobileReels, post.id, reelsList[currentReelIndex]?.id, currentItem.user?.is_trusted, currentReelIndex]);
 
 
   useEffect(() => {
@@ -1185,10 +1247,19 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       toast.info("Interactions are not allowed in preview mode");
       return;
     }
-    const ok = await auth.ensureAccountVerified();
-    if (!ok) return;
 
-    const finalCommentText = (manualText ?? commentText)?.trim();
+    // Fast-path: skip expensive network round-trips when user is already logged in & verified
+    const cachedUser = auth?.user;
+    if (!cachedUser) {
+      const ok = await auth.ensureAccountVerified();
+      if (!ok) return;
+    } else if (!cachedUser.phone_no || !cachedUser.email) {
+      const ok = await auth.ensureAccountVerified();
+      if (!ok) return;
+    }
+
+    // Read from ref first (always fresh) then fall back to manualText/state
+    const finalCommentText = (manualText ?? commentTextRef.current ?? commentText)?.trim();
     if (!finalCommentText) return;
 
     // Phase 1: Optimistic Update (Instant UI reflection)
@@ -1223,6 +1294,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
     // Reset input immediately
     setCommentText("");
+    commentTextRef.current = "";
     if (sheetTextareaRef.current) sheetTextareaRef.current.style.height = 'auto';
     if (desktopTextareaRef.current) desktopTextareaRef.current.style.height = 'auto';
     if (reelTextareaRef.current) reelTextareaRef.current.style.height = 'auto';
@@ -1482,7 +1554,23 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
       fetchComments(activePostId);
     }
-  }, [activePostId, isMobileReels]);
+  }, [activePostId, isMobileReels, fetchComments]);
+
+  useEffect(() => {
+    if (isCommenting && isMobileReels) {
+      const timer = setTimeout(() => {
+        reelTextareaRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isCommenting, isMobileReels]);
+
+  // Mobile Reels View Hydration: Load comments when sheet opens
+  useEffect(() => {
+    if (isMobileReels && showCommentsSheet && activePostId) {
+      fetchComments(activePostId);
+    }
+  }, [showCommentsSheet, activePostId, isMobileReels, fetchComments]);
 
   const getNoteStyles = (config: any) => {
     if (!config) return { background: "#f1f5f9" };
@@ -1521,12 +1609,19 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       ? { width: `${computedWidth}px` }
       : undefined;
 
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
-      className={`fixed inset-0 flex items-center justify-center px-0 py-0 ${!zIndex ? 'z-[9999]' : ''}`}
+      className={`fixed inset-0 flex items-center justify-center px-0 py-0 ${!zIndex ? 'z-[500001]' : ''}`}
       style={zIndex ? { zIndex } : {}}
       onMouseDown={onClose}
     >
@@ -1550,13 +1645,14 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
               onMouseDown={stop}
               style={{
                 ...modalInlineStyle,
-                transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center"
+                transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center",
+                height: lockHeight
               }}
               initial={{ opacity: 0, scale: 0.3 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.3 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative z-10 w-full h-full bg-white flex flex-col overflow-y-auto md:flex md:flex-row md:overflow-hidden md:w-[96vw] md:max-w-[1100px] md:h-[94vh] md:rounded-2xl shadow-2xl"
+              className="relative z-10 w-full bg-white flex flex-col overflow-y-auto md:flex md:flex-row md:overflow-hidden md:w-[96vw] md:max-w-[1100px] md:h-[94vh] md:rounded-2xl shadow-2xl"
             >
               {backgroundAudioUrl && (
                 <audio
@@ -1580,7 +1676,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                     </button>
                     <div className="flex items-center gap-3 min-w-0">
                       <Link
-                        href={`/user/profile/${currentItem.user.id}`}
+                        href={currentItem.author_handle ? `/${currentItem.author_handle}` : `/user/profile/${currentItem.user.id}`}
                         onClick={(e) => e.stopPropagation()}
                         className="flex-shrink-0 active:scale-95 transition-transform"
                       >
@@ -1592,7 +1688,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                       </Link>
                       <div className="min-w-0">
                         <Link
-                          href={`/user/profile/${currentItem.user.id}`}
+                          href={currentItem.author_handle ? `/${currentItem.author_handle}` : `/user/profile/${currentItem.user.id}`}
                           onClick={(e) => e.stopPropagation()}
                           className="text-sm text-black font-semibold truncate hover:text-red-500 transition-colors block flex items-center gap-1"
                         >
@@ -1618,12 +1714,15 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
               {isMobileReels ? (
                 /* FULLSCREEN REELS VIEW (MOBILE) - CUSTOM GESTURE ENGINE */
-                <div className="flex-1 flex flex-col bg-black overflow-hidden relative select-none">
+                <div
+                  className="flex-1 flex flex-col bg-black overflow-hidden relative select-none"
+                  style={{ contain: "layout size paint", overflowAnchor: "none" }}
+                >
                   {/* Video Port (Top 25% if comments open, Else 100%) */}
                   <motion.div
                     className="relative overflow-hidden touch-none bg-black flex items-center justify-center p-0"
                     animate={{
-                      height: showCommentsSheet ? "25vh" : "100%",
+                      height: videoPortHeight,
                     }}
                     transition={{
                       type: "tween",
@@ -1693,6 +1792,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                           <div
                             key={`${rp.id}_${i}`}
                             className="w-full h-full flex-shrink-0 flex flex-col items-center bg-black overflow-hidden relative"
+                            style={{ contain: "layout size paint" }}
                           >
                             {!isNear ? (
                               // Empty placeholder to preserve layout/scroll height
@@ -1743,7 +1843,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                       </motion.div>
                                     ))}
                                   </AnimatePresence>
-                                  <VideoPlayer
+                                  <MobileVideoPlayer
                                     videoId={`${rp.id}_${i}`}
                                     isActive={String(rp.id) === String(activePostId)}
                                     onLongPress={(e: React.MouseEvent | React.TouchEvent) => {
@@ -1812,7 +1912,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                     <div className="absolute inset-0 pointer-events-none flex flex-col justify-end p-4 pb-2 bg-gradient-to-t from-black/70 via-transparent to-transparent z-[60]">
                                       <div className="flex flex-col gap-2.5 pointer-events-auto">
                                         <div className="flex items-center gap-2.5">
-                                          <Link href={`/user/profile/${rp.user.id}`} className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0">
+                                          <Link href={rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user.id}`} className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0">
                                             <img src={rp.user.avatar} className="w-full h-full object-cover" alt="author" />
                                           </Link>
                                           <div className="flex flex-col min-w-0">
@@ -1915,151 +2015,205 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                     </motion.div>
                   </motion.div>
 
-                  {/* Actions Bar (Only if no sheet) */}
                   <AnimatePresence>
                     {!showCommentsSheet && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20 }}
-                        className={`${isCommenting ? "h-auto py-3 pt-4" : "h-[54px]"} bg-black border-t border-white/10 flex flex-col px-4 shrink-0 z-50 pointer-events-auto transition-all`}
+                        className="h-[58px] bg-black border-t border-white/10 flex flex-col px-4 shrink-0 z-50 pointer-events-auto transition-all"
+                        style={{
+                          paddingBottom: "env(safe-area-inset-bottom, 12px)"
+                        }}
                       >
-                        {isCommenting ? (
-                          <div className="flex flex-col gap-3 w-full">
-                            <textarea
-                              autoFocus
-                              ref={reelTextareaRef}
-                              rows={1}
-                              value={commentText}
-                              onChange={(e) => {
-                                setCommentText(e.target.value);
-                                const el = e.target;
-                                el.style.height = 'auto';
-                                el.style.height = Math.min(el.scrollHeight, 100) + 'px';
-                                el.style.overflowY = el.scrollHeight > 100 ? 'auto' : 'hidden';
-                              }}
-                              placeholder="Say something..."
-                              className="w-full min-h-[44px] bg-white/10 rounded-2xl px-4 py-3 text-[13px] text-white outline-none border border-white/10 resize-none overflow-hidden leading-tight"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleAddComment();
-                                  setIsCommenting(false);
-                                }
-                              }}
-                            />
-                            <div className="flex items-center justify-end gap-3 pb-1">
+                        <div className="h-full flex items-center justify-between gap-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsCommenting(true);
+                            }}
+                            className="flex-1 h-9 bg-white/10 hover:bg-white/15 rounded-full px-4 flex items-center gap-2 transition-colors border border-white/5"
+                          >
+                            <MessageCircleMore className="w-3.5 h-3.5 text-white/40" />
+                            <span className="text-[11px] text-white/50 font-medium">Say something...</span>
+                          </button>
+
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1.5 min-w-[32px]">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setIsCommenting(false);
-                                  setCommentText("");
-                                }}
-                                className="px-4 py-2 rounded-full text-xs font-bold text-white/60 hover:text-white transition-colors"
+                                onClick={(e) => { e.stopPropagation(); handleToggleLike(e); }}
+                                className="w-6 h-6 flex items-center justify-center text-white active:scale-110 transition-transform relative"
                               >
-                                Cancel
+                                {showBurst && <LikeBurst />}
+                                <div className="relative w-full h-full flex items-center justify-center">
+                                  <AnimatePresence>
+                                    <motion.div
+                                      key={postLiked ? "liked" : "unliked"}
+                                      initial={{ scale: 0.6, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      exit={{ scale: 0.6, opacity: 0 }}
+                                      transition={{ type: "spring", stiffness: 400, damping: 12 }}
+                                      className="absolute inset-0 flex items-center justify-center"
+                                    >
+                                      {postLiked ? (
+                                        <FaHeart className="w-4.5 h-4.5 text-red-500 fill-current drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                                      ) : (
+                                        <FaRegHeart className="w-4.5 h-4.5 text-white stroke-[2.5]" />
+                                      )}
+                                    </motion.div>
+                                  </AnimatePresence>
+                                </div>
                               </button>
+                              <span className="text-[11px] font-black text-white/90 tracking-tighter tabular-nums drop-shadow-sm">
+                                {postLikeCount > 0 ? (postLikeCount >= 1000 ? `${(postLikeCount / 1000).toFixed(1)}k` : postLikeCount) : "Like"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 min-w-[32px]">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddComment();
-                                  setIsCommenting(false);
-                                }}
-                                disabled={commentPosting || !commentText.trim()}
-                                className="px-6 py-2 rounded-full bg-red-500 text-white text-xs font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:grayscale"
+                                onClick={(e) => { e.stopPropagation(); setShowCommentsSheet(true); }}
+                                className="w-6 h-6 flex items-center justify-center text-white active:scale-90 transition-transform"
+                                aria-label="Open comments"
                               >
-                                {commentPosting ? "Posting" : "Post"}
+                                <MessageCircleMore size={18} strokeWidth={2.5} className="text-white" />
                               </button>
+                              <span className="text-[11px] font-black text-white/90 tracking-tighter tabular-nums drop-shadow-sm">
+                                {(() => {
+                                  // Robust multi-field extraction for flexible API compatibility
+                                  const count = Number(currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? 0);
+                                  return count > 0 ? (count >= 1000 ? `${(count / 1000).toFixed(1)}k` : count) : "cmt";
+                                })()}
+                              </span>
                             </div>
                           </div>
-                        ) : (
-                          <div className="h-full flex items-center justify-between gap-4">
-                            {/* QUICK-INPUT TRIGGER: Bypass sheet viewing for instant engagement */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsCommenting(true);
-                              }}
-                              className="flex-1 h-9 bg-white/10 hover:bg-white/15 rounded-full px-4 flex items-center gap-2 transition-colors border border-white/5"
-                            >
-                              <MessageCircleMore className="w-3.5 h-3.5 text-white/40" />
-                              <span className="text-[11px] text-white/50 font-medium">Say something...</span>
-                            </button>
+                        </div>
 
-                            {/* SOCIAL ACTION CLUSTER */}
-                            <div className="flex items-center gap-4">
-                              {/* LIKE ACTION */}
-                              <div className="flex items-center gap-1.5 min-w-[32px]">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleToggleLike(e); }}
-                                  className="w-6 h-6 flex items-center justify-center text-white active:scale-110 transition-transform relative"
-                                >
-                                  {showBurst && <LikeBurst />}
-                                  <div className="relative w-full h-full flex items-center justify-center">
-                                    <AnimatePresence>
-                                      <motion.div
-                                        key={postLiked ? "liked" : "unliked"}
-                                        initial={{ scale: 0.6, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        exit={{ scale: 0.6, opacity: 0 }}
-                                        transition={{ type: "spring", stiffness: 400, damping: 12 }}
-                                        className="absolute inset-0 flex items-center justify-center"
-                                      >
-                                        {postLiked ? (
-                                          <FaHeart className="w-4.5 h-4.5 text-red-500 fill-current drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                                        ) : (
-                                          <Heart className="w-4.5 h-4.5 text-white" />
-                                        )}
-                                      </motion.div>
-                                    </AnimatePresence>
-                                    {postLiked && (
-                                      <motion.div
-                                        initial={{ scale: 1, opacity: 1 }}
-                                        animate={{ scale: [1, 2, 2.5], opacity: [1, 0.4, 0], y: [0, -15, -25] }}
-                                        transition={{ duration: 0.6, ease: "easeOut" }}
-                                        className="absolute text-red-500 pointer-events-none flex items-center justify-center"
-                                      >
-                                        <FaHeart className="w-4.5 h-4.5" />
-                                      </motion.div>
-                                    )}
-                                  </div>
-                                </button>
-                                <span className="text-[11px] font-black text-white/90">{postLikeCount === 0 ? 'like' : postLikeCount}</span>
-                              </div>
-
-                              {/* COMMENT ACTION */}
-                              <div className="flex items-center gap-1.5 min-w-[32px]">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowCommentsSheet(true);
-                                    fetchComments(activePostId);
-                                    const count = (currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? 0);
-                                    if (count === 0 || count === "0") {
-                                      setIsCommenting(true);
-                                      setTimeout(() => {
-                                        const input = document.getElementById('sheet-comment-input-active');
-                                        if (input) input.focus();
-                                      }, 300);
-                                    }
-                                  }}
-                                  className="w-6 h-6 flex items-center justify-center text-white active:scale-110 transition-transform"
-                                >
-                                  <MessageCircleMore className="w-4.5 h-4.5 text-white" />
-                                </button>
-                                <span className="text-[11px] font-black text-white/90">
-                                  {(() => {
-                                    const count = (currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? comments.length);
-                                    return (count === 0) ? 'cmt' : count;
-                                  })()}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {isCommenting && !showCommentsSheet && typeof document !== "undefined" && createPortal(
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 z-[10000] flex flex-col justify-end pointer-events-none"
+                      style={{ transform: 'translateZ(0)' }}
+                    >
+                      {/* Backdrop — only closes when tapping OUTSIDE the panel */}
+                      <div
+                        className="absolute inset-0 bg-transparent pointer-events-auto"
+                        onTouchStart={(e) => {
+                          // Only dismiss if touch started directly on backdrop (not panel)
+                          if (e.target === e.currentTarget) {
+                            setIsCommenting(false);
+                            setCommentText("");
+                          }
+                        }}
+                        onMouseDown={(e) => {
+                          if (e.target === e.currentTarget) {
+                            setIsCommenting(false);
+                            setCommentText("");
+                          }
+                        }}
+                      />
+                      {/* Bottom Panel — blocks ALL touch/click from reaching backdrop */}
+                      <motion.div
+                        initial={{ y: 100 }}
+                        animate={{ y: 0 }}
+                        className="relative bg-zinc-900 border-t border-white/10 px-4 py-4 pointer-events-auto w-full z-10"
+                        style={{
+                          paddingBottom: "var(--kb-pad, env(safe-area-inset-bottom, 24px))",
+                          transform: 'translateZ(0)',
+                          WebkitFontSmoothing: 'antialiased'
+                        }}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex flex-col gap-4">
+                          {replyingTo && (
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 rounded-lg text-[11px] mb-1">
+                              <span className="text-white/50">Replying to <span className="font-bold text-white/90">{(replyingTo as any).author_name || (replyingTo as any).user_name}</span></span>
+                              <button onClick={() => { setReplyingTo(null); }} className="text-white/30 hover:text-white"><XMarkIcon className="w-3.5 h-3.5" /></button>
+                            </div>
+                          )}
+                          <textarea
+                            autoFocus
+                            ref={reelTextareaRef}
+                            rows={1}
+                            value={commentText}
+                            onChange={(e) => {
+                              // Sync both state AND ref so touch handlers always have fresh value
+                              commentTextRef.current = e.target.value;
+                              setCommentText(e.target.value);
+                              const el = e.target;
+                              el.style.height = 'auto';
+                              el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                // Read from ref — always current
+                                const text = commentTextRef.current.trim();
+                                if (text) handleAddComment(text);
+                              }
+                            }}
+                            placeholder={replyingTo ? "Write a reply..." : "Say something..."}
+                            className="w-full min-h-[52px] bg-white/5 rounded-2xl px-5 py-4 text-[14px] text-white outline-none border border-white/10 resize-none overflow-hidden leading-snug"
+                          />
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              onTouchEnd={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                commentTextRef.current = "";
+                                setIsCommenting(false);
+                                setCommentText("");
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                commentTextRef.current = "";
+                                setIsCommenting(false);
+                                setCommentText("");
+                              }}
+                              className="px-5 py-2.5 rounded-full text-[13px] font-bold text-white/60 hover:text-white transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              disabled={commentPosting || !commentText.trim()}
+                              onTouchEnd={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (commentPosting) return;
+                                // Read from DOM ref directly — most reliable source on mobile
+                                const domText = reelTextareaRef.current?.value?.trim();
+                                const refText = commentTextRef.current?.trim();
+                                const text = domText || refText;
+                                if (!text) return;
+                                handleAddComment(text);
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (commentPosting) return;
+                                const domText = reelTextareaRef.current?.value?.trim();
+                                const refText = commentTextRef.current?.trim();
+                                const text = domText || refText;
+                                if (!text) return;
+                                handleAddComment(text);
+                              }}
+                              className="px-8 py-2.5 rounded-full bg-red-600 text-white text-[13px] font-black shadow-xl shadow-red-600/20 active:scale-95 transition-all disabled:opacity-40"
+                            >
+                              {commentPosting ? "Sending..." : "Send"}
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </motion.div>,
+                    document.body
+                  )}
                   <AnimatePresence>
                     {showCommentsSheet && (
                       <motion.div
@@ -2067,15 +2221,9 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         animate={{ y: 0 }}
                         exit={{ y: "100%" }}
                         transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
-                        drag="y"
-                        dragConstraints={{ top: 0 }}
-                        dragElastic={0.2}
-                        onDragEnd={(e, { offset, velocity }) => {
-                          if (offset.y > 150 || velocity.y > 800) {
-                            setShowCommentsSheet(false);
-                          }
-                        }}
-                        className="absolute bottom-0 inset-x-0 h-[75vh] bg-white rounded-t-[0.5rem] z-[100] flex flex-col overflow-hidden shadow-[0_-20px_50px_rgba(0,0,0,0.5)]"
+
+                        style={{ height: commentSheetHeight }}
+                        className="absolute bottom-0 inset-x-0 bg-white rounded-t-[0.5rem] z-[100] flex flex-col overflow-hidden shadow-[0_-20px_50px_rgba(0,0,0,0.5)] touch-none"
                       >
 
 
@@ -2090,14 +2238,23 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         </div>
 
                         {/* Scrollable Comments */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 relative">
-                          {loadingComments ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-20 gap-3">
-                              <svg className="h-8 w-8 animate-spin text-red-500" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="opacity-20" fill="none" />
-                                <path fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z" />
-                              </svg>
-                              <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Loading Conversation...</span>
+                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 relative pb-32">
+                          {loadingComments && comments.length === 0 ? (
+                            <div className="flex flex-col gap-6 ">
+                              {[1, 2, 3].map((i) => (
+                                <div key={i} className="flex items-start gap-4 animate-pulse">
+                                  <div className="h-9 w-9 rounded-full bg-slate-100 shrink-0" />
+                                  <div className="flex-1 space-y-3 py-1">
+                                    <div className="h-2 bg-slate-100 rounded w-1/4" />
+                                    <div className="h-2 bg-slate-100 rounded w-full" />
+                                    <div className="h-2 bg-slate-100 rounded w-3/4" />
+                                    <div className="flex items-center gap-4 pt-1">
+                                      <div className="h-2 bg-slate-50 rounded w-12" />
+                                      <div className="h-2 bg-slate-50 rounded w-12" />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           ) : comments.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 gap-2">
@@ -2121,7 +2278,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                     )}
 
                                     <div className="flex items-start gap-4 relative z-10">
-                                      <Link href={`/user/profile/${c.user_id}`} onClick={(e) => e.stopPropagation()}>
+                                      <Link href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`} onClick={(e) => e.stopPropagation()}>
                                         <img
                                           src={c.author_pic ?? `https://i.pravatar.cc/40?u=${c.author_name}-${c.comment_id}`}
                                           alt={c.author_name}
@@ -2131,7 +2288,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                          <Link href={`/user/profile/${c.user_id}`} onClick={(e) => e.stopPropagation()} className="text-sm font-medium text-slate-400 truncate">
+                                          <Link href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`} onClick={(e) => e.stopPropagation()} className="text-sm font-medium text-slate-400 truncate">
                                             {c.author_name}
                                           </Link>
                                           {c.is_partner && (
@@ -2214,7 +2371,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                         {visibleReplies.map((r) => (
                                           <div key={r.comment_id} className="flex items-start gap-3 relative">
                                             <div className="absolute -left-6 top-0 w-6 h-[14px] border-l-[1.2px] border-b-[1.2px] border-slate-100 rounded-bl-[12px]" />
-                                            <Link href={`/user/profile/${r.user_id}`} onClick={(e) => e.stopPropagation()}>
+                                            <Link href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`} onClick={(e) => e.stopPropagation()}>
                                               <img
                                                 src={r.author_pic ?? `https://i.pravatar.cc/40?u=${r.author_name}-${r.comment_id}`}
                                                 alt={r.author_name}
@@ -2223,7 +2380,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                             </Link>
                                             <div className="flex-1">
                                               <div className="flex items-center gap-2">
-                                                <Link href={`/user/profile/${r.user_id}`} onClick={(e) => e.stopPropagation()} className="text-xs font-medium text-slate-400">
+                                                <Link href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`} onClick={(e) => e.stopPropagation()} className="text-xs font-medium text-slate-400">
                                                   {r.author_name}
                                                 </Link>
                                                 {r.is_partner && (
@@ -2320,7 +2477,12 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         </div>
 
                         {/* Input Pad (Sticky) - Expandable to match desktop */}
-                        <div className="px-5 py-2 bg-white border-t border-slate-100 shrink-0">
+                        <div
+                          className="absolute bottom-0 inset-x-0 z-[110] px-5 py-2 bg-white border-t border-slate-100 shrink-0"
+                          style={{
+                            paddingBottom: "var(--kb-pad, env(safe-area-inset-bottom, 16px))"
+                          }}
+                        >
                           {replyingTo && (
                             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 rounded-lg text-[10px] mb-3">
                               <span className="text-slate-500">Replying to <span className="font-bold text-slate-700">{replyingTo.author_name}</span></span>
@@ -2337,6 +2499,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 rows={1}
                                 value={commentText}
                                 onChange={(e) => {
+                                  commentTextRef.current = e.target.value;
                                   setCommentText(e.target.value);
                                   const el = e.target;
                                   el.style.height = 'auto';
@@ -2348,8 +2511,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    handleAddComment();
-                                    setIsCommenting(false);
+                                    const text = commentTextRef.current.trim();
+                                    if (text) handleAddComment(text);
                                   }
                                 }}
                               />
@@ -2366,10 +2529,26 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                   Cancel
                                 </button>
                                 <button
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onTouchEnd={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (commentPosting) return;
+                                    const domText = sheetTextareaRef.current?.value?.trim();
+                                    const refText = commentTextRef.current?.trim();
+                                    const text = domText || refText;
+                                    if (!text) return;
+                                    handleAddComment(text);
+                                  }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleAddComment();
-                                    setIsCommenting(false);
+                                    e.preventDefault();
+                                    if (commentPosting) return;
+                                    const domText = sheetTextareaRef.current?.value?.trim();
+                                    const refText = commentTextRef.current?.trim();
+                                    const text = domText || refText;
+                                    if (!text) return;
+                                    handleAddComment(text);
                                   }}
                                   disabled={commentPosting || !commentText.trim()}
                                   className="px-6 py-2 rounded-full bg-red-500 text-white text-xs font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:grayscale transition-all"
@@ -2384,10 +2563,13 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 e.stopPropagation();
                                 setIsCommenting(true);
                               }}
-                              className="w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400 text-left flex items-center gap-3 transition-colors hover:bg-slate-200/50"
+                              className="w-full rounded-full bg-slate-100 px-5 py-3 text-[14px] font-medium text-slate-400 cursor-text flex items-center justify-between transition-colors hover:bg-slate-200/50"
                             >
-                              <MessageCircleMore className="w-4 h-4" />
-                              <span>{replyingTo ? "Add a reply..." : "Add a comment..."}</span>
+                              <span>{replyingTo ? "Write a reply..." : "Add a comment..."}</span>
+                              <div className="flex items-center gap-1 opacity-40">
+                                <div className="w-1 h-1 rounded-full bg-slate-400 animate-pulse" />
+                                <div className="w-1 h-1 rounded-full bg-slate-400 animate-pulse delay-75" />
+                              </div>
                             </button>
                           )}
                         </div>
@@ -2463,8 +2645,10 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 </motion.div>
                               ))}
                             </AnimatePresence>
-                            <VideoPlayer
-                              videoId={String(post.id)}
+                            <LargeScreenVideoPlayer
+                              videoId={`desktop_modal_${post.id}`}
+                              isActive={true}
+                              onRegisterRef={(el) => handleVideoRegister(el, true)}
                               onLongPress={(e: React.MouseEvent | React.TouchEvent) => {
                                 if ('clientX' in e) {
                                   setMenuPosition({ x: e.clientX, y: e.clientY });
@@ -2704,7 +2888,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                   {/* Parent Comment */}
                                   <div className="flex items-start gap-4 relative z-10">
                                     <Link
-                                      href={`/user/profile/${c.user_id}`}
+                                      href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`}
                                       onClick={(e) => e.stopPropagation()}
                                       className="flex-shrink-0 active:scale-95 transition-transform"
                                     >
@@ -2719,7 +2903,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                       <div className="flex items-center gap-2 min-w-0">
                                         <div className="flex items-center gap-1 min-w-0">
                                           <Link
-                                            href={`/user/profile/${c.user_id}`}
+                                            href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`}
                                             onClick={(e) => e.stopPropagation()}
                                             className="text-sm font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
                                           >
@@ -2823,7 +3007,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                               )}
 
                                               <Link
-                                                href={`/user/profile/${r.user_id}`}
+                                                href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="flex-shrink-0 active:scale-95 transition-transform z-10"
                                               >
@@ -2836,7 +3020,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                               <div className="flex-1">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                   <Link
-                                                    href={`/user/profile/${r.user_id}`}
+                                                    href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className="text-xs font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
                                                   >
@@ -3020,10 +3204,13 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                               </button>
 
                               <button
+                                onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleAddComment();
-                                  setIsCommenting(false);
+                                  e.preventDefault();
+                                  const text = commentText.trim();
+                                  if (!text) return;
+                                  handleAddComment(text);
                                 }}
                                 disabled={commentPosting || !commentText.trim()}
                                 className="h-7 flex px-4 items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-500/20 hover:brightness-105 active:scale-95 text-sm disabled:opacity-50 disabled:grayscale transition-all"
@@ -3131,6 +3318,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                   userManualPauseRef.current = false;
                 }}
                 payload={selectedProductData}
+                onProductClick={(id) => handleProductClick(Number(id))}
+                ignoreRouterBack={true}
               />
             )}
 
@@ -3227,6 +3416,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
           </>
         )}
       </AnimatePresence>
-    </div>
+    </div>,
+    document.body
   );
 }

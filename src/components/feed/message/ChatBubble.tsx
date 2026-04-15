@@ -157,7 +157,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                     video.muted = true;
                     video.playsInline = true;
                     video.currentTime = 3.0; // Seek to 3 seconds for better cover
-                    
+
                     video.onloadeddata = () => {
                         const canvas = document.createElement('canvas');
                         canvas.width = video.videoWidth || 640;
@@ -197,9 +197,9 @@ export const ChatBubble: React.FC<MessageProps> = ({
     const toggleVoicePlayback = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!voiceAudioRef.current) return;
-        
+
         const uniqueId = String(messageId || actualUrl);
-        
+
         if (isVoicePlaying) {
             voiceAudioRef.current.pause();
             registerPlayback(null);
@@ -283,8 +283,8 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         }`}
                                     style={{ maxHeight: '350px', minWidth: '180px', transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
                                 />
-                             ) : isVideo ? (
-                                <div 
+                            ) : isVideo ? (
+                                <div
                                     className="relative group/vid cursor-pointer"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -296,31 +296,31 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                     {status === 'processing' && (
                                         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm rounded-xl">
                                             <Loader2 className="w-6 h-6 text-white animate-spin mb-1" />
-                                            <span className="text-white text-[9px] font-bold tracking-widest uppercase">Processing</span>
+                                            <span className="text-white text-[9px] font-bold tracking-widest ">Processing</span>
                                         </div>
                                     )}
-                                    
+
                                     {/* Video Cover Image (Static Cachable Image) */}
                                     <div className="relative overflow-hidden rounded-xl bg-slate-100">
                                         {videoThumbUrl || video_thumbnail ? (
-                                            <img 
+                                            <img
                                                 src={videoThumbUrl || video_thumbnail || ''}
                                                 alt="Video cover"
                                                 className={`max-w-full rounded-xl object-cover transition-all duration-500 ${status === 'processing' ? 'blur-sm scale-95 opacity-80' : 'hover:opacity-95'}`}
-                                                style={{ 
+                                                style={{
                                                     maxHeight: '300px',
                                                     minWidth: '180px',
                                                     display: 'block'
                                                 }}
                                             />
                                         ) : (
-                                            <video 
+                                            <video
                                                 src={actualUrl ? `${actualUrl}#t=3.0` : ''}
                                                 crossOrigin="anonymous"
-                                                muted 
+                                                muted
                                                 playsInline
                                                 className={`max-w-full rounded-xl object-cover transition-all duration-500 ${status === 'processing' ? 'blur-sm scale-95 opacity-80' : 'hover:opacity-95'}`}
-                                                style={{ 
+                                                style={{
                                                     maxHeight: '300px',
                                                     minWidth: '180px',
                                                     display: 'block'
@@ -349,18 +349,18 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                 }}
                                             />
                                         )}
-                                        
+
                                         {/* Video Badge (Top Right) */}
                                         <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded-md flex items-center gap-1 border border-white/10 shadow-lg">
-                                            <svg className="w-2.5 h-2.5 text-white fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                            <span className="text-[8px] font-black text-white uppercase tracking-tighter">Video</span>
+                                            <svg className="w-2.5 h-2.5 text-white fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                            <span className="text-[8px] font-black text-white  tracking-tighter">Video</span>
                                         </div>
 
                                         {/* Large Center Play Button Overlay */}
                                         {status !== 'processing' && (
                                             <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-auto bg-black/5 hover:bg-black/20 transition-colors">
                                                 <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-xl shadow-2xl border border-white/30 transition-transform active:scale-95 group-hover/vid:scale-110">
-                                                     <svg className="w-6 h-6 text-white ml-0.5 fill-current drop-shadow-lg" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                                    <svg className="w-6 h-6 text-white ml-0.5 fill-current drop-shadow-lg" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                                                 </div>
                                             </div>
                                         )}
@@ -400,7 +400,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                         className="h-full bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.4)]"
                                                     />
                                                 </div>
-                                                <span className="text-[8px] font-black text-slate-400 mt-1 uppercase tracking-widest">Uploading...</span>
+                                                <span className="text-[8px] font-black text-slate-400 mt-1  tracking-widest">Uploading...</span>
                                             </div>
                                         )}
 
@@ -438,7 +438,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             })()}
                                         </p>
                                         <div className="flex items-center gap-2">
-                                            <span className={`text-[9px] font-bold uppercase tracking-widest ${mine ? "text-white/60" : "text-slate-400"}`}>
+                                            <span className={`text-[9px] font-bold  tracking-widest ${mine ? "text-white/60" : "text-slate-400"}`}>
                                                 PDF Document
                                             </span>
                                             {status !== 'sending' && (
@@ -447,7 +447,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             {status !== 'sending' && (
                                                 <button
                                                     onClick={() => onPdfClick?.(actualUrl || "")}
-                                                    className={`text-[9px] font-black uppercase tracking-widest underline decoration-1 underline-offset-2 ${mine ? "text-white hover:text-red-100" : "text-red-500 hover:text-red-600"}`}
+                                                    className={`text-[9px] font-black  tracking-widest underline decoration-1 underline-offset-2 ${mine ? "text-white hover:text-red-100" : "text-red-500 hover:text-red-600"}`}
                                                 >
                                                     View
                                                 </button>
@@ -466,17 +466,17 @@ export const ChatBubble: React.FC<MessageProps> = ({
 
                                     <div className="flex-1 flex flex-col gap-1.5">
                                         <div className="flex items-center gap-1 justify-center h-6">
-                                             {[...Array(15)].map((_, i) => (
-                                                 <div 
-                                                     key={i} 
-                                                     className={`w-0.5 rounded-full transition-all duration-300 ${mine ? "bg-white" : "bg-red-500"} ${isVoicePlaying ? 'animate-pulse' : 'opacity-40'}`} 
-                                                     style={{ 
-                                                         height: `${Math.max(3, Math.random() * 18)}px`,
-                                                         animationDelay: `${i * 0.05}s`
-                                                     }} 
-                                                 />
-                                             ))}
-                                         </div>
+                                            {[...Array(15)].map((_, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`w-0.5 rounded-full transition-all duration-300 ${mine ? "bg-white" : "bg-red-500"} ${isVoicePlaying ? 'animate-pulse' : 'opacity-40'}`}
+                                                    style={{
+                                                        height: `${Math.max(3, Math.random() * 18)}px`,
+                                                        animationDelay: `${i * 0.05}s`
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
 
                                     <audio
@@ -524,11 +524,11 @@ export const ChatBubble: React.FC<MessageProps> = ({
                             )}
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2">
-                                    <h4 className={`text-[10px] font-bold uppercase tracking-tight leading-tight line-clamp-2 ${mine ? "text-white" : "text-slate-900"}`}>{product_name}</h4>
+                                    <h4 className={`text-[10px] font-bold  tracking-tight leading-tight line-clamp-2 ${mine ? "text-white" : "text-slate-900"}`}>{product_name}</h4>
                                     <span className={`text-[11px] font-black shrink-0 ml-auto ${mine ? "text-white" : "text-red-600"}`}>₦{Number(product_price || 0).toLocaleString()}</span>
                                 </div>
                                 {product_variant && (
-                                    <p className={`text-[9px] font-bold mt-0.5 whitespace-normal leading-relaxed uppercase tracking-widest ${mine ? "text-white/70" : "text-slate-400"}`}>{product_variant}</p>
+                                    <p className={`text-[9px] font-bold mt-0.5 whitespace-normal leading-relaxed  tracking-widest ${mine ? "text-white/70" : "text-slate-400"}`}>{product_variant}</p>
                                 )}
                             </div>
                         </div>
@@ -560,12 +560,12 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         )}
                                     </div>
                                     <div className="flex flex-col min-w-0 pr-1">
-                                        <span className={`text-[8px] font-black uppercase tracking-widest ${mine ? "text-red-100" : "text-slate-400"}`}>Order Reference</span>
+                                        <span className={`text-[8px] font-black  tracking-widest ${mine ? "text-red-100" : "text-slate-400"}`}>Order Reference</span>
                                         <span className={`text-[11px] font-bold truncate max-w-[120px] ${mine ? "text-white" : "text-slate-900"}`}>{order_ref}</span>
                                     </div>
                                 </div>
                                 <div className={`px-2 py-0.5 rounded-full text-[8px] font-bold shrink-0 ${mine ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
-                                    DETAILS
+                                    Details
                                 </div>
                             </div>
                             <div className={`h-[1px] w-full ${mine ? "bg-white/10" : "bg-slate-100"}`} />
@@ -587,12 +587,12 @@ export const ChatBubble: React.FC<MessageProps> = ({
                             </p>
                             <div className="absolute bottom-0 right-0 flex items-center justify-end gap-1 opacity-70 px-1 pb-0.5">
                                 {isEdited && (
-                                    <span className={`text-[7px] font-black uppercase tracking-widest ${mine ? "opacity-60" : "opacity-40"}`}>
+                                    <span className={`text-[7px] font-black  tracking-widest ${mine ? "opacity-60" : "opacity-40"}`}>
                                         Edited
                                     </span>
                                 )}
                                 {sentAt && (
-                                    <span className={`text-[7.5px] font-black tabular-nums uppercase ${mine ? "opacity-60" : "opacity-40"}`}>
+                                    <span className={`text-[7.5px] font-black tabular-nums  ${mine ? "opacity-60" : "opacity-40"}`}>
                                         {new Date(sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 )}
@@ -610,12 +610,12 @@ export const ChatBubble: React.FC<MessageProps> = ({
                     {!content && (
                         <div className={`absolute bottom-1 right-1 flex items-center gap-1 backdrop-blur-md px-1 py-0.5 rounded-full ring-1 ${mine ? "bg-black/10 ring-white/5" : "bg-white/50 ring-black/5"}`}>
                             {isEdited && (
-                                <span className={`text-[7px] font-black uppercase tracking-widest ${mine ? "text-white/70" : "text-gray-500/70"}`}>
+                                <span className={`text-[7px] font-black  tracking-widest ${mine ? "text-white/70" : "text-gray-500/70"}`}>
                                     Edited
                                 </span>
                             )}
                             {sentAt && (
-                                <span className={`text-[7.5px] font-black tabular-nums uppercase ${mine ? "text-white/90" : "text-gray-500/80"}`}>
+                                <span className={`text-[7.5px] font-black tabular-nums  ${mine ? "text-white/90" : "text-gray-500/80"}`}>
                                     {new Date(sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             )}

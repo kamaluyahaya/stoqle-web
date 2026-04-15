@@ -7,6 +7,7 @@ import { ProductFeedItem, PreviewPayload, ProductSku } from "@/src/types/product
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import { API_BASE_URL } from "@/src/lib/config";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaArrowLeft, FaStore, FaHeart, FaRegHeart, FaShare } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
@@ -150,7 +151,7 @@ function ShoppingReelsContent() {
                 url: shareUrl,
             }).catch(() => { });
         } else {
-            navigator.clipboard.writeText(shareUrl);
+            copyToClipboard(shareUrl);
             toast.info("Link copied to clipboard!");
         }
     };
@@ -428,7 +429,7 @@ function ShoppingReelsContent() {
                             setModalOpen(false);
                             setSelectedProductPayload(null);
                         }}
-                        onProductClick={handleProductBuyClick}
+                    // onProductClick={handleProductBuyClick}
                     />
                 )
             }

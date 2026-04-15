@@ -83,7 +83,7 @@ export default function OpenStorePage() {
               <div className="mt-4 flex gap-3">
                 <button onClick={() => setModalOpen(true)} className="flex-1 rounded-lg bg-rose-500 px-4 py-3 text-white font-semibold">Create my shop</button>
 
-                <button onClick={() => router.push("/merchant-guide")} className="flex-1 rounded-lg border border-slate-200 px-4 py-3 bg-white font-medium">Merchant Guide</button>
+                <button onClick={() => router.push("/profile/business/onboarding")} className="flex-1 rounded-lg border border-slate-200 px-4 py-3 bg-white font-medium">Merchant Guide</button>
               </div>
             </motion.section>
 

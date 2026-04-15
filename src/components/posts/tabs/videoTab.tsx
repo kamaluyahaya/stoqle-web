@@ -251,11 +251,11 @@ export default function VideoTab({
 
       {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="p-5 rounded-3xl bg-white border border-slate-100">
-          <div className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Resolution</div>
+          <div className="text-[10px] font-black text-red-500  tracking-widest mb-1">Resolution</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">Recommended 720p or 1080p for best quality.</p>
         </div>
         <div className="p-5 rounded-3xl bg-white border border-slate-100">
-          <div className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Duration</div>
+          <div className="text-[10px] font-black text-red-500  tracking-widest mb-1">Duration</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">Maximum 3 minutes for high-impact reels.</p>
         </div>
       </div> */}

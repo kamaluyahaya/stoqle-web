@@ -33,6 +33,8 @@ import type { PreviewPayload } from "@/src/types/product";
 import { API_BASE_URL } from "@/src/lib/config";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import { computeDiscountedPrice } from "@/src/lib/utils/product/price";
+import { formatDuration } from "@/src/lib/utils/product/duration";
 
 function LikeBurst() {
   const particles = Array.from({ length: 12 });
@@ -135,14 +137,11 @@ const PostCard = React.memo(({
               </div>
             </div>
           ) : post.isVideo ? (
-            <video
-              src={post.src}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
+            <img
+              src={post.thumbnail || post.src}
+              alt={post.caption || "Video thumbnail"}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              onError={(e) => { (e.target as any).src = 'https://via.placeholder.com/800x1200?text=Video+Thumbnail' }}
             />
           ) : (
             <div className="absolute inset-0 w-full h-full">
@@ -187,7 +186,8 @@ const PostCard = React.memo(({
             onClick={(e) => {
               e.stopPropagation();
               if (!user) { setShowLoginModal(true); return; }
-              router.push(`/user/profile/${post.user.id}`);
+              const handle = post.author_handle || post.user.username;
+              router.push(handle ? `/${handle}` : `/user/profile/${post.user.id}`);
             }}
           >
             <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
@@ -316,9 +316,45 @@ const ProductCard = React.memo(({
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
 
-  const isPromoActive = useMemo(() => {
-    return !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
-  }, [p.promo_title, p.promo_discount, p.promo_end]);
+  const promoInfo = useMemo(() => {
+    // 1. Promotions (Occasional) - Match previewModal.tsx logic
+    const promotions = p.promotions_data || [];
+    const activePromo = Array.isArray(promotions)
+      ? promotions.find((pr: any) => {
+        const start = pr.start_date || pr.start;
+        const end = pr.end_date || pr.end;
+        const isStarted = !start || new Date(start) <= new Date();
+        const isEnded = end && new Date(end) < new Date();
+        return isStarted && !isEnded && (pr.discount_percent || pr.discount) > 0;
+      })
+      : null;
+
+    if (activePromo) {
+      return {
+        title: activePromo.title || activePromo.name || activePromo.occasion || "Promotion",
+        discount: activePromo.discount_percent || activePromo.discount
+      };
+    }
+
+    // 2. Sales Discount - Match previewModal.tsx logic
+    const sale = p.sale_discount_data;
+    if (sale && (sale.discount_percent || sale.discount_percentage || sale.discount) > 0) {
+      return {
+        title: sale.title || sale.name || sale.discount_type || sale.type || "Sale",
+        discount: sale.discount_percent || sale.discount_percentage || sale.discount
+      };
+    }
+
+    // 3. Legacy flat fields (fallback)
+    if (p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date())) {
+      return { title: p.promo_title, discount: p.promo_discount };
+    }
+
+    return null;
+  }, [p.promo_title, p.promo_discount, p.promo_end, p.promotions_data, p.sale_discount_data]);
+
+  const isPromoActive = !!promoInfo;
+  const discountedPrice = computeDiscountedPrice(p.price, promoInfo?.discount);
 
   const entryVariants = {
     initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
@@ -448,33 +484,51 @@ const ProductCard = React.memo(({
           <span className="align-middle ">{p.title || "Untitled Product"}</span>
         </h3>
 
-        <div className=" flex items-center min-h-[16px]">
-          {isPromoActive ? (
-            <span className="text-[10px] font-medium text-rose-500 border-red-500 border-[0.5px] px-1  truncate">
-              {p.promo_title} {p.promo_discount}% Off
-            </span>
-          ) : p.sale_type ? (
-            <span className="text-[10px] text-rose-500 border-red-500 border-[0.5px] px-1  truncate">
-              {p.sale_type} {p.sale_discount}% Off
-            </span>
-          ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-            <span className="text-[10px] font-bold text-rose-500  tracking-widest truncate">
-              Only {Number(p.total_quantity)} left
-            </span>
-          ) : p.return_shipping_subsidy === 1 ? (
-            <span className="text-[10px] font-bold text-green-700  tracking-widest truncate">
-              Return Shipping Subsidy
-            </span>
-          ) : p.market_name ? (
-            <span className="text-[10px] font-bold text-rose-500  tracking-widest truncate">
-              {p.market_name}
-            </span>
-          ) : null}
-        </div>
+        {((p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) > 0 && Number(p.total_quantity) <= 4) ||
+          promoInfo ||
+          (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) === 0) ||
+          p.return_shipping_subsidy === 1 ||
+          p.seven_day_no_reason_return === 1 ||
+          p.market_name) && (
+            <div className="flex items-center min-h-[16px]">
+              {(p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) > 0 && Number(p.total_quantity) <= 4) ? (
+                <span className="text-[10px] font-bold text-rose-500 tracking-widest truncate">
+                  Only {Number(p.total_quantity)} left
+                </span>
+              ) : promoInfo ? (
+                <span className="text-[10px] font-medium text-rose-500 border-red-500 border-[0.5px] px-1 truncate">
+                  {promoInfo.title} {promoInfo.discount}% Off
+                </span>
+              ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) === 0) ? (
+                <span className="text-[10px] font-bold text-slate-400 tracking-widest truncate">
+                  Out of Stock
+                </span>
+              ) : p.seven_day_no_reason_return === 1 ? (
+                <span className="text-[10px] font-bold text-emerald-600 tracking-widest truncate">
+                  7 Days No Reason Return
+                </span>
+              ) : p.return_shipping_subsidy === 1 ? (
+                <span className="text-[10px] font-bold text-green-700 tracking-widest truncate">
+                  Return Shipping Subsidy
+                </span>
+              ) : p.market_name ? (
+                <span className="text-[10px] font-bold text-slate-400 tracking-widest truncate ">
+                  {p.market_name}
+                </span>
+              ) : null}
+            </div>
+          )}
 
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold">
-            <span className="text-slate-900 text-base">₦{Number(p.price || 0).toLocaleString()}</span>
+            {isPromoActive && discountedPrice !== null ? (
+              <div className="flex flex-col">
+                <span className="text-rose-500 text-base font-black">₦{Number(discountedPrice).toLocaleString()}</span>
+                <span className="text-slate-400 text-[10px] line-through decoration-rose-500/50">₦{Number(p.price || 0).toLocaleString()}</span>
+              </div>
+            ) : (
+              <span className="text-slate-900 text-base font-black">₦{Number(p.price || 0).toLocaleString()}</span>
+            )}
           </div>
           <div
             className="flex items-center gap-1 cursor-pointer relative"
@@ -645,17 +699,16 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     if (isPage) return;
     if (!isOpen || shouldHideModal) return;
 
-    const wasAlreadyLocked = document.body.style.overflow === "hidden";
-    
+    const wasAlreadyLocked = document.body.classList.contains("overflow-hidden") ||
+      window.getComputedStyle(document.body).overflow === "hidden";
+
     if (!wasAlreadyLocked) {
-      document.body.style.overflow = "hidden";
-      document.documentElement.style.overflow = "hidden";
+      document.body.classList.add("overflow-hidden");
     }
 
     return () => {
       if (!wasAlreadyLocked) {
-        document.body.style.overflow = "";
-        document.documentElement.style.overflow = "";
+        document.body.classList.remove("overflow-hidden");
       }
     };
   }, [isOpen, shouldHideModal, isPage]);
@@ -682,14 +735,20 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
 
   const mapUnifiedSearchProductToProduct = (p: any, index: number): any => ({
     ...p,
-    product_id: p.id,
-    title: p.name,
-    first_image: p.image,
+    product_id: p.id || p.product_id,
+    title: p.name || p.title,
+    first_image: p.image || p.thumbnail || p.first_image,
     product_video: p.product_video,
-    business_logo: p.business_logo,
-    business_slug: p.business_slug,
+    business_name: p.business_name || p.shop_name || p.vendor_name || p.business_owner_name,
+    business_logo: p.business_logo || p.logo || p.vendor_logo || p.shop_logo,
+    business_slug: p.business_slug || p.slug || p.shop_slug,
+    logo: p.business_logo || p.logo || p.vendor_logo || p.shop_logo,
+    profile_pic: p.profile_pic || p.avatar || p.user_image || p.author_image,
+    total_quantity: p.total_quantity ?? p.quantity ?? p.stock ?? 0,
     isLiked: p.is_liked === 1 || p.is_liked === true,
     likes_count: p.likes_count || 0,
+    promotions_data: p.promotions_data ? (typeof p.promotions_data === 'string' ? JSON.parse(p.promotions_data) : p.promotions_data) : null,
+    sale_discount_data: p.sale_discount_data ? (typeof p.sale_discount_data === 'string' ? JSON.parse(p.sale_discount_data) : p.sale_discount_data) : null,
     index
   });
 
@@ -704,8 +763,9 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         const dbProduct = res.data.product;
         const mappedPayload = mapProductToPreviewPayload(dbProduct, formatProductUrl);
 
-        const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
-        if (baseInv && mappedPayload) mappedPayload.quantity = baseInv.quantity;
+        // If fetchProductById didn't return business details, we can try to fill from the search result if they exist
+        if (!mappedPayload.businessLogo && dbProduct.business_logo) mappedPayload.businessLogo = dbProduct.business_logo;
+        if (!mappedPayload.vendorAvatar && (dbProduct.profile_pic || dbProduct.logo)) mappedPayload.vendorAvatar = dbProduct.profile_pic || dbProduct.logo;
 
         setSelectedProductData(mappedPayload);
         setProductPreviewOpen(true);
@@ -782,26 +842,31 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   }, [isOpen, query, activeTab, token]);
 
   const mapUnifiedSearchPostToPost = (p: any): any => {
-    const isVideo = p.cover_type === 'video' || (p.image && VIDEO_EXT_RE.test(p.image));
+    const isVideo = p.cover_type === 'video' || (p.image && VIDEO_EXT_RE.test(p.image)) || !!p.final_video_url || !!p.original_video_url;
+    const finalVideoUrl = formatFullUrl(p.final_video_url || p.original_video_url);
 
     // Media URL mapping
-    const finalSrc = formatFullUrl(p.image);
+    const finalSrc = isVideo ? (finalVideoUrl || formatFullUrl(p.image)) : formatFullUrl(p.image);
 
     // Author image URL mapping
-    const avatarUrl = formatFullUrl(p.author_image);
+    const avatarUrl = formatFullUrl(p.logo || p.business_logo || p.vendor_logo || p.shop_logo || p.author_image || p.profile_pic || p.avatar || p.author_pic);
 
     return {
       id: p.id,
       apiId: p.id,
       src: finalSrc,
+      thumbnail: formatFullUrl(p.image),
+      final_video_url: finalVideoUrl,
       isVideo,
       caption: p.text || p.subtitle || "",
       note_caption: p.subtitle || "",
       user: {
         id: p.author_id,
         name: p.author_name,
+        username: p.author_handle,
         avatar: avatarUrl || `https://ui-avatars.com/api/?name=${p.author_name}`,
       },
+      author_handle: p.author_handle,
       liked: Boolean(p.liked_by_me),
       likeCount: p.like_count || 0,
       coverType: p.cover_type,
@@ -821,12 +886,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       if (urlData) {
         if (urlData.url) {
           window.history.pushState({ modal: true }, "", urlData.url);
-          // If the secure link provides a better URL (signed with xsec_token/source),
-          // update the selectedPost immediately so the Modal sees the valid link.
-          setSelectedPost((prev: any) => prev ? { 
-            ...prev, 
-            src: urlData.url || prev.src,
-            final_video_url: urlData.url || prev.final_video_url
+          // Only update properties that don't break playback (like tokens if needed)
+          // But don't overwrite src with a page URL!
+          setSelectedPost((prev: any) => prev ? {
+            ...prev,
+            xsecToken: urlData.xsec_token,
+            xsecSource: urlData.xsec_source
           } : null);
         } else {
           const url = new URL(window.location.href);
@@ -955,7 +1020,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         >
           <div className="w-12 h-12 rounded-full border border-slate-100 overflow-hidden flex-shrink-0">
             <img
-              src={formatFullUrl(s.image)}
+              src={formatFullUrl(s.business_logo || s.logo || s.image || s.profile_pic)}
               alt={s.name}
               className="w-full h-full object-cover"
               onError={(e) => { (e.target as any).src = 'https://ui-avatars.com/api/?name=' + s.name }}
@@ -1002,6 +1067,11 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                 <span className="text-[10px] font-black text-white tracking-wider drop-shadow-sm">
                   ₦{Number(p.price || 0).toLocaleString()}
                 </span>
+                {(p.total_quantity === 0 || p.quantity === 0 || p.stock === 0) && (
+                  <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-sm text-white text-[8px] font-black px-1 rounded-sm  tracking-tighter">
+                    Out
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -1118,7 +1188,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                       onClick={() => {
                         const profilePath = (user?.id === u.id || user?.user_id === u.id)
                           ? "/profile"
-                          : `/user/profile/${u.id}`;
+                          : (u.username ? `/${u.username}` : `/user/profile/${u.id}`);
                         router.push(profilePath);
                       }}
                     >
@@ -1180,7 +1250,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                   onClick={() => {
                     const profilePath = (user?.id === u.id || user?.user_id === u.id)
                       ? "/profile"
-                      : `/user/profile/${u.id}`;
+                      : (u.username ? `/${u.username}` : `/user/profile/${u.id}`);
                     router.push(profilePath);
                   }}
                 >
@@ -1196,7 +1266,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                   onClick={() => {
                     const profilePath = (user?.id === u.id || user?.user_id === u.id)
                       ? "/profile"
-                      : `/user/profile/${u.id}`;
+                      : (u.username ? `/${u.username}` : `/user/profile/${u.id}`);
                     router.push(profilePath);
                   }}
                   className="px-5 py-1.5 border border-slate-200 rounded-full text-[11px] font-bold text-slate-600"
@@ -1318,8 +1388,10 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
           initial={isPage ? { opacity: 1 } : { opacity: 0, scale: 1.05 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={isPage ? { opacity: 1 } : { opacity: 0, scale: 1.05 }}
-          className="fixed inset-0 z-[99999] bg-white backdrop-blur-2xl flex flex-col"
+          className="fixed inset-0 z-[600000] bg-white backdrop-blur-2xl flex flex-col"
           style={{ display: shouldHideModal ? "none" : "flex" }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           <div className="h-14 flex items-center px-2 gap-2 border-slate-50 bg-white sticky top-0 z-30">
             <button onClick={onClose} className="p-2 rounded-full active:bg-slate-50">

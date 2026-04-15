@@ -32,9 +32,12 @@ class VideoPlaybackManager {
     }
 
     private notify() {
-        for (const listener of this.listeners) {
-            listener(this.activeVideoId);
-        }
+        const id = this.activeVideoId;
+        queueMicrotask(() => {
+            for (const listener of this.listeners) {
+                listener(id);
+            }
+        });
     }
 
     private log(...args: any[]) {
@@ -78,7 +81,7 @@ class VideoPlaybackManager {
         videoId: string,
         finalMuted: boolean = false,
         finalVolume: number = 1
-    ) {
+    ): Promise<boolean | void> {
         const session = ++this.playSessionId;
         const entry = this.registry.get(videoId);
 
@@ -96,25 +99,10 @@ class VideoPlaybackManager {
 
         // Mark as active early so the UI can switch from poster -> video,
         // but playback itself is still gated below.
-        this.activeVideoId = videoId;
-        this.notify();
-
-        // Wait until the first frame is actually ready to paint.
-        // Wait until the first frame is actually ready to paint.
-        // We require at least HAVE_FUTURE_DATA (3) to avoid black-screen flickers.
-        const ready = await this.waitForFirstPaint(targetVideo, session);
-        
-        if (!ready || this.playSessionId !== session || this.activeVideoId !== videoId) {
-            this.log(`Aborted play for ${videoId} - session or readiness mismatch`);
-            // Safety: Ensure this specific element is NOT playing if it lost the session
-            targetVideo.pause();
-            targetVideo.muted = true;
-            return;
+        if (this.activeVideoId !== videoId) {
+          this.activeVideoId = videoId;
+          this.notify();
         }
-
-        // STEP 2: Force frame render BEFORE sound
-        targetVideo.muted = true;
-        targetVideo.volume = 0;
 
         // CRITICAL: Respect manual pause override before starting background playback
         if (this.manualPauseMap.get(videoId)) {
@@ -122,17 +110,48 @@ class VideoPlaybackManager {
             return;
         }
 
+        // STEP 1: Attempt to play with the requested sound settings immediately
+        targetVideo.muted = finalMuted;
+        targetVideo.volume = finalMuted ? 0 : finalVolume;
+        targetVideo.playsInline = true; // Safari hard requirement
+
+        let autoplayBlocked = false;
+
         try {
             await targetVideo.play();
-            // Force browser to commit at least one frame paint
-            await new Promise(requestAnimationFrame);
-            await new Promise(resolve => setTimeout(resolve, 50));
-        } catch {
+        } catch (e: any) {
+            if (e.name === "NotAllowedError" && !finalMuted) {
+                // Browser strictly requires user interaction for sound. 
+                // Fallback to muted playback instead of stalling.
+                this.log(`Autoplay with sound blocked for ${videoId}, falling back to muted play`);
+                targetVideo.muted = true;
+                targetVideo.volume = 0;
+                autoplayBlocked = true;
+                
+                try {
+                    await targetVideo.play();
+                } catch (e2) {
+                    this.log(`Fallback muted play also failed for ${videoId}`, e2);
+                    return;
+                }
+            } else {
+                this.log(`Forced play failed or aborted for ${videoId}`, e);
+                return;
+            }
+        }
+
+        // STEP 2: Wait until the first frame is actually ready to paint if it wasn't already.
+        await this.waitForFirstPaint(targetVideo, session);
+
+        // Verify we are still the active session before unmuting.
+        if (this.playSessionId !== session || this.activeVideoId !== videoId) {
+            this.log(`Session mismatch after play() resolved for ${videoId}`);
+            targetVideo.pause();
             return;
         }
 
-        // STEP 3: Activate sound AFTER frame is visible
-        if (this.activeVideoId === videoId && this.playSessionId === session) {
+        // STEP 3: Activate sound AFTER frame is visible (or instantly if already ready)
+        if (!autoplayBlocked) {
             targetVideo.muted = finalMuted;
             targetVideo.volume = finalMuted ? 0 : finalVolume;
         }
@@ -142,6 +161,8 @@ class VideoPlaybackManager {
             paused: targetVideo.paused,
             muted: targetVideo.muted,
         });
+
+        return autoplayBlocked;
     }
 
     /**
@@ -166,13 +187,9 @@ class VideoPlaybackManager {
         for (const [id, entry] of this.registry.entries()) {
             const video = entry.el;
             if (id !== activeId) {
-                // EXTREME RESET: Force stop, mute, volume 0, AND reset time
                 video.pause();
                 video.muted = true;
                 video.volume = 0;
-                try {
-                    video.currentTime = 0;
-                } catch { }
             }
         }
     }
@@ -255,15 +272,10 @@ class VideoPlaybackManager {
                 requestAnimationFrame(() => finish());
             };
 
-            // If already ready enough (HAVE_FUTURE_DATA), resolve on next paint tick.
-            if (video.readyState >= 3) {
-                requestAnimationFrame(() => {
-                    if (this.playSessionId !== session) {
-                        resolve(false);
-                        return;
-                    }
-                    finish();
-                });
+            // If already ready enough (HAVE_CURRENT_DATA), resolve instantly for zero latency.
+            // Safari often stays on 2 for HLS streams until .play() is called
+            if (video.readyState >= 2) {
+                finish();
                 return;
             }
 
@@ -271,7 +283,8 @@ class VideoPlaybackManager {
             video.addEventListener("canplay", onReady, { once: true });
             video.addEventListener("playing", onReady, { once: true });
 
-            // Hard timeout so we never hang forever.
+            // Safari often takes longer to buffer HLS natively, but we don't want to hang the UI forever.
+            // Reduce timeout to 2s for a faster fallback to "just play it anyway".
             timer = setTimeout(() => {
                 if (this.playSessionId !== session) {
                     cleanup();
@@ -279,7 +292,7 @@ class VideoPlaybackManager {
                     return;
                 }
                 finish();
-            }, 1800);
+            }, 2000);
         });
     }
 

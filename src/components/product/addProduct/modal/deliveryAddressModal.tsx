@@ -41,6 +41,9 @@ export default function DeliveryAddressModal({
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [showGeocodeWarning, setShowGeocodeWarning] = useState(false);
 
+    const [pastePromptOpen, setPastePromptOpen] = useState(false);
+    const [parsedAddress, setParsedAddress] = useState<any>(null);
+
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [sessionToken, setSessionToken] = useState<any>(null);
@@ -149,19 +152,19 @@ export default function DeliveryAddressModal({
             document.head.appendChild(script);
         } else {
             debug("Google Maps script already exists on page. Checking for library...");
-            
+
             // If script exists but URL doesn't have places, we might need a reload or to warn
             const hasPlacesInUrl = script.src.includes("libraries=places") || script.src.includes("libraries=...,places") || script.src.includes("libraries=places,...");
-            
+
             if (window.google?.maps?.places) {
                 initPlacesService();
             } else if (!hasPlacesInUrl) {
                 debug("Existing script missing 'places' library. Appending library...");
                 // Force reload with places if possible, or at least try to load it
-                const newSrc = script.src.includes("libraries=") 
+                const newSrc = script.src.includes("libraries=")
                     ? script.src.replace(/libraries=([^&]+)/, "libraries=$1,places")
                     : `${script.src}&libraries=places`;
-                
+
                 // Note: Simply changing src might not work for Google Maps API once initialized.
                 // But we can try to append a new script if the first one hasn't initialized google.maps yet.
                 if (!window.google?.maps) {
@@ -169,7 +172,7 @@ export default function DeliveryAddressModal({
                 } else {
                     console.warn("[DeliveryAddressModal] Google Maps initialized without 'places'. Autocomplete may fail.");
                 }
-                
+
                 const waitForLoad = setInterval(() => {
                     if (window.google?.maps?.places) {
                         clearInterval(waitForLoad);
@@ -204,7 +207,71 @@ export default function DeliveryAddressModal({
 
         loadAttemptedRef.current = true;
         loadGooglePlaces();
+
+        // Only check clipboard if adding a new address
+        if (!initialData) {
+            checkClipboard();
+        }
     }, [open]);
+
+    const checkClipboard = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text || text.length < 10) return;
+
+            const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+            if (lines.length >= 3) {
+                const name = lines[0];
+                const phone = lines[1].replace(/\D/g, "");
+                const remaining = lines.slice(2).join(", ");
+
+                // Format: [Street Optional], Country, State, City
+                const parts = remaining.split(",").map(p => p.trim());
+
+                let street = "";
+                let reg = "";
+
+                // If we have at least 3 parts, assume they are Country, State, City at the end
+                if (parts.length >= 3) {
+                    const country = parts[parts.length - 3];
+                    const state = parts[parts.length - 2];
+                    const city = parts[parts.length - 1];
+                    reg = `${country}, ${state}, ${city}`;
+
+                    // Everything before that is the street
+                    street = parts.slice(0, parts.length - 3).join(", ");
+                    // If street was empty because there were only 3 parts total, find it elsewhere or use city
+                    if (!street && parts.length === 3) {
+                        street = city; // Fallback
+                    }
+                } else {
+                    street = remaining;
+                    reg = "Nigeria"; // Default fallback
+                }
+
+                setParsedAddress({
+                    recipientName: name,
+                    contactNo: phone,
+                    address: street,
+                    region: reg
+                });
+                setPastePromptOpen(true);
+            }
+        } catch (err) {
+            console.debug("Clipboard access check skipped:", err);
+        }
+    };
+
+    const handleApplyPasted = () => {
+        if (parsedAddress) {
+            setRecipientName(parsedAddress.recipientName);
+            setContactNo(parsedAddress.contactNo);
+            setAddress(parsedAddress.address);
+            setRegion(parsedAddress.region);
+            setPastePromptOpen(false);
+            toast.success("Address pasted successfully");
+        }
+    };
 
     // Update position of suggestions dropdown
     useEffect(() => {
@@ -518,7 +585,7 @@ export default function DeliveryAddressModal({
             {open && (
                 <div
                     key="delivery-address-container"
-                    className="fixed inset-0 z-[20005] flex items-end sm:items-center justify-center p-0 outline-none"
+                    className="fixed inset-0 z-[610000] flex items-end sm:items-center justify-center p-0 outline-none"
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
                     role="dialog"
@@ -552,6 +619,110 @@ export default function DeliveryAddressModal({
                                 {initialData ? "Edit Delivery Address" : "Add Delivery Address"}
                             </h2>
                         </div>
+
+                        {/* Paste Prompt */}
+                        <AnimatePresence>
+                            {pastePromptOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden bg-red-50/50 border-b border-red-100"
+                                >
+                                    <div className="p-4 flex items-center justify-between gap-3">
+                                        <div className="flex-1">
+                                            <p className="text-[11px] font-bold text-red-600  tracking-wider mb-1">
+                                                Paste copied address?
+                                            </p>
+                                            <p className="text-[12px] text-slate-600 line-clamp-1 italic">
+                                                {parsedAddress?.recipientName} • {parsedAddress?.address}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setPastePromptOpen(false)}
+                                                className="px-3 py-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleApplyPasted}
+                                                className="px-4 py-1.5 text-[11px] font-bold bg-white text-red-600 border border-red-200 rounded-full shadow-sm hover:bg-red-50"
+                                            >
+                                                Paste
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Paste Confirmation Modal Overlay */}
+                        <AnimatePresence>
+                            {pastePromptOpen && (
+                                <div className="fixed inset-0 z-[620000] flex items-center justify-center p-4">
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+                                        onClick={() => setPastePromptOpen(false)}
+                                    />
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                        className="relative bg-white w-full max-w-sm rounded-[1.2rem] shadow-2xl p-6 overflow-hidden"
+                                    >
+                                        <div className="text-center mb-6">
+                                            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                </svg>
+                                            </div>
+                                            <h3 className="text-lg font-black text-slate-900">Paste copied address?</h3>
+                                            <p className="text-xs text-slate-400 font-medium mt-1">We detected an address in your clipboard</p>
+                                        </div>
+
+                                        <div className="space-y-4 mb-8">
+                                            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-slate-400  tracking-widest mb-0.5">Recipient</p>
+                                                    <p className="text-sm font-bold text-slate-800">{parsedAddress?.recipientName}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-slate-400  tracking-widest mb-0.5">Contact</p>
+                                                    <p className="text-sm font-bold text-slate-800">{parsedAddress?.contactNo}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-slate-400  tracking-widest mb-0.5">Address</p>
+                                                    <p className="text-sm font-bold text-slate-800 leading-snug">{parsedAddress?.address}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-slate-400  tracking-widest mb-0.5">Region</p>
+                                                    <p className="text-sm font-bold text-slate-800">{parsedAddress?.region}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-3">
+                                            <button
+                                                onClick={handleApplyPasted}
+                                                className="w-full py-3 rounded-full bg-red-600 text-white font-black text-sm shadow-lg shadow-red-100 active:scale-95 transition-all"
+                                            >
+                                                Confirm & Fill
+                                            </button>
+                                            <button
+                                                onClick={() => setPastePromptOpen(false)}
+                                                className="w-full py-3 rounded-full text-slate-400 font-black text-sm hover:bg-slate-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                </div>
+                            )}
+                        </AnimatePresence>
 
                         <div className="flex-1 overflow-y-auto p-5 pb-20 space-y-4">
                             <div className="relative">
@@ -607,7 +778,7 @@ export default function DeliveryAddressModal({
                                     {address && (
                                         <button
                                             onClick={() => { setAddress(""); setSuggestions([]); setShowSuggestions(false); }}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-tighter"
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-slate-600  tracking-tighter"
                                         >
                                             Clear
                                         </button>
@@ -638,7 +809,7 @@ export default function DeliveryAddressModal({
                                                 }}
                                                 className="bg-white border border-slate-100 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.18)] max-h-64 overflow-y-auto no-scrollbar py-2 pointer-events-auto"
                                             >
-                                                <div className="px-5 pt-2 pb-1 text-[10px] uppercase tracking-widest font-bold text-slate-400">
+                                                <div className="px-5 pt-2 pb-1 text-[10px]  tracking-widest font-bold text-slate-400">
                                                     Suggestions
                                                 </div>
 
@@ -681,7 +852,7 @@ export default function DeliveryAddressModal({
                             <div className="flex items-center justify-between bg-white rounded-2xl border-slate-100">
                                 <div className="flex flex-col">
                                     <span className="text-sm font-bold text-slate-800">Set as Default Address</span>
-                                    <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                                    <span className="text-[10px] text-slate-400  tracking-widest font-bold">
                                         Use for all future orders
                                     </span>
                                 </div>
@@ -708,7 +879,7 @@ export default function DeliveryAddressModal({
                             <button
                                 onClick={handleSave}
                                 disabled={isGeocoding}
-                                className={`w-full py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-red-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""
+                                className={`w-full py-2 mb-5 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-red-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""
                                     }`}
                             >
                                 {isGeocoding ? (
@@ -772,7 +943,7 @@ export default function DeliveryAddressModal({
                                     <span className="font-bold text-slate-900">building/house number</span>.
                                 </p>
                                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-left">
-                                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">
+                                    <p className="text-[10px]  font-bold text-slate-400 tracking-wider mb-1">
                                         Provided Address
                                     </p>
                                     <p className="text-sm text-slate-700 font-medium leading-tight">

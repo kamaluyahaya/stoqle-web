@@ -300,27 +300,36 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
       bank: bankName.trim(),
     };
 
+    let backendMsg = "";
     try {
       const token = localStorage.getItem("token");
-      if (role === 'user') {
-        await savePaymentAccount(payloadObj);
-      } else if (role === 'vendor' && businessId) {
+      if (role === 'vendor' && businessId) {
         const res = await fetch(`${API_BASE_URL}/api/business/${businessId}/policy/payment`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(payloadObj),
         });
+        const resJson = await res.json();
         if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.message || "Paystack verification failed");
+          throw new Error(resJson.message || "Paystack verification failed");
         }
+        backendMsg = resJson.message;
+      } else if (role === 'user') {
+        const res = await savePaymentAccount(payloadObj);
+        backendMsg = res.message;
       }
 
       const fullPayload = JSON.stringify({ ...payloadObj, pod: !!podEnabled, cod: !!codEnabled, supportAvailable: !!supportAvailable });
       localStorage.setItem(prefKey, fullPayload);
       if (onSave) await onSave(fullPayload);
 
-      Swal.fire({ icon: "success", title: "Saved", text: "Account verified and saved.", confirmButtonColor: "#10b981", timer: 2000 });
+      Swal.fire({ 
+        icon: backendMsg?.includes("progress") ? "info" : "success", 
+        title: backendMsg?.includes("progress") ? "Saved & Syncing" : "Saved", 
+        text: backendMsg || "Account verified and saved.", 
+        confirmButtonColor: "#10b981", 
+        timer: backendMsg?.includes("progress") ? 4000 : 2000 
+      });
       onClose();
     } catch (e: any) {
       console.error("Save error", e);
@@ -356,7 +365,7 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
               <div className="p-6 border-b border-slate-50 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-30">
                 <div className="space-y-1">
                   <h3 className="text-xl font-black text-slate-900 tracking-tight">Withdrawal Settings</h3>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Payout & Bank Configuration</p>
+                  <p className="text-[10px] font-black text-slate-400  tracking-widest">Payout & Bank Configuration</p>
                 </div>
                 <button onClick={() => !saving && onClose()} className="p-2 hover:bg-slate-50 rounded-full transition text-slate-400">
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M6 6L18 18M6 18L18 6" /></svg>
@@ -367,12 +376,12 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
                 {loading ? (
                   <div className="py-20 flex flex-col items-center justify-center space-y-4">
                     <div className="w-8 h-8 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Syncing securely...</p>
+                    <p className="text-[10px] font-black text-slate-400  tracking-widest">Syncing securely...</p>
                   </div>
                 ) : (
                   <>
                     <section className="space-y-4">
-                      <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] px-1">Global Settlement</h4>
+                      <h4 className="text-[11px] font-black text-slate-900  tracking-[0.2em] px-1">Global Settlement</h4>
                       <div className=" space-y-5">
                         <DefaultInput label="Account Number" value={accountNumber} onChange={setAccountNumber} placeholder="10 Digits" required maxLength={10} />
                         <CategorySelectionModal
@@ -380,7 +389,7 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
                           onSelected={(v) => { setBankName(v); setBankCode(getBankCodeByName(v)); }}
                           hintText="Choose your bank provider" isRequired triggerLabel="Bank Name"
                         />
-                        <DefaultInput label="Account Name" value={isResolving ? "Resolving..." : accountName} disabled={true} placeholder="Resolves automatically" />
+                        <DefaultInput label="Account Name" value={isResolving ? "Resolving..." : accountName} onChange={() => {}} disabled={true} placeholder="Resolves automatically" />
                       </div>
                     </section>
 
@@ -396,7 +405,7 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
                             <div key={i} className="bg-white border border-slate-100 rounded p-4 flex items-center justify-between ">
                               <div>
                                 <div className="text-sm font-black text-slate-900">{opt.label}</div>
-                                <div className="text-[10px] font-medium text-slate-400 uppercase tracking-widest leading-none mt-1">{opt.sub}</div>
+                                <div className="text-[10px] font-medium text-slate-400  tracking-widest leading-none mt-1">{opt.sub}</div>
                               </div>
                               <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" checked={opt.val} onChange={(e) => opt.set(e.target.checked)} className="sr-only" />

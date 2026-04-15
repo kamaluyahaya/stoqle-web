@@ -328,8 +328,8 @@ export default function SmartInventoryPage() {
     return (
         <div className="min-h-screen bg-slate-100 pb-20">
             {/* Header */}
-            <div className="sticky top-0 lg:top-16 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 pb-4 flex items-center justify-between gap-4 left-0 right-0 pt-[env(safe-area-inset-top,12px)]">
-                <div className="flex items-center">
+            <div className="sticky top-0 lg:top-16 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4  py-2 flex items-center justify-between gap-4 left-0 right-0 pt-[env(safe-area-inset-top,12px)]">
+                <div className="flex items-center pt-4">
                     <button
                         onClick={() => router.back()}
                         className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 sm:hidden"
@@ -340,10 +340,10 @@ export default function SmartInventoryPage() {
                         {businessData?.logo && (
                             <img src={businessData.logo} alt="" className="w-6 h-6 rounded-full border border-slate-200" />
                         )}
-                        {businessData?.business_name || "My Inventory"}
+                        My Inventory
                     </h1>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 pt-4">
                     {refreshing && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
                     <button
                         onClick={() => router.push('/profile/business/inventory/report')}

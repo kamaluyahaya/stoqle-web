@@ -9,6 +9,7 @@ import { useCart } from "@/src/context/cartContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import SearchModal from "../modal/SearchModal";
 import SearchResultsModal from "../modal/SearchResultsModal";
+import HelpCenterModal from "../modal/HelpCenterModal";
 import {
   Bars3Icon,
   XMarkIcon,
@@ -25,15 +26,17 @@ import {
   ChevronLeftIcon,
   MagnifyingGlassIcon,
   ChevronRightIcon,
-  CreditCardIcon
+  CreditCardIcon,
+  RocketLaunchIcon
 } from "@heroicons/react/24/outline";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWallet } from "@/src/context/walletContext";
 type Props = {
   height: number;
+  hideHeaderOnMobile?: boolean;
 };
 
-export default function Navbar({ height }: Props) {
+export default function Navbar({ height, hideHeaderOnMobile }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [showMobileSearch, setShowMobileSearch] = useState(false);
@@ -48,6 +51,7 @@ export default function Navbar({ height }: Props) {
   const { token, user, openLogin } = useAuth();
   const { cartCount } = useCart();
   const { openWallet } = useWallet();
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const lastPath = useRef(pathname);
 
   useEffect(() => {
@@ -136,6 +140,20 @@ export default function Navbar({ height }: Props) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  useEffect(() => {
+    const handleToggle = () => setShowMobileMenu(prev => !prev);
+    const handleClose = () => {
+      setShowMobileMenu(false);
+      setActiveSubmenu(null);
+    };
+    window.addEventListener("toggle-mobile-menu", handleToggle);
+    window.addEventListener("close-mobile-menu", handleClose);
+    return () => {
+      window.removeEventListener("toggle-mobile-menu", handleToggle);
+      window.removeEventListener("close-mobile-menu", handleClose);
+    };
+  }, []);
+
   // click outside / escape to close mobile menu
   useEffect(() => {
     if (showMobileMenu) {
@@ -211,15 +229,7 @@ export default function Navbar({ height }: Props) {
             >
               {/* Header (Top of Drawer) */}
               <div className="p-4 mt-5 relative flex items-center justify-center border-gray-50 bg-white">
-                {user && (
-                    <Link
-                      href="/profile/business/business-status"
-                      onClick={() => setShowMobileMenu(false)}
-                      className="bg-red-500 text-white px-6 py-1.5 rounded-full text-xs font-extrabold shadow-sm active:scale-95 transition-all"
-                    >
-                      {Boolean(user?.is_business_owner || user?.business_name || user?.business_id || user?.isBusiness) ? "My shop" : "Open Store"}
-                    </Link>
-                )}
+
 
                 <button
                   onClick={() => setShowMobileMenu(false)}
@@ -237,7 +247,7 @@ export default function Navbar({ height }: Props) {
                   <DrawerItem
                     label="Add friends"
                     icon={UserPlusIcon}
-                    href={`/user/profile/${user?.id || user?.user_id}?tab=friends`}
+                    href={user?.username ? `/${user.username}?tab=friends` : `/user/profile/${user?.id || user?.user_id}?tab=friends`}
                     onClick={() => setShowMobileMenu(false)}
                   />
                   <DrawerItem
@@ -251,11 +261,19 @@ export default function Navbar({ height }: Props) {
                 {/* Group 2: Creator & Comments */}
                 <MenuGroup>
                   <DrawerItem
-                    label="Creator center"
+                    label={Boolean(user?.is_business_owner || user?.business_name || user?.business_id || user?.isBusiness) ? "My shop" : "Become a vendor"}
                     icon={SparklesIcon}
-                    href="/creative/portfolio"
+                    href="/profile/business/business-status"
                     onClick={() => setShowMobileMenu(false)}
                   />
+                  {Boolean(user?.is_business_owner || user?.business_id) && (
+                    <DrawerItem
+                      label="Vendor onboarding"
+                      icon={RocketLaunchIcon}
+                      href="/profile/business/onboarding"
+                      onClick={() => setShowMobileMenu(false)}
+                    />
+                  )}
                   <DrawerItem
                     label="My comments"
                     icon={ChatBubbleOvalLeftIcon}
@@ -294,7 +312,7 @@ export default function Navbar({ height }: Props) {
                   <DrawerItem
                     label="Community Guidelines"
                     icon={InformationCircleIcon}
-                    href="/help/guidelines"
+                    href="/community-guidelines"
                     onClick={() => setShowMobileMenu(false)}
                   />
                 </MenuGroup>
@@ -309,21 +327,44 @@ export default function Navbar({ height }: Props) {
                     { label: "Scan", icon: QrCodeIcon, href: "/scan" },
                     { label: "Help center", icon: QuestionMarkCircleIcon, href: "/help/faq" },
                     { label: "Settings", icon: Cog6ToothIcon, href: "/settings" },
-                  ].map((item, idx) => (
-                    <Link
-                      key={idx}
-                      href={item.href}
-                      onClick={() => { }}
-                      className="flex flex-col items-center gap-1 group"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-red-500 transition-all">
-                        <item.icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
-                        {item.label}
-                      </span>
-                    </Link>
-                  ))}
+                  ].map((item, idx) => {
+                    const isHelp = item.label === "Help center";
+
+                    if (isHelp) {
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setShowHelpModal(true);
+                            setShowMobileMenu(false);
+                          }}
+                          className="flex flex-col items-center gap-1 group"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-red-500 transition-all">
+                            <item.icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
+                            {item.label}
+                          </span>
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={idx}
+                        href={item.href}
+                        className="flex flex-col items-center gap-1 group"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-red-500 transition-all">
+                          <item.icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
+                          {item.label}
+                        </span>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
@@ -332,10 +373,7 @@ export default function Navbar({ height }: Props) {
       </AnimatePresence>
 
       <header
-        className={`fixed top-0 inset-x-0 bg-white backdrop-blur-md p-2 ${pathname === "/messages" || pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory")
-          ? "hidden sm:block"
-          : ""
-          }`}
+        className={`fixed top-0 inset-x-0 bg-white backdrop-blur-md p-2 ${hideHeaderOnMobile ? "hidden lg:block" : (pathname === "/messages" || pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory") ? "hidden sm:block" : "")}`}
         style={{ height, zIndex: (showMobileMenu || showMobileSearch) ? 300000 : 1000 }}
       >
         <div className="mx-auto flex h-full items-center px-4 w-full">
@@ -538,6 +576,11 @@ export default function Navbar({ height }: Props) {
           </div>
         </div>
       </header>
+
+      <HelpCenterModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+      />
     </>
   );
 }

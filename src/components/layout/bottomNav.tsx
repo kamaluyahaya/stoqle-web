@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { usePathname, useSearchParams, useRouter, useParams } from "next/navigation";
 import React, { useState } from "react";
 import { useAuth } from "@/src/context/authContext";
 import {
@@ -34,6 +34,7 @@ export default function BottomNav() {
   const auth = useAuth();
   const { unreadCount } = useChat();
   const pathname = usePathname();
+  const params = useParams();
   const router = useRouter(); // add router
   const searchParams = useSearchParams();
   const [showReleaseModal, setShowReleaseModal] = useState(false);
@@ -54,7 +55,8 @@ export default function BottomNav() {
     pathname === "/profile/orders" ||
     pathname?.startsWith("/profile/business/inventory") ||
     pathname === "/release" ||
-    pathname?.includes("/track/")
+    pathname?.includes("/track/") ||
+    !!params?.username
   ) return null;
 
   const rawProfileImage = auth?.user?.business_logo || auth?.user?.profile_pic || auth?.user?.avatar || auth?.user?.photoURL || null;

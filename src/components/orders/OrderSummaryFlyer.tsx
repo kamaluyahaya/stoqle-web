@@ -167,7 +167,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
       {/* VERTICAL VERIFICATION SLIP (RIGHT EDGE) */}
       <div className="fixed right-3 top-0 bottom-0 flex items-center justify-center pointer-events-none opacity-[0.2] select-none z-50">
         <div
-          className="text-[12px] font-black tracking-[0.5em] uppercase text-slate-600"
+          className="text-[12px] font-black tracking-[0.5em]  text-slate-600"
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
         >
           ——  Stoqle Order Verification Slip — ID: #{order.sale_id} — Validated by Anti-Tamper System —
@@ -183,7 +183,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
             <h1 className="text-3xl font-bold tracking-tight text-slate-950">Order Summary</h1>
           </div>
           <div className="text-right">
-            <div className="inline-block bg-slate-100 text-slate-800 text-[10px] font-black px-3 py-1.5 rounded-lg tracking-widest uppercase mb-3">
+            <div className="inline-block bg-slate-100 text-slate-800 text-[10px] font-black px-3 py-1.5 rounded-lg tracking-widest  mb-3">
               {order.status.replace(/_/g, ' ')}
             </div>
             <div className="text-sm font-bold text-slate-950 mb-1">Order ID: #{order.sale_id}</div>
@@ -194,7 +194,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
         <div className="grid grid-cols-2 gap-12 mb-2">
           {/* VENDOR SECTION */}
           <section className="p-4 rounded-lg border border-slate-100 mb-0" style={{ pageBreakAfter: 'avoid' }}>
-            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+            <h2 className="text-[10px] font-black text-slate-400  tracking-[0.2em] mb-3 flex items-center gap-2">
               <ShoppingBag size={12} /> Merchant Details
             </h2>
             <div className="flex items-center gap-4 mb-3">
@@ -221,7 +221,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
 
           {/* CUSTOMER SECTION */}
           <section className="p-4 mb-0" style={{ pageBreakAfter: 'avoid' }}>
-            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+            <h2 className="text-[10px] font-black text-slate-400  tracking-[0.2em] mb-4 flex items-center gap-2">
               <User size={12} /> Delivery Destination
             </h2>
             <div className="font-extrabold text-slate-900 text-sm mb-1 tracking-tight">{delivery.name}</div>
@@ -241,16 +241,16 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
 
         {/* ORDER ITEMS TABLE */}
         <section className="mb-4">
-          <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">Order Contents</h2>
+          <h2 className="text-[10px] font-black text-slate-400  tracking-[0.2em] px-2">Order Contents</h2>
           <div className="overflow-hidden rounded-lg border border-slate-100">
             <table className="w-full border-collapse">
               <thead className="bg-slate-50/50">
                 <tr>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Product</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Item Details</th>
-                  <th className="text-center px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Qty</th>
-                  <th className="text-right px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Unit Price</th>
-                  <th className="text-right px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Total</th>
+                  <th className="text-left px-6 py-4 text-[10px] font-black text-slate-500  tracking-widest">Product</th>
+                  <th className="text-left px-6 py-4 text-[10px] font-black text-slate-500  tracking-widest">Item Details</th>
+                  <th className="text-center px-6 py-4 text-[10px] font-black text-slate-500  tracking-widest">Qty</th>
+                  <th className="text-right px-6 py-4 text-[10px] font-black text-slate-500  tracking-widest">Unit Price</th>
+                  <th className="text-right px-6 py-4 text-[10px] font-black text-slate-500  tracking-widest">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -264,7 +264,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
                     <td className="px-6 py-5">
                       <div className="font-extrabold text-slate-900 text-sm leading-tight">{item.product_name}</div>
                       {item.variant_info && (
-                        <div className="text-[10px] font-black text-rose-500 uppercase mt-1 tracking-wider">{item.variant_info}</div>
+                        <div className="text-[10px] font-black text-rose-500  mt-1 tracking-wider">{item.variant_info}</div>
                       )}
                     </td>
                     <td className="px-6 py-5 text-center text-sm font-bold text-slate-950">{item.quantity}</td>
@@ -289,7 +289,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
                     <span>{activePromoObj.title} ({activePromoObj.discount_percent}%)</span>
                     <span>-₦{Number((order.combined_total * activePromoObj.discount_percent) / 100).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center text-[10px] text-emerald-500 font-black uppercase tracking-widest px-2 pt-1 border-t border-emerald-50">
+                  <div className="flex justify-between items-center text-[10px] text-emerald-500 font-black  tracking-widest px-2 pt-1 border-t border-emerald-50">
                     <span>Total Amount Savings</span>
                     <span>₦{Number((order.combined_total * activePromoObj.discount_percent) / 100).toLocaleString()}</span>
                   </div>
@@ -302,7 +302,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
               </div>
               <div className="h-px my-2" />
               <div className="flex justify-between items-center px-4 py-2">
-                <span className="text-xs font-black uppercase tracking-widest opacity-70">Final Total</span>
+                <span className="text-xs font-black  tracking-widest opacity-70">Final Total</span>
                 <span className="text-xl font-black">₦{Number(order.combined_total || 0).toLocaleString()}</span>
               </div>
             </div>
@@ -312,7 +312,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
         {/* DELIVERY INFORMATION */}
         <section className="grid grid-cols-2 gap-2">
           <div className="space-y-4">
-            <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+            <h2 className="text-[10px] font-black text-slate-400  tracking-[0.2em] mb-4 flex items-center gap-2">
               <Calendar size={12} /> Delivery Time
             </h2>
             <div className="flex items-start gap-4 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
@@ -330,7 +330,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
           {/* QR CODE SECTION */}
           <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50/30 rounded-lg border border-dashed border-slate-200">
             <img src={qrUrl} alt="Order QR" className="w-24 h-24 mb-3 border-4 border-white shadow-lg rounded-lg" />
-            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Order Verification Tag</div>
+            <div className="text-[9px] font-black text-slate-400  tracking-widest">Order Verification Tag</div>
             <p className="text-[8px] text-slate-400 mt-1 max-w-[120px]">Scan to view real-time tracking and delivery status history.</p>
           </div>
         </section>
@@ -338,7 +338,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
         {/* FOOTER */}
         <footer className="text-center pt-4 space-y-2">
           <div className="flex items-center justify-center gap-2 opacity-30 grayscale hover:grayscale-0 transition duration-500">
-            <span className="text-xs font-black tracking-[0.3em] uppercase">Powered by</span>
+            <span className="text-xs font-black tracking-[0.3em] ">Powered by</span>
             <img src="/assets/images/logo.png" className="h-4 object-contain" alt="Stoqle" />
           </div>
           <p className="text-[10px] font-bold text-slate-400 tracking-wider">Built for sellers. Loved by buyers.</p>

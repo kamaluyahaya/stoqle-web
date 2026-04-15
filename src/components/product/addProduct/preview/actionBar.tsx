@@ -3,14 +3,32 @@ import { LifebuoyIcon, BuildingStorefrontIcon, ShoppingCartIcon } from "@heroico
 import { useAuth } from "@/src/context/authContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
-export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartClick, onShopClick, cartCount = 0, shopLogo, shopProfilePic, businessId, businessSlug, businessName }: any) {
+export default function ActionBar({
+  onAddToCart,
+  onBuyNow,
+  onOpenChat,
+  onCartClick,
+  onShopClick,
+  onWishlist,
+  cartCount = 0,
+  shopLogo,
+  shopProfilePic,
+  businessId,
+  businessSlug,
+  businessName,
+  quantity = 0,
+  hasVariants = false
+}: any) {
   const router = useRouter();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const { token, user } = useAuth();
   const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
   const isOwner = currentUserBizId && businessId && Number(currentUserBizId) === Number(businessId);
   const [localCount, setLocalCount] = useState(cartCount);
+  
+  const isSoldOut = !hasVariants && Number(quantity || 0) <= 0;
 
   const slugify = (str: string) =>
     String(str || "")
@@ -30,9 +48,8 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
         const uniqueItems = items.filter((item: any, index: number, self: any[]) =>
           index === self.findIndex((t: any) => t.cart_id === item.cart_id)
         );
-        // Calculate total pieces (sum of quantities)
-        const totalPieces = uniqueItems.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
-        setLocalCount(totalPieces);
+        // Calculate total items (deduplicated by cart_id)
+        setLocalCount(uniqueItems.length);
       }
     } catch (err) {
       console.error("Failed to fetch cart count:", err);
@@ -105,8 +122,26 @@ export default function ActionBar({ onAddToCart, onBuyNow, onOpenChat, onCartCli
         </div>
 
         <div className="ml-auto flex flex-1 overflow-hidden rounded-full bg-white">
-          <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
-          <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
+          {isSoldOut ? (
+            <button
+              onMouseDown={stop}
+              onClick={(e) => {
+                if (onWishlist) {
+                  onWishlist(e);
+                } else {
+                  toast.success("Added to wishlist!");
+                }
+              }}
+              className="flex-1 py-1.5 text-[11px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition"
+            >
+              Sold out, add to wishlist
+            </button>
+          ) : (
+            <>
+              <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
+              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
+            </>
+          )}
         </div>
       </div>
     </div>

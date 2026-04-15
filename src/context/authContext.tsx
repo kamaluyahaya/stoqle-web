@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const t = typeof window !== "undefined" ? localStorage.getItem("token") : token;
     if (!t) return;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/auth/profile/me`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://10.123.11.181:4000"}/api/auth/profile/me`, {
         headers: {
           "Authorization": `Bearer ${t}`,
         },
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verificationResolverRef.current = { resolve };
     });
   };
- 
+
   const closeVerification = () => {
     setVerificationOpen(false);
     if (verificationResolverRef.current) {
@@ -231,15 +231,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const onVerificationSuccess = (verifiedUser: User) => {
-      setUser(verifiedUser);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(verifiedUser));
-      }
-      setVerificationOpen(false);
-      if (verificationResolverRef.current) {
-        verificationResolverRef.current.resolve(verifiedUser as any);
-        verificationResolverRef.current = null;
-      }
+    setUser(verifiedUser);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("user", JSON.stringify(verifiedUser));
+    }
+    setVerificationOpen(false);
+    if (verificationResolverRef.current) {
+      verificationResolverRef.current.resolve(verifiedUser as any);
+      verificationResolverRef.current = null;
+    }
   };
   const logout = async () => {
     // clear storage FIRST (most important)

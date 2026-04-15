@@ -21,195 +21,137 @@ export default function SevenDayReturnModal({ open, onClose }: Props) {
     };
   }, [open]);
 
-  const content = `
-<br/><br/>
-<b><center>📄 7-Day No-Reason Return Policy</center></b><br/><br/>
+  const content = `<b><center>📄 7-Day No-Reason Return Service Description</center></b><br/><br/>
 
-<b>1. Coverage</b><br/>
+<b>1. Scope of Protection</b><br/>
+After a buyer purchases a product with the “7-Day No-Reason Return” service label, within 7 days after the logistics shows the product has been signed for (calculated from the time of signing, 168 hours equals 7 days), for products that support “7-Day No-Reason Return” and meet the intact standard, a “7-Day No-Reason Return” application can be initiated.<br/><br/>
 
-Products marked with <b>“7-Day No-Reason Return”</b> are eligible for return.<br/><br/>
+<b>2. Protection Period</b><br/>
+Within 7 days after the logistics shows the product has been signed for (calculated from the time of signing, 168 hours equals 7 days).<br/><br/>
 
-Buyers may request a return:<br/><br/>
+<b>3. Return Shipping Fee</b><br/>
+(i) When the buyer performs a “7-Day No-Reason Return”, if the product seller provides free shipping, the buyer only bears the return shipping fee;<br/>
+(ii) If the product is not free shipping, or is conditionally free shipping by the seller and partial return by the buyer causes the free shipping condition to no longer be met, the buyer shall bear all shipping costs;<br/>
+(iii) For non-consumer reasons (such as product quality issues) or when the platform determines the merchant is responsible, the related return shipping fee shall be borne by the merchant;<br/>
+(iv) If the merchant has other commitments, follow those commitments;<br/>
+(v) If both parties have other agreements, follow the agreement.<br/><br/>
 
-Within 7 days after delivery<br/>
-Without providing a specific reason (e.g. no longer needed, wrong size, not satisfied)<br/><br/>
+<b>4. Application Method</b><br/>
+Initiate application: My Orders - Corresponding Order - Initiate Return & Refund - Select reason such as “Don’t want it anymore” and other subjective reasons (such as wrong purchase/multiple purchase/dislike/size not suitable).<br/><br/>
 
-<b>2. Return Period</b><br/><br/>
+<b>5. Requirements for Returned Products</b><br/>
+The product meets the intact standard. In addition, the platform encourages merchants to make seven-day no-reason return commitments that are more favorable to consumers than this specification.<br/><br/>
 
-The return window is:<br/><br/>
+<b>6. General Intact Standard</b><br/>
+(i) The returned product and related accessories (such as tags, manuals, warranty cards, etc.) are complete and maintain original quality and function, without damage, contamination, tampering with anti-counterfeiting marks, activation (authorization), or appearance usage traces that are difficult to restore, or unreasonable personal usage data traces.<br/><br/>
+(ii) Consumers opening the product packaging for inspection needs, or conducting reasonable debugging to confirm product quality and function, does not affect the intact condition. If the product packaging objectively has anti-counterfeiting, uniqueness, collectible commemorative value, or other special added value, the merchant may propose specific packaging protection requirements within a reasonable scope. For reasonable and feasible packaging protection requirements, after the merchant clearly informs in advance, consumers should actively and cautiously protect them. If the damage degree of such packaging is sufficient to cause value depreciation or functional loss, it can be determined as value depreciation. If the merchant has special requirements for functional integrity, it is recommended that the merchant clearly indicate the specific stage or scenario causing the product to be not intact. However, if the merchant does not give clear notice or the product packaging does not have the above special characteristics, it shall be handled according to the general product packaging intact standard.<br/><br/>
+(iii) How to make “clear notice”: the merchant must use prominent methods to remind consumers to pay attention to special product packaging protection requirements, such as clearly indicating the specific packaging layer that would cause the product packaging to be not intact. Specific methods include but are not limited to the following: providing reminders on the product detail page, informing consumers through BCIM chat channels before purchase, placing prominent reminders inside the product package. If there are special packaging protection requirements, the merchant shall explain them in advance, but the explanation content must not restrict the consumer’s basic inspection and examination rights of the product itself.<br/><br/>
 
-7 days (168 hours) starting from the time the order is marked as delivered.<br/><br/>
+<b>7. General Product Packaging Intact Standard</b><br/>
+The original product packaging is not missing, and the overall packaging structure is complete. However, unavoidable form changes during packaging transportation or unpacking, such as moderate deformation, stains, partial damage, etc., are not considered to affect packaging integrity.<br/><br/>
 
-<b>3. Return Shipping Fees</b><br/><br/>
+<b>8. 📋 Specific Product Intact Standards</b><br/><br/>
 
-Shipping responsibility depends on the situation:<br/><br/>
-
-Free Shipping Orders<br/>
-→ Buyer pays only the return shipping fee<br/><br/>
-
-Non-Free Shipping Orders<br/>
-→ Buyer pays all shipping costs<br/><br/>
-
-Conditional Free Shipping (e.g. minimum order value)<br/>
-→ If return breaks the condition, buyer pays all shipping<br/><br/>
-
-Seller Fault (e.g. defective or wrong item)<br/>
-→ Seller pays all return shipping costs<br/><br/>
-
-Special Seller Promises or Agreements<br/>
-→ Follow the seller’s stated policy<br/><br/>
-
-<b>4. How to Request a Return</b><br/><br/>
-
-Buyers can initiate a return by:<br/><br/>
-
-My Orders → Select Order → Request Return/Refund → Choose reason (e.g. “No longer needed”)<br/><br/>
-
-<b>5. Return Conditions (Important)</b><br/><br/>
-
-To qualify for a return, items must be:<br/><br/>
-
-In original condition<br/>
-Unused or minimally tested<br/>
-With all original packaging, tags, and accessories included<br/><br/>
-
-<b>6. General Condition Requirements</b><br/><br/>
-
-Returned items must:<br/><br/>
-
-Be free from damage, stains, or heavy use<br/>
-Not be activated (for digital/electronic products)<br/>
-Not contain personal data or usage records<br/>
-Include all accessories (manuals, tags, warranty cards, etc.)<br/><br/>
-
-<b>7. Packaging Requirements</b><br/><br/>
-
-Original packaging must be intact<br/>
-Minor changes (e.g. slight deformation from shipping) are acceptable<br/><br/>
-
-If packaging has special value (sealed, collectible, anti-counterfeit):<br/><br/>
-
-Buyer must handle it carefully<br/>
-Damage may reduce refund value
-
-
-<br/><br/>
-<b>8. 📋 Return Conditions by Product Category</b><br/><br/>
-
-<table style="width:100%; border-collapse: collapse; font-size:13px;">
+<table style="width:100%; border-collapse: collapse; font-size:12px; border: 1px solid #e5e7eb;">
   <thead>
-    <tr>
-      <th style="border:1px solid #e5e7eb; padding:8px; text-align:left;"><b>Product Category</b></th>
-      <th style="border:1px solid #e5e7eb; padding:8px; text-align:left;"><b>Return Condition (Must Meet All)</b></th>
+    <tr style="background-color: #f9fafb;">
+      <th style="border:1px solid #e5e7eb; padding:10px; text-align:left;"><b>Product Category</b></th>
+      <th style="border:1px solid #e5e7eb; padding:10px; text-align:left;"><b>Intact Standard</b></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Food, Cosmetics, Medical, Consumables</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must remain <b>sealed and unopened</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Food (including health food), cosmetics, medical devices, family planning products, office consumables, automotive consumables</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Necessary one-time sealed packaging has not been opened</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Electronics</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">No repairs, no modifications, no scratches, no activation or personal data</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Electronic appliances</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">None of the following situations: 1. Unauthorized repair, modification, damage, or alteration of mandatory product certification marks, indicator labels, machine serial numbers, etc.; 2. Appearance usage traces that are difficult to restore, or activation, authorization information, unreasonable personal usage data traces</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Clothing, Shoes, Bags, Toys</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must be unused, unwashed, with tags/seals intact. Underwear/swimwear cannot be returned after wearing</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Clothing, shoes, hats, underwear, bags, toys</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">1. If the product has trademarks, original sealed packaging/seals, anti-counterfeit or anti-theft or anti-damage tags/stickers that do not affect reasonable trial use, they cannot be removed, torn, or displaced and must remain intact, and the product has no obvious wearing, washing, contamination traces. 2. Underwear/swimwear categories must have intact protective stickers on relevant parts and must not be removed; once worn, 7-day no-reason return is not supported.</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Personal Care, Beauty, Pet Products, Agricultural Products</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must be sealed and unopened (including outer packaging and labels)</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Personal care, hair care, cosmetics, game software, pet food, health products, medicines, feed, animal health products, veterinary drugs, seeds, seedlings, pesticides, fertilizers</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Products with one-time sealed packaging that is unopened, or with one-time sealed outer packaging and special labels not damaged (excluding seller-applied labels), support 7-day no-reason return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Cameras / DSLR / Video Cameras</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Limited use only (e.g. shutter count ≤ 20), no activation, lens must remain sealed</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Digital cameras, SLR cameras, camcorders</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">SLR camera shutter count does not exceed 20, no activation, authorization information, or unreasonable personal usage data traces; lens (if any) remains sealed</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>TVs, Air Conditioners</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Can be tested (powered on), but not installed or mounted</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>LCD TVs, air conditioners</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Simple power-on debugging allowed, not wall-mounted for use</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Washing Machines</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must not be used (no water usage)</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Washing machines</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Not used with water</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Other Electronics / Appliances</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must not be activated, connected to network, or exposed to liquid</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Other digital home appliances</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Network access license not damaged, no liquid exposure; products already connected to network or activated do not support 7-day no-reason return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Lighters (e.g. Zippo)</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">No fuel added, no wear on ignition parts</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>ZIPPO lighters</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Cotton core must not be oiled, ignition wheel and flint show no obvious wear</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Collectibles / Models / Figures</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Internal packaging must remain sealed (no opened plastic or seals)</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Models, figurines, action figures, BJD</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Inner packaging intact, if sealed with tape/plastic wrap, not opened</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Electronic Components</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">No soldering, no installation, sealed consumables must remain unopened</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Electronic components</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">No soldering performed, integrated circuits not installed on IC base, consumables (thermal paste, adhesives, sealants, conductive glue, etc.) remain unopened</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Books</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">No marks, folds, stains, or reading signs. If sealed, must remain sealed</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Books</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">If sealed, packaging unopened, no folds, water stains, contamination, handwriting, or reading traces</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Luxury & Metal Products</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Protective films must not be removed</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Luxury goods and metal products</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Hardware protective film not removed</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Jewelry</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Certificates and tags must be complete and intact</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Jewelry</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Loss or incompleteness of certificates or price tags, or obvious contamination, does not support 7-day no-reason return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Sports, Auto Parts, Equipment</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must not be installed, used, or activated</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Sports & outdoor, motorcycle equipment/parts, auto parts, electric vehicles/parts</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">1. Fitness/cycling products after installation, use or activation; outdoor instruments after real-name activation; surfing/diving products after actual use do not support return. 2. Auto/motorcycle/electric parts without usage/installation traces and batteries not powered support return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Home Textiles & Household Items</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">No damage, stains, or removed tags/seals</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Home textiles, home goods</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Trademark removed or cut, product contaminated or damaged, original sealed packaging opened/damaged; deodorizing products, disposable towels, damaged sealed packaging, or scented candles with usage traces do not support return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Furniture & Home Installation Items</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Not eligible after installation or use</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Furniture, home improvement</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">1. Assembled furniture after installation, mattresses with damaged protective film or usage traces, toilets, cabinets, smart locks, lighting after installation do not support return. 2. Non-custom products without installation or usage traces support return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Baby Products</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Sealed packaging must not be opened or damaged</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Mother & baby products</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">Diapers/wipes packaging damaged, or sealed packaging opened with damaged labels do not support return</td>
     </tr>
     <tr>
-      <td style="border:1px solid #e5e7eb; padding:8px;"><b>Second-hand Luxury Items</b></td>
-      <td style="border:1px solid #e5e7eb; padding:8px;">Must have original tags, no new wear, all accessories included</td>
+      <td style="border:1px solid #e5e7eb; padding:10px;"><b>Second-hand luxury goods (bags, watches, accessories)</b></td>
+      <td style="border:1px solid #e5e7eb; padding:10px;">1. Anti-counterfeit tags, anti-theft buckles, original protective films intact; 2. No new wearing, usage, washing, contamination, scratches, wear; 3. Complete accessories (including gifts, invoices, certificates, warranty cards, manuals, original shipping documents, etc.)</td>
     </tr>
   </tbody>
-</table>
+</table><br/>
 
+<b>Note:</b> Sealed means the product outer packaging is sealed by the manufacturer with seals or fully plastic-sealed.<br/><br/>
 
-
-
-<br/><br/>
-<b>9. Gifts & Promotional Items</b><br/><br/>
-
-Any free gifts or promotional items must be returned together with the product<br/>
-If not returned, the value of the gift may be deducted from the refund<br/><br/>
-
-<b>10. Exceptions</b><br/><br/>
-
-Returns may not be accepted if:<br/><br/>
-
-Items are used, damaged, or incomplete<br/>
-Packaging or seals are broken (for required sealed items)<br/>
-Product falls under restricted categories after use<br/><br/>
-
-<b>11. Additional Notes</b><br/><br/>
-
-Sellers may offer more flexible return policies (e.g. longer return period)<br/>
-Platform encourages sellers to provide better customer-friendly policies
+<b>9. Special Notes</b><br/>
+• If gifts cannot be returned together, the merchant may require the consumer to pay for the gift at the pre-marked price.<br/>
+• Loss or damage of gifts, or loss of invoices does not affect product return.<br/>
+• Damaged or lost gifts shall be handled with depreciation, and invoice loss requires the consumer to bear corresponding taxes.<br/>
+• 📄 Detailed rules can be found: Stoqle Rules Center
 `;
 
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[20100] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -225,11 +167,11 @@ Platform encourages sellers to provide better customer-friendly policies
             className="relative bg-white w-full sm:max-w-sm h-[80vh] sm:h-auto sm:max-h-[85vh] rounded-t-[0.5rem] sm:rounded-[0.5rem] p-6 border-t sm:border border-slate-100 shadow-2xl flex flex-col justify-between"
           >
             <div className="flex-1 flex flex-col min-h-0 pt-2">
-              <h2 className="text-sm font-bold text-slate-900 mb-3 text-center">7-Day No-Reason Return</h2>
+              <h2 className="text-base font-bold text-slate-900 mb-6 text-center">7-Day No-Reason Return Service</h2>
 
               <div className="flex-1 overflow-y-auto pr-3 custom-scrollbar">
                 <div
-                  className="text-[13px] text-slate-600 leading-relaxed"
+                  className="text-[13px] text-slate-600 leading-relaxed pb-10"
                   dangerouslySetInnerHTML={{ __html: content }}
                 />
               </div>

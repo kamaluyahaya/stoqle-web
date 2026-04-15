@@ -24,7 +24,7 @@ export default function WalletPinModal({ isOpen, onClose, onSuccess, errorMessag
 
     const handlePinChange = (val: string, index: number) => {
         if (!/^\d*$/.test(val)) return;
-        
+
         const newPin = [...pin];
         newPin[index] = val.slice(-1);
         setPin(newPin);
@@ -98,7 +98,7 @@ export default function WalletPinModal({ isOpen, onClose, onSuccess, errorMessag
                                 </div>
 
                                 {errorMessage && (
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ opacity: 0, y: -10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-3"
@@ -111,13 +111,13 @@ export default function WalletPinModal({ isOpen, onClose, onSuccess, errorMessag
                                 {isLoading && (
                                     <div className="flex flex-col items-center justify-center py-4">
                                         <div className="w-6 h-6 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
-                                        <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Verifying PIN...</p>
+                                        <p className="mt-2 text-[10px] font-black text-slate-400  tracking-widest">Verifying PIN...</p>
                                     </div>
                                 )}
                             </div>
 
                             <div className="text-center">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
+                                <p className="text-[10px] font-black text-slate-400  tracking-widest leading-relaxed">
                                     Stoqle uses military-grade encryption to ensure your transactions are always secure.
                                 </p>
                             </div>

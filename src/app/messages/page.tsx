@@ -20,6 +20,8 @@ import { ChevronLeftIcon, ChevronRightIcon, ChatBubbleBottomCenterTextIcon, Plus
 import { chatDb, type CachedMessage, type CachedRoom } from "@/src/lib/services/chatDb";
 import { Package, X, CheckCircle, ChevronRight, Zap, RefreshCw, AlertCircle, AlertTriangle, Copy, XCircle } from "lucide-react";
 import ImageViewer from "@/src/components/modal/imageViewer"; // Added ImageViewer import
+import { MESSAGES_CACHE } from "@/src/lib/cache";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 
 const formatUrl = (path?: string | null) => {
   if (!path) return "";
@@ -35,8 +37,10 @@ type ChatRoom = {
   other_user_id?: string | number;
   full_name?: string;
   profile_pic?: string;
+  username?: string;
   business_name?: string | null;
   business_logo?: string | null;
+  business_slug?: string | null;
   business_category?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -91,7 +95,7 @@ function MessagesPageContent({
   const userParam = searchParams.get("user") || searchParams.get("user_id") || searchParams.get("u_id");
   const router = useRouter();
 
-  const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const [rooms, setRooms] = useState<ChatRoom[]>(MESSAGES_CACHE.chatSessions);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const selectedRoomRef = useRef<ChatRoom | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -151,7 +155,27 @@ function MessagesPageContent({
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [isSearchingList, setIsSearchingList] = useState(false);
-  const [roomsLoaded, setRoomsLoaded] = useState(false);
+  const [roomsLoaded, setRoomsLoaded] = useState(Date.now() - MESSAGES_CACHE.lastFetchedAt < 1000 * 60 * 5 || MESSAGES_CACHE.chatSessions.length > 0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [visibleHeight, setVisibleHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const updateVisibility = () => {
+      // Logic: Use vv.height for exact visible area. 
+      // Subtracting vv.offsetTop handles cases where the browser scrolls the page up to show the input.
+      setVisibleHeight(vv.height);
+      setKeyboardHeight(window.innerHeight - vv.height);
+    };
+    vv.addEventListener("resize", updateVisibility);
+    vv.addEventListener("scroll", updateVisibility);
+    updateVisibility();
+    return () => {
+      vv.removeEventListener("resize", updateVisibility);
+      vv.removeEventListener("scroll", updateVisibility);
+    };
+  }, []);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
 
@@ -186,8 +210,14 @@ function MessagesPageContent({
   async function fetchRooms() {
     // ⚡ STEP 1: Immediate Render from Cache (NO LOADER)
     const cached = await chatDb.getRooms();
-    if (cached.length > 0 && rooms.length === 0) {
-      setRooms(cached as any);
+    const CACHE_TTL = 1000 * 60 * 5; // 5 mins
+    const isRecent = Date.now() - MESSAGES_CACHE.lastFetchedAt < CACHE_TTL;
+
+    if (cached.length > 0 || isRecent) {
+      if (cached.length > 0 && rooms.length === 0 && MESSAGES_CACHE.chatSessions.length === 0) {
+        MESSAGES_CACHE.chatSessions = cached as any;
+        setRooms(cached as any);
+      }
 
       // Seed unreadMap from cache for instant feedback
       const cacheUnread: Record<string | number, number> = {};
@@ -195,9 +225,12 @@ function MessagesPageContent({
         if (r.unread_count) cacheUnread[r.chat_room_id] = Number(r.unread_count);
       });
       setUnreadMap(cacheUnread);
-      setRoomsLoaded(true); // Allow UI to proceed with cached data
+      setRoomsLoaded(true); // Allow UI to proceed with cached (or legitimately empty) data
     }
 
+    // We removed the early return to enforce background Stale-While-Revalidate (SWR).
+    // The UI is already populated from the cache above, so the network request below 
+    // happens silently in the background, updating state on success without spinners.
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat/room`, { headers });
       const data = await res.json();
@@ -207,6 +240,7 @@ function MessagesPageContent({
       // ⚡ STEP 2: Background Sync
       setRooms(roomsList);
       chatDb.saveRooms(roomsList as any);
+      MESSAGES_CACHE.chatSessions = roomsList;
 
       // Initialize unreadMap from the API data
       const initialUnread: Record<string | number, number> = {};
@@ -219,6 +253,7 @@ function MessagesPageContent({
       });
       setUnreadMap(initialUnread);
       setRoomsLoaded(true);
+      MESSAGES_CACHE.lastFetchedAt = Date.now();
     } catch (err) {
       console.warn("fetchRooms sync failed", err);
       // Fallback: If network fails, already showing cache
@@ -242,12 +277,20 @@ function MessagesPageContent({
   async function fetchMessages(chat_room_id: string | number) {
     // ⚡ STEP 1: LOAD FROM LOCAL CACHE FIRST (INSTANT) - Try cache BEFORE showing loader
     const cached = await chatDb.getMessages(chat_room_id);
+    const CACHE_TTL = 1000 * 60 * 5;
+    const lastFetch = MESSAGES_CACHE.roomsFetchedAt[String(chat_room_id)] || 0;
+    const isRecent = Date.now() - lastFetch < CACHE_TTL;
 
-    if (cached.length > 0) {
-      setMessages(cached as any);
+    if (cached.length > 0 || isRecent) {
+      if (cached.length > 0) {
+        setMessages(cached as any);
+      }
       setIsMessagesLoading(false); // Bypasses loader entirely
       // Synchronous scroll for instant feel
       setTimeout(() => scrollToBottom("auto"), 5);
+      
+      // We removed the early return here as well. Data will continuously
+      // sync via SWR behind the scenes if there are changes.
     } else {
       // ⚡ Only clear and show spinner if we HAVE NO CACHED DATA
       setMessages([]);
@@ -267,6 +310,7 @@ function MessagesPageContent({
         chatDb.saveMessages(freshMessages as any);
       }
 
+      MESSAGES_CACHE.roomsFetchedAt[String(chat_room_id)] = Date.now();
       setIsMessagesLoading(false);
       markRoomAsRead(chat_room_id);
       setTimeout(() => scrollToBottom("auto"), 30);
@@ -407,7 +451,16 @@ function MessagesPageContent({
 
   async function handleSend(customContent?: any) {
     // ⚡ FIX: Check if customContent is a string (manual send) or a MouseEvent (click)
-    const finalContent = (typeof customContent === 'string') ? customContent : (newMessage || "");
+    let finalContent = (typeof customContent === 'string') ? customContent : (newMessage || "");
+
+    // ⚡ AUTO-INTRO for tagged items if message is empty
+    if (!finalContent.trim() && !selectedFile) {
+      if (taggedProduct) {
+        finalContent = `Hello, I'm interested in "${taggedProduct.name}" ${taggedProduct.variant ? `(${taggedProduct.variant})` : ''} at ₦${Number(taggedProduct.price || 0).toLocaleString()}.`;
+      } else if (taggedOrderRef) {
+        finalContent = `Hello, I'm reaching out regarding my order #${taggedOrderRef}.`;
+      }
+    }
 
     if ((!finalContent.trim() && !selectedFile) || !selectedRoom || isSending) return;
 
@@ -451,12 +504,13 @@ function MessagesPageContent({
     setTaggedProduct(null);
     setTaggedOrderRef(null);
     setTaggedOrderId(null);
+    setTaggedOrderData(null);
     scrollToBottom("smooth");
 
     // ⚡ CLEAN URL: Remove product tagging params after send so they don't reappear on refresh
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
-      ['product_id', 'pname', 'pprice', 'pvariant', 'pimg'].forEach(p => url.searchParams.delete(p));
+      ['product_id', 'pname', 'pprice', 'pvariant', 'pimg', 'order_ref', 'order_id'].forEach(p => url.searchParams.delete(p));
       window.history.replaceState(null, "", url.toString());
     }
 
@@ -1196,7 +1250,7 @@ function MessagesPageContent({
                 </div>
                 <div className="flex flex-col items-center gap-2">
                   <div className="h-3 w-40 bg-slate-200 rounded-full" />
-                  <p className="text-[10px] font-black text-slate-300 tracking-widest uppercase">Fetching Status</p>
+                  <p className="text-[10px] font-black text-slate-300 tracking-widest ">Fetching Status</p>
                 </div>
               </div>
             ) : order ? (
@@ -1319,7 +1373,7 @@ function MessagesPageContent({
                 <div className="space-y-3 px-1">
                   <div className="flex justify-between items-start text-[11px]">
                     <span className="font-bold text-slate-400">Reference</span>
-                    <span className="font-black text-slate-900 uppercase tracking-tighter">{orderRef || order.display_id || order.id}</span>
+                    <span className="font-black text-slate-900  tracking-tighter">{orderRef || order.display_id || order.id}</span>
                   </div>
                   <div className="flex justify-between items-start text-[11px]">
                     <span className="font-bold text-slate-400">Recipient</span>
@@ -1376,12 +1430,12 @@ function MessagesPageContent({
 
                   <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Secure Delivery Code</h3>
                   <p className="text-xs font-medium text-slate-500 leading-relaxed mb-6">
-                    Reference: <strong className="text-slate-800 uppercase">{selectedDeliveryOrderRef}</strong>
+                    Reference: <strong className="text-slate-800 ">{selectedDeliveryOrderRef}</strong>
                   </p>
 
                   <div className="bg-slate-50 border-2 border-slate-100 rounded-xl p-6 w-full mb-6 cursor-pointer"
                     onClick={() => {
-                      navigator.clipboard.writeText(selectedDeliveryCode || 'N/A');
+                      copyToClipboard(selectedDeliveryCode || 'N/A');
                       toast.success('Code copied to clipboard!');
                     }}
                   >
@@ -1394,7 +1448,7 @@ function MessagesPageContent({
                   <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl text-left flex gap-3 text-rose-700 w-full mb-2">
                     <XCircle size={16} className="shrink-0 mt-0.5" />
                     <div className="text-[10px] font-bold leading-relaxed">
-                      <span className="uppercase tracking-widest text-rose-800 font-black text-[9px] mb-1 block">Critical Warning</span>
+                      <span className=" tracking-widest text-rose-800 font-black text-[9px] mb-1 block">Critical Warning</span>
                       Do <strong>NOT</strong> disclose this 4-digit code to the vendor or rider until you have successfully received AND inspected your complete order in good condition. Handing over this code confirms delivery and authorizes payment!
                     </div>
                   </div>
@@ -1408,9 +1462,12 @@ function MessagesPageContent({
   };
 
   return (
-    <div className="bg-slate-100 overflow-hidden pt-[env(safe-area-inset-top)] sm:pt-0">
-      {/* Balanced height for full-screen experience when a room is selected, otherwise account for bottom nav */}
-      <div className={`flex ${isShowingChat ? 'h-dvh' : 'h-[calc(100dvh-56px)]'} sm:h-[calc(100dvh-64px)] overflow-hidden`}>
+    <div className="bg-slate-100 overflow-hidden pt-[env(safe-area-inset-top)] sm:pt-0 overscroll-none">
+      {/* ⚡ VISUAL VIEWPORT SYNC: By using visibleHeight, we precisely track the top of the mobile keyboard */}
+      <div 
+        className={`flex ${isShowingChat ? 'h-dvh' : 'h-[calc(100dvh-56px)]'} sm:h-[calc(100dvh-64px)] overflow-hidden overscroll-none`}
+        style={visibleHeight && isShowingChat ? { height: `${visibleHeight}px` } : {}}
+      >
         <aside className={`${isShowingChat ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] flex-col bg-slate-100 border-r border-gray-100`}>
           <div className="p-4 sm:p-6 pb-2 shrink-0 h-[80px] flex flex-col justify-center">
             <AnimatePresence mode="wait">
@@ -1513,7 +1570,10 @@ function MessagesPageContent({
                       {recommendations.map((rec, i) => (
                         <div
                           key={rec.user_id || i}
-                          onClick={() => router.push(`/user/profile/${rec.user_id}`)}
+                          onClick={() => {
+                            const handle = rec.username || rec.business?.business_slug || rec.business_slug;
+                            router.push(handle ? `/${handle}` : `/user/profile/${rec.user_id}`);
+                          }}
                           className="flex items-center gap-3 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors text-left group"
                         >
                           <img
@@ -1578,7 +1638,10 @@ function MessagesPageContent({
                         {recommendations.map((rec, i) => (
                           <div
                             key={rec.user_id || i}
-                            onClick={() => router.push(`/user/profile/${rec.user_id}`)}
+                            onClick={() => {
+                              const handle = rec.username || rec.business?.business_slug || rec.business_slug;
+                              router.push(handle ? `/${handle}` : `/user/profile/${rec.user_id}`);
+                            }}
                             className="flex items-center gap-3 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors text-left group"
                           >
                             <img
@@ -1627,7 +1690,7 @@ function MessagesPageContent({
                       <div className="h-16 w-64 bg-slate-100 rounded-2xl rounded-tl-none shadow-sm" />
                     </div>
                   </div>
-                  <p className="text-[10px] font-black text-slate-300 tracking-[0.2em] uppercase">Securing Connection...</p>
+                  <p className="text-[10px] font-black text-slate-300 tracking-[0.2em] ">Securing Connection...</p>
                 </div>
               </div>
             ) : (
@@ -1673,7 +1736,10 @@ function MessagesPageContent({
                       ) : recommendations.slice(0, 6).map((rec, i) => (
                         <div
                           key={rec.user_id || i}
-                          onClick={() => router.push(`/user/profile/${rec.user_id}`)}
+                          onClick={() => {
+                            const handle = rec.username || rec.business?.business_slug || rec.business_slug;
+                            router.push(handle ? `/${handle}` : `/user/profile/${rec.user_id}`);
+                          }}
                           className="group bg-white p-4 rounded-2xl border border-slate-100 hover:border-red-100 hover:shadow-xl hover:shadow-red-500/5 transition-all cursor-pointer flex items-center gap-4"
                         >
                           <div className="relative shrink-0">
@@ -1740,11 +1806,12 @@ function MessagesPageContent({
                     onClick={() => {
                       const targetId = selectedRoom.other_user_id || (String(selectedRoom.user1_id) === String(userId) ? selectedRoom.user2_id : selectedRoom.user1_id);
                       if (targetId) {
-                        if (String(targetId) === String(userId)) {
-                          router.push("/profile");
-                        } else {
-                          router.push(`/user/profile/${targetId}`);
-                        }
+                          if (String(targetId) === String(userId)) {
+                            router.push("/profile");
+                          } else {
+                            const handle = selectedRoom.username || selectedRoom.business_slug;
+                            router.push(handle ? `/${handle}` : `/user/profile/${targetId}`);
+                          }
                       }
                     }}
                     className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
@@ -1788,7 +1855,7 @@ function MessagesPageContent({
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar relative z-10">
+              <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar relative z-10 overscroll-contain">
                 <div className="relative z-10 min-h-full flex flex-col">
                   {isMessagesLoading ? (
                     <div className="flex-1 flex flex-col gap-6 py-8 px-2 animate-pulse">
@@ -1980,15 +2047,13 @@ function MessagesPageContent({
                       <MessageInput
                         value={newMessage}
                         onChange={setNewMessage}
-                        onSend={() => {
-                          handleSend();
-                          setTaggedProduct(null);
-                        }}
+                        onSend={handleSend}
                         onFileSelect={handleFile}
                         isSending={isSending}
                         selectedFile={selectedFile}
                         filePreview={filePreview}
                         onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
+                        alwaysAllowSend={!!taggedProduct}
                       />
                     </div>
                   </motion.div>
@@ -2004,7 +2069,7 @@ function MessagesPageContent({
                     <div className="flex items-center justify-between mb-6 shrink-0">
                       <div className="flex flex-col text-left">
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Tagging Order</h3>
-                        <p className="text-[10px] font-bold text-rose-500 tracking-widest font-black uppercase">Support Mode</p>
+                        <p className="text-[10px] font-bold text-rose-500 tracking-widest font-black ">Support Mode</p>
                       </div>
                       <button
                         onClick={() => {
@@ -2035,15 +2100,15 @@ function MessagesPageContent({
                         </div>
 
                         <div className="space-y-1 mb-6">
-                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Order Reference</p>
-                          <h4 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter uppercase">{taggedOrderRef}</h4>
+                          <p className="text-[10px] font-black text-slate-300  tracking-widest">Order Reference</p>
+                          <h4 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter ">{taggedOrderRef}</h4>
                         </div>
 
                         {taggedOrderData && (
                           <div className="grid grid-cols-2 gap-4 mb-8">
                             <div>
-                              <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Status</p>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${taggedOrderData.status?.toLowerCase().includes('delivered') ? 'bg-emerald-100 text-emerald-600' :
+                              <p className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Status</p>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black  tracking-wider ${taggedOrderData.status?.toLowerCase().includes('delivered') ? 'bg-emerald-100 text-emerald-600' :
                                 taggedOrderData.status?.toLowerCase().includes('cancel') ? 'bg-rose-100 text-rose-600' :
                                   'bg-amber-100 text-amber-600'
                                 }`}>
@@ -2051,7 +2116,7 @@ function MessagesPageContent({
                               </span>
                             </div>
                             <div>
-                              <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Payment</p>
+                              <p className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Payment</p>
                               <span className="text-[10px] font-bold text-slate-600">₦{Number(taggedOrderData.total_amount || 0).toLocaleString()}</span>
                             </div>
                           </div>
@@ -2059,10 +2124,10 @@ function MessagesPageContent({
 
                         <div className="flex items-center justify-between pt-6 border-t border-slate-50">
                           <div className="flex flex-col">
-                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Context</span>
+                            <span className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Context</span>
                             <span className="text-xs font-bold text-slate-500">Order Inquiry</span>
                           </div>
-                          <div className="px-4 py-2 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm shadow-rose-100">
+                          <div className="px-4 py-2 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black  tracking-widest shadow-sm shadow-rose-100">
                             Selected
                           </div>
                         </div>
@@ -2090,17 +2155,13 @@ function MessagesPageContent({
                       <MessageInput
                         value={newMessage}
                         onChange={setNewMessage}
-                        onSend={() => {
-                          handleSend();
-                          setTaggedOrderRef(null);
-                          setTaggedOrderId(null);
-                          setTaggedOrderData(null);
-                        }}
+                        onSend={handleSend}
                         onFileSelect={handleFile}
                         isSending={isSending}
                         selectedFile={selectedFile}
                         filePreview={filePreview}
                         onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
+                        alwaysAllowSend={!!taggedOrderRef}
                       />
                     </div>
                   </motion.div>
@@ -2144,7 +2205,7 @@ function MessagesPageContent({
                           <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center shadow-sm">
                             <Package size={32} />
                           </div>
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedFile.name}</p>
+                          <p className="text-xs font-bold text-slate-400  tracking-widest">{selectedFile.name}</p>
                         </div>
                       )}
                     </div>
@@ -2163,13 +2224,19 @@ function MessagesPageContent({
                         selectedFile={selectedFile}
                         filePreview={null} // Hide the internal tiny preview since we have the big one
                         onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
+                        alwaysAllowSend={!!(taggedProduct || taggedOrderRef)}
                       />
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <div className="p-4  border-t border-gray-100 shrink-0 relative z-[110] pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              <div 
+                className="p-4 border-t border-gray-100 shrink-0 relative z-[110]"
+                style={{ 
+                  paddingBottom: keyboardHeight > 50 ? '0.75rem' : 'calc(1rem + env(safe-area-inset-bottom))'
+                }}
+              >
                 <style dangerouslySetInnerHTML={{
                   __html: `
                   @media (max-width: 1023px) {
@@ -2202,21 +2269,13 @@ function MessagesPageContent({
                 <MessageInput
                   value={newMessage}
                   onChange={setNewMessage}
-                  onSend={isEditingMessage ? handleUpdateMessage : () => {
-                    if (newMessage.trim() === "" && taggedProduct) {
-                      const intro = `Hello, I'm interested in "${taggedProduct.name}" ${taggedProduct.variant ? `(${taggedProduct.variant})` : ''} at ₦${Number(taggedProduct.price || 0).toLocaleString()}.`;
-                      handleSend(intro);
-                    } else {
-                      handleSend();
-                    }
-                    if (taggedProduct) setTaggedProduct(null);
-                    if (taggedOrderRef) setTaggedOrderRef(null);
-                  }}
+                  onSend={isEditingMessage ? handleUpdateMessage : handleSend}
                   onFileSelect={handleFile}
                   isSending={isSending}
                   selectedFile={selectedFile}
                   filePreview={filePreview}
                   onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
+                  alwaysAllowSend={!!(taggedProduct || taggedOrderRef)}
                 />
               </div>
             </div>
@@ -2343,7 +2402,7 @@ function MessagesPageContent({
 
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(selectedMessageForAction.message_content || "");
+                    copyToClipboard(selectedMessageForAction.message_content || "");
                     setIsMessageActionOpen(false);
                     toast.success("Copied to clipboard");
                   }}
@@ -2701,7 +2760,7 @@ function OrderTrackingModal({ orderId, orderRef, open, onClose }: any) {
                       <div className="absolute -left-[23px] top-1.5 w-[16px] h-[16px] rounded-full border-4 border-white z-10 shadow-sm bg-green-500 ring-4 ring-green-100" />
                       <div>
                         <p className="text-xs font-black tracking-tight leading-tight text-slate-900">
-                          {targetVendor.shipment_status?.replace(/_/g, ' ').toUpperCase() || 'PROCESSING'}
+                          {targetVendor.shipment_status?.replace(/_/g, ' ') || 'Processing'}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
                           Parcel is currently being processed. Status: {targetVendor.shipment_status || 'In Transit'}

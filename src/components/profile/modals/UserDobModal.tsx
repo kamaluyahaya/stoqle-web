@@ -49,7 +49,7 @@ export default function UserDobModal({ open, initialValue, onClose, onSave }: Pr
             <p className="text-sm text-slate-500 mb-5">Your birthday will not be shown publicly.</p>
 
             <div className="mb-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Birthday</label>
+              <label className="text-xs font-bold text-slate-500  tracking-widest block mb-2">Birthday</label>
               <input
                 type="date"
                 value={dob}

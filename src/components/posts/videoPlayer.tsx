@@ -90,9 +90,11 @@ const VideoPlayer = memo(function VideoPlayer({
   const [internalMuteFallback, setInternalMuteFallback] = useState(false);
   const [internalisActive, setInternalIsActive] = useState(false);
   const [isFullyPainted, setIsFullyPainted] = useState(false);
+  const [hasTriggeredPlay, setHasTriggeredPlay] = useState(false);
+  const [isManagerActive, setIsManagerActive] = useState(false);
 
   // Unified Activation Logic: Trust the parent prop first for instant-render sync, fallback to manager
-  const isActive = isActiveProp !== undefined ? isActiveProp : internalisActive;
+  const isActive = isActiveProp !== undefined ? isActiveProp : isManagerActive;
 
   const onTimeUpdateRef = useRef(onTimeUpdateHandler);
   const onEndedRef = useRef(onEndedHandler);
@@ -150,15 +152,21 @@ const VideoPlayer = memo(function VideoPlayer({
 
   useEffect(() => {
     const isActuallyActive = videoPlaybackManager.getActiveVideoId() === playerId;
-    if (isActuallyActive !== internalisActive) setInternalIsActive(isActuallyActive);
+    if (isActuallyActive !== isManagerActive) setIsManagerActive(isActuallyActive);
 
     const unsubscribe = videoPlaybackManager.subscribe((activeId) => {
       const active = activeId === playerId;
-      setInternalIsActive(active);
+      setIsManagerActive(active);
 
       if (!active) {
         setIsNativeReady(false);
         setIsFullyPainted(false);
+        setHasTriggeredPlay(false);
+      } else {
+        // If it becomes active and already has data, pre-emptively set ready for instant display
+        if (videoRef.current && videoRef.current.readyState >= 2) {
+          setIsNativeReady(true);
+        }
       }
     });
 
@@ -195,15 +203,41 @@ const VideoPlayer = memo(function VideoPlayer({
     videoPlaybackManager.setManualPause(playerId, userManualPause || false);
 
     if (userManualPause) {
+      if (hasTriggeredPlay) {
+        setHasTriggeredPlay(false);
+      }
       video.pause();
     } else {
-      // Audio-Safe Start: ONLY play if strictly paused.
-      // Volume and Mute are handled by a SEPARATE effect now to prevent audio 'blinks' or stutters during UI renders.
-      if (video.paused) {
-        videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume);
+      // 🚨 AUTOMATIC RECOVERY SYSTEM:
+      // If we are active but not playing and not having a successful play session, trigger it.
+      if (video.paused && !hasTriggeredPlay) {
+        setHasTriggeredPlay(true);
+        
+        // Reels (autoFitPortrait) go immediately. No delay.
+        if (autoFitPortrait) {
+          videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
+            .then((forcedMute) => {
+              if (forcedMute) setInternalMuteFallback(true);
+            })
+            .catch(() => {
+              setHasTriggeredPlay(false);
+            });
+        } else {
+          // Post Modal details keep a small delay for layout stability
+          const timer = setTimeout(() => {
+            if (isActive && !userManualPause && video.paused) {
+              videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
+                .then((forcedMute) => {
+                  if (forcedMute) setInternalMuteFallback(true);
+                })
+                .catch(() => setHasTriggeredPlay(false));
+            }
+          }, 200);
+          return () => clearTimeout(timer);
+        }
       }
     }
-  }, [userManualPause, isActive, playerId]); // NO finalMuted/finalVolume in dependencies to prevent sound 'blinks'
+  }, [userManualPause, isActive, playerId, hasTriggeredPlay]);
 
   const appliedVideoClass = useMemo(() => {
     // ELITE DISCOVERY: Default to object-cover if it's an active reel to prevent sizing 'pop'
@@ -245,7 +279,8 @@ const VideoPlayer = memo(function VideoPlayer({
       const hls = new Hls({
         capLevelToPlayerSize: true,
         autoStartLoad: true,
-        maxBufferLength: 20,
+        maxBufferLength: 40, // More aggressive batch-downloading
+        maxMaxBufferLength: 60,
         enableWorker: true,
       });
 
@@ -271,6 +306,9 @@ const VideoPlayer = memo(function VideoPlayer({
       });
     } else {
       video.src = src;
+      // 🚨 CRITICAL SAFARI FIX: Native HLS (.m3u8) on Safari often requires 
+      // an explicit .load() call to trigger the hardware decoder.
+      video.load();
     }
 
     const onLoadedData = () => {
@@ -324,7 +362,9 @@ const VideoPlayer = memo(function VideoPlayer({
         return;
       }
 
-      videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume);
+      videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume).then((forcedMute) => {
+        if (forcedMute) setInternalMuteFallback(true);
+      });
     };
 
     const onPlayingEvent = () => {
@@ -382,8 +422,6 @@ const VideoPlayer = memo(function VideoPlayer({
         hlsRef.current = null;
       }
 
-      video.removeAttribute("src");
-      video.load();
     };
   }, [src, loop, playsInline, playerId]); // STRICT CORE DEPENDENCIES: Removing finalMuted/finalVolume/seeking to prevent blink-reloads
 
@@ -396,16 +434,20 @@ const VideoPlayer = memo(function VideoPlayer({
         const entry = entries[0];
         if (!entry) return;
 
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
+        // Relax threshold for Safari (0.1 instead of 0.4) 
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.1) {
           const video = videoRef.current;
           if (!video) return;
 
-          if (video.readyState >= 2) {
-            videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume);
+          // ONLY trigger if not already active - the primary effect handles isActive=true
+          if (!isActive && video.readyState >= 1) {
+            videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume).then((forcedMute) => {
+              if (forcedMute) setInternalMuteFallback(true);
+            });
           }
         }
       },
-      { threshold: [0, 0.6, 1] }
+      { threshold: [0, 0.1, 0.5, 1.0] }
     );
 
     observer.observe(wrap);
@@ -414,10 +456,7 @@ const VideoPlayer = memo(function VideoPlayer({
 
   useEffect(() => {
     if (!isActive && src) {
-      const timer = setTimeout(() => {
-        videoPlaybackManager.prepare(playerId);
-      }, 100);
-      return () => clearTimeout(timer);
+      videoPlaybackManager.prepare(playerId);
     }
   }, [isActive, playerId, src]);
 
@@ -512,8 +551,8 @@ const VideoPlayer = memo(function VideoPlayer({
         }
       }}
     >
-      {/* 1. INITIAL / SCROLL LOADER: Stoqle Shimmer Branding */}
-      {((loading || !isNativeReady || !isFullyPainted) && isActive && !error) && (
+      {/* 1. INITIAL LOADER: Only show on cold boot / first src load */}
+      {(loading && isActive && !error) && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black">
           <motion.div
             initial={{ opacity: 0 }}
@@ -616,11 +655,13 @@ const VideoPlayer = memo(function VideoPlayer({
       <video
         ref={videoRef}
         src={src || undefined}
-        poster={isActive ? undefined : (poster || undefined)}
+        poster={poster || undefined} // Keep poster on video element always
         playsInline={playsInline}
+        autoPlay={autoplay && isActive}
         muted={true}
+        disableRemotePlayback={true}
         preload="auto"
-        className={`w-full h-full bg-black ${!isActive || !isNativeReady || !isFullyPainted ? "opacity-0" : "opacity-100"
+        className={`w-full h-full bg-black transition-opacity duration-300 ${!isActive ? "opacity-0" : "opacity-100"
           } ${appliedVideoClass || (aspectRatio && aspectRatio < 0.8 ? "object-cover" : "object-contain")}`}
       />
 

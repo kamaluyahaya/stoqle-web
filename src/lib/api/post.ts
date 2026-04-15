@@ -13,6 +13,7 @@ export type APIComment = {
   is_first_comment: number;
   author_name: string;
   author_pic?: string;
+  author_handle?: string;
   likes_count: number;
   author_liked?: boolean;
   liked_by_user?: boolean;

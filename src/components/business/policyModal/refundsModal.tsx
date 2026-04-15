@@ -16,6 +16,8 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
   const [returnShippingSubsidy, setReturnShippingSubsidy] = useState<boolean>(false);
   const [noReasonReturn7Days, setNoReasonReturn7Days] = useState<boolean>(false);
   const [rapidRefund, setRapidRefund] = useState<boolean>(false);
+  const [lateShipmentCompensation, setLateShipmentCompensation] = useState<boolean>(false);
+  const [fakeOnePayFour, setFakeOnePayFour] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [note, setNote] = useState<string>("");
@@ -27,14 +29,15 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
 
     try {
       if (!initialValue || initialValue.trim() === "") {
-        // defaults: false/false/false
+        // defaults: false
         setReturnShippingSubsidy(false);
         setNoReasonReturn7Days(false);
         setRapidRefund(false);
+        setLateShipmentCompensation(false);
+        setFakeOnePayFour(false);
       } else {
         const parsed = JSON.parse(initialValue);
         if (parsed && typeof parsed === "object") {
-          // accept several possible key names that might be in existing payloads
           const readBool = (obj: any, ...keys: string[]) => {
             for (const k of keys) {
               if (k in obj) {
@@ -49,17 +52,22 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
           setReturnShippingSubsidy(readBool(parsed, "return_shipping_subsidy", "return_shipping_subsidy_bool"));
           setNoReasonReturn7Days(readBool(parsed, "no_reason_return_7days", "seven_day_no_reason_return", "no_reason_7days"));
           setRapidRefund(readBool(parsed, "rapid_refund", "rapid_refund_bool"));
+          setLateShipmentCompensation(readBool(parsed, "late_shipment_compensation", "late_shipment_compensation_bool"));
+          setFakeOnePayFour(readBool(parsed, "fake_one_pay_four", "fake_one_pay_four_bool"));
         } else {
           setReturnShippingSubsidy(false);
           setNoReasonReturn7Days(false);
           setRapidRefund(false);
+          setLateShipmentCompensation(false);
+          setFakeOnePayFour(false);
         }
       }
     } catch (e) {
-      // parse fail -> defaults
       setReturnShippingSubsidy(false);
       setNoReasonReturn7Days(false);
       setRapidRefund(false);
+      setLateShipmentCompensation(false);
+      setFakeOnePayFour(false);
     } finally {
       setLoading(false);
     }
@@ -78,30 +86,26 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
   async function handleSave() {
     setSaving(true);
     try {
-      // payload: keep Flutter keys, and also include the other common key for compatibility
       const payloadObj: Record<string, any> = {
         return_shipping_subsidy: !!returnShippingSubsidy,
         seven_day_no_reason_return: !!noReasonReturn7Days,
         rapid_refund: !!rapidRefund,
-        // also write alternative key used elsewhere
+        late_shipment_compensation: !!lateShipmentCompensation,
+        fake_one_pay_four: !!fakeOnePayFour,
         additional_info: !!noReasonReturn7Days,
-
       };
 
       const payloadJson = JSON.stringify(payloadObj);
 
-      // persist to localStorage
       try {
         localStorage.setItem(prefKey, payloadJson);
       } catch (e) {
-        // ignore localStorage errors (quota/disabled)
         console.error("Failed to write refunds to localStorage", e);
       }
 
       if (onSave) await onSave(payloadJson);
     } catch (e) {
       console.error("Failed saving refunds", e);
-      // optionally you can show a toast here
       window.alert("Failed to save refund settings.");
     } finally {
       setSaving(false);
@@ -128,11 +132,11 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10 flex flex-col"
+            className="relative w-full max-w-2xl bg-white lg:rounded-[0.5rem] rounded-t-[0.5rem] shadow-xl p-5 z-10 flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Returns & Refunds</h3>
+              <h3 className="text-md font-semibold text-center">Returns & Refunds</h3>
               <button
                 onClick={() => (saving ? null : onClose())}
                 className="text-sm px-3 py-1 rounded-md hover:bg-slate-100"
@@ -149,138 +153,55 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
               {loading ? (
                 <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
               ) : (
-                <div className="space-y-4">
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-semibold text-slate-900">Return shipping subsidy</div>
-                            <div className="text-xs text-slate-500 mt-1">We cover return shipping costs in eligible cases.</div>
-                          </div>
-
-                          <label className="inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={returnShippingSubsidy}
-                              onChange={(e) => setReturnShippingSubsidy(e.target.checked)}
-                              className="sr-only"
-                            />
-                            <span
-                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${returnShippingSubsidy ? "bg-rose-500" : "bg-slate-200"
-                                }`}
-                              aria-hidden
-                            >
-                              <span
-                                className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${returnShippingSubsidy ? "translate-x-5" : "translate-x-0"
-                                  }`}
-                              />
-                            </span>
-                          </label>
+                <div className="space-y-4 px-1 pb-4">
+                  {[
+                    { label: "Return shipping subsidy", desc: "We cover return shipping costs in eligible cases.", state: returnShippingSubsidy, setter: setReturnShippingSubsidy },
+                    { label: "7-day no reason return", desc: "Buyers can return items within 7 days without explanation.", state: noReasonReturn7Days, setter: setNoReasonReturn7Days },
+                    { label: "Rapid refund", desc: "When conditions are met, customers receive an instant refund.", state: rapidRefund, setter: setRapidRefund },
+                    { label: "Late shipment compensation", desc: "If shipping is delayed beyond the promised time, you receive compensation.", state: lateShipmentCompensation, setter: setLateShipmentCompensation },
+                    { label: "Fake one pay four", desc: "If the product is proven to be counterfeit, we refund four times the price.", state: fakeOnePayFour, setter: setFakeOnePayFour }
+                  ].map((item, idx) => (
+                    <div key={idx} className="bg-white rounded-[0.5rem] p-4 border border-slate-100  transition-all hover:border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 pr-4">
+                          <div className="text-[12px] font-medium text-slate-900">{item.label}</div>
+                          <div className="text-xs text-slate-500 mt-1">{item.desc}</div>
                         </div>
+                        <label className="inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={item.state}
+                            onChange={(e) => item.setter(e.target.checked)}
+                            className="sr-only"
+                          />
+                          <span className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${item.state ? "bg-rose-500" : "bg-slate-200"}`}>
+                            <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${item.state ? "translate-x-5" : "translate-x-0"}`} />
+                          </span>
+                        </label>
                       </div>
                     </div>
-                  </div>
+                  ))}
 
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-semibold text-slate-900">7-day no reason return</div>
-                            <div className="text-xs text-slate-500 mt-1">Buyers can return items within 7 days without explanation.</div>
-                          </div>
 
-                          <label className="inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={noReasonReturn7Days}
-                              onChange={(e) => setNoReasonReturn7Days(e.target.checked)}
-                              className="sr-only"
-                            />
-                            <span
-                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${noReasonReturn7Days ? "bg-rose-500" : "bg-slate-200"
-                                }`}
-                              aria-hidden
-                            >
-                              <span
-                                className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${noReasonReturn7Days ? "translate-x-5" : "translate-x-0"
-                                  }`}
-                              />
-                            </span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-semibold text-slate-900">Rapid refund</div>
-                            <div className="text-xs text-slate-500 mt-1">
-                              When conditions are met, customers receive an instant refund.
-                            </div>
-                          </div>
-
-                          <label className="inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={rapidRefund}
-                              onChange={(e) => setRapidRefund(e.target.checked)}
-                              className="sr-only"
-                            />
-                            <span
-                              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${rapidRefund ? "bg-rose-500" : "bg-slate-200"
-                                }`}
-                              aria-hidden
-                            >
-                              <span
-                                className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${rapidRefund ? "translate-x-5" : "translate-x-0"
-                                  }`}
-                              />
-                            </span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Note */}
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <label className="text-sm font-semibold text-slate-900">Notes</label>
-                    <p className="text-xs text-slate-500 mt-1 mb-2">Optional info (e.g. Online only, Delivery only)</p>
-                    <textarea
-                      value={note}
-                      onChange={(e) => {
-                        if (e.target.value.length <= 100) setNote(e.target.value);
-                      }}
-                      rows={4}
-                      placeholder="Optional note (max 100 chars)"
-                      className="w-full border border-slate-200 rounded-lg p-3 text-sm resize-none"
-                    />
-                    <div className="text-xs text-slate-400 mt-2 text-right">{note.length}/100</div>
-                  </div>
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className="mt-4 flex justify-end gap-3">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => (saving ? null : onClose())}
-                className="px-4 py-2 rounded-lg bg-white border"
+                className="px-6 py-2.5 rounded-full bg-white border border-slate-200 text-sm font-medium hover:bg-slate-50 transition-colors"
                 disabled={saving}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold"
+                className="px-8 py-2 rounded-full bg-rose-500 text-white text-sm font-bold shadow-lg shadow-rose-500/30 hover:bg-rose-600 active:scale-95 transition-all"
                 disabled={saving}
               >
-                {saving ? "Saving..." : "Save"}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </motion.div>

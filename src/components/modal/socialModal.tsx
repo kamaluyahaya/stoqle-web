@@ -246,7 +246,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
         }
       });
       if (!res.ok) throw new Error("Failed to update follow status");
-      
+
       // ✅ Notify parent about the update
       onFollowUpdate?.(targetUserId, !currentStatus);
     } catch (err) {
@@ -278,9 +278,10 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
     }
   }, [isOpen]);
 
-  const handleUserClick = (targetId: string | number) => {
+  const handleUserClick = (targetUser: SocialUser) => {
     onClose();
-    router.push(`/user/profile/${targetId}`);
+    const handle = targetUser.username;
+    router.push(handle ? `/${handle}` : `/user/profile/${targetUser.user_id}`);
   };
 
   return (
@@ -407,7 +408,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                               : "Check back later for more suggestions."}
                     </p>
                     {error && (
-                      <button 
+                      <button
                         onClick={() => { setError(null); fetchData(); }}
                         className="mt-6 px-6 py-2 bg-slate-100 text-slate-600 rounded-full text-xs font-bold hover:bg-slate-200 transition-colors"
                       >
@@ -424,7 +425,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                         transition={{ delay: idx * 0.03 }}
                         key={`social-user-${user.user_id}-${idx}`}
                         className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 active:bg-slate-100 transition-all cursor-pointer group"
-                        onClick={() => handleUserClick(user.user_id)}
+                        onClick={() => handleUserClick(user)}
                       >
                         <div className="relative flex-shrink-0">
                           <img
@@ -506,7 +507,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                           transition={{ delay: idx * 0.03 }}
                           key={`rec-user-${user.user_id}-${idx}`}
                           className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 active:bg-slate-100 transition-all cursor-pointer group"
-                          onClick={() => handleUserClick(user.user_id)}
+                          onClick={() => handleUserClick(user)}
                         >
                           <div className="relative flex-shrink-0">
                             <img
@@ -567,12 +568,12 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
 
               {/* Footer Stats / PWA Hint */}
               <div className="px-6 py-3 bg-slate-50/50 flex items-center justify-between shrink-0">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <span className="text-[10px] font-bold text-slate-400  tracking-widest">
                   {filteredUsers.length} Users Listed
                 </span>
                 <div className="flex items-center gap-1.5 opacity-40">
                   <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
-                  <span className="text-[10px] font-bold text-slate-900 uppercase">Live Updates</span>
+                  <span className="text-[10px] font-bold text-slate-900 ">Live Updates</span>
                 </div>
               </div>
             </motion.div>

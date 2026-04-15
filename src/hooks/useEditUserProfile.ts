@@ -13,6 +13,7 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
   const [job, setJob] = useState("");
   const [school, setSchool] = useState("");
   const [profilePic, setProfilePic] = useState("");
+  const [bgPhotoUrl, setBgPhotoUrl] = useState("");
   const [email, setEmail] = useState("");
   const [phone_no, setPhoneNo] = useState("");
 
@@ -52,6 +53,7 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
           setJob(u.job ?? "");
           setSchool(u.school ?? "");
           setProfilePic(u.profile_pic ?? "");
+          setBgPhotoUrl(u.bg_photo_url ?? "");
           setEmail(u.email ?? "");
           setPhoneNo(u.phone_no ?? "");
         }
@@ -142,9 +144,9 @@ export function useEditUserProfile({ userId, token }: { userId?: number | null; 
   }
 
   return {
-    fullName, bio, gender, dob, location, job, school, profilePic, email, phone_no,
+    fullName, bio, gender, dob, location, job, school, profilePic, bgPhotoUrl, email, phone_no,
     isLoading, isSyncing, modalOpen, modalProps,
     openEditor, setModalOpen, saveEditorValue,
-    setProfilePic,
+    setProfilePic, setBgPhotoUrl,
   } as const;
 }

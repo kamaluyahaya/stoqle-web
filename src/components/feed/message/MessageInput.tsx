@@ -13,6 +13,7 @@ type MessageInputProps = {
     selectedFile?: File | null;
     filePreview?: string | null;
     onCancelFile?: () => void;
+    alwaysAllowSend?: boolean;
 };
 
 export const MessageInput: React.FC<MessageInputProps> = ({
@@ -24,6 +25,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     selectedFile,
     filePreview,
     onCancelFile,
+    alwaysAllowSend = false,
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -55,23 +57,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         const analyser = audioContext.createAnalyser();
         const source = audioContext.createMediaStreamSource(stream);
-        
-        analyser.fftSize = 64; 
+
+        analyser.fftSize = 64;
         source.connect(analyser);
-        
+
         audioContextRef.current = audioContext;
         analyserRef.current = analyser;
-        
+
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
+
         const update = () => {
             if (!analyserRef.current) return;
             analyserRef.current.getByteFrequencyData(dataArray);
-            
+
             // Map frequencies to 15 bar levels (scaled 2-24px)
             const newLevels = Array.from({ length: 15 }, (_, i) => {
                 const val = dataArray[i * 2] || 0;
-                return 4 + (val / 255) * 20; 
+                return 4 + (val / 255) * 20;
             });
             setSignalLevels(newLevels);
             animationFrameRef.current = requestAnimationFrame(update);
@@ -88,7 +90,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     // Review visualizer logic (hook into internal audio tag)
     const startReviewVisualizer = () => {
         if (!audioRef.current || isPlaying) return;
-        
+
         // This is tricky because of CORS/MediaSource, but since it's a blob, it should be fine.
         // For simplicity, we'll just run a pseudo-animation if playing, 
         // OR better, we can actually hook it up if needed.
@@ -134,11 +136,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 const url = URL.createObjectURL(blob);
                 setAudioBlob(blob);
                 setAudioUrl(url);
-                
+
                 // Pass it up as a file so existing logic handles it
                 const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
                 onFileSelect(file);
-                
+
                 // Stop all tracks
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -203,11 +205,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         if (textareaRef.current) {
             const el = textareaRef.current;
             el.style.height = 'auto'; // Reset first
-            
+
             const lineHeight = 20;
             const maxRows = 6;
             const maxHeight = lineHeight * maxRows;
-            
+
             // Recalculate based on content
             el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
             el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
@@ -215,9 +217,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }, [value]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
+        // Support Cmd+Enter or Ctrl+Enter for sending on desktop
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            if (value.trim() || selectedFile || audioUrl || alwaysAllowSend) {
+                e.preventDefault();
+                onSend();
+            }
         }
     };
 
@@ -263,13 +268,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                             >
                                 {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
                             </button>
-                            
+
                             <div className="flex-1 h-8 flex items-center justify-center gap-1 overflow-hidden px-4">
                                 {signalLevels.map((h, i) => (
-                                    <div 
-                                        key={i} 
-                                        className={`w-1 rounded-full transition-all duration-75 ${isPlaying ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} 
-                                        style={{ height: `${isPlaying ? Math.max(4, Math.random() * 20) : 4}px` }} 
+                                    <div
+                                        key={i}
+                                        className={`w-1 rounded-full transition-all duration-75 ${isPlaying ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`}
+                                        style={{ height: `${isPlaying ? Math.max(4, Math.random() * 20) : 4}px` }}
                                     />
                                 ))}
                             </div>
@@ -280,12 +285,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                             >
                                 <Trash2 size={16} />
                             </button>
-                            
-                            <audio 
-                                ref={audioRef} 
-                                src={audioUrl} 
+
+                            <audio
+                                ref={audioRef}
+                                src={audioUrl}
                                 onEnded={() => setIsPlaying(false)}
-                                className="hidden" 
+                                className="hidden"
                             />
                         </div>
                     ) : isRecording ? (
@@ -297,11 +302,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                             </div>
                             <span className="flex-1 text-xs font-bold text-red-600">Recording...</span>
                             <span className="text-[10px] font-bold text-red-500 tabular-nums">{formatTime(recordingTime)}</span>
-                            <button onClick={cancelRecording} className="text-[10px] uppercase tracking-widest font-black text-red-400">Cancel</button>
+                            <button onClick={cancelRecording} className="text-[10px]  tracking-widest font-black text-red-400">Cancel</button>
                         </div>
                     ) : (
                         <textarea
-                            autoFocus
                             ref={textareaRef}
                             onFocus={(e) => {
                                 // Move cursor to end on focus
@@ -347,7 +351,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     )}
                 </div>
 
-                <div 
+                <div
                     className="relative shrink-0"
                     onMouseDown={() => !value.trim() && !selectedFile && !audioUrl && startRecording()}
                     onMouseUp={() => stopRecording()}
@@ -367,7 +371,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 >
                     <button
                         onClick={() => {
-                            if (value.trim() || selectedFile || audioUrl) {
+                            if (value.trim() || selectedFile || audioUrl || alwaysAllowSend) {
                                 onSend();
                                 setAudioBlob(null);
                                 setAudioUrl(null);
@@ -375,7 +379,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                         }}
                         disabled={isSending}
                         className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-semibold shadow-md active:scale-95 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed group
-                            ${isRecording ? 'bg-red-600 scale-125 shadow-red-200' : (value.trim() || selectedFile || audioUrl) ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
+                            ${isRecording ? 'bg-red-600 scale-125 shadow-red-200' : (value.trim() || selectedFile || audioUrl || alwaysAllowSend) ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
                         `}
                     >
                         {isSending ? (
@@ -388,7 +392,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                             <Mic className="h-4 w-4" />
                         )}
                     </button>
-                    
+
                     {isRecording && (
                         <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg whitespace-nowrap animate-bounce">
                             Release to finish recording

@@ -884,7 +884,7 @@ export default function VendorOrdersPage() {
                                                                                             <p style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 12px;">This order is currently under dispute and is being reviewed by the administration.</p>
                                                                                             
                                                                                             <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-                                                                                                <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: uppercase; margin-bottom: 4px;">Customer's Reason</p>
+                                                                                                <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: ; margin-bottom: 4px;">Customer's Reason</p>
                                                                                                 <p style="font-size: 13px; font-weight: 600; color: #9f1239;">${currentShipment.dispute_explanation || currentShipment.dispute_reason || 'Customer reported a problem with this shipment.'}</p>
                                                                                             </div>
 
@@ -902,7 +902,7 @@ export default function VendorOrdersPage() {
                                                                                     confirmButtonColor: '#0f172a',
                                                                                     customClass: {
                                                                                         popup: 'rounded-[1.5rem]',
-                                                                                        confirmButton: 'rounded-full px-8 py-3 font-bold text-xs uppercase'
+                                                                                        confirmButton: 'rounded-full px-8 py-3 font-bold text-xs '
                                                                                     }
                                                                                 });
                                                                                 return;
@@ -956,7 +956,7 @@ export default function VendorOrdersPage() {
                                                                                             <p style="font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 12px;">This order is currently under dispute and is being reviewed by the administration.</p>
                                                                                             
                                                                                             <div style="background: #fff1f2; border: 1px solid #fda4af; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-                                                                                                <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: uppercase; margin-bottom: 4px;">Customer's Reason</p>
+                                                                                                <p style="font-size: 10px; font-weight: 900; color: #e11d48; text-transform: ; margin-bottom: 4px;">Customer's Reason</p>
                                                                                                 <p style="font-size: 13px; font-weight: 600; color: #9f1239;">${currentShipment.dispute_explanation || currentShipment.dispute_reason || 'Customer reported a problem with this shipment.'}</p>
                                                                                             </div>
 
@@ -974,7 +974,7 @@ export default function VendorOrdersPage() {
                                                                         confirmButtonColor: '#0f172a',
                                                                         customClass: {
                                                                             popup: 'rounded-[1.5rem]',
-                                                                            confirmButton: 'rounded-full px-8 py-3 font-bold text-xs uppercase'
+                                                                            confirmButton: 'rounded-full px-8 py-3 font-bold text-xs '
                                                                         }
                                                                     });
                                                                     return;
@@ -1601,7 +1601,7 @@ function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_UR
                                         <Clock size={20} />
                                     </div>
                                     <div>
-                                        <h5 className="text-[12px] font-black text-blue-900 uppercase tracking-widest mb-1">Claim Under Review</h5>
+                                        <h5 className="text-[12px] font-black text-blue-900  tracking-widest mb-1">Claim Under Review</h5>
                                         <p className="text-[11px] text-blue-700/80 font-bold leading-relaxed">
                                             Fulfillment proof was submitted on {new Date(shipment.updated_at || shipment.created_at).toLocaleDateString()}. Admin will verify this within 48h.
                                         </p>
@@ -1612,13 +1612,13 @@ function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_UR
                             <div className="space-y-6">
                                 <section className="p-5 bg-white rounded-2xl border border-slate-100 space-y-4">
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Claim Reason</label>
+                                        <label className="text-[10px] font-black text-slate-400  tracking-widest block mb-2">Claim Reason</label>
                                         <p className="text-[13px] font-black text-slate-900 leading-snug">{shipment.delivery_review_reason || "Standard Delivery Claim"}</p>
                                     </div>
 
                                     {shipment.delivery_review_explanation && (
                                         <div>
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Explanation</label>
+                                            <label className="text-[10px] font-black text-slate-400  tracking-widest block mb-2">Explanation</label>
                                             <p className="text-[12px] font-bold text-slate-500 leading-relaxed bg-slate-50/50 p-3 rounded-lg border border-slate-100/50 italic">
                                                 "{shipment.delivery_review_explanation}"
                                             </p>
@@ -1631,7 +1631,7 @@ function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_UR
                                             if (imgs.length > 0) {
                                                 return (
                                                     <div>
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Evidence Provided</label>
+                                                        <label className="text-[10px] font-black text-slate-400  tracking-widest block mb-2">Evidence Provided</label>
                                                         <div className="flex gap-3 mt-1 overflow-x-auto pb-2 scrollbar-hide">
                                                             {imgs.map((url: string, i: number) => (
                                                                 <img key={i} src={url} className="w-20 h-20 rounded-xl object-cover border-2 border-white shadow-sm ring-1 ring-slate-100 flex-shrink-0" />
@@ -1654,7 +1654,7 @@ function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_UR
                                                 <ShieldCheck size={18} className="animate-bounce" />
                                                 <span className="text-sm font-black tracking-tight">Have the Delivery Code?</span>
                                             </div>
-                                            <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest group-hover:scale-105 transition-transform underline underline-offset-4 decoration-2">Verify the Delivery NOW</p>
+                                            <p className="text-[11px] font-black text-emerald-600  tracking-widest group-hover:scale-105 transition-transform underline underline-offset-4 decoration-2">Verify the Delivery NOW</p>
                                         </div>
                                     </button>
                                 </div>

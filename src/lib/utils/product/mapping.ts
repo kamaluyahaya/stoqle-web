@@ -9,6 +9,11 @@ export const defaultFormatImageUrl = (url: string) => {
     if (!url.startsWith("http")) {
         formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
     }
+
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(formatted)) {
+        formatted = formatted.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "");
+    }
+
     return encodeURI(formatted);
 };
 
@@ -17,21 +22,35 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
 
     const mapped: PreviewPayload = {
         productId: dbProduct.product_id,
+        slug: dbProduct.slug || dbProduct.product_slug,
         title: dbProduct.title,
         description: dbProduct.description,
         category: dbProduct.category,
         hasVariants: dbProduct.has_variants === 1,
         price: dbProduct.price ?? "",
-        quantity: dbProduct.quantity ?? "",
         businessId: Number(dbProduct.business_id),
         businessSlug: dbProduct.business_slug,
         businessName: dbProduct.business_name,
+        businessLogo: formatUrl(dbProduct.business_logo || dbProduct.logo || dbProduct.profile_pic || dbProduct.avatar),
+        vendorAvatar: formatUrl(dbProduct.profile_pic || dbProduct.avatar),
+        quantity: (() => {
+            if (dbProduct.has_variants === 1) {
+                const inventory = dbProduct.inventory || [];
+                // If there's a base inventory record, prioritized, otherwise sum all variant stocks
+                const baseRec = inventory.find((inv: any) => !inv.sku_id && !inv.variant_option_id);
+                if (baseRec) return baseRec.quantity;
+
+                const total = inventory.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 0), 0);
+                return total > 0 ? total : (dbProduct.quantity ?? "");
+            }
+            return dbProduct.quantity ?? "";
+        })(),
         productImages: (() => {
             const media = dbProduct.media || [];
             const imgs = media.filter((m: any) => m.type === "image");
             if (imgs.length > 0) {
                 const coverRef = dbProduct.first_image || dbProduct.image_url;
-                
+
                 // Deterministic sort: 
                 // Promote items marked as is_cover OR matching the product's first_image field
                 const sorted = [...imgs].sort((a, b) => {
@@ -42,8 +61,8 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
                     return 0;
                 });
 
-                return sorted.map((m: any) => ({ 
-                    name: m.name || "img", 
+                return sorted.map((m: any) => ({
+                    name: m.name || "img",
                     url: formatUrl(m.url),
                     isCover: m.is_cover === 1 || (coverRef && m.url && m.url.includes(coverRef))
                 }));
@@ -69,7 +88,7 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
             title: g.title,
             allowImages: g.allow_images === 1 || !!g.allow_images,
             entries: (g.options || g.entries || []).map((o: any) => {
-                const inventoryMatch = (dbProduct.inventory || []).find((inv: any) => 
+                const inventoryMatch = (dbProduct.inventory || []).find((inv: any) =>
                     Number(inv.variant_option_id || inv.option_id) === Number(o.option_id || o.id)
                 );
                 const mediaItems = o.media || o.images || [];
@@ -110,6 +129,8 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
                 sevenDayNoReasonReturn: !!dbProduct.policy_settings.seven_day_no_reason_return,
                 rapidRefund: !!dbProduct.policy_settings.rapid_refund,
                 returnWindow: dbProduct.policy_settings.return_window || 3,
+                lateShipmentCompensation: !!dbProduct.policy_settings.late_shipment,
+                fakeOnePayFour: !!dbProduct.policy_settings.fake_one_pay_four,
             },
             useStoreDefaultShipping: !!dbProduct.policy_settings.use_store_default_shipping,
             shippingPolicy: {

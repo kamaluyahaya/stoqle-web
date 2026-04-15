@@ -165,7 +165,7 @@ export default function AddressSelectionModal({
   const ModalContent = () => (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[650000] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
           {/* backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

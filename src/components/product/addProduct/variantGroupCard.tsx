@@ -36,37 +36,22 @@ export default function VariantGroupCard({
 
         {/* RIGHT — Actions */}
         <div className="flex items-center justify-end gap-2 sm:gap-3">
-          {group.entries.length !== 0 && (
+          {onRemoveGroup && (
             <button
-              onClick={() => onAddEntry(group.id)}
+              onClick={() => onRemoveGroup(group.id)}
               className="
-          px-2 py-1.5
-          rounded-lg
-          bg-red-400
-          text-sm
-          text-white
-          hover:bg-slate-400
-          transition
-        "
+                px-3 py-1.5
+                rounded-lg
+                border border-slate-200
+                text-sm
+                text-slate-500
+                hover:bg-slate-50
+                transition
+              "
             >
-              + Entry
+              Remove
             </button>
           )}
-
-          <button
-            onClick={() => onRemoveGroup(group.id)}
-            className="
-        px-3 py-1.5
-        rounded-lg
-        border border-slate-200
-        text-sm
-        text-slate-500
-        hover:bg-slate-50
-        transition
-      "
-          >
-            Remove
-          </button>
 
         </div>
       </div>
@@ -74,20 +59,6 @@ export default function VariantGroupCard({
 
 
       <div className="mt-3 grid-cols-1 sm:grid-cols-2 gap-3">
-        {group.entries.length === 0 && (
-          <div className="text-center">
-            <div className=" text-slate-400">
-              No entries yet
-
-            </div>
-            <button
-              onClick={() => onAddEntry(group.id)}
-              className="px-2 py-1 rounded-lg bg-red-400 text-white text-sm"
-            >
-              + Entry
-            </button>
-          </div>
-        )}
         {children}
       </div>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { API_BASE_URL } from "@/src/lib/config";
 import { ProductSku } from "@/src/types/product";
 import NumberInput from "@/src/components/input/defaultNumberInput";
 import { Package } from "lucide-react";
@@ -39,13 +40,34 @@ export default function VariantSkuSection({
         setSkus((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
     };
 
+    const formatImageUrl = (url: string | null | undefined) => {
+        if (!url) return null;
+        if (typeof url !== "string") return null;
+        if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+        const apiBase = API_BASE_URL || "https://api.stoqle.com";
+        return url.startsWith("/public") ? `${apiBase}${url}` : `${apiBase}/public/${url}`;
+    };
+
     const getSkuImageParts = (sku: ProductSku) => {
         return sku.variantOptionIds.map((optionId) => {
             const group = variantGroups.find((g: any) => g.entries.some((e: any) => e.id === optionId));
             const entry = group?.entries.find((e: any) => e.id === optionId);
+
+            let rawImage: string | null = null;
+            if (entry?.imagePreviews && entry.imagePreviews.length > 0) {
+                rawImage = entry.imagePreviews[0];
+            } else if (entry?.images && entry.images.length > 0) {
+                const first = entry.images[0];
+                if (typeof first === "string") {
+                    rawImage = first;
+                } else if (first instanceof File || first instanceof Blob) {
+                    rawImage = URL.createObjectURL(first);
+                }
+            }
+
             return {
                 name: entry?.name || "Unknown",
-                image: entry?.imagePreviews?.[0] || null
+                image: formatImageUrl(rawImage),
             };
         });
     };
@@ -114,13 +136,13 @@ export default function VariantSkuSection({
                                                 className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none transition-all placeholder:text-slate-300 placeholder:font-normal"
                                             />
                                             <div className="absolute top-0 right-0 -translate-y-full pb-1">
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter px-1">Price</span>
+                                                <span className="text-[9px] font-bold text-slate-400  tracking-tighter px-1">Price</span>
                                             </div>
                                         </div>
                                     )}
                                     <div className="w-[66px] flex-shrink-0 relative">
                                         {readOnlyStock ? (
-                                             <div className="w-full h-8.5 py-1.5 bg-slate-100/50 border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 font-bold text-xs">
+                                            <div className="w-full h-8.5 py-1.5 bg-slate-100/50 border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 font-bold text-xs">
                                                 {sku.quantity || 0}
                                             </div>
                                         ) : (
@@ -134,7 +156,7 @@ export default function VariantSkuSection({
                                             />
                                         )}
                                         <div className="absolute top-0 right-0 -translate-y-full pb-1 pr-1 truncate">
-                                            <span className={`text-[9px] font-bold ${readOnlyStock ? 'text-red-400' : 'text-slate-400'} uppercase tracking-tighter`}>
+                                            <span className={`text-[9px] font-bold ${readOnlyStock ? 'text-red-400' : 'text-slate-400'}  tracking-tighter`}>
                                                 {readOnlyStock ? 'Inv' : 'Qty'}
                                             </span>
                                         </div>
@@ -159,7 +181,7 @@ export default function VariantSkuSection({
                                 <div className="flex flex-col gap-0.5">
                                     <span>Quantity</span>
                                     {readOnlyStock && (
-                                        <span className="text-[8px] text-red-500 font-bold uppercase tracking-tighter leading-none whitespace-nowrap animate-pulse">
+                                        <span className="text-[8px] text-red-500 font-bold  tracking-tighter leading-none whitespace-nowrap animate-pulse">
                                             Stock Managed In inventory
                                         </span>
                                     )}

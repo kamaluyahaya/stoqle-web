@@ -27,8 +27,17 @@ export const PROFILE_CACHE = {
   mediaPosts: [] as any[],
   notePosts: [] as any[],
   vendorProducts: [] as any[],
+  likedItems: [] as any[],
   activeTabIndex: 0,
   productLikeData: {} as Record<number, { liked: boolean, count: number }>,
   scrollPos: 0,
-  lastFetchedAt: 0
+  lastFetchedAt: 0,
+  lastLikedFetchedAt: 0,
+};
+
+export const MESSAGES_CACHE = {
+  chatSessions: [] as any[],
+  scrollPos: 0,
+  lastFetchedAt: 0,
+  roomsFetchedAt: {} as Record<string, number>,
 };

@@ -2,11 +2,12 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext"; // adjust path
 import { useCart } from "@/src/context/cartContext";
 import LoginModal from "../../../components/modal/auth/loginModal"; // adjust path if needed
 import { API_BASE_URL } from "@/src/lib/config";
+import { createPortal } from "react-dom";
 import BalanceModal from "../../business/balanceModal";
 import { fetchMyWallet, requestWithdrawal, fetchMyPaymentAccount } from "@/src/lib/api/walletApi";
 import { toast } from "sonner";
@@ -14,10 +15,12 @@ import PinSetupModal from "../../business/pinSetupModal";
 import TransferModal from "../../business/transferModal";
 import WithdrawModal from "../../business/withdrawModal";
 import { useWallet } from "@/src/context/walletContext";
-import { EyeIcon, EyeSlashIcon, ArrowLeftIcon, UserPlusIcon, CheckIcon, EllipsisHorizontalIcon, ChevronLeftIcon, PlusIcon, MapPinIcon, Cog6ToothIcon, XMarkIcon, UserGroupIcon, LinkIcon, FlagIcon, NoSymbolIcon } from "@heroicons/react/24/outline";
+import { copyToClipboard } from "@/src/lib/utils/utils";
+import { EyeIcon, EyeSlashIcon, ArrowLeftIcon, UserPlusIcon, CheckIcon, EllipsisHorizontalIcon, ChevronLeftIcon, QrCodeIcon, PlusIcon, MapPinIcon, Cog6ToothIcon, XMarkIcon, UserGroupIcon, LinkIcon, FlagIcon, NoSymbolIcon, BuildingStorefrontIcon, Bars3Icon } from "@heroicons/react/24/outline";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircleMore, Settings, ShoppingBag } from "lucide-react";
+import { MessageCircleMore, Settings, ShoppingBag, Share, Star } from "lucide-react";
+import { formatUrl } from "@/src/lib/utils/media";
 
 
 import ImageViewer from "../../../components/modal/imageViewer";
@@ -35,14 +38,17 @@ type HeaderProps = {
   isFollowing?: boolean;
   followersCount?: number;
   isBlocked?: boolean;
+  products?: any[];
 };
 
 const DEFAULT_AVATAR = "/assets/images/favio.png";
+const DEFAULT_BANNER = "/assets/images/background.png";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
-export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop, onFollowToggle, isFollowing: isFollowingProp, followersCount: followersCountProp, isBlocked: isBlockedProp }: HeaderProps) {
+export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop, onFollowToggle, isFollowing: isFollowingProp, followersCount: followersCountProp, isBlocked: isBlockedProp, products }: HeaderProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const isOtherUserProfileRoute = pathname?.startsWith('/user/profile/');
+  const [localBg, setLocalBg] = useState<string | null>(null);
+  const hasBg = !!(localBg || profileApi?.bg_photo_url || profileApi?.user?.bg_photo_url || profileApi?.business?.bg_photo_url || (profileApi ? DEFAULT_BANNER : null));
   const auth = (useAuth?.() ?? null) as any;
   const { cartCount } = useCart();
   const currentUser = auth?.user ?? null;
@@ -102,10 +108,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   const [uploadingProfile, setUploadingProfile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputBgRef = useRef<HTMLInputElement>(null);
   const [localProfilePic, setLocalProfilePic] = useState<string | null>(null);
 
   const [cropperImage, setCropperImage] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [unfollowConfirmOpen, setUnfollowConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
 
 
@@ -130,19 +138,15 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   useEffect(() => {
     const handleScroll = () => {
       // MiniHeader logic (Mobile logic sync)
-      if (!isOwner || isOtherUserProfileRoute) {
-        setShowMiniHeader(window.scrollY > 0);
-        setShowMiniLogo(window.scrollY > 150);
-      }
-    };
-    // Initial check on mount
-    if (!isOwner || isOtherUserProfileRoute) {
       setShowMiniHeader(window.scrollY > 0);
       setShowMiniLogo(window.scrollY > 150);
-    }
+    };
+    // Initial check on mount
+    setShowMiniHeader(window.scrollY > 0);
+    setShowMiniLogo(window.scrollY > 150);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isOwner, isOtherUserProfileRoute]);
+  }, [isOwner]);
 
   useEffect(() => {
     if (!profileUserId) return;
@@ -307,15 +311,25 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     return false;
   }, [isOwner, profileApi?.dm_preference, profileApi?.is_follower]);
 
-  const profilePic = profileApi?.business?.business_logo ?? profileApi?.user?.profile_pic ?? DEFAULT_AVATAR;
+  const profilePic = formatUrl(
+    profileApi?.business?.business_logo || 
+    profileApi?.user?.profile_pic || 
+    profileApi?.business?.logo || 
+    profileApi?.profile_pic
+  );
 
-  // Extract dominant color from profile picture
+  // Extract dominant color from background/profile picture
   useEffect(() => {
-    if (!profilePic) return;
+    const bgUrl = formatUrl(
+        profileApi?.bg_photo_url || 
+        profileApi?.user?.bg_photo_url || 
+        profileApi?.business?.bg_photo_url
+    );
+    if (!bgUrl || bgUrl.includes('favio.png')) return;
 
     const img = new Image();
     img.crossOrigin = "Anonymous";
-    img.src = profilePic;
+    img.src = bgUrl;
     img.onload = () => {
       try {
         const canvas = document.createElement("canvas");
@@ -337,7 +351,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     img.onerror = () => {
       setDominantColor("rgba(255, 255, 255, 1)");
     };
-  }, [profilePic]);
+  }, [localBg, profileApi?.bg_photo_url, profileApi?.user?.bg_photo_url, profileApi?.business?.bg_photo_url, profilePic]);
 
 
   const handleNavigate = (href: string) => {
@@ -408,6 +422,11 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleUnfollowClick = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setUnfollowConfirmOpen(true);
   };
 
   const unfollowUser = async () => {
@@ -580,6 +599,42 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     }
   };
 
+  const handleBgPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+
+    setUploadingBg(true);
+    toast.info("Updating background...", { duration: 2000 });
+
+    const formData = new FormData();
+    formData.append("bg_photo", file);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/profile/bg-photo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || "Failed to update background");
+
+      const newBgUrl = json.data?.user?.bg_photo_url || json.data?.bg_photo_url;
+
+      toast.success("Background updated!");
+      if (newBgUrl) {
+        setLocalBg(newBgUrl);
+      }
+    } catch (err: any) {
+      console.error("Background upload error:", err);
+      toast.error(err.message || "Failed to upload background");
+    } finally {
+      setUploadingBg(false);
+    }
+  };
+
+  const [uploadingBg, setUploadingBg] = useState(false);
+
   // Report handler (for non-owner) kept for report functionality
   const reportUser = () => {
     if (!token) {
@@ -606,7 +661,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await copyToClipboard(window.location.href);
       toast.success("Profile link copied!");
     } catch (err) {
       toast.error("Failed to copy link");
@@ -675,6 +730,15 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               Settings
             </button>
             <button
+              onClick={() => handleNavigate("/profile/business/business-status")}
+              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
+            >
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                <BuildingStorefrontIcon className="w-4 h-4" />
+              </div>
+              {profileApi?.is_business_owner ? "My shop" : "Open store"}
+            </button>
+            <button
               onClick={() => handleNavigate("/profile/orders/")}
               className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
             >
@@ -719,7 +783,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
             }
             setOpen(!open);
           }}
-          className={`p-1.5 rounded-full transition-all group active:scale-90 hover:bg-black/5 ${color || ""}`}
+          className={`p-1.5 rounded-full transition-all group active:scale-90 hover:bg-black/5 ${open ? 'bg-slate-300' : ''} ${color || ""}`}
         >
           {isOwner ? (
             <Cog6ToothIcon className="w-6 h-6 stroke-[1.8] group-hover:rotate-45 transition-transform duration-500" />
@@ -751,7 +815,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
                         >
                           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white">
-                            <UserGroupIcon className="w-4 h-4" />
+                            <Share className="w-4 h-4" />
                           </div>
                           Share to Friends
                         </button>
@@ -778,6 +842,11 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         </button>
                         <button
                           onClick={() => {
+                            if (!token) {
+                              setShowLoginModal(true);
+                              setOpen(false);
+                              return;
+                            }
                             if (isBlockedLocal) {
                               handleBlockUser();
                             } else {
@@ -797,95 +866,99 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   </div>
                 </motion.div>
               ) : (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setOpen(false)}
-                    className="fixed inset-0 bg-black/40 z-[140] lg:hidden"
-                  />
-                  <motion.div
-                    key="bottomsheet"
-                    initial={{ y: "100%" }}
-                    animate={{ y: 0 }}
-                    exit={{ y: "100%" }}
-                    transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[0.5rem] z-[150] lg:hidden pb-[env(safe-area-inset-bottom,20px)] shadow-[0_-8px_30px_rgba(0,0,0,0.1)] overflow-hidden"
-                  >
-                    <div className="flex items-center justify-center p-4 relative  border-slate-100">
-                      <span className="font-bold text-slate-800 text-sm">Share to</span>
-                      <button
-                        onClick={() => setOpen(false)}
-                        className="absolute right-4 p-1 hover:bg-slate-100 rounded-full transition-colors"
-                      >
-                        <XMarkIcon className="w-5 h-5 text-slate-500" />
-                      </button>
-                    </div>
-
-                    <div className="p-6">
-                      <div
-                        className="flex flex-col items-start cursor-pointer group"
-                        onClick={() => {
-                          setOpen(false);
-                          setShowShareFriendsModal(true);
-                        }}
-                      >
-                        <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 group-active:scale-95 transition-transform">
-                          <UserGroupIcon className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-[11px] font-medium text-slate-600">Friends</span>
+                typeof document !== "undefined" && createPortal(
+                  <div className="fixed inset-0 z-[200]">
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setOpen(false)}
+                      className="absolute inset-0 bg-black/40"
+                    />
+                    <motion.div
+                      key="bottomsheet"
+                      initial={{ y: "100%" }}
+                      animate={{ y: 0 }}
+                      exit={{ y: "100%" }}
+                      transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                      className="absolute bottom-0 left-0 right-0 bg-white rounded-[0.5rem] pb-[env(safe-area-inset-bottom,20px)] shadow-[0_-8px_30px_rgba(0,0,0,0.1)] overflow-hidden"
+                    >
+                      <div className="flex items-center justify-center p-4 relative border-b border-slate-100">
+                        <span className="font-bold text-slate-800 text-sm">More Options</span>
+                        <button
+                          onClick={() => setOpen(false)}
+                          className="absolute right-4 p-1 hover:bg-slate-100 rounded-full transition-colors"
+                        >
+                          <XMarkIcon className="w-5 h-5 text-slate-500" />
+                        </button>
                       </div>
-                    </div>
 
-                    <div className="mx-6 border-t border-slate-100" />
+                      <div className="p-4 space-y-1">
+                        <button
+                          onClick={() => {
+                            setOpen(false);
+                            setShowShareFriendsModal(true);
+                          }}
+                          className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white">
+                            <Share className="w-5 h-5" />
+                          </div>
+                          Share to Friends
+                        </button>
 
-                    <div className="p-6 py-4 flex gap-6 items-start">
-                      <button
-                        onClick={() => {
-                          handleCopyLink();
-                          setOpen(false);
-                        }}
-                        className="flex flex-col items-center gap-2 group"
-                      >
-                        <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center group-active:scale-95 transition-transform text-slate-600">
-                          <LinkIcon className="w-5 h-5" />
-                        </div>
-                        <span className="text-[11px] font-medium text-slate-500">Copy link</span>
-                      </button>
+                        <button
+                          onClick={() => {
+                            handleCopyLink();
+                            setOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                            <LinkIcon className="w-5 h-5" />
+                          </div>
+                          Copy Link
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          reportUser();
-                          setOpen(false);
-                        }}
-                        className="flex flex-col items-center gap-2 group"
-                      >
-                        <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center group-active:scale-95 transition-transform text-slate-600">
-                          <FlagIcon className="w-5 h-5" />
-                        </div>
-                        <span className="text-[11px] font-medium text-slate-500">Report</span>
-                      </button>
+                        <button
+                          onClick={() => {
+                            reportUser();
+                            setOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                            <FlagIcon className="w-5 h-5" />
+                          </div>
+                          Report
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          if (isBlockedLocal) {
-                            handleBlockUser();
-                          } else {
-                            setBlockConfirmOpen(true);
-                          }
-                          setOpen(false);
-                        }}
-                        className="flex flex-col items-center gap-2 group"
-                      >
-                        <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center group-active:scale-95 transition-transform text-slate-600">
-                          <NoSymbolIcon className="w-5 h-5" />
-                        </div>
-                        <span className="text-[11px] font-medium text-slate-500">{isBlockedLocal ? "Unblock" : "Block"}</span>
-                      </button>
-                    </div>
-                  </motion.div>
-                </>
+                        <button
+                          onClick={() => {
+                            if (!token) {
+                              setShowLoginModal(true);
+                              setOpen(false);
+                              return;
+                            }
+                            if (isBlockedLocal) {
+                              handleBlockUser();
+                            } else {
+                              setBlockConfirmOpen(true);
+                            }
+                            setOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                            <NoSymbolIcon className="w-5 h-5" />
+                          </div>
+                          {isBlockedLocal ? "Unblock" : "Block"}
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>,
+                  document.body
+                )
               )}
             </>
           )}
@@ -896,8 +969,38 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   return (
     <div className="relative">
+      {(() => {
+        const userBg = localBg || profileApi?.bg_photo_url || profileApi?.user?.bg_photo_url || profileApi?.business?.bg_photo_url;
+        // If not loaded yet OR no background set, use bg-slate-200
+        const bannerUrl = userBg || (profileApi ? DEFAULT_BANNER : null);
+        const finalSrc = bannerUrl ? (bannerUrl.startsWith('http') || bannerUrl.startsWith('/') || bannerUrl.startsWith('blob:') ? bannerUrl : `${API_BASE_URL}/public/${bannerUrl}`) : null;
+
+        return (
+          <div className={`absolute inset-x-0 top-0 bottom-[-32px] lg:hidden z-0 overflow-hidden ${!finalSrc ? 'bg-slate-100' : ''}`}>
+            {finalSrc && (
+              <img
+                src={finalSrc}
+                className="w-full h-full object-cover"
+                alt=""
+              />
+            )}
+            {/* Subtle top gradient for navbar readability */}
+            {finalSrc && <div className="absolute inset-x-0 top-0 h-100 bg-gradient-to-b from-black/20 via-black/30 to-transparent" />}
+            {/* Dark bottom gradient for content legibility */}
+            {finalSrc && <div className="absolute inset-x-0 bottom-0 h-100 bg-gradient-to-t from-black/50 via-transparent to-transparent" />}
+            <input
+              type="file"
+              ref={fileInputBgRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleBgPhotoChange}
+            />
+          </div>
+        );
+      })()}
+
       {/* Immersive Navbar (Back & More always visible; Logo & Follow animate on scroll) */}
-      <motion.div
+      <motion.header
         initial={false}
         animate={{
           backgroundColor: showMiniHeader ? dominantColor : "rgba(255,255,255,0)",
@@ -905,14 +1008,23 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         transition={{ duration: 0.3 }}
         className="fixed top-0 left-0 lg:left-[300px] right-0 z-[100] h-14 flex lg:hidden items-center px-4 transition-[left] duration-300"
       >
-        {/* Left part: Back button (Always visible on mobile/tablet) */}
-        <div className="flex-1 flex justify-start min-w-0 lg:hidden focus:outline-none">
-          <button
-            onClick={() => router.back()}
-            className={`p-2 -ml-2 transition-colors duration-300 ${showMiniHeader ? 'text-white' : 'text-slate-800'} hover:opacity-70`}
-          >
-            <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
-          </button>
+        {/* Left part: Back button or Menu icon */}
+        <div className="flex-1 flex justify-start">
+          {isOwner ? (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("toggle-mobile-menu"))}
+              className={`p-2 -ml-2 transition-colors duration-300 ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}
+            >
+              <Bars3Icon className="w-6 h-6 stroke-[2]" />
+            </button>
+          ) : (
+            <button
+              onClick={() => router.back()}
+              className={`p-2 -ml-2 transition-colors duration-300 ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'} hover:opacity-70`}
+            >
+              <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
+            </button>
+          )}
         </div>
 
         {/* Divider for Desktop centering (Hidden where Back button exists) */}
@@ -953,14 +1065,14 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 {!isFollowing ? (
                   <button
                     onClick={followUser}
-                    className="bg-red-500 text-white px-5 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all shadow-md"
+                    className="bg-red-500 text-white px-5 py-1 rounded-full text-xs active:scale-95 transition-all shadow-md"
                   >
                     Follow
                   </button>
                 ) : (
                   <button
-                    onClick={unfollowUser}
-                    className="bg-white/10 backdrop-blur-md text-white px-5 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all"
+                    onClick={handleUnfollowClick}
+                    className="bg-white/10 backdrop-blur-md text-white px-5 py-1.5 rounded-full text-xs  active:scale-95 transition-all"
                   >
                     Following
                   </button>
@@ -968,17 +1080,48 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               </motion.div>
             )}
           </AnimatePresence>
-          <div className={`transition-colors duration-300 ${showMiniHeader ? 'text-white' : 'text-slate-800'}`}>
-            <MoreMenu />
+          <div className={`transition-colors duration-300 ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}>
+            <div className="flex items-center gap-1">
+              <AnimatePresence>
+                {isOwner && !showMiniHeader && (
+                  <motion.button
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    onClick={() => fileInputBgRef.current?.click()}
+                    className="text-[9px] text-white bg-black/20 backdrop-blur-md px-3 py-1 rounded-full active:scale-95 transition-all whitespace-nowrap mr-2"
+                  >
+                    Edit background image
+                  </motion.button>
+                )}
+              </AnimatePresence>
+              {isOwner ? (
+                <>
+                  <button
+                    className={`p-2 active:scale-95 transition-transform ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}
+                  >
+                    <QrCodeIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setShowShareFriendsModal(true)}
+                    className={`p-2 active:scale-95 transition-transform ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}
+                  >
+                    <Share className="w-5 h-5" />
+                  </button>
+                </>
+              ) : (
+                <MoreMenu color={(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'} />
+              )}
+            </div>
           </div>
         </div>
-      </motion.div>
+      </motion.header>
 
 
-      <div className="rounded-2xl overflow-visible bg-white mb-6">
-        <div className="max-w-4xl mx-auto mt-20 px-4">
+      <div className={`relative z-10 rounded-2xl overflow-visible mb-6 transition-colors duration-300 ${hasBg ? 'bg-transparent lg:bg-white' : ''}`}>
+        <div className="max-w-4xl mx-auto pt-20 px-4">
           {/* Mobile */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <div className="flex items-center gap-3">
               <div
                 className="group relative flex-none cursor-pointer active:scale-95 transition-transform"
@@ -1001,7 +1144,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     DEFAULT_AVATAR
                   }
                   alt={displayName ?? "Profile"}
-                  className={`h-20 w-20 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200 ${uploadingProfile ? "opacity-50" : ""}`}
+                  className={`h-20 w-20 rounded-full object-cover ring-1 border ring-white shadow bg-white border-slate-200 ${uploadingProfile ? "opacity-50" : ""}`}
                 />
 
                 {isOwner && (
@@ -1018,7 +1161,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               </div>
 
               <div className="flex-1 min-w-0">
-                <h2 className="lg:-mt-10 sm:-mt-5 font-semibold text-slate-900 leading-tight truncate flex items-center gap-1.5" style={{ fontSize: "clamp(1rem, 2.2vw, 1.25rem)" }}>
+                <h2 className={`lg:-mt-10 sm:-mt-5 font-semibold leading-tight truncate flex items-center gap-1.5 ${hasBg ? 'text-white lg:text-slate-900 drop-shadow-sm' : 'text-slate-900'}`} style={{ fontSize: "clamp(1rem, 2.2vw, 1.25rem)" }}>
                   {displayName}
                   {profileApi?.is_verified_partner && (
                     <CheckBadgeIcon className="w-4 h-4 text-blue-500 fill-current" />
@@ -1032,12 +1175,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       animate={{ opacity: 1, y: 0 }}
                       className="mt-1 flex flex-col gap-0.5"
                     >
-                      <p className="text-[10px] text-slate-400 mt-1">
+                      <p className={`text-[10px] mt-1 ${hasBg ? 'text-white/80 lg:text-slate-400' : 'text-slate-400'}`}>
                         Stoqle ID: {profileApi?.user?.user_id || profileApi?.user?.id || ""}
                       </p>
                       {!isOwner && (profileApi?.latest_location || profileApi?.latest_ip) && (
                         <div className="flex items-center gap-1.5 mt-1">
-                          <p className="text-[10px] text-slate-400 max-w-xl leading-snug">IP location: {profileApi.latest_location || profileApi.latest_ip}</p>
+                          <p className={`text-[10px] max-w-xl leading-snug ${hasBg ? 'text-white/80 lg:text-slate-400' : 'text-slate-400'}`}>IP location: {profileApi.latest_location || profileApi.latest_ip}</p>
                         </div>
                       )}
                     </motion.div>
@@ -1057,7 +1200,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       transition={{ delay: 0.1 }}
                       className="flex items-start gap-2 mt-2 max-w-xl"
                     >
-                      <p className="text-sm text-slate-500 leading-snug">
+                      <p className={`text-sm leading-snug whitespace-pre-wrap ${hasBg ? 'text-white/90 lg:text-slate-500 drop-shadow-sm' : 'text-slate-500'}`}>
                         {profileApi?.user?.bio || (isOwner ? (
                           <span className="flex items-center gap-2">
                             <svg className="w-4 h-4 mt-0.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -1089,8 +1232,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                             onSocialClick?.("followers");
                           }}
                         >
-                          <div className="text-sm font-bold text-slate-800">{followersCount}</div>
-                          <div className="text-xs text-slate-500">Followers</div>
+                          <div className={`text-sm font-bold ${hasBg ? 'text-white lg:text-slate-800' : 'text-slate-800'}`}>{followersCount}</div>
+                          <div className={`text-xs ${hasBg ? 'text-white/80 lg:text-slate-500' : 'text-slate-500'}`}>Followers</div>
                         </div>
 
                         <div
@@ -1100,18 +1243,18 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                             onSocialClick?.("following");
                           }}
                         >
-                          <div className="text-sm font-bold text-slate-800">
+                          <div className={`text-sm font-bold ${hasBg ? 'text-white lg:text-slate-800' : 'text-slate-800'}`}>
                             {profileApi?.stats?.following ?? profileApi?.stats?.following_count ?? 0}
                           </div>
-                          <div className="text-xs text-slate-500">Following</div>
+                          <div className={`text-xs ${hasBg ? 'text-white/80 lg:text-slate-500' : 'text-slate-500'}`}>Following</div>
                         </div>
 
                         <div
                           className={`flex flex-col items-center ${isOwner ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
                           onClick={() => isOwner && onSocialClick?.("liked")}
                         >
-                          <div className="text-sm font-bold text-slate-800">{profileApi?.stats?.total_likes ?? 0}</div>
-                          <div className="text-xs text-slate-500">Likes</div>
+                          <div className={`text-sm font-bold ${hasBg ? 'text-white lg:text-slate-800' : 'text-slate-800'}`}>{profileApi?.stats?.total_likes ?? 0}</div>
+                          <div className={`text-xs ${hasBg ? 'text-white/80 lg:text-slate-500' : 'text-slate-500'}`}>Likes</div>
                         </div>
                       </motion.div>
                     )}
@@ -1119,14 +1262,11 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
                   <div className="flex items-center gap-2">
                     {!statusFetched && !isOwner ? (
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-24 rounded-full shimmer-bg opacity-60" />
-                        <div className="h-8 w-8 rounded-full shimmer-bg opacity-60" />
-                      </div>
+                      <div className="flex items-center gap-2 pr-6" />
                     ) : isOwner ? (
                       <div className="flex gap-1">
                         <button
-                          className="bg-red-500 text-white rounded-full px-5 py-2 text-sm whitespace-nowrap active:scale-95 transition-transform"
+                          className="bg-red-500 text-white rounded-full px-2 py-1 text-sm whitespace-nowrap active:scale-95 transition-transform"
                           onClick={() => {
                             if (!token) {
                               setShowLoginModal(true);
@@ -1138,7 +1278,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         >
                           Edit Profile
                         </button>
-                        <div className="p-2 border border-slate-200 rounded-full" onClick={() => { router.push("/settings"); }}>
+                        <div
+                          className={`px-4 text-center flex item-center justify-center  rounded-full transition-all active:scale-95 ${hasBg ? 'border-white/50 text-white  shadow-sm' : 'border-slate-200 text-slate-800 bg-white'}`}
+                          onClick={() => { router.push("/settings"); }}
+                        >
                           <Settings className="w-5 h-5" />
                         </div>
                       </div>
@@ -1147,6 +1290,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         {isFollowing ? (
                           profileApi?.is_business_owner ? (
                             <>
+                              {/* <button
+                                className="rounded-full px-4 py-1.5 text-xs font-bold shadow bg-white border border-slate-200 text-slate-800 transition-all active:scale-95"
+                                onClick={handleUnfollowClick}
+                              >
+                                Following
+                              </button> */}
                               <button
                                 className="rounded-full px-3 py-1 text-sm shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
                                 onClick={(e) => {
@@ -1193,7 +1342,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           <>
                             {statusFetched && !actionLoading && (
                               <button
-                                className="rounded-full px-5 py-2 text-sm font-bold shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
+                                className="rounded-full px-5 py-1 text-sm shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
                                 onClick={(e) => {
                                   if (!currentUser) {
                                     setShowLoginModal(true);
@@ -1218,7 +1367,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                               {messageLoading ? (
                                 <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
                               ) : (
-                                <MessageCircleMore className="w-5 h-5" />
+                                <MessageCircleMore className="w-4 h-4" />
                               )}
                             </button>
                           </>
@@ -1230,6 +1379,72 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               </div>
             </div>
           </div>
+
+          {/* Business Store Section */}
+          {profileApi?.is_business_owner && (() => {
+            const stats = profileApi?.business?.stats || profileApi?.stats;
+            const policy = profileApi?.policy;
+            const rating = Number(stats?.rating ?? stats?.avg_rating ?? (policy?.customer_service?.good_reviews_threshold ? (policy.customer_service.good_reviews_threshold / 20) : 5.0));
+            const totalSold = Number(stats?.total_sold || 0);
+
+            return (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVisitShop?.();
+                }}
+                className={`lg:hidden mt-3 p-2 rounded-xl  transition-all active:scale-[0.98] flex items-center justify-between gap-4 cursor-pointer ${hasBg ? 'bg-black/40 border-white/10 shadow-lg' : 'bg-slate-50 border-slate-100 hover:bg-slate-100'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${hasBg ? 'bg-white/20' : 'bg-white shadow-sm'}`}>
+                    <BuildingStorefrontIcon className={`w-5 h-5 ${hasBg ? 'text-white' : 'text-slate-600'}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex items-center gap-0.5 text-amber-400">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-current" />
+                        ))}
+                      </div>
+                      <span className={`text-[10px] font-black ${hasBg ? 'text-white' : 'text-slate-900'}`}>
+                        {rating.toFixed(1)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 mt-0.5 opacity-80">
+                      <ShoppingBag className={`w-2.5 h-2.5 ${hasBg ? 'text-white/80' : 'text-slate-500'}`} />
+                      <span className={`text-[9px] font-bold ${hasBg ? 'text-white/80' : 'text-slate-500'}`}>
+                        {totalSold.toLocaleString()}+ sold
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {(products || []).slice(0, 3).map((p: any, i: number) => (
+                    <div key={p.product_id || i} className={`relative w-12 h-12 rounded overflow-hidden bg-white ${hasBg ? '' : 'border-slate-200'}`}>
+                      <img
+                        src={p.first_image?.startsWith('http') ? p.first_image : (p.first_image ? `${API_BASE_URL}/public/${p.first_image}` : NO_IMAGE_PLACEHOLDER)}
+                        className="w-full h-full object-cover"
+                        alt=""
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-center py-2">
+                        <span className="text-[7px] font-black text-white px-1 leading-none drop-shadow-sm">
+                          ₦{Number(p.price || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {(!products || products.length === 0) && (
+                    <div className={`text-[10px] font-bold px-3 py-1.5 rounded-full ${hasBg ? 'bg-white/10 text-white/80' : 'bg-slate-100 text-slate-500'}`}>
+                      Shop now
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Desktop Layout */}
           <div className="hidden lg:flex md:items-start md:gap-6">
@@ -1277,25 +1492,25 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   <CheckBadgeIcon className="w-4 h-4 text-blue-500" />
                 )}
               </h2>
-                <AnimatePresence mode="wait">
-                  {profileApi && (
-                    <motion.div
-                      key="desktop-stoqle-id"
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-1 flex flex-col gap-0.5"
-                    >
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Stoqle ID: {profileApi?.user?.user_id || profileApi?.user?.id || ""}
-                      </p>
-                      {!isOwner && (profileApi?.latest_location || profileApi?.latest_ip) && (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <p className="text-[10px] text-slate-400 max-w-xl leading-snug">IP location: {profileApi.latest_location || profileApi.latest_ip}</p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              <AnimatePresence mode="wait">
+                {profileApi && (
+                  <motion.div
+                    key="desktop-stoqle-id"
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-1 flex flex-col gap-0.5"
+                  >
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Stoqle ID: {profileApi?.user?.user_id || profileApi?.user?.id || ""}
+                    </p>
+                    {!isOwner && (profileApi?.latest_location || profileApi?.latest_ip) && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <p className="text-[10px] text-slate-400 max-w-xl leading-snug">IP location: {profileApi.latest_location || profileApi.latest_ip}</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <AnimatePresence mode="wait">
                 {profileApi && (
                   <motion.div
@@ -1305,7 +1520,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     transition={{ delay: 0.1 }}
                     className="flex items-start gap-2 mt-2 max-w-xl"
                   >
-                    <p className="text-sm text-slate-500 leading-snug">
+                    <p className="text-sm text-slate-500 leading-snug whitespace-pre-wrap">
                       {profileApi?.user?.bio || (isOwner ? (
                         <span className="flex items-center gap-2">
                           <svg className="w-4 h-4 mt-0.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -1367,14 +1582,11 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
             <div className="flex-none self-center flex items-center gap-3">
               {!statusFetched && !isOwner ? (
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-32 rounded-full shimmer-bg opacity-60" />
-                  <div className="h-10 w-10 rounded-full shimmer-bg opacity-60" />
-                </div>
+                <div className="flex items-center gap-3 pr-6" />
               ) : isOwner ? (
                 <>
                   <button
-                    className="bg-red-500 text-white rounded-full px-5 py-2 text-sm shadow active:scale-95 transition-transform"
+                    className="bg-red-500 text-white rounded-full px-5 py-1 text-sm shadow active:scale-95 transition-transform"
                     onClick={() => router.push("/profile/edit")}
                   >
                     Edit profile
@@ -1387,7 +1599,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     profileApi?.is_business_owner ? (
                       <>
                         <button
-                          className="rounded-full px-5 py-2 text-sm shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
+                          className="rounded-full px-5 py-1 text-sm font-bold shadow bg-white border border-slate-200 text-slate-800 transition-all active:scale-95"
+                          onClick={handleUnfollowClick}
+                        >
+                          Following
+                        </button>
+                        <button
+                          className="rounded-full px-5 py-1 text-sm shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
                           onClick={(e) => {
                             e.stopPropagation();
                             onVisitShop?.();
@@ -1414,29 +1632,37 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         )}
                       </>
                     ) : (
-                      !isDMRestricted && (
+                      <>
                         <button
-                          className="rounded-full p-2 text-slate-800 bg-white border border-slate-200  transition-transform active:scale-95 hover:bg-slate-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMessageClick();
-                          }}
-                          disabled={messageLoading}
-                          aria-label="Message"
+                          className="rounded-full px-5 py-1 text-sm font-bold shadow bg-white border border-slate-200 text-slate-800 transition-all active:scale-95"
+                          onClick={handleUnfollowClick}
                         >
-                          {messageLoading ? (
-                            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <MessageCircleMore className="w-5 h-5" />
-                          )}
+                          Following
                         </button>
-                      )
+                        {!isDMRestricted && (
+                          <button
+                            className="rounded-full p-2 text-slate-800 bg-white border border-slate-200  transition-transform active:scale-95 hover:bg-slate-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMessageClick();
+                            }}
+                            disabled={messageLoading}
+                            aria-label="Message"
+                          >
+                            {messageLoading ? (
+                              <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <MessageCircleMore className="w-5 h-5" />
+                            )}
+                          </button>
+                        )}
+                      </>
                     )
                   ) : (
                     <>
                       {statusFetched && !actionLoading && (
                         <button
-                          className="rounded-full px-6 py-2 text-sm font-bold shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
+                          className="rounded-full px-6 py-1 text-sm  shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
                           onClick={(e) => {
                             if (!currentUser) {
                               setShowLoginModal(true);
@@ -1560,9 +1786,51 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         onConfirm={handleBlockUser}
         name={displayName}
       />
+
+      <UnfollowConfirmModal
+        isOpen={unfollowConfirmOpen}
+        onClose={() => setUnfollowConfirmOpen(false)}
+        onConfirm={unfollowUser}
+        name={displayName}
+      />
     </div>
   );
 
+}
+
+function UnfollowConfirmModal({ isOpen, onClose, onConfirm, name }: any) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4 bg-black/60">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+      >
+        <h3 className="text-md font-bold text-slate-800 mb-2 text-center tracking-tight">Unfollow {name}?</h3>
+        <p className="text-[13px] text-slate-500 mb-6 text-center leading-relaxed">
+          Do you want to unfollow {name}? You will stop receiving updates from this profile in your feed.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-full border border-slate-200 text-slate-500 text-sm font-medium active:scale-[0.98] transition-all hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className="flex-1 py-2.5 rounded-full bg-red-500 text-white text-sm active:scale-[0.98] transition-all"
+          >
+            Unfollow
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
 }
 
 function BlockConfirmModal({ isOpen, onClose, onConfirm, name }: any) {

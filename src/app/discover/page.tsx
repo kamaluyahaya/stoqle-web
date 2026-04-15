@@ -86,7 +86,7 @@ const PostCard = React.memo(({
           initial={entryVariants.initial}
           animate={entryVariants.animate}
           transition={entryVariants.transition}
-          className="w-full h-full"
+          className="w-full h-full relative z-[1]"
         >
           {post.coverType === "note" && !post.src ? (
             <div
@@ -123,6 +123,15 @@ const PostCard = React.memo(({
             </div>
           ) : (
             <div className="relative w-full overflow-hidden bg-slate-50">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+              </div>
+              {/* Placeholder frame indicator */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
+                </div>
+              </div>
               <style jsx global>{`
                 @keyframes fadeIn {
                   from { opacity: 0; }
@@ -132,7 +141,7 @@ const PostCard = React.memo(({
               <img
                 src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
                 alt={post.caption}
-                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
+                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
                 loading="lazy"
                 onLoad={(e) => {
                   (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
@@ -143,13 +152,7 @@ const PostCard = React.memo(({
           )}
         </motion.div>
 
-        {/* Placeholder frame indicator */}
-        <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
-          <div className="flex flex-col items-center gap-2 opacity-20">
-            <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-            <span className="text-[10px] font-bold text-slate-400">Opening...</span>
-          </div>
-        </div>
+
       </div>
 
       <div className="p-3">
@@ -163,7 +166,7 @@ const PostCard = React.memo(({
               className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
               onClick={(e) => {
                 e.stopPropagation();
-                router.push(`/user/profile/${post.user.id}`);
+                router.push(post.author_handle ? `/${post.author_handle}` : `/user/profile/${post.user.id}`);
               }}
             >
               <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
@@ -173,7 +176,7 @@ const PostCard = React.memo(({
                 className="truncate text-[11px] font-semibold text-slate-400 cursor-pointer hover:text-slate-900 transition-colors capitalize"
                 onClick={(e) => {
                   e.stopPropagation();
-                  router.push(`/user/profile/${post.user.id}`);
+                  router.push(post.author_handle ? `/${post.author_handle}` : `/user/profile/${post.user.id}`);
                 }}
               >
                 {post.user.name}
@@ -411,10 +414,13 @@ function DiscoverFeed({ postCount = 100 }: Props) {
   useEffect(() => {
     if (!isHydrated) return; // Algorithm: Wait for hydration
 
+    const CACHE_TTL = 1000 * 60 * 5; // 5 mins
+
     // Algorithm: Cache & Personalization Check
     if (DISCOVERY_CACHE.posts.length > 0 && DISCOVERY_CACHE.category === activeCategory) {
+      const isFresh = Date.now() - DISCOVERY_CACHE.lastFetchedAt < CACHE_TTL;
       const needsPersonalization = token && !DISCOVERY_CACHE.personalized && activeCategory === "Recommend";
-      if (!needsPersonalization) {
+      if (!needsPersonalization && isFresh) {
         setLoading(false);
         setPosts(DISCOVERY_CACHE.posts);
         setOffset(DISCOVERY_CACHE.offset);
@@ -454,6 +460,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
             DISCOVERY_CACHE.hasMore = mapped.length >= BATCH_SIZE;
             DISCOVERY_CACHE.category = activeCategory;
             DISCOVERY_CACHE.personalized = !!token;
+            DISCOVERY_CACHE.lastFetchedAt = Date.now();
 
             // Prefetch
             const allMedia = [...mapped, ...trending].slice(0, 10).map(p => p.src).filter(Boolean) as string[];
@@ -481,6 +488,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
             DISCOVERY_CACHE.hasMore = processed.length >= BATCH_SIZE;
             DISCOVERY_CACHE.category = activeCategory;
             DISCOVERY_CACHE.personalized = !!token;
+            DISCOVERY_CACHE.lastFetchedAt = Date.now();
 
             prefetchMediaConservative(processed.slice(0, 8).map(p => p.src).filter(Boolean) as string[]).catch(() => { });
           }
@@ -511,6 +519,8 @@ function DiscoverFeed({ postCount = 100 }: Props) {
     });
 
     socket.on("post_updated", (updatedPost) => {
+      // Guard: socket may emit a null or incomplete payload
+      if (!updatedPost || updatedPost.social_post_id == null) return;
       console.log("Post updated socket event received:", updatedPost.social_post_id);
       setPosts((prev) =>
         prev.map((p) => {

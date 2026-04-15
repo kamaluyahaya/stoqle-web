@@ -398,6 +398,8 @@ export function useEditBusinessProfile({
       return_shipping_subsidy: refundsObj.return_shipping_subsidy ?? refundsObj.returnShippingSubsidy ?? undefined,
       seven_day_no_reason_return: refundsObj.seven_day_no_reason_return ?? refundsObj.sevenDayNoReasonReturn ?? undefined,
       rapid_refund: refundsObj.rapid_refund ?? refundsObj.rapidRefund ?? undefined,
+      late_shipment_compensation: refundsObj.late_shipment_compensation ?? refundsObj.lateShipmentCompensation ?? undefined,
+      fake_one_pay_four: refundsObj.fake_one_pay_four ?? refundsObj.fakeOnePayFour ?? undefined,
       additional_info: shippingObj.additional_info ?? shippingObj.additionalInfo ?? shippingObj.note ?? undefined,
 
       // payment

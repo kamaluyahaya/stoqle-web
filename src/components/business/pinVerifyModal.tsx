@@ -12,11 +12,11 @@ interface PinVerifyModalProps {
     errorMessage?: string | null;
 }
 
-export default function PinVerifyModal({ 
-    isOpen, 
-    onClose, 
-    onSuccess, 
-    title = "Enter Wallet PIN", 
+export default function PinVerifyModal({
+    isOpen,
+    onClose,
+    onSuccess,
+    title = "Enter Wallet PIN",
     description = "Enter your 4-digit security code to authorize this transaction.",
     isLoading = false,
     errorMessage = null
@@ -112,7 +112,7 @@ export default function PinVerifyModal({
                             </div>
 
                             {errorMessage && (
-                                <motion.div 
+                                <motion.div
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-3"
@@ -125,14 +125,14 @@ export default function PinVerifyModal({
                             {isLoading && (
                                 <div className="flex flex-col items-center justify-center">
                                     <div className="w-6 h-6 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
-                                    <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Verifying PIN...</p>
+                                    <p className="mt-2 text-[10px] font-black text-slate-400  tracking-widest">Verifying PIN...</p>
                                 </div>
                             )}
 
                             <div className="pt-2 text-center">
-                                <button 
+                                <button
                                     onClick={onClose}
-                                    className="text-[10px] font-black text-slate-400 hover:text-slate-600 transition uppercase tracking-[0.2em]"
+                                    className="text-[10px] font-black text-slate-400 hover:text-slate-600 transition  tracking-[0.2em]"
                                 >
                                     Cancel Transaction
                                 </button>

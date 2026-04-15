@@ -77,8 +77,12 @@ export default function BusinessStatusPage() {
 
     load();
 
+    const handleRefresh = () => load(true);
+    window.addEventListener('refresh-business-data', handleRefresh);
+
     return () => {
       mounted = false;
+      window.removeEventListener('refresh-business-data', handleRefresh);
     };
   }, []);
 
@@ -179,7 +183,7 @@ export default function BusinessStatusPage() {
                 alt="Verification Pending"
                 className="h-full object-contain rounded mix-blend-multiply"
               />
-              <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase animate-pulse">
+              <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold tracking-wider  animate-pulse">
                 Under Review
               </div>
             </div>
@@ -207,7 +211,7 @@ export default function BusinessStatusPage() {
                   <h3 className="font-bold text-slate-900 truncate">{business?.business_name || "New Business"}</h3>
                   <p className="text-sm text-slate-500 truncate">{formatAddress(business?.business_address)}</p>
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded uppercase tracking-tighter">
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded  tracking-tighter">
                       {business?.business_category || "General"}
                     </span>
                     <span className="text-[10px] font-medium text-slate-400 italic">
@@ -241,7 +245,7 @@ export default function BusinessStatusPage() {
                 alt="Account Suspended"
                 className="h-full object-contain"
               />
-              <div className="absolute top-4 right-4 bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase">
+              <div className="absolute top-4 right-4 bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider ">
                 Action Required
               </div>
             </div>
@@ -294,6 +298,11 @@ export default function BusinessStatusPage() {
               wallet={wallet}
               pendingOrdersCount={pendingOrdersCount}
               customerDeliveredCount={customerDeliveredCount}
+              onRefresh={() => {
+                // We'll call load(true) to refresh state without full loading spinner
+                const event = new CustomEvent('refresh-business-data');
+                window.dispatchEvent(event);
+              }}
             />
           </div>
         )}

@@ -144,11 +144,10 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                                         onIndexChange((currentIndex - 1 + mediaList.length) % mediaList.length);
                                     }
                                 }}
-                                className={`max-w-[95vw] max-h-[85vh] object-contain shadow-2xl pointer-events-auto cursor-grab active:cursor-grabbing ${
-                                    profileUserId 
-                                        ? "aspect-square rounded-full ring-4 ring-white/20" 
+                                className={`max-w-[95vw] max-h-[85vh] object-contain shadow-2xl pointer-events-auto cursor-grab active:cursor-grabbing ${profileUserId
+                                        ? "aspect-square rounded-full ring-4 ring-white/20"
                                         : "rounded-xl border border-white/10"
-                                }`}
+                                    }`}
                                 onClick={(e) => e.stopPropagation()}
                             />
                         </AnimatePresence>
@@ -224,7 +223,7 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                                     >
                                         Change Profile
                                     </button>
-                                    <p className="text-white/20 text-[10px] uppercase tracking-widest font-bold">Your Profile Statistics</p>
+                                    <p className="text-white/20 text-[10px]  tracking-widest font-bold">Your Profile Statistics</p>
                                 </div>
                             )}
                         </motion.div>
@@ -262,13 +261,13 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                                     likers.map((liker) => (
                                         <Link
                                             key={liker.user_id}
-                                            href={`/user/profile/${liker.user_id}`}
+                                            href={liker.username ? `/${liker.username}` : `/user/profile/${liker.user_id}`}
                                             className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-colors group"
                                             onClick={onClose}
                                         >
                                             <img src={liker.profile_pic || "https://via.placeholder.com/40"} className="w-10 h-10 rounded-full object-cover ring-1 ring-white/20" alt="" />
                                             <div className="lex-1 min-w-0">
-                                                <p className="text-white font-medium text-sm truncate group-hover:text-rose-400 transition-colors uppercase tracking-tight">{liker.full_name}</p>
+                                                <p className="text-white font-medium text-sm truncate group-hover:text-rose-400 transition-colors  tracking-tight">{liker.full_name}</p>
                                                 <p className="text-white/40 text-[10px]">Liked recently</p>
                                             </div>
                                         </Link>

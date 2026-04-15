@@ -18,7 +18,7 @@ import { useAuth } from "@/src/context/authContext";
 type StoreType = "individual" | "enterprise" | null;
 
 export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
-  const { refreshUser } = useAuth();
+  const { refreshUser, ensureAccountVerified } = useAuth() as any;
   const [step, setStep] = useState<"choose" | "form">("choose");
   const [storeType, setStoreType] = useState<StoreType>(null);
 
@@ -226,14 +226,23 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
-    // basic validation
     if (!storeType) return;
+
+    // ── Verification Gate ────────────────────────────────────────────────────
+    // Before any submission logic, ensure the user has both email and phone
+    // on their account. If not, the verification modal fires.
+    const verified = await ensureAccountVerified();
+    if (!verified) {
+      toast.warning("Please verify your email and phone number before registering a business.");
+      return;
+    }
+
+    // ── Standard form validation ─────────────────────────────────────────────
     if (!ninFile) return toast.warning("Please upload NIN");
     if (storeType === "enterprise" && !cacFile) return toast.warning("Please upload CAC");
     if (!businessName.trim()) return toast.warning("Please enter business name");
     if (!category.trim()) return toast.warning("Please select a category");
     if (!address.trim()) return toast.warning("Please enter address");
-
     if (!agreed) return toast.warning("Please agree to terms");
 
     setSubmitting(true);
@@ -371,7 +380,12 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
                       title="Individual"
                       subtitle="Suitable for opening a store as an individual without a business license."
                       icon={<FaUser />}
-                      onSelect={() => {
+                      onSelect={async () => {
+                        const verified = await ensureAccountVerified();
+                        if (!verified) {
+                          toast.warning("Please verify your email and phone number to open a store.");
+                          return;
+                        }
                         setStoreType("individual");
                         setStep("form");
                       }}
@@ -382,7 +396,12 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
                       title="Enterprise"
                       subtitle='Suitable for entities with a business license, where the business license type displays "Individual Industrial and Commercial Household" or "Company/Enterprise/Sole Proprietorship", etc.'
                       icon={<FaStore />}
-                      onSelect={() => {
+                      onSelect={async () => {
+                        const verified = await ensureAccountVerified();
+                        if (!verified) {
+                          toast.warning("Please verify your email and phone number to open a store.");
+                          return;
+                        }
                         setStoreType("enterprise");
                         setStep("form");
                       }}
@@ -620,12 +639,12 @@ function OptionCard({
         <div className="flex-shrink-0 flex items-center justify-center text-3xl">{icon}</div>
         <div className="flex-1">
           <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-          <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+          <p className="text-[12px] text-slate-500 mt-1">{subtitle}</p>
         </div>
       </div>
 
       <button onClick={onSelect} className="ml-4 flex-shrink-0 rounded-full px-3 py-2 text-rose-600 border border-rose-100 whitespace-nowrap">
-        Open Store
+        Open store
       </button>
     </div>
   );

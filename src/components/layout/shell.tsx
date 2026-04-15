@@ -7,7 +7,7 @@ import Sidebar from "./sidebar";
 import LoginModal from "@/src/components/modal/auth/loginModal";
 import BottomNav from "./bottomNav"; // <-- add this
 import { useAuth } from "@/src/context/authContext";
-import { usePathname } from "next/navigation";
+import { usePathname, useParams } from "next/navigation";
 import AccountVerificationModal from "../modal/accountVerificationModal";
 import ReleaseSelectionModal from "../modal/social/ReleaseSelectionModal";
 import GlobalPostComposer from "../posts/GlobalPostComposer";
@@ -20,8 +20,11 @@ const SIDEBAR_WIDTH = 300;
 export default function Shell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const pathname = usePathname();
+  const params = useParams();
 
+  const isUsernamePage = !!params.username;
   const isOtherUserProfile = pathname?.startsWith('/user/profile/');
+  const isMyProfile = pathname === '/profile';
   const isShopPage = pathname?.startsWith('/shop/');
   const isEditProfile = pathname === '/profile/edit';
   const isMessages = pathname === '/messages';
@@ -32,20 +35,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const isInventory = pathname?.startsWith('/profile/business/inventory');
   const isCustomerOrder = pathname?.startsWith('/profile/business/customer-order');
   const isOrders = pathname === '/profile/orders';
+  const isCommunityGuidelines = pathname === '/community-guidelines';
+  const isVendorOnboarding = pathname === '/profile/business/onboarding';
 
-  const shouldHideTopNav = isOtherUserProfile || isShopPage || isEditProfile || isMessages || isSettings || isBusinessStatus || isAccountSecurity || isPrivacy || isInventory || isCustomerOrder || isOrders;
-  const shouldHideBottomNav = isOtherUserProfile || isShopPage || isEditProfile || isSettings || isBusinessStatus || isAccountSecurity || isPrivacy || isInventory || isCustomerOrder || isOrders;
+  const shouldHideTopNav = isMyProfile || isOtherUserProfile || isShopPage || isEditProfile || isMessages || isSettings || isBusinessStatus || isAccountSecurity || isPrivacy || isInventory || isCustomerOrder || isOrders || isCommunityGuidelines || isVendorOnboarding || isUsernamePage;
+  const shouldHideBottomNav = isOtherUserProfile || isShopPage || isEditProfile || isSettings || isBusinessStatus || isAccountSecurity || isPrivacy || isInventory || isCustomerOrder || isOrders || isCommunityGuidelines || isVendorOnboarding || isUsernamePage;
 
   return (
     <div className=" bg-white relative">
-      {!shouldHideTopNav && <Navbar height={NAV_HEIGHT} />}
-      
-      {/* Top Navbar logic for Large screens only on some pages */}
-      {(isEditProfile || isOtherUserProfile || isMessages || isSettings || isBusinessStatus || isAccountSecurity || isPrivacy || isInventory || isCustomerOrder || isOrders) && <div className="hidden lg:block"><Navbar height={NAV_HEIGHT} /></div>}
+      <Navbar height={NAV_HEIGHT} hideHeaderOnMobile={shouldHideTopNav} />
 
       <Sidebar navHeight={NAV_HEIGHT} width={SIDEBAR_WIDTH} />
 
-      <main className={`${(isShopPage) ? 'pt-0' : (shouldHideTopNav ? 'pt-0 lg:pt-16' : 'pt-16')} lg:ml-[300px] transition-all duration-300`}>
+      <main className={`${(isShopPage) ? 'pt-0' : (shouldHideTopNav ? 'pt-0 lg:pt-16' : 'pt-16')} lg:ml-[300px] transition-[margin-left] duration-300`}>
         {children}
       </main>
 

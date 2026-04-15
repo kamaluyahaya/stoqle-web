@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Info } from "lucide-react";
+import { X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -21,129 +21,78 @@ export default function ReturnShippingSubsidyModal({ open, onClose }: Props) {
     };
   }, [open]);
 
-  const content = `<b><center>🚚 Return Shipping Fee Protection Service Description</center></b><br/><br/>
+  const content = `<b><center>🚚 Return Shipping Fee Coverage Service Description</center></b><br/><br/>
 
-<b>Service Content</b><br/>
-“Return Shipping Fee Protection” is a service provided by the Stoqle platform to consumers (hereinafter referred to as “you” or “user”), offering shipping subsidies for returns and exchanges. After purchasing products that support this service on the Stoqle e-commerce platform, if you initiate a return or exchange within the required return/exchange period, the platform will provide a shipping subsidy according to certain standards.<br/><br/>
+<b>1. Service Content</b><br/>
+“Return Shipping Fee Coverage” is a return/exchange shipping subsidy service provided by the Stoqle platform for consumers (hereinafter also referred to as “you” or “user”). After purchasing products that support this service on the Stoqle e-commerce platform, if you initiate a return or exchange within the eligible return/exchange period, the platform will provide a shipping fee subsidy according to certain standards.<br/><br/>
 
-<b>How is the return shipping subsidized?</b><br/><br/>
+<b>2. How is the return shipping fee subsidized?</b><br/><br/>
 
-<b>Method 1: Door-to-door pickup — subsidy for the first weight tier (within 1 kg)</b><br/><br/>
-• When applying for return/exchange, select door-to-door pickup<br/>
-• When the courier picks up the item, the first weight shipping fee is directly deducted<br/>
-• If you choose door-to-door pickup in the after-sales page, once the courier completes pickup, the platform will subsidize the first weight shipping fee (i.e., within 1 kg)<br/>
-• You need to pay the return shipping fee online, and the system will immediately deduct the first weight subsidy<br/>
-• The subsidy will not be paid to you separately<br/>
-• You only pay the excess shipping fee beyond the first weight (if any)<br/>
-• You do not need to wait for the return process to be completed to receive the subsidy<br/><br/>
+<b>Return Method 1: Schedule doorstep pickup, subsidy covers the first weight shipping fee (within 1 kg)</b><br/>
+• Select doorstep pickup when applying for return/exchange<br/>
+• The courier deducts the first weight shipping fee directly upon pickup<br/>
+• If you choose doorstep pickup on the after-sales details page when initiating a return/exchange request, once the courier completes the pickup, the platform will subsidize the first weight shipping fee (i.e., the shipping fee within 1 kg, same below). You need to pay the return/exchange shipping fee online, and the system will instantly deduct the first weight shipping fee online. The subsidy will not be paid separately to you. You only need to pay the remaining shipping fee exceeding the first weight (if any), and you can receive the subsidy without waiting for the return/exchange to be completed.<br/><br/>
 
-<b>Method 2: Self-return — subsidy based on first weight shipping standard (within 1 kg)</b><br/><br/>
-• When applying for return/exchange, select self-return<br/>
-• After the merchant confirms receipt, the system will automatically issue the subsidy<br/>
-• If you choose self-return, the platform will provide a subsidy based on the first weight shipping standard after the merchant confirms receipt<br/>
-• The specific subsidy amount is shown in your “Order Details - Return Shipping Fee Protection” page<br/>
-• You must first pay the return shipping fee and upload the correct tracking number in the after-sales page<br/>
-• After the merchant confirms receipt, and 72 hours later, the platform will issue the subsidy to your Stoqle wallet or original payment account<br/>
-• You can check the refund in: Stoqle App → Me → Wallet → Balance<br/><br/>
+<b>Return Method 2: Self-send the product, subsidy based on first weight shipping fee standard (within 1 kg standard)</b><br/>
+• Select self-send when applying for return/exchange<br/>
+• The system automatically initiates the subsidy after the merchant confirms receipt<br/>
+• If you choose to self-send, after the merchant confirms receipt, the platform will subsidize your return/exchange shipping fee based on the first weight shipping fee standard. The specific subsidy amount shall be subject to what is displayed on your corresponding “Order Details - Return Shipping Fee Coverage” page. You need to pay the return/exchange shipping fee in advance and upload the correct logistics tracking number on the after-sales details page. Within 72 hours after the merchant confirms receipt, the platform will provide the corresponding subsidy amount. You can check the credited amount in “Stoqle APP - Me - Wallet - Account Balance” or in the original payment channel account corresponding to your order.<br/><br/>
 
-<b>Method 3: Service point drop-off — subsidy for first weight (within 1 kg)</b><br/><br/>
-• When applying for return/exchange, select lockers or service points for shipping<br/>
-• When the courier completes pickup, the first weight shipping fee is directly deducted<br/>
-• You must pay the return shipping fee online<br/>
-• The system will immediately deduct the first weight subsidy<br/>
-• The subsidy will not be paid separately<br/>
-• You only pay the excess shipping fee beyond the first weight (if any)<br/>
-• You do not need to wait for the return process to be completed to receive the subsidy<br/><br/>
+<b>Return Method 3: Drop off at service points, subsidy covers the first weight shipping fee (within 1 kg)</b><br/>
+• Select courier locker or station drop-off when applying for return/exchange<br/>
+• The courier deducts the first weight shipping fee directly upon pickup<br/>
+• If you choose courier locker or station drop-off on the after-sales details page when initiating a return/exchange request, once the courier completes collection, the platform will subsidize the first weight shipping fee. You need to pay the return/exchange shipping fee online, and the system will instantly deduct the first weight shipping fee. The subsidy will not be paid separately to you. You only need to pay the remaining shipping fee exceeding the first weight (if any), and you can receive the subsidy without waiting for the return/exchange to be completed.<br/><br/>
 
-<b>Applicable Regions</b><br/>
-Click to view full coverage areas for door-to-door pickup/service point shipping<br/><br/>
+<b>3. Applicable Regions</b><br/>
+Click to view full coverage areas for doorstep pickup/service point drop-off<br/><br/>
 
-<b>Eligible Users</b><br/>
-Consumers who purchase products marked with the “Return Shipping Fee Protection” service label<br/><br/>
+<b>4. Applicable Users</b><br/>
+Consumers who purchase products with the “Return Shipping Fee Coverage” service label.<br/><br/>
 
-<b>Subsidy Frequency</b><br/>
-• One order can receive one shipping subsidy<br/>
-• If multiple return shipments are generated from one order, only one subsidy is provided<br/>
-• If multiple orders are returned in one package, only one subsidy is provided<br/><br/>
+<b>5. Subsidy Frequency</b><br/>
+Each order placed on the Stoqle platform is eligible for one shipping subsidy (i.e., if one order corresponds to multiple return shipments, only one subsidy will be provided). If multiple orders are combined into one return package, only one subsidy will be provided.<br/><br/>
 
-<b>Effective Time & Service Period</b><br/>
-• The service takes effect when the seller ships the product<br/>
-• The service period is 90 calendar days from the shipping date (inclusive)<br/>
-• After this period, returns/exchanges will not be subsidized<br/><br/>
+<b>6. Effective Time and Service Period</b><br/>
+The “Return Shipping Fee Coverage” service takes effect when the merchant ships the product you purchased. The service period is within 90 (inclusive) natural days from the date of shipment by the merchant. Returns or exchanges initiated after the service period will no longer be subsidized by the platform.<br/><br/>
 
-<b>Subsidy Standards</b><br/>
-• For door-to-door pickup/service point shipping, the subsidy is based on first weight (within 1 kg)<br/>
-• The first weight shipping fee varies by region<br/>
-• The exact subsidy amount depends on what is displayed on the shipping page<br/>
-• The service is a subsidy, not full reimbursement<br/>
-• If the subsidy is less than the actual shipping cost, you pay the remaining amount<br/>
-• If agreed with the seller, the seller may cover the difference<br/><br/>
-• For self-return, the subsidy follows the first weight standard (within 1 kg), and varies by region<br/><br/>
+<b>7. Subsidy Standards</b><br/>
+• If you choose doorstep pickup/service point drop-off, the subsidy standard is the first weight shipping fee (within 1 kg). The first weight shipping fee may vary by region, and the specific subsidy amount is subject to what is displayed on the doorstep pickup/service point drop-off page.<br/><br/>
+• Since the return shipping fee coverage service is a subsidy in nature and does not guarantee full coverage of your shipping fee, if the subsidy amount is lower than the actual shipping fee you need to pay, you will still need to pay the remaining shipping fee beyond the subsidy. If you and the merchant agree that the merchant will bear all return/exchange shipping costs, you may request the merchant to pay the difference.<br/><br/>
+• If you choose self-send, the subsidy standard is based on the first weight shipping fee standard (within 1 kg standard). The first weight shipping fee standard may vary by region, and the specific subsidy amount is subject to what is displayed on your corresponding “Order Details - Return Shipping Fee Coverage” page.<br/><br/>
 
-<b>Subsidy Process</b><br/>
-• After receiving the product, if you and the seller agree to return or exchange, you must submit a request on the platform<br/>
-• After seller approval:<br/>
-- For self-return → you must upload logistics tracking info<br/>
-- Once the seller confirms receipt and requirements are met, Stoqle will transfer the subsidy to your wallet or original payment method<br/>
-- For door-to-door/service point → subsidy is directly deducted instantly from shipping fee<br/><br/>
+<b>8. Subsidy Process</b><br/>
+If the product you purchased is eligible for the return shipping fee coverage service, after receiving the product and reaching an agreement with the merchant for return or exchange, you need to submit a corresponding request within the platform. After the merchant agrees, if you choose self-send, you need to fill in the corresponding logistics information in the system. After the merchant confirms receipt of the returned product and Stoqle determines that you meet all subsidy requirements, Stoqle will credit the subsidy amount to your Stoqle wallet or the original payment channel account corresponding to your order in one lump sum. If you choose doorstep pickup/service point drop-off, the subsidy will be instantly deducted online from your first weight shipping fee and will not be paid separately to you.<br/><br/>
 
-<b>Other Notes</b><br/><br/>
+<b>9. Other Notes</b><br/>
+<b>9.1 Situations where you may not receive the subsidy:</b><br/>
+① The merchant has not enabled the shipping insurance service.<br/>
+② Only a refund occurred without an actual return/exchange shipment.<br/>
+③ You did not fill in or incorrectly filled in the logistics company, tracking number, or did not use a qualified logistics service provider for return/exchange shipment.<br/>
+④ Multiple orders are combined for return/exchange with only one tracking number; only one order will receive the subsidy, and other related orders will not be subsidized. If multiple return/exchange actions occur for products in the same order and multiple service requests are submitted, only one subsidy will be granted based on the logistics information you uploaded or automatically returned by the system, and other products will not be subsidized.<br/>
+⑤ The return/exchange does not comply with platform policies, or you and the merchant did not reach an agreement on the return/exchange.<br/>
+⑥ The merchant refuses to accept the goods, resulting in the goods being returned to the original sender.<br/>
+⑦ The return/exchange occurs after the service period of the order’s return shipping fee coverage.<br/>
+⑧ Other situations that do not meet the return shipping fee coverage subsidy rules.<br/><br/>
 
-<b>8.1 Situations where you may not receive subsidy:</b><br/>
-1. Seller has not enabled the service<br/>
-2. Only refund occurred, no actual return shipment<br/>
-3. Missing or incorrect shipping details or not using a valid logistics provider<br/>
-4. Multiple orders combined into one shipment → only one subsidy<br/>
-5. Return not compliant with platform policy or not agreed with seller<br/>
-6. Seller refused delivery<br/>
-7. Return outside the service period<br/>
-8. Other non-compliant cases<br/><br/>
+<b>9.2 Refusal of subsidy and legal pursuit:</b><br/>
+① No actual return/exchange shipment occurred, and false logistics information was provided.<br/>
+② You colluded with the merchant to fabricate return/exchange scenarios.<br/>
+③ Malicious return/exchange operations to obtain platform subsidies.<br/>
+④ Other malicious situations identified by the platform.<br/><br/>
 
-<b>8.2 Platform may reject subsidy or request repayment if:</b><br/>
-1. Fake shipping information is provided<br/>
-2. Seller and user collude to fake returns<br/>
-3. Malicious return behavior to exploit subsidies<br/>
-4. Other malicious activities determined by platform<br/><br/>
+<b>10. FAQs</b><br/>
+<b>10.1 Difference between pickup/drop-off vs self-send:</b><br/>
+① Pickup/drop-off: Subsidy is instantly deducted online. You only pay excess shipping. No waiting required.<br/>
+② Self-send: You pay in advance, upload tracking, and receive subsidy after merchant confirms receipt.<br/><br/>
 
-<b>8.3 The applicable service for your order depends on what is shown in your “Order Details - Return Shipping Fee Protection” page</b><br/><br/>
+<b>10.2 Convenience of pickup/drop-off:</b><br/>
+Instant subsidy deduction (1 kg) after pickup. No waiting for return completion.
+`;
 
-<b>FAQs</b><br/><br/>
-
-<b>9.1 Difference between door-to-door/service point vs self-return:</b><br/><br/>
-① <b>Door-to-door / service point</b><br/>
-• Subsidy is applied immediately when pickup is completed<br/>
-• First weight is deducted instantly<br/>
-• You pay only excess shipping<br/>
-• No need to wait for return completion<br/><br/>
-
-② <b>Self-return</b><br/>
-• You must input tracking info<br/>
-• Subsidy is given after merchant confirms receipt<br/>
-• Subsidy may differ from actual shipping cost<br/><br/>
-
-<b>9.2 What convenience does pickup/service point provide?</b><br/><br/>
-• Instant subsidy deduction after pickup<br/>
-• You only pay extra shipping cost<br/>
-• No waiting required for subsidy<br/><br/>
-
-<b>9.3 What is the subsidy standard?</b><br/><br/>
-• Varies by region<br/>
-• Based on first weight (1 kg)<br/>
-• Exact amount shown on product page<br/><br/>
-
-<b>9.4 Why didn’t I receive instant subsidy?</b><br/><br/>
-Possible reasons:<br/><br/>
-1. Seller has not enabled the service<br/>
-2. You didn’t select pickup/service point or not supported in your area<br/>
-3. Other conditions listed in 8.1<br/><br/>
-If none apply, contact support with:<br/>
-• Order number<br/>
-• Shipping proof<br/>
-• Contact number`;
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[600000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -156,7 +105,7 @@ If none apply, contact support with:<br/>
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative bg-white w-full sm:max-w-sm h-[80vh] sm:h-auto sm:max-h-[85vh] rounded-t-[0.5rem] sm:rounded-[0.5rem] p-6 border-t sm:border border-slate-100 shadow-2xl flex flex-col justify-between"
+            className="relative bg-white w-full sm:max-w-sm h-[80vh] sm:h-auto sm:max-h-[85vh] rounded-t-[0.5rem] sm:rounded-[0.5rem] p-6 sm:border border-slate-100 shadow-2xl flex flex-col justify-between"
           >
             <div className="flex-1 flex flex-col min-h-0 pt-2">
               <h2 className="text-sm font-bold text-slate-900 mb-3 text-center">Return Shipping Subsidy</h2>

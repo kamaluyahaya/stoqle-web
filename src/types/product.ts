@@ -30,7 +30,7 @@ export type VariantGroupProps = {
   onUpdateTitle: (id: string, title: string) => void;
   onSetAllowImages: (id: string) => void;
   onAddEntry: (groupId: string) => void;
-  onRemoveGroup: (id: string) => void;
+  onRemoveGroup?: (id: string) => void;
   children?: React.ReactNode;
 };
 
@@ -106,6 +106,7 @@ export type VariantEntryModal = {
 
 export type PreviewPayload = {
   productId?: number;
+  slug?: string;
   title: string;
   description: string;
   category: string;
@@ -117,6 +118,8 @@ export type PreviewPayload = {
   businessId?: number;
   businessSlug?: string;
   businessName?: string;
+  businessLogo?: string;
+  vendorAvatar?: string;
   userId?: number;
   productImages: { file?: File | string; name?: string; url?: string }[]; // urls for previews
   productVideo?: { file?: File | string; name?: string; url?: string } | null;
@@ -264,6 +267,9 @@ export type ReturnPolicy = {
   return_shipping_subsidy?: number;
   seven_day_no_reason?: number;
   rapid_refund?: number;
+  fake_one_pay_four?: number;
+  late_shipment?: number;
+  return_window?: number;
   additional_info?: string;
   created_at?: string;
 };
@@ -386,6 +392,7 @@ export type SalesDiscount = {
 
 export type ProductFeedItem = {
   product_id: number;
+  slug?: string;
   title: string;
   price: number;
   category?: string;

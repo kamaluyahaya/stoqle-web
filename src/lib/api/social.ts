@@ -4,6 +4,7 @@
  * - exports: fetchSocialPosts, fetchSocialPostById, prefetchMediaConservative
  */
 
+import { API_BASE_URL } from "@/src/lib/config";
 import type { Post } from "@/src/lib/types";
 
 const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
@@ -11,34 +12,56 @@ const NO_IMAGE_PLACEHOLDER = "https://via.placeholder.com/800x600?text=No+Image"
 
 const isVideoUrl = (u?: string) => !!u && VIDEO_EXT_RE.test(u);
 
+const formatLocalUrl = (url: string | undefined): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith("http")) return url;
+  
+  const base = (API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${base}${path}`;
+};
+
 /**
  * Map an API response post to our frontend Post shape.
  * Keep this deterministic and side-effect free.
  */
 export const mapApiPost = (p: any): Post => {
-  const apiId = p.social_post_id ?? Math.floor(Math.random() * 1e6);
+  // Guard: Backend may occasionally return a null item in a list or on a failed fetch
+  if (!p) {
+    return {
+      id: Math.floor(Math.random() * 1e6),
+      apiId: 0,
+      src: NO_IMAGE_PLACEHOLDER,
+      caption: "Unavailable",
+      user: { id: 0, name: "Unknown", avatar: "" },
+      liked: false,
+      likeCount: 0,
+      allMedia: []
+    } as any;
+  }
+  const apiId = p.social_post_id ?? p.id ?? Math.floor(Math.random() * 1e6);
   let src: string | undefined;
   let thumbnail: string | undefined;
   const images = Array.isArray(p.images) ? p.images : [];
-  
+
   if (p.cover_type === "video") {
     const videoFile = images.find((i: any) => isVideoUrl(i.image_url));
     const coverFile = images.find((i: any) => !!i.is_cover);
-    
-    src = videoFile?.image_url;
-    thumbnail = coverFile?.image_url;
-    
+
+    src = formatLocalUrl(videoFile?.image_url);
+    thumbnail = formatLocalUrl(coverFile?.image_url);
+
     // Fallback if no video file found but cover exists
     if (!src) src = coverFile?.image_url;
   } else if (images.length > 0) {
     const cover = images.find((i: any) => !!i.is_cover) ?? images[0];
-    src = cover?.image_url;
+    src = formatLocalUrl(cover?.image_url);
   }
 
   const allMedia = images.length > 0
-    ? images.map((i: any) => ({ url: i.image_url, id: i.social_post_image_id || i.post_image_id || i.id }))
-    : src ? [{ url: src, id: p.cover_id || null }] : [];
-  
+    ? images.map((i: any) => ({ url: formatLocalUrl(i.image_url), id: i.social_post_image_id || i.post_image_id || i.id }))
+    : src ? [{ url: formatLocalUrl(src), id: p.cover_id || null }] : [];
+
   if (!src && p.cover_type !== "note") {
     src = NO_IMAGE_PLACEHOLDER;
   }
@@ -55,24 +78,28 @@ export const mapApiPost = (p: any): Post => {
     user: {
       id: p.user_id ?? p.user?.user_id ?? p.user?.id ?? 0,
       name: p.author_name ?? "Unknown",
-      avatar: p.author_pic ?? `https://i.pravatar.cc/100?u=${p.user_id ?? apiId}`,
+      username: p.author_handle ?? p.user?.username ?? "",
+      avatar: formatLocalUrl(p.logo || p.business_logo || p.vendor_logo || p.shop_logo || p.author_pic || p.profile_pic || p.avatar || p.user?.logo || p.user?.profile_pic) || `https://i.pravatar.cc/100?u=${p.user_id ?? apiId}`,
       is_trusted: Number(
-        p.author_is_trusted ?? 
-        p.user?.is_trusted ?? 
-        p.user?.is_verified_partner ?? 
-        p.user?.is_partner ?? 
-        p.user?.policy?.market_affiliation?.trusted_partner ?? 
-        p.is_verified_partner ?? 
+        p.author_is_trusted ??
+        p.user?.is_trusted ??
+        p.user?.is_verified_partner ??
+        p.user?.is_partner ??
+        p.user?.policy?.market_affiliation?.trusted_partner ??
+        p.is_verified_partner ??
         p.is_partner ??
         0
-      ) === 1 || 
-      !!p.author_is_verified || 
-      !!p.user?.is_verified_partner || 
-      !!p.user?.is_partner || 
-      !!p.is_verified_partner || 
-      !!p.is_partner ||
-      !!p.author_is_trusted,
+      ) === 1 ||
+        !!p.author_is_verified ||
+        !!p.user?.is_verified_partner ||
+        !!p.user?.is_partner ||
+        !!p.is_verified_partner ||
+        !!p.is_partner ||
+        !!p.author_is_trusted,
     },
+    author_handle: p.author_handle,
+    author_name: p.author_name,
+    author_pic: p.author_pic,
     liked: Boolean(p.liked_by_me),
     likeCount: p.likes_count ?? 0,
     coverType: p.cover_type,
@@ -85,13 +112,13 @@ export const mapApiPost = (p: any): Post => {
     status: p.status,
     is_product_linked: Boolean(p.is_product_linked),
     linked_product: p.linked_product,
-    
+
     // Engagement Metadata - Master Keys
     likes_count: p.likes_count ?? p.likeCount ?? 0,
     comment_count: p.comment_count ?? p.comments_count ?? p.commentCount ?? 0,
     liked_by_user: Boolean(p.liked_by_me ?? p.liked ?? false),
-    original_audio_url: p.original_audio_url,
-    original_video_url: p.original_video_url,
+    original_audio_url: formatLocalUrl(p.original_audio_url),
+    original_video_url: formatLocalUrl(p.original_video_url),
   };
 };
 
@@ -155,7 +182,7 @@ export async function fetchLinkedProductPosts(opts: FetchPostsOptions = {}) {
   if (!res.ok) throw new Error(`API returned ${res.status}`);
   const json = await res.json();
   const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
-  return apiPosts.map(mapApiPost);
+  return apiPosts.filter(Boolean).map(mapApiPost);
 }
 
 /**
@@ -184,7 +211,7 @@ const getCache = (): Map<string, CachedTokenStore> => {
   try {
     const stored = sessionStorage.getItem("xsec_tokens");
     if (stored) return new Map(JSON.parse(stored));
-  } catch (e) {}
+  } catch (e) { }
   return new Map();
 };
 
@@ -192,7 +219,7 @@ const saveCache = (cache: Map<string, CachedTokenStore>) => {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem("xsec_tokens", JSON.stringify(Array.from(cache.entries())));
-  } catch (e) {}
+  } catch (e) { }
 };
 
 /**
@@ -214,7 +241,7 @@ export async function fetchSecurePostUrl(postId: number | string, source: string
 
   const url = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}/secure-link`);
   url.searchParams.set("source", source);
-  
+
   const headers: any = { Accept: "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -243,13 +270,13 @@ export async function fetchSecurePostUrl(postId: number | string, source: string
 export function preloadSecurePostUrls(postIds: (number | string)[], source: string, token?: string | null) {
   if (typeof window === "undefined") return;
   const cb = (window as any).requestIdleCallback ?? ((fn: Function) => setTimeout(fn, 250));
-  
+
   cb(async () => {
     for (const id of postIds) {
       const cacheKey = `${id}-${source}`;
       const cache = getCache();
       const cached = cache.get(cacheKey);
-      
+
       // Skip if already cached and far from expiry
       if (!cached || cached.expiresAt <= Date.now() + 60000) {
         await fetchSecurePostUrl(id, source, token);
@@ -317,8 +344,8 @@ export async function prefetchMediaConservative(urls: Array<string | undefined>,
  * Supports multipart/form-data for image/video uploads.
  */
 export async function createSocialPost(
-  formData: FormData, 
-  token: string, 
+  formData: FormData,
+  token: string,
   onUploadProgress?: (progress: number) => void
 ) {
   const base = process.env.NEXT_PUBLIC_API_URL;
@@ -411,7 +438,7 @@ export async function logSocialActivity(payload: ActivityPayload, token?: string
       body: JSON.stringify(payload)
     });
     return res.ok;
-  } catch(e) { return false; }
+  } catch (e) { return false; }
 }
 
 /**
@@ -438,10 +465,10 @@ export async function fetchDiscoverFeed(opts: FetchPostsOptions = {}) {
   const data = json?.data || {};
 
   return {
-    forYou: (data.for_you || []).map(mapApiPost),
-    trending: (data.trending || []).map(mapApiPost),
-    following: (data.following || []).map(mapApiPost),
-    similar: (data.similar || []).map(mapApiPost),
+    forYou: (data.for_you || []).filter(Boolean).map(mapApiPost),
+    trending: (data.trending || []).filter(Boolean).map(mapApiPost),
+    following: (data.following || []).filter(Boolean).map(mapApiPost),
+    similar: (data.similar || []).filter(Boolean).map(mapApiPost),
   };
 }
 
@@ -467,7 +494,7 @@ export async function fetchSmartReels(opts: FetchPostsOptions = {}): Promise<{ p
   const json = await res.json();
   const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
   return {
-    posts: apiPosts.map(mapApiPost),
+    posts: apiPosts.filter(Boolean).map(mapApiPost),
     nextCursor: json?.data?.nextCursor || null
   };
 }
@@ -502,5 +529,5 @@ export async function recordSoundUsage(soundId: number | string, token?: string 
 
   try {
     await fetch(url, { method: "POST", headers });
-  } catch (err) {}
+  } catch (err) { }
 }

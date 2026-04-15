@@ -202,7 +202,7 @@ function AccountRecoveryModal({ onClose, onLinked }: any) {
                     <div className="p-6 space-y-6">
                         <div className="flex items-center gap-2 mb-2">
                             <button onClick={() => setShowSearch(false)} className="p-1 hover:bg-slate-50 rounded-full transition-colors"><FaChevronLeft size={12} className="text-slate-400" /></button>
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Search Account</span>
+                            <span className="text-xs font-bold text-slate-400  tracking-widest">Search Account</span>
                         </div>
 
                         <div className="relative">
@@ -434,7 +434,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                             </div>
 
                             <div className="pt-2">
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Upload supporting photos</label>
+                                <label className="block text-[10px] font-black text-slate-400  tracking-widest mb-4">Upload supporting photos</label>
                                 <div className="flex gap-3">
                                     {photos.map((p, i) => (
                                         <div key={i} className="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center relative border border-slate-200 overflow-hidden group">
@@ -453,7 +453,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                                             className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 hover:bg-white transition-all group"
                                         >
                                             <span className="text-2xl group-hover:scale-110 transition-transform">+</span>
-                                            <span className="text-[9px] font-black uppercase">Upload</span>
+                                            <span className="text-[9px] font-black ">Upload</span>
                                         </button>
                                     )}
                                 </div>

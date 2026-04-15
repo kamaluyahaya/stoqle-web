@@ -136,7 +136,7 @@ export default function MarketModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl p-5 z-10 flex flex-col"
+            className="relative w-full max-w-2xl bg-white rounded-[0.5rem]  p-5 z-10 flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -188,31 +188,17 @@ export default function MarketModal({
                     </div>
                   </div>
 
-                  {/* Note */}
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <label className="text-sm font-semibold text-slate-900">Notes</label>
-                    <p className="text-xs text-slate-500 mt-1 mb-2">Optional info (e.g. Online only, Delivery only)</p>
-                    <textarea
-                      value={note}
-                      onChange={(e) => {
-                        if (e.target.value.length <= 100) setNote(e.target.value);
-                      }}
-                      rows={4}
-                      placeholder="Optional note (max 100 chars)"
-                      className="w-full border border-slate-200 rounded-lg p-3 text-sm resize-none"
-                    />
-                    <div className="text-xs text-slate-400 mt-2 text-right">{note.length}/100</div>
-                  </div>
+
                 </div>
               )}
             </div>
 
             {/* Footer */}
             <div className="mt-4 flex justify-end gap-3">
-              <button onClick={() => (saving ? null : onClose())} className="px-4 py-2 rounded-lg bg-white border" disabled={saving}>
+              <button onClick={() => (saving ? null : onClose())} className="px-4 py-2 rounded-full bg-white border border-slate-200" disabled={saving}>
                 Cancel
               </button>
-              <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-rose-500 text-white font-semibold" disabled={saving}>
+              <button onClick={handleSave} className="px-8 py-2 rounded-full bg-rose-500 text-white " disabled={saving}>
                 {saving ? "Saving..." : "Save"}
               </button>
             </div>

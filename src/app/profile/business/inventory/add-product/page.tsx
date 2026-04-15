@@ -46,6 +46,16 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
   const [price, setPrice] = useState<number | "">("");
   const [quantity, setQuantity] = useState<number | "">("");
   const [hasVariants, setHasVariants] = useState(false);
+  const [productType, setProductType] = useState<'simple' | 'variant' | null>(null);
+
+  // Sync productType with hasVariants when loaded from draft or changed
+  useEffect(() => {
+    if (hasVariants) {
+      setProductType('variant');
+    } else if (price !== "" || quantity !== "") {
+      setProductType('simple');
+    }
+  }, [hasVariants]); // don't add price/quantity to deps to avoid loops, just run once on mount/load
 
   const [productImages, setProductImages] = useState<(File | string)[]>([]);
   const [productVideo, setProductVideo] = useState<File | string | null>(null);
@@ -283,6 +293,8 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
     returnShippingSubsidy: false,
     sevenDayNoReasonReturn: true,
     rapidRefund: false,
+    lateShipmentCompensation: false,
+    fakeOnePayFour: false,
     returnWindow: 3,
   });
 
@@ -332,6 +344,8 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
         returnShippingSubsidy: !!storePolicy.returns.return_shipping_subsidy,
         sevenDayNoReasonReturn: !!storePolicy.returns.seven_day_no_reason,
         rapidRefund: !!storePolicy.returns.rapid_refund,
+        lateShipmentCompensation: !!storePolicy.returns.late_shipment,
+        fakeOnePayFour: !!storePolicy.returns.fake_one_pay_four,
         returnWindow: 3,
       });
     }
@@ -433,7 +447,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
 
     // Ensure we have a placeholder title for nameless drafts
     if (!draftData.title || draftData.title.trim() === "") {
-        draftData.title = `Untitled Draft (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+      draftData.title = `Untitled Draft (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
     }
     try {
       const id = await saveDraft(draftData, currentDraftId || undefined);
@@ -453,6 +467,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
     setPrice(draft.price);
     setQuantity(draft.quantity);
     setHasVariants(draft.hasVariants);
+    setProductType(draft.hasVariants ? 'variant' : (draft.price !== "" || draft.quantity !== "" ? 'simple' : null));
 
     // Regenerate blob URLs for variant images since they expire on refresh
     const restoredVariantGroups = (draft.variantGroups || []).map(group => ({
@@ -713,8 +728,9 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
   const handleSubmit = async () => {
     if (title.trim().length < 3) return toast("Product name must be at least 3 characters.");
     if (!category.trim()) return toast("Please choose or add a category.");
+    if (!productType) return toast("Please select a Product Type (Simple or Variant).");
     if (productImages.length === 0) return toast("Please upload at least one product image.");
-    
+
     const ok = await auth.ensureAccountVerified();
     if (!ok) return;
 
@@ -876,7 +892,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
         resetForm();
         if (onSubmit) onSubmit(form);
         setSubmitting(false); // only close when fully over
-        
+
         // Redirect to inventory
         router.push("/profile/business/inventory");
       }, 500);
@@ -995,7 +1011,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           <div className="flex items-center gap-2">
             <button
               onClick={() => router.back()}
-              className="p-2 lg:hidden hover:bg-slate-100 rounded-full transition-colors text-slate-700 active:scale-95"
+              className=" lg:hidden hover:bg-slate-100 rounded-full transition-colors text-slate-700 active:scale-95"
             >
               <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
             </button>
@@ -1014,11 +1030,17 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
               <Eye className="w-4 h-4" /> Preview
             </button>
             <button
+              onClick={openPreview}
+              className=" lg:hidden flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-bold shadow-lg shadow-red-200 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm  shadow-red-200 transition-all disabled:opacity-50"
             >
-              <Save className="w-4 h-4" /> {submitting ? "Publishing..." : "Publish Product"}
+              {submitting ? "Publishing..." : "Publish Product"}
             </button>
           </div>
         </div>
@@ -1053,7 +1075,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             {/* 1. Basic Information */}
             <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-800">Basic Information</h2>
+                <h2 className="text-sm font-bold text-slate-800">Product Info.</h2>
               </div>
               <div className="p-6 space-y-5">
                 <DefaultInput
@@ -1097,177 +1119,211 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
               </div>
             </div>
 
-            {/* 2. Pricing & Stock (Simple Product only) */}
-            {!hasVariants && (
-              <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
-                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                  <div className="p-1.5 bg-green-100 rounded-lg text-green-600">
-                    <Tag className="w-4 h-4" />
-                  </div>
-                  <h2 className="text-sm font-bold text-slate-800">Pricing & Inventory</h2>
-                </div>
-                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <NumberInput label="Retail Price (NGN)" value={price} onChange={setPrice} placeholder="0.00" required />
-                    <p className="text-[10px] text-slate-400 font-medium italic">Base price for customers</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <NumberInput label="Initial Stock Quantity" value={quantity} onChange={setQuantity} placeholder="0" required />
-                    <p className="text-[10px] text-slate-400 font-medium italic">Available units in hand</p>
-                  </div>
-                </div>
+            {/* 1.5 Product Type Selection */}
+            <div className="bg-white overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-slate-400" />
+                <h2 className="text-sm font-bold text-slate-800">Product Type</h2>
               </div>
-            )}
+              <div className="p-6 grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProductType('simple');
+                    setHasVariants(false);
+                  }}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'simple' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <span className="text-sm  tracking-tight">Simple Product</span>
+                  <p className="text-[10px] font-medium text-center opacity-70">Single price and fixed stock quantity</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProductType('variant');
+                    setHasVariants(true);
+                    if (variantGroups.length === 0) addVariantGroup();
+                  }}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'variant' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <span className="text-sm  tracking-tight">Variant Product</span>
+                  <p className="text-[10px] font-medium text-center opacity-70">Multiple sizes, colors or options</p>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Pricing & Stock (Simple Product only) */}
+            <AnimatePresence>
+              {productType === 'simple' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-white border border-slate-200 overflow-hidden shadow-sm"
+                >
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+                    <div className="p-1.5 bg-green-100 rounded-lg text-green-600">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-sm font-bold text-slate-800">Pricing & Inventory</h2>
+                  </div>
+                  <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-1.5">
+                      <NumberInput label="Retail Price (NGN)" value={price} onChange={setPrice} placeholder="0.00" required />
+                      <p className="text-[10px] text-slate-400 font-medium italic">Base price for customers</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <NumberInput label="Initial Stock Quantity" value={quantity} onChange={setQuantity} placeholder="0" required />
+                      <p className="text-[10px] text-slate-400 font-medium italic">Available units in hand</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* 3. Variant Management */}
-            <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-800">Variations</h2>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer relative">
-                    <input
-                      type="checkbox"
-                      checked={hasVariants}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setHasVariants(checked);
-                        if (checked && variantGroups.length === 0) {
-                          addVariantGroup();
-                        }
-                      }}
-                      className="appearance-none w-4 h-4 rounded-full border-2 border-red-500 checked:bg-red-500 checked:border-red-500 focus:ring-2 focus:ring-red-400 relative"
-                    />
-                    <span className={`absolute left-1.5 top-1.0 w-1 h-2 pointer-events-none transform rotate-45 border-r-2 border-b-2 border-white transition-all ${hasVariants ? "scale-100" : "scale-0"}`} />
-                    <span className="text-sm font-bold text-slate-700 select-none">Has variants</span>
-                  </label>
-
-                  {hasVariants && (
-                    <button
-                      onClick={addVariantGroup}
-                      disabled={variantGroups.length >= 2}
-                      className="px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-30 transition-all shadow-md"
-                    >
-                      + Add Group
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {hasVariants ? (
-                <div className="p-6 space-y-8">
-                  {/* Pricing Strategy */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-slate-50 rounded-[0.5px] border border-slate-100">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-slate-900 mb-1">Pricing Strategy</span>
-                      <span className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Shared vs Individual</span>
+            <AnimatePresence>
+              {productType === 'variant' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-white border border-slate-200 overflow-hidden shadow-sm"
+                >
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-bold text-slate-800">Variations</h2>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200">
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => seedAndApplySharedPrice(true)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-red-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                        onClick={addVariantGroup}
+                        disabled={variantGroups.length >= 2}
+                        className="px-4 py-1.5 rounded-full text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-30 transition-all shadow-md"
                       >
-                        Single Price
-                      </button>
-                      <button
-                        onClick={() => seedAndApplySharedPrice(false)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-red-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                      >
-                        Different prices
+                        + Add Group
                       </button>
                     </div>
-                    {samePriceForAll && (
-                      <div className="flex-1 max-w-[150px]">
-                        <input
-                          type="number"
-                          value={sharedPrice ?? ""}
-                          onChange={(e) => setSharedPrice(e.target.value === "" ? null : Number(e.target.value))}
-                          className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-red-100 outline-none"
-                          placeholder="Shared Price"
-                        />
-                      </div>
-                    )}
                   </div>
 
-                  {variantGroups.map((g, idx) => (
-                    <VariantGroupCard
-                      key={g.id}
-                      groupIndex={idx}
-                      group={g}
-                      onUpdateTitle={updateVariantGroupTitle}
-                      onSetAllowImages={setGroupAllowImages}
-                      onAddEntry={openAddEntryModal}
-                      onRemoveGroup={removeVariantGroup}
-                    >
-                      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-                        {g.entries.map((e) => (
-                          <VariantEntryCard
-                            key={e.id}
-                            entry={e}
-                            allowImages={g.allowImages}
-                            useCombinations={useCombinations}
+                  <div className="p-6 space-y-8">
+                    {/* Pricing Strategy */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-slate-50 rounded-[0.5px] border border-slate-100">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-900 mb-1">Pricing Strategy</span>
+                        <span className="text-[10px] text-slate-400 font-medium tracking-wide ">Shared vs Individual</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200">
+                        <button
+                          onClick={() => seedAndApplySharedPrice(true)}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-red-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                        >
+                          Single Price
+                        </button>
+                        <button
+                          onClick={() => seedAndApplySharedPrice(false)}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-red-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                        >
+                          Different prices
+                        </button>
+                      </div>
+                      {samePriceForAll && (
+                        <div className="flex-1 max-w-[150px]">
+                          <input
+                            type="number"
+                            value={sharedPrice ?? ""}
+                            onChange={(e) => setSharedPrice(e.target.value === "" ? null : Number(e.target.value))}
+                            className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-red-100 outline-none"
+                            placeholder="Shared Price"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {variantGroups.map((g, idx) => (
+                      <VariantGroupCard
+                        key={g.id}
+                        groupIndex={idx}
+                        group={g}
+                        onUpdateTitle={updateVariantGroupTitle}
+                        onSetAllowImages={setGroupAllowImages}
+                        onAddEntry={openAddEntryModal}
+                        onRemoveGroup={variantGroups.length > 1 ? removeVariantGroup : undefined}
+                      >
+                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                          {g.entries.map((e) => (
+                            <VariantEntryCard
+                              key={e.id}
+                              entry={e}
+                              allowImages={g.allowImages}
+                              useCombinations={useCombinations}
+                              samePriceForAll={samePriceForAll}
+                              sharedPrice={sharedPrice}
+                              onRemove={() => removeVariantEntry(g.id, e.id)}
+                              onEdit={() => openEditEntryModal(g.id, e)}
+                            />
+                          ))}
+
+                          {/* Add Placeholder Button */}
+                          <button
+                            onClick={() => openAddEntryModal(g.id)}
+                            className="flex flex-col items-center justify-center min-h-[82px] border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100/80 hover:border-red-300 transition-all group cursor-pointer"
+                          >
+                            <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-red-400 flex items-center justify-center text-slate-400 group-hover:text-red-500 transition-colors">
+                              <span className="text-sm font-bold">+</span>
+                            </div>
+                            <span className="mt-1 text-[10px] font-bold text-slate-400 group-hover:text-red-500 uppercase tracking-tighter">Add option</span>
+                          </button>
+                        </div>
+                      </VariantGroupCard>
+                    ))}
+
+                    {/* Combo Toggle */}
+                    <div className="pt-6 border-t border-dashed border-slate-200">
+                      <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all duration-200">
+                        <div className="flex items-center gap-4">
+                          <div className="relative">
+                            <input
+                              type="checkbox"
+                              checked={useCombinations}
+                              onChange={(e) => {
+                                if (e.target.checked && variantGroups.length < 2) {
+                                  toast.info("Add more variant groups (e.g. Size and Color) to use advanced combination logic.");
+                                  return;
+                                }
+                                setUseCombinations(e.target.checked);
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-800 tracking-tight">Advanced Combination Logic</span>
+                            <span className="text-[10px] font-medium text-slate-500 tracking-widest ">Pricing & Stock per combo</span>
+                          </div>
+                        </div>
+                      </label>
+
+                      {useCombinations && (
+                        <div className="mt-6 pb-4">
+                          <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-100 shadow-sm">
+                            <Info className="w-4 h-4 shrink-0" />
+                            <p className="text-[10px] font-bold leading-tight">Quantities specified here will be your initial stock distribution.</p>
+                          </div>
+                          <VariantSkuSection
+                            skus={skus}
+                            setSkus={setSkus}
                             samePriceForAll={samePriceForAll}
                             sharedPrice={sharedPrice}
-                            onRemove={() => removeVariantEntry(g.id, e.id)}
-                            onEdit={() => openEditEntryModal(g.id, e)}
+                            variantGroups={variantGroups}
                           />
-                        ))}
-                      </div>
-                    </VariantGroupCard>
-                  ))}
-
-                  {/* Combo Toggle */}
-                  <div className="pt-6 border-t border-dashed border-slate-200">
-                    <label className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all duration-200">
-                      <div className="flex items-center gap-4">
-                        <div className="relative">
-                          <input
-                            type="checkbox"
-                            checked={useCombinations}
-                            onChange={(e) => {
-                              if (e.target.checked && variantGroups.length < 2) {
-                                toast.info("Add more variant groups (e.g. Size and Color) to use advanced combination logic.");
-                                return;
-                              }
-                              setUseCombinations(e.target.checked);
-                            }}
-                            className="sr-only peer"
-                          />
-                          <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-slate-800 tracking-tight">Advanced Combination Logic</span>
-                          <span className="text-[10px] font-medium text-slate-500 tracking-widest uppercase">Pricing & Stock per combo</span>
-                        </div>
-                      </div>
-                    </label>
-
-                    {useCombinations && (
-                      <div className="mt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-100 shadow-sm">
-                          <Info className="w-4 h-4 shrink-0" />
-                          <p className="text-[10px] font-bold leading-tight">Quantities specified here will be your initial stock distribution.</p>
-                        </div>
-                        <VariantSkuSection
-                          skus={skus}
-                          setSkus={setSkus}
-                          samePriceForAll={samePriceForAll}
-                          sharedPrice={sharedPrice}
-                          variantGroups={variantGroups}
-                        />
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="p-12 text-center bg-slate-50/30">
-                  <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-sm font-bold text-slate-500">Standard Simple Product</p>
-                  <p className="text-xs text-slate-400 mt-1">Enable "Has variants" to add multiple sizes or colors.</p>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
 
             {/* 4. Specifications */}
             <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
@@ -1280,7 +1336,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                 </div>
                 <button
                   onClick={openAddParam}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-700 uppercase tracking-tighter transition-colors"
+                  className="text-xs font-bold text-purple-600 hover:text-purple-700  tracking-tighter transition-colors"
                 >
                   + Add parameters
                 </button>
@@ -1333,7 +1389,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                     <Globe className="w-4 h-4 text-slate-400" />
                     <h2 className="text-sm font-bold text-slate-800">Product Assets</h2>
                   </div>
-                  {!hasVariants && <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Required</span>}
+                  {!hasVariants && <span className="text-[10px] font-bold text-red-500  tracking-widest">Required</span>}
                 </div>
                 <div className="p-4">
                   <ProductMedia
@@ -1346,7 +1402,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                     businessLogo={businessLogo}
                   />
                   <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
-                    <p className="text-[11px] font-bold text-blue-700 flex items-center gap-2 uppercase tracking-tight">
+                    <p className="text-[11px] font-bold text-blue-700 flex items-center gap-2  tracking-tight">
                       <Tag className="w-3 h-3" /> Retail Pro Tip:
                     </p>
                     <p className="text-[10px] text-blue-600 font-medium leading-relaxed mt-1.5">
@@ -1458,19 +1514,19 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                   <div className="h-12 w-12 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
                 </div>
               </div>
-              
-              <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Optimizing Video</h2>
+
+              <h2 className="text-2xl font-black text-white mb-2  tracking-tighter">Optimizing Video</h2>
               <p className="text-slate-400 text-sm font-medium mb-8">Trimming to 1:30 and generating thumbnail...</p>
-              
+
               <div className="space-y-3">
                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <motion.div 
+                  <motion.div
                     className="h-full bg-red-500"
                     initial={{ width: 0 }}
                     animate={{ width: `${trimmingProgress}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                <div className="flex justify-between text-[10px] font-black text-slate-500  tracking-widest">
                   <span>Processing wasm</span>
                   <span>{trimmingProgress}%</span>
                 </div>

@@ -29,25 +29,25 @@ export default function AccountRecoveryPage() {
                 </div>
 
                 <div className="space-y-4">
-                    <RecoveryOption 
-                        icon={<EnvelopeIcon className="w-5 h-5" />} 
-                        label="Recover via Email" 
+                    <RecoveryOption
+                        icon={<EnvelopeIcon className="w-5 h-5" />}
+                        label="Recover via Email"
                         desc="We'll send a reset link to your primary email address."
                     />
-                    <RecoveryOption 
-                        icon={<PhoneIcon className="w-5 h-5" />} 
-                        label="Recover via Phone" 
+                    <RecoveryOption
+                        icon={<PhoneIcon className="w-5 h-5" />}
+                        label="Recover via Phone"
                         desc="Receive a verification code on your linked mobile number."
                     />
-                    <RecoveryOption 
-                        icon={<ChatBubbleLeftRightIcon className="w-5 h-5" />} 
-                        label="Contact Support" 
+                    <RecoveryOption
+                        icon={<ChatBubbleLeftRightIcon className="w-5 h-5" />}
+                        label="Contact Support"
                         desc="Our team will manually verify your identity to help you."
                     />
                 </div>
 
                 <div className="pt-8 text-center bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200">
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Security Tip</p>
+                    <p className="text-[10px] font-black  text-slate-400 tracking-widest mb-2">Security Tip</p>
                     <p className="text-xs text-slate-500 font-medium italic">"Always ensure your contact information is up to date in Account Security to make recovery faster."</p>
                 </div>
             </div>

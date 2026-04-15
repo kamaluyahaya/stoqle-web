@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
 import { ProductFeedItem, PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import { copyToClipboard } from "@/src/lib/utils/utils";
 import ProductPreviewModal from "./previewModal";
 import { API_BASE_URL } from "@/src/lib/config";
 import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaTimes, FaStore, FaHeart, FaRegHeart, FaShare, FaCheckCircle } from "react-icons/fa";
@@ -250,13 +251,15 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
         }
     };
 
-    const handleNavigateToReel = useCallback(async (productId: number) => {
+    const handleNavigateToReel = useCallback(async (productId: number | string, businessName?: string, e?: any, businessSlug?: string, productSlug?: string) => {
         // Close the detail modal so the user can see the video they just reselected
         setDetailModalOpen(false);
         setSelectedProductPayload(null);
 
+        const pid = typeof productId === 'string' ? Number(productId) : productId;
+
         // 2. See if we have this product already
-        const existingIndex = products.findIndex(p => p.product_id === productId);
+        const existingIndex = products.findIndex(p => p.product_id === pid);
         if (existingIndex !== -1) {
             setActiveVideoIndex(existingIndex);
             if (containerRef.current) {
@@ -265,15 +268,16 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                     behavior: "smooth"
                 });
             }
-            if (onActiveProductChange) onActiveProductChange(productId, products[existingIndex].business_name, products[existingIndex].business_slug);
-            logUserActivity({ product_id: productId, action_type: 'view', category: products[existingIndex].category }, token);
+            if (onActiveProductChange) onActiveProductChange(pid, products[existingIndex].business_name, products[existingIndex].business_slug);
+            logUserActivity({ product_id: pid, action_type: 'view', category: products[existingIndex].category }, token);
         } else {
             // If not found, we might need to fetch it and prepend or reload. 
             // For now, simpler to reload or just use the master page logic.
             // But we can try to fetch and prepend to keep it smooth.
             try {
                 setLoading(true);
-                const res = await fetchProductById(productId);
+                const identifier = productSlug || pid;
+                const res = await fetchProductById(identifier);
                 if (res?.data) {
                     const p = res.data.product || res.data;
                     const newItem = mapToFeedItem(p);
@@ -282,8 +286,8 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                     if (containerRef.current) {
                         containerRef.current.scrollTop = 0;
                     }
-                    if (onActiveProductChange) onActiveProductChange(productId, newItem.business_name, newItem.business_slug);
-                    logUserActivity({ product_id: productId, action_type: 'view', category: newItem.category }, token);
+                    if (onActiveProductChange) onActiveProductChange(p.product_id, newItem.business_name, newItem.business_slug);
+                    logUserActivity({ product_id: p.product_id, action_type: 'view', category: newItem.category }, token);
                 }
             } catch (e) {
                 console.error(e);
@@ -293,22 +297,18 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
         }
     }, [products, onActiveProductChange, mapToFeedItem]);
 
-    const handleProductBuyClick = async (productId: number, businessNameOrEvent?: string | React.MouseEvent, e?: React.MouseEvent) => {
+    const handleProductBuyClick = async (productId: number | string, businessName?: string, e?: any, businessSlug?: string, isSocialPost?: boolean, productSlug?: string) => {
         if (fetchingProduct) return;
 
-        let clickEvent: React.MouseEvent | undefined;
-        if (typeof businessNameOrEvent !== "string") {
-            clickEvent = businessNameOrEvent;
-        } else {
-            clickEvent = e;
-        }
+        let clickEvent: React.MouseEvent | undefined = e;
 
         if (clickEvent) setPreviewOrigin({ x: clickEvent.clientX, y: clickEvent.clientY });
         else setPreviewOrigin({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
         try {
             setFetchingProduct(true);
-            const res = await fetchProductById(productId, token);
+            const identifier = productSlug || productId;
+            const res = await fetchProductById(identifier, token);
             if (res?.data?.product) {
                 const dbProduct = res.data.product;
                 const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
@@ -380,7 +380,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                 url: shareUrl,
             }).catch(() => { });
         } else {
-            navigator.clipboard.writeText(shareUrl);
+            copyToClipboard(shareUrl);
             toast.info("Link copied to clipboard!");
         }
     };
@@ -442,7 +442,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
                                             product={p}
                                             isActive={i === activeVideoIndex}
                                             shouldPreload={i === activeVideoIndex + 1 || i === activeVideoIndex + 2}
-                                            onBuyClick={(e: React.MouseEvent) => handleProductBuyClick(p.product_id, e)}
+                                            onBuyClick={(e: React.MouseEvent) => handleProductBuyClick(p.product_id, p.business_name, e, p.business_slug, false, p.slug)}
                                             onVendorClick={() => handleVendorClick(p)}
                                             onLikeClick={() => handleLikeClick(p.product_id)}
                                             onShareClick={() => handleShareClick(p)}
@@ -542,8 +542,8 @@ function MarqueeLane({ items, speed, reverse = false }: { items: any[], speed: n
                 {displayItems.map((p, i) => (
                     <div key={i} className="bg-black/50 backdrop-blur-xl px-4 py-1.5 rounded-full border border-white/20 shadow-2xl flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
-                        <span className="text-orange-400 text-[9px] font-black uppercase tracking-tighter">{p.key}</span>
-                        <span className="text-white text-[12px] font-bold uppercase tracking-widest">{p.value}</span>
+                        <span className="text-orange-400 text-[9px] font-black  tracking-tighter">{p.key}</span>
+                        <span className="text-white text-[12px] font-bold  tracking-widest">{p.value}</span>
                     </div>
                 ))}
             </motion.div>
@@ -587,7 +587,7 @@ function ReelItem({
     return (
         <div className="w-full h-full relative">
             <ProductTicker product={product} params={params} />
-            
+
             {videoUrl && (isActive || shouldPreload) ? (
                 <VideoPlayer
                     src={videoUrl}
@@ -600,10 +600,10 @@ function ReelItem({
             ) : videoUrl ? (
                 <div className="w-full h-full bg-slate-900 group relative">
                     {product.first_image && (
-                         <img src={formatUrl(product.first_image)} alt="" className="w-full h-full object-cover opacity-50 blur-sm" />
+                        <img src={formatUrl(product.first_image)} alt="" className="w-full h-full object-cover opacity-50 blur-sm" />
                     )}
                     <div className="absolute inset-0 flex items-center justify-center">
-                         <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                        <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
                     </div>
                 </div>
             ) : (
@@ -612,8 +612,8 @@ function ReelItem({
 
             <button
                 onClick={(e) => {
-                     e.stopPropagation();
-                     setIsGlobalMuted(!isGlobalMuted);
+                    e.stopPropagation();
+                    setIsGlobalMuted(!isGlobalMuted);
                 }}
                 className="absolute top-6 right-6 z-20 bg-black/40 backdrop-blur-md p-3 rounded-full text-white hover:bg-black/60 transition"
             >
@@ -698,7 +698,7 @@ function ReelItem({
                             )}
                         </div>
                         {product.category && (
-                            <span className="text-white/70 text-[10px] uppercase tracking-wider font-bold">{product.category}</span>
+                            <span className="text-white/70 text-[10px]  tracking-wider font-bold">{product.category}</span>
                         )}
                     </div>
                 </div>

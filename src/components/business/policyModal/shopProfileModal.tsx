@@ -7,6 +7,7 @@ import BusinessAddressModal from "./businessAddressModal";
 import { motion, AnimatePresence } from "framer-motion";
 import { geocodeAddress, arrangeAddressForNigeria } from "../../../lib/geocoding";
 import { FaCamera, FaStore, FaImage, FaMapMarkerAlt, FaExclamationTriangle } from "react-icons/fa";
+import ImageCropperModal from "../../modal/imageCropperModal";
 
 type Props = {
     open: boolean;
@@ -47,6 +48,11 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
 
     const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
 
+    // Cropping states
+    const [cropImage, setCropImage] = useState<string | null>(null);
+    const [cropType, setCropType] = useState<'profile' | 'bg'>('profile');
+    const [isCropperOpen, setIsCropperOpen] = useState(false);
+
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showGeocodeWarning, setShowGeocodeWarning] = useState(false);
@@ -78,15 +84,29 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
 
         const reader = new FileReader();
         reader.onloadend = () => {
-            if (type === 'profile') {
-                setProfilePic(reader.result as string);
-                setProfileFile(file);
-            } else {
-                setBgPhoto(reader.result as string);
-                setBgFile(file);
-            }
+            setCropImage(reader.result as string);
+            setCropType(type);
+            setIsCropperOpen(true);
         };
         reader.readAsDataURL(file);
+        
+        // Reset input so the same file can be picked again if needed
+        e.target.value = '';
+    };
+
+    const onCropComplete = (blob: Blob) => {
+        const croppedUrl = URL.createObjectURL(blob);
+        const fileName = cropType === 'profile' ? 'profile.jpg' : 'background.jpg';
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+        if (cropType === 'profile') {
+            setProfilePic(croppedUrl);
+            setProfileFile(file);
+        } else {
+            setBgPhoto(croppedUrl);
+            setBgFile(file);
+        }
+        setIsCropperOpen(false);
     };
 
     const formatAddress = (addrJson: string) => {
@@ -245,7 +265,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                     </p>
 
                                     <div className="space-y-1.5 px-1">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Business Address</label>
+                                        <label className="text-xs font-bold text-slate-500  tracking-widest">Business Address</label>
                                         <button
                                             type="button"
                                             onClick={() => setIsAddressModalOpen(true)}
@@ -269,7 +289,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Shop Bio</label>
+                                        <label className="text-xs font-bold text-slate-500  tracking-widest px-1">Shop Bio</label>
                                         <textarea
                                             className="w-full px-5 py-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-rose-500/20 transition h-32 text-slate-900 placeholder:text-slate-400 resize-none text-sm"
                                             placeholder="Tell customers about your business..."
@@ -361,6 +381,17 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                             </div>
                         )}
                     </AnimatePresence>
+
+                    <ImageCropperModal
+                        image={cropImage}
+                        isOpen={isCropperOpen}
+                        onClose={() => setIsCropperOpen(false)}
+                        onCropComplete={onCropComplete}
+                        aspect={cropType === 'profile' ? 1 : 16 / 5}
+                        cropShape={cropType === 'profile' ? 'round' : 'rect'}
+                        title={cropType === 'profile' ? 'Adjust Logo' : 'Adjust Header Cover'}
+                        buttonLabel={cropType === 'profile' ? 'Save Logo' : 'Save Header'}
+                    />
                 </div>
             )}
         </AnimatePresence>

@@ -22,9 +22,12 @@ import { ShoppingCartIcon as ShoppingCartIconSolid } from "@heroicons/react/24/s
 import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import ReelsModal from "@/src/components/product/addProduct/modal/reelsModal";
+import PostModal from "@/src/components/modal/postModal";
+import { fetchLinkedProductPosts, fetchSocialPostById } from "@/src/lib/api/social";
 import PhoneVerificationModal from "@/src/components/modal/phoneVerificationModal";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
+import { formatDuration } from "@/src/lib/utils/product/duration";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toast } from "sonner";
@@ -101,6 +104,7 @@ const ProductCard = React.memo(({
     isVideoCover,
     formatUrl,
     handleProductClick,
+    handleReelsClick,
     handleLikeClick,
     isLiked,
     likeCount,
@@ -113,6 +117,11 @@ const ProductCard = React.memo(({
     const isPromoActive = useMemo(() => {
         return !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
     }, [p.promo_title, p.promo_discount, p.promo_end]);
+
+    const shippingDuration = useMemo(() => {
+        const shippingAvg = (p.shipping_policies || p.shipping_duration || []).find((s: any) => s.kind === "avg" || s.type === "avg");
+        return shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : null;
+    }, [p.shipping_policies, p.shipping_duration]);
 
     // Animation variants
     const entryVariants = {
@@ -130,8 +139,7 @@ const ProductCard = React.memo(({
             key={`${p.product_id}${isVideoCover ? '-vid' : ''}`}
             onClick={(e) => {
                 if (isVideoCover) {
-                    const bizSlug = slugify(p.business_name || "store");
-                    router.push(`/market/${bizSlug}?product_id=${p.product_id}&reels=true`);
+                    handleReelsClick(p.product_id, p.business_name, e);
                 } else {
                     handleProductClick(p.product_id, false, e);
                 }
@@ -144,11 +152,20 @@ const ProductCard = React.memo(({
             }}
         >
             <div className="relative w-full overflow-hidden bg-slate-100">
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+                </div>
+                {/* Placeholder frame indicator */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
+                    </div>
+                </div>
                 <motion.div
                     initial={entryVariants.initial}
                     animate={entryVariants.animate}
                     transition={entryVariants.transition}
-                    className="w-full h-full"
+                    className="w-full h-full relative z-[1]"
                 >
                     {p.product_video && isVideoCover ? (
                         <video
@@ -196,13 +213,7 @@ const ProductCard = React.memo(({
                     )}
                 </motion.div>
 
-                {/* Placeholder frame indicator */}
-                <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
-                    <div className="flex flex-col items-center gap-2 opacity-20">
-                        <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-                        <span className="text-[10px] font-bold  text-slate-400 ">Opening...</span>
-                    </div>
-                </div>
+
             </div>
 
             <div className="p-3">
@@ -342,6 +353,10 @@ const ProductCard = React.memo(({
                                 <span className="text-[10px] font-bold text-green-700   truncate">
                                     Return Shipping Subsidy
                                 </span>
+                            ) : shippingDuration ? (
+                                <span className="text-[10px] font-bold text-orange-600   truncate">
+                                    Ships in {shippingDuration}
+                                </span>
                             ) : p.market_name ? (
                                 <span className="text-[10px] font-bold text-rose-500   truncate">
                                     {p.market_name}
@@ -350,8 +365,15 @@ const ProductCard = React.memo(({
                         </div>
 
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold">
-                                <span className="text-slate-900 text-base font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
+                            <div className="flex items-center gap-1.5 h-4">
+                                {isPromoActive || p.sale_type ? (
+                                    <>
+                                        <span className="text-slate-900 text-base font-bold">₦{Math.round(Number(p.price || 0) * (1 - (p.promo_discount || p.sale_discount || 0) / 100)).toLocaleString()}</span>
+                                        <span className="text-[11px] text-red-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
+                                    </>
+                                ) : (
+                                    <span className="text-slate-900 text-base font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
+                                )}
                             </div>
                             <div
                                 className="flex items-center gap-1 cursor-pointer relative"
@@ -397,7 +419,7 @@ const ProductCard = React.memo(({
 });
 ProductCard.displayName = "ProductCard";
 
-const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleLikeClick, formatUrl, router }: any) => {
+const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, formatUrl, router }: any) => {
     const [columns, setColumns] = useState(5);
     useEffect(() => {
         const updateColumns = () => {
@@ -440,6 +462,7 @@ const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, h
                                     isVideoCover={!!p.product_video}
                                     formatUrl={formatUrl}
                                     handleProductClick={handleProductClick}
+                                    handleReelsClick={handleReelsClick}
                                     handleLikeClick={handleLikeClick}
                                     isLiked={ld.liked}
                                     likeCount={ld.count}
@@ -469,6 +492,7 @@ export default function CartPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [reelsModalOpen, setReelsModalOpen] = useState(false);
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+    const [selectedSocialPost, setSelectedSocialPost] = useState<any | null>(null);
     const [fetchingProduct, setFetchingProduct] = useState(false);
     const [phoneModalOpen, setPhoneModalOpen] = useState(false);
     const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
@@ -535,24 +559,51 @@ export default function CartPage() {
         setLoadingRecs(true);
         try {
             const res = await fetchPersonalizedFeed(20, 0, token);
-            const products = res?.data || [];
-            setRecommendedProducts(products.map((p: any, i: number) => {
+            const nextProducts = res?.data || [];
+
+            let nextPosts: any[] = [];
+            try {
+                const posts = await fetchLinkedProductPosts({ limit: 5, offset: 0, token: token! });
+                nextPosts = posts;
+            } catch (e) { }
+
+            const mappedProducts = nextProducts.map((p: any, i: number) => {
                 const media = p.media || [];
                 const imgs = media.filter((m: any) => m.type === "image");
                 const coverRef = p.first_image || p.image_url;
-
-                // Robust cover detection: check is_cover flag OR matching URL
-                const foundCover = imgs.find((m: any) =>
-                    m.is_cover === 1 || (coverRef && m.url && m.url.includes(coverRef))
-                ) || imgs[0];
-
+                const foundCover = imgs.find((m: any) => m.is_cover === 1 || (coverRef && m.url && m.url.includes(coverRef))) || imgs[0];
                 return {
                     ...p,
                     originalIndex: i,
                     first_image: foundCover?.url || coverRef || (media[0]?.type === 'image' ? media[0].url : "") || "",
                     product_video: p.product_video || media.find((m: any) => m.type === 'video')?.url || "",
                 };
+            });
+
+            const mappedSocialPosts = nextPosts.map((p: any, i: number) => ({
+                ...p,
+                product_id: `post-${p.id}`,
+                is_social_post: true,
+                title: p.caption || p.linked_product?.title || "Social Post",
+                first_image: p.thumbnail || p.src,
+                price: p.linked_product?.price || 0,
+                business_name: p.user?.name || "Member",
+                logo: p.user?.avatar,
+                originalIndex: mappedProducts.length + i,
             }));
+
+            let combined: any[] = [];
+            const socialStep = Math.max(3, Math.ceil(mappedProducts.length / (mappedSocialPosts.length || 1)));
+            let socialIdx = 0;
+            mappedProducts.forEach((prod: any, i: number) => {
+                combined.push(prod);
+                if (i > 0 && i % socialStep === 0 && socialIdx < mappedSocialPosts.length) {
+                    combined.push(mappedSocialPosts[socialIdx++]);
+                }
+            });
+            while (socialIdx < mappedSocialPosts.length) combined.push(mappedSocialPosts[socialIdx++]);
+
+            setRecommendedProducts(combined);
         } catch (err) {
             console.error("Fetch recs error", err);
         } finally {
@@ -721,13 +772,16 @@ export default function CartPage() {
     const formatUrl = (url: string) => {
         if (!url) return "";
         let formatted = url;
-        if (!url.startsWith("http")) {
-            formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(formatted)) {
+            formatted = formatted.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "");
+        }
+        if (!formatted.startsWith("http")) {
+            formatted = formatted.startsWith("/public") ? `${API_BASE_URL}${formatted}` : `${API_BASE_URL}/public/${formatted}`;
         }
         return encodeURI(formatted);
     };
 
-    const updateUrl = useCallback((productId: number | null, replace: boolean = false, isReels: boolean = false) => {
+    const updateUrl = useCallback((productId: number | string | null, replace: boolean = false, isReels: boolean = false) => {
         const urlParams = new URLSearchParams(window.location.search);
         if (productId) {
             urlParams.set("product_id", String(productId));
@@ -748,18 +802,12 @@ export default function CartPage() {
         }
     }, []);
 
-    const handleProductClick = async (productId: number, arg2?: string | boolean | React.MouseEvent, e?: React.MouseEvent) => {
+    const handleProductClick = async (productId: number | string, businessName?: string, e?: any, businessSlug?: string, isSocialPost?: boolean, productSlug?: string) => {
         if (fetchingProduct) return;
 
-        let actualEvent: React.MouseEvent | undefined;
+        let actualEvent: React.MouseEvent | undefined = e;
         let replaceUrl = false;
-
-        if (typeof arg2 === 'boolean') {
-            replaceUrl = arg2;
-            actualEvent = e;
-        } else if (arg2 && typeof arg2 === 'object' && 'clientX' in arg2) {
-            actualEvent = arg2 as React.MouseEvent;
-        }
+        let isSocial = isSocialPost || (typeof productId === 'string' && productId.startsWith('post-'));
 
         if (actualEvent) {
             setClickPos({ x: actualEvent.clientX, y: actualEvent.clientY });
@@ -767,17 +815,27 @@ export default function CartPage() {
             setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
         }
 
-        updateUrl(productId, replaceUrl);
+        if (!isSocial) updateUrl(productId, replaceUrl);
+
         try {
             setFetchingProduct(true);
-            const res = await fetchProductById(productId);
-            if (res?.data?.product) {
-                const dbProduct = res.data.product;
-                const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
-                const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
-                if (baseInv) mappedPayload.quantity = baseInv.quantity;
-                setSelectedProductPayload(mappedPayload);
-                setModalOpen(true);
+            if (isSocial) {
+                const realId = String(productId).replace('post-', '');
+                const res = await fetchSocialPostById(Number(realId), { token: token! });
+                if (res) {
+                    setSelectedSocialPost(res);
+                }
+            } else {
+                const identifier = productSlug || productId;
+                const res = await fetchProductById(identifier);
+                if (res?.data?.product) {
+                    const dbProduct = res.data.product;
+                    const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
+                    const baseInv = (dbProduct.inventory || []).find((inv: any) => !inv.sku_id && !inv.variant_option_id);
+                    if (baseInv) mappedPayload.quantity = baseInv.quantity;
+                    setSelectedProductPayload(mappedPayload);
+                    setModalOpen(true);
+                }
             }
         } catch (err) {
             console.error(err);
@@ -786,8 +844,8 @@ export default function CartPage() {
         }
     };
 
-    const handleReelsClick = useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
-        handleProductClick(productId, businessName, e);
+    const handleReelsClick = useCallback(async (productId: number | string, businessName?: string, e?: any, businessSlug?: string, productSlug?: string) => {
+        handleProductClick(productId, businessName, e, businessSlug, false, productSlug);
     }, [handleProductClick]);
 
     useEffect(() => {
@@ -805,7 +863,7 @@ export default function CartPage() {
                     }
                 } else {
                     if (!modalOpen && !fetchingProduct && selectedProductPayload?.productId !== pid) {
-                        handleProductClick(pid, true);
+                        handleProductClick(pid, undefined, undefined, undefined, false);
                     }
                 }
             } else {
@@ -903,6 +961,7 @@ export default function CartPage() {
                             likeData={likeData}
                             fetchingProductId={selectedProductPayload?.productId}
                             handleProductClick={handleProductClick}
+                            handleReelsClick={handleReelsClick}
                             handleLikeClick={handleLikeClick}
                             formatUrl={formatUrl}
                             router={router}
@@ -935,6 +994,18 @@ export default function CartPage() {
                         updateUrl(pid, true, true);
                     }}
                 />
+
+                {selectedSocialPost && (
+                    <PostModal
+                        open={!!selectedSocialPost}
+                        post={selectedSocialPost}
+                        onClose={() => setSelectedSocialPost(null)}
+                        onToggleLike={() => fetchRecommendations()}
+                        userToken={token}
+                        origin={clickPos}
+                        isProductLinkedOnly={true}
+                    />
+                )}
             </div>
         );
     }
@@ -1007,8 +1078,11 @@ export default function CartPage() {
                                                 <CheckIcon className="w-2.5 h-2.5 text-white stroke-[3] animate-in zoom-in duration-200" />
                                             )}
                                         </button>
-                                        <div onClick={(e) => handleProductClick(item.product_id, false, e)} className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-50 relative group cursor-pointer">
-                                            <Image src={formatUrl(item.product_image)} alt={item.product_title} fill sizes="96px" className="object-cover transition-transform duration-500 group-hover:scale-110" />
+                                        <div onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-50 relative group cursor-pointer">
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <span className="text-[10px] font-black text-slate-300 opacity-40 select-none">stoqle</span>
+                                            </div>
+                                            <Image src={formatUrl(item.product_image)} alt={item.product_title} fill sizes="96px" className="object-cover transition-transform duration-500 group-hover:scale-110 relative z-[1]" />
                                             {item.total_quantity !== undefined && item.total_quantity > 0 && item.total_quantity <= 4 && (
                                                 <>
                                                     <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
@@ -1021,7 +1095,7 @@ export default function CartPage() {
                                         <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                                             <div>
                                                 <div className="flex items-start justify-between gap-4">
-                                                    <h3 onClick={(e) => handleProductClick(item.product_id, false, e)} className="text-sm text-slate-900 line-clamp-2 leading-snug flex-1 cursor-pointer hover:text-red-600 transition-colors">
+                                                    <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-sm text-slate-900 line-clamp-2 leading-snug flex-1 cursor-pointer hover:text-red-600 transition-colors">
                                                         {item.product_title}
                                                     </h3>
                                                     <div className="flex-shrink-0">
@@ -1071,13 +1145,16 @@ export default function CartPage() {
                         <section className="bg-white rounded-xl overflow-hidden border border-slate-100">
                             {outOfStockItems.map((item, idx) => (
                                 <div key={`${item.cart_id}-${idx}`} className="px-8 py-4 flex gap-4 relative bg-white border-b border-slate-50 last:border-0">
-                                    <div onClick={(e) => handleProductClick(item.product_id, false, e)} className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative cursor-pointer grayscale opacity-80">
+                                    <div onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative cursor-pointer grayscale opacity-80">
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <span className="text-[10px] font-black text-slate-300 opacity-40 select-none">stoqle</span>
+                                        </div>
                                         <Image
                                             src={formatUrl(item.product_image)}
                                             alt={item.product_title}
                                             fill
                                             sizes="80px"
-                                            className="object-cover"
+                                            className="object-cover relative z-[1]"
                                         />
                                         <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-1 text-center">
                                             <span className="text-[10px] text-white font-bold  tracking-tighter">Unavailable</span>
@@ -1085,7 +1162,7 @@ export default function CartPage() {
                                     </div>
                                     <div className="flex-1 min-w-0 py-1 flex flex-col justify-between">
                                         <div>
-                                            <h3 onClick={(e) => handleProductClick(item.product_id, false, e)} className="text-xs font-bold text-slate-400 line-clamp-1 cursor-pointer hover:text-red-500 transition-colors">{item.product_title}</h3>
+                                            <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-xs font-bold text-slate-400 line-clamp-1 cursor-pointer hover:text-red-500 transition-colors">{item.product_title}</h3>
                                             {item.variant_label && <p className="text-[10px] text-slate-400 font-medium  tracking-tight mt-0.5">{item.variant_label}</p>}
                                         </div>
                                         <div className="flex items-center justify-between mt-2">
@@ -1111,6 +1188,7 @@ export default function CartPage() {
                             likeData={likeData}
                             fetchingProductId={selectedProductPayload?.productId}
                             handleProductClick={handleProductClick}
+                            handleReelsClick={handleReelsClick}
                             handleLikeClick={handleLikeClick}
                             formatUrl={formatUrl}
                             router={router}

@@ -15,10 +15,14 @@ import ProductPreviewModal from "@/src/components/product/addProduct/modal/previ
 import type { Post, User } from "@/src/lib/types";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import { formatDuration } from "@/src/lib/utils/product/duration";
 import { API_BASE_URL } from "@/src/lib/config";
+import { useCache } from "@/src/context/cacheContext";
 import { io } from "socket.io-client";
 import SocialModal from "../../modal/socialModal";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import { toggleSocialPostLike } from "@/src/lib/api/social";
+import { toast } from "sonner";
 
 
 type ApiPost = any;
@@ -34,7 +38,6 @@ const isImageUrl = (u?: string) => !!u && IMAGE_EXT_RE.test(u);
 // local images in public folder
 const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png"; // fallback post image
 const DEFAULT_AVATAR = "/assets/images/favio.png";       // fallback avatar
-const DEFAULT_BG = "/assets/images/background.png";      // fallback background
 
 const slugify = (str: string) =>
   String(str || "")
@@ -86,23 +89,24 @@ const mapApiPost = (p: any): Post => {
     user: {
       id: p?.user_id ?? p?.user?.user_id ?? p?.user?.id ?? 0,
       name: p?.author_name ?? p?.user?.name ?? p?.user?.full_name ?? "",
-      avatar: p?.author_pic ?? p?.user?.profile_pic ?? DEFAULT_AVATAR,
+      avatar: p?.logo || p?.business_logo || p?.author_pic || p?.user?.profile_pic || p?.user?.logo || DEFAULT_AVATAR,
+      author_handle: p?.author_handle ?? p?.user?.username ?? p?.author_username,
       is_trusted: Number(
-        p?.author_is_trusted ?? 
-        p?.user?.is_trusted ?? 
-        p?.user?.is_verified_partner ?? 
-        p?.user?.is_partner ?? 
-        p?.user?.policy?.market_affiliation?.trusted_partner ?? 
-        p?.is_verified_partner ?? 
+        p?.author_is_trusted ??
+        p?.user?.is_trusted ??
+        p?.user?.is_verified_partner ??
+        p?.user?.is_partner ??
+        p?.user?.policy?.market_affiliation?.trusted_partner ??
+        p?.is_verified_partner ??
         p?.is_partner ??
         0
-      ) === 1 || 
-      !!p?.author_is_verified || 
-      !!p?.user?.is_verified_partner || 
-      !!p?.user?.is_partner || 
-      !!p?.is_verified_partner || 
-      !!p?.is_partner ||
-      !!p?.author_is_trusted,
+      ) === 1 ||
+        !!p?.author_is_verified ||
+        !!p?.user?.is_verified_partner ||
+        !!p?.user?.is_partner ||
+        !!p?.is_verified_partner ||
+        !!p?.is_partner ||
+        !!p?.author_is_trusted,
     },
     liked: Boolean(p?.liked_by_me),
     likeCount: p?.likes_count ?? 0,
@@ -111,6 +115,7 @@ const mapApiPost = (p: any): Post => {
     rawCreatedAt: p?.created_at,
     thumbnail,
     isPinned: Boolean(p?.is_pinned),
+    author_handle: p?.author_handle ?? p?.user?.username ?? p?.author_username,
     status: p?.status,
     is_product_linked: Boolean(p?.is_product_linked),
     linked_product: p?.linked_product,
@@ -161,9 +166,12 @@ const PostCard = React.memo(({
       layoutId={`post-${post.id}`}
       transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       onClick={() => openPostWithUrl(post)}
-      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col sm:rounded-xl rounded-md bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+        </div>
         {post.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
@@ -308,7 +316,8 @@ const ProductCard = React.memo(({
   handleLikeClick,
   isLiked,
   likeCount,
-  fetchingProduct
+  fetchingProduct,
+  profileApi
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
   const now = new Date();
@@ -350,6 +359,11 @@ const ProductCard = React.memo(({
     return null;
   }, [p]);
 
+  const shippingDuration = React.useMemo(() => {
+    const shippingAvg = (p.shipping_policies || profileApi?.policy?.shipping || profileApi?.policy?.shipping_duration || []).find((s: any) => s.kind === "avg" || s.type === "avg");
+    return shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : null;
+  }, [p.shipping_policies, profileApi?.policy?.shipping, profileApi?.policy?.shipping_duration]);
+
   const isPromoActive = !!effectivePromo;
 
   return (
@@ -359,9 +373,12 @@ const ProductCard = React.memo(({
       transition={{ layout: { duration: 0.4, type: "spring", stiffness: 300, damping: 30 } }}
       key={p.product_id}
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
-      className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
+      className="group flex flex-col rounded-lg bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-50 overflow-hidden post-media">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
+        </div>
         {p.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
@@ -374,13 +391,13 @@ const ProductCard = React.memo(({
             muted
             loop
             playsInline
-            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
           />
         ) : (
           <img
             src={formatUrl(p.first_image)}
             alt={p.title}
-            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110 relative z-[1]"
           />
         )}
         {p.product_video && (
@@ -395,10 +412,26 @@ const ProductCard = React.memo(({
             <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
+
+        {/* Placeholder frame indicator */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
+          </div>
+        </div>
       </div>
       <div className="p-3">
         <div className="flex items-center justify-between pt-1 mb-1">
-          <span className="text-slate-900 text-sm font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
+          <div className="flex items-center gap-1.5 h-4">
+            {isPromoActive ? (
+              <>
+                <span className="text-slate-900 text-sm font-bold">₦{Math.round(Number(p.price || 0) * (1 - (effectivePromo.discount || 0) / 100)).toLocaleString()}</span>
+                <span className="text-[10px] text-red-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
+              </>
+            ) : (
+              <span className="text-slate-900 text-sm font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
+            )}
+          </div>
           <div
             className="flex items-center gap-1 cursor-pointer relative"
             onClick={(e) => {
@@ -444,12 +477,20 @@ const ProductCard = React.memo(({
               {effectivePromo.title ? `${effectivePromo.title}: ` : "Sale: "}{effectivePromo.discount}% off
             </span>
           ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-            <span className="text-[9px] text-rose-500 ">
+            <span className="text-[9px] text-rose-500 font-bold uppercase tracking-tight">
               Only {Number(p.total_quantity)} Left
             </span>
-          ) : p.return_shipping_subsidy ? (
+          ) : p.seven_day_no_reason ? (
+            <span className="text-[9px] text-blue-600 border-blue-500 border-[0.2px] px-1.5 py-0.5 ">
+              7-day Return
+            </span>
+          ) : (p.return_shipping_subsidy || profileApi?.policy?.returns?.return_shipping_subsidy === 1) ? (
             <span className="text-[9px] text-emerald-600 border-emerald-500 border-[0.2px] px-1.5 py-0.5 ">
               Return shipping subsidy
+            </span>
+          ) : shippingDuration ? (
+            <span className="text-[9px] text-orange-600 border-orange-500 border-[0.2px] px-1.5 py-0.5 ">
+              Ships in {shippingDuration}
             </span>
           ) : null}
         </div>
@@ -464,7 +505,7 @@ const ProductCard = React.memo(({
 });
 ProductCard.displayName = "ProductCard";
 
-const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, setFullImageUrl, formatUrl, handleProductClick, handleLikeClick, likeData, fetchingProductId }: any) => {
+const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, setFullImageUrl, formatUrl, handleProductClick, handleLikeClick, likeData, fetchingProductId, profileApi }: any) => {
   const [columns, setColumns] = useState(5);
 
   useEffect(() => {
@@ -515,6 +556,7 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
                     isLiked={ld.liked}
                     likeCount={ld.count}
                     fetchingProduct={fetchingProductId === item.product_id}
+                    profileApi={profileApi}
                   />
                 );
               }
@@ -575,6 +617,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   };
 
   const auth = useAuth();
+  const token = auth?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
   const router = useRouter();
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -687,7 +730,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           ? { ...p, ...updated }
           : p
       ));
-      
+
       // Update the active modal if it's viewing this post
       setSelectedPost(prev => {
         if (prev && String(prev.id) === String(updatedPost.social_post_id)) {
@@ -706,23 +749,23 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const handleFollowUpdate = (targetUserId: string | number, following: boolean) => {
     // If we're on SOMEONE ELSE'S profile and we just followed/unfollowed them
     if (!isOwner && String(targetUserId) === viewUserId) {
-        setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1));
-        setIsFollowing(following);
+      setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1));
+      setIsFollowing(following);
     }
 
     // If we're on OUR OWN profile, our "following" count changes
     if (isOwner) {
-        setProfileApi((prev: any) => {
-            if (!prev) return prev;
-            const currentFollowing = Number(prev.stats?.following ?? 0);
-            return {
-                ...prev,
-                stats: {
-                    ...prev.stats,
-                    following: following ? currentFollowing + 1 : Math.max(0, currentFollowing - 1)
-                }
-            };
-        });
+      setProfileApi((prev: any) => {
+        if (!prev) return prev;
+        const currentFollowing = Number(prev.stats?.following ?? 0);
+        return {
+          ...prev,
+          stats: {
+            ...prev.stats,
+            following: following ? currentFollowing + 1 : Math.max(0, currentFollowing - 1)
+          }
+        };
+      });
     }
   };
 
@@ -739,9 +782,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       }
 
       // MiniHeader logic (Mobile logic sync)
-      if (!isOwner) {
-        setIsMiniHeaderVisible(window.scrollY > 0);
-      }
+      setIsMiniHeaderVisible(window.scrollY > 0);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -750,29 +791,78 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
   const tabs = useMemo(() => {
     const base = ["Notes", "Posts"];
-    if (profileApi?.is_business_owner && profileApi?.business?.business_status === 'active') {
+    // Show Products tab for any business profile regardless of viewer's ownership
+    if (profileApi?.is_business_owner && profileApi?.business?.business_id) {
       base.push("Products");
     }
     if (isOwner) base.push("Liked");
     return base;
-  }, [profileApi?.is_business_owner, profileApi?.business?.business_status, isOwner]);
+  }, [profileApi?.is_business_owner, profileApi?.business?.business_id, isOwner]);
 
   const pushedRef = useRef(false);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+
+  const { getCachedProfile, setCachedProfile, setCachedProfilePosts, getActiveTab, setActiveTab, getScrollPosition, setScrollPosition } = useCache();
+
+  // Record scroll position
+  useEffect(() => {
+    const handleScroll = () => {
+      if (viewUserId) setScrollPosition(`profile_${viewUserId}`, window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [viewUserId]);
+
+  // Save active tab
+  useEffect(() => {
+    if (viewUserId && tabs[activeTabIndex]) {
+      setActiveTab(`profile_${viewUserId}_tab`, tabs[activeTabIndex]);
+    }
+  }, [activeTabIndex, tabs, viewUserId]);
+
+  // Restore scroll position after loading
+  useEffect(() => {
+    if (!profileLoading && !postsLoading && viewUserId) {
+      const pos = getScrollPosition(`profile_${viewUserId}`);
+      if (pos > 0) {
+        setTimeout(() => window.scrollTo(0, pos), 100);
+      }
+    }
+  }, [profileLoading, postsLoading, viewUserId]);
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
 
     async function loadProfile() {
+      if (!viewUserId) return;
+
+      const cached = getCachedProfile(String(viewUserId));
+      if (cached && cached.data) {
+        setProfileApi(cached.data);
+        setIsFollowing(cached.data.is_following);
+        setIsBlocked(cached.data.is_blocked);
+        setMediaPosts(cached.mediaPosts || []);
+        setNotePosts(cached.notePosts || []);
+        setProfileLoading(false);
+        setPostsLoading(false);
+        
+        // Restore active tab
+        const savedTab = getActiveTab(`profile_${viewUserId}_tab`);
+        if (savedTab !== null) {
+          const tabIndex = tabs.indexOf(savedTab as string);
+          if (tabIndex !== -1) setActiveTabIndex(tabIndex);
+        }
+        return;
+      }
+
       setProfileLoading(true);
       setProfileError(null);
       try {
         const base = process.env.NEXT_PUBLIC_API_URL;
         if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
 
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -806,6 +896,9 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         setProfileApi(normalized);
         setIsFollowing(normalized.is_following);
         setIsBlocked(normalized.is_blocked);
+        
+        // Cache the normalized profile
+        setCachedProfile(String(viewUserId), normalized);
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to fetch profile:", err);
@@ -830,8 +923,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     async function loadLikedItems() {
       setLikedLoading(true);
       try {
-        const token = localStorage.getItem("token");
-        const headers = {
+        const headers: HeadersInit = {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         };
@@ -866,17 +958,17 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     return () => { cancelled = true; };
   }, [activeTabIndex, tabs, isOwner]);
 
-  // fetch vendor products if owner
+  // fetch vendor products whenever this profile belongs to a business
   useEffect(() => {
     const businessId = profileApi?.business?.business_id || profileApi?.business?.id;
-    const isOwner = profileApi?.is_business_owner;
-
-    if (!businessId || !isOwner) return;
+    // Load products for ANY business profile — not just the owner's own profile.
+    // isOwner here means the viewer == profile owner, but products should always
+    // be visible on a vendor profile page.
+    if (!businessId || !profileApi?.is_business_owner) return;
 
     const loadVendorProducts = async () => {
       setProductsLoading(true);
       try {
-        const token = localStorage.getItem("token");
         const identifier = profileApi?.business?.business_slug || businessId;
         const res = await fetchBusinessProducts(identifier, 100, undefined, undefined, token);
         let foundProducts = [];
@@ -904,12 +996,11 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       }
     };
     loadVendorProducts();
-  }, [profileApi, viewUserId]);
+  }, [profileApi?.business?.business_id, profileApi?.is_business_owner, viewUserId]);
 
   const handleFollow = async () => {
-    const token = localStorage.getItem("token");
     if (!token) {
-      router.push("/login");
+      auth.openLogin();
       return;
     }
     setIsFollowing(true);
@@ -940,7 +1031,6 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       try {
         const base = process.env.NEXT_PUBLIC_API_URL;
         if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -986,6 +1076,9 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
         setMediaPosts(media.slice(0, postCount));
         setNotePosts(notes.slice(0, postCount));
+        
+        // Cache the posts
+        setCachedProfilePosts(String(viewUserId), media, notes);
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to load posts:", err);
@@ -1029,8 +1122,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
         if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
 
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const headers: any = {};
+        const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers.Authorization = `Bearer ${token}`;
 
         const res = await fetch(fetchUrl.toString(), { headers });
@@ -1081,8 +1173,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
               if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
               if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
 
-              const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-              const headers: any = {};
+              const headers: HeadersInit = { "Content-Type": "application/json" };
               if (token) headers.Authorization = `Bearer ${token}`;
 
               const res = await fetch(fetchUrl.toString(), { headers });
@@ -1113,7 +1204,6 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     setSelectedPost(post);
     try {
       const { fetchSecurePostUrl } = require("@/src/lib/api/social");
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const urlData = await fetchSecurePostUrl(post.id, "profile_feed", token);
 
       let xsecToken = "";
@@ -1164,27 +1254,44 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     }
   };
 
-  const toggleLike = (postId: string | number) => {
-    setMediaPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
-          : p
-      )
-    );
-    setNotePosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, liked: !p.liked, likeCount: p.liked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1 }
-          : p
-      )
-    );
+  const toggleLike = async (postId: string | number) => {
+    if (!token) {
+      auth.openLogin();
+      return;
+    }
+
+    const targetPost = [...mediaPosts, ...notePosts].find(p => p.id === postId);
+    if (!targetPost) return;
+
+    const wasLiked = targetPost.liked;
+    const newLiked = !wasLiked;
+    const diff = newLiked ? 1 : -1;
+
+    const updatePost = (p: Post) =>
+      p.id === postId ? { ...p, liked: newLiked, likeCount: Math.max(0, (p.likeCount || 0) + diff) } : p;
+
+    setMediaPosts((prev) => prev.map(updatePost));
+    setNotePosts((prev) => prev.map(updatePost));
+
+    try {
+      await toggleSocialPostLike(postId, token);
+    } catch (err) {
+      console.error("Like error", err);
+      toast.error("Failed to update like");
+      // Revert optimism
+      const revertPost = (p: Post) =>
+        p.id === postId ? { ...p, liked: wasLiked, likeCount: targetPost.likeCount } : p;
+      setMediaPosts((prev) => prev.map(revertPost));
+      setNotePosts((prev) => prev.map(revertPost));
+    }
   };
 
   const handleProductLike = async (e: React.MouseEvent, productId: number, baseCount: number) => {
     e.stopPropagation();
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      auth.openLogin();
+      return;
+    }
 
     const current = productLikeData[productId] || { liked: false, count: baseCount };
     const newLiked = !current.liked;
@@ -1207,13 +1314,20 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     }
   };
 
-  const handleProductClick = async (productId: number, businessName?: string, e?: React.MouseEvent) => {
-    if (fetchingProductId) return;
-    const token = localStorage.getItem("token") || "";
+  const handleProductClick = async (
+    productId: string | number,
+    businessName?: string,
+    e?: any,
+    businessSlug?: string,
+    isSocialPost?: boolean,
+    productSlug?: string
+  ) => {
+    const id = Number(productId);
+    if (!id || fetchingProductId === id) return;
 
     try {
-      setFetchingProductId(productId);
-      const res = await fetchProductById(productId, token);
+      setFetchingProductId(id);
+      const res = await fetchProductById(id, token);
       if (res?.data?.product) {
         const dbProduct = res.data.product;
         const mappedPayload = mapProductToPreviewPayload(dbProduct, formatUrl);
@@ -1323,27 +1437,36 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className={`bg-white px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50`}
+      className={`bg-white rounded px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50`}
       style={{ top: isMiniHeaderVisible ? "56px" : `${navbarHeight}px` }}
     >
       <div ref={tabsInnerRef} className="flex gap-8 overflow-x-auto scrollbar-hide py-1">
-        {tabs.map((t, i) => (
-          <button
-            key={t}
-            onClick={() => setActiveTabIndex(i)}
-            className={`relative py-2 text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            {t}
-            {i === activeTabIndex && (
-              <motion.div
-                layoutId="activeTabUnderline"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full"
-                initial={false}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            )}
-          </button>
-        ))}
+        {profileLoading ? (
+          <>
+            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
+          </>
+        ) : (
+          tabs.map((t, i) => (
+            <button
+              key={t}
+              onClick={() => setActiveTabIndex(i)}
+              className={`relative py-2 text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
+            >
+              {t}
+              {i === activeTabIndex && (
+                <motion.div
+                  layoutId="activeTabUnderline"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              )}
+            </button>
+          ))
+        )}
       </div>
     </div>
   );
@@ -1407,13 +1530,14 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
                 toggleLike={toggleLike}
                 getNoteStyles={getNoteStyles}
                 setFullImageUrl={setFullImageUrl}
+                profileApi={profileApi}
               />
             </div>
           )}
         </div>
 
-        {/* Products pane */}
-        {profileApi?.is_business_owner && profileApi?.business?.business_status === 'active' && (
+        {/* Products pane — visible for any business profile */}
+        {profileApi?.is_business_owner && profileApi?.business?.business_id && (
           <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Products" ? "auto" : "0", overflow: "hidden" }}>
             {productsLoading ? (
               <ShimmerGrid count={10} />
@@ -1441,6 +1565,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
                   handleLikeClick={handleProductLike}
                   likeData={productLikeData}
                   fetchingProductId={fetchingProductId}
+                  profileApi={profileApi}
                 />
               </div>
             )}
@@ -1471,6 +1596,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
                   handleLikeClick={handleProductLike}
                   likeData={productLikeData}
                   fetchingProductId={fetchingProductId}
+                  profileApi={profileApi}
                 />
               </div>
             )}
@@ -1488,6 +1614,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         isFollowing={isFollowing}
         isBlocked={isBlocked}
         followersCount={followersCount}
+        products={vendorProducts}
         onVisitShop={() => {
           const business = profileApi?.business;
           if (business) {
@@ -1582,7 +1709,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={handleFollow}
-                className="bg-red-500 text-white px-5 py-2 rounded-full text-xs font-bold active:scale-95 transition shadow-sm whitespace-nowrap"
+                className="bg-red-500 text-white px-5 py-2 rounded-full text-xs  active:scale-95 transition shadow-sm whitespace-nowrap"
               >
                 Follow
               </button>

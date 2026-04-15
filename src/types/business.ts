@@ -20,6 +20,8 @@ export type BusinessPolicy = {
     return_shipping_subsidy: number;
     seven_day_no_reason: number;
     rapid_refund: number;
+    fake_one_pay_four: number;
+    late_shipment: number;
     additional_info?: string | null;
     created_at: string;
   };

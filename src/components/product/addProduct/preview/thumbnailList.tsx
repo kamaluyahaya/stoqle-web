@@ -31,14 +31,18 @@ export default function ThumbnailList({
                   key={`style-${i}`}
                   onClick={() => onIndexChange(i, "styles")}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className={`flex-shrink-0 group relative rounded-lg border-2 p-0.5 transition-all duration-300 ${isSelected
+                  className={`flex-shrink-0 flex items-center group relative rounded-lg border p-0.5 transition-all duration-500 ease-in-out ${isSelected
                     ? "border-red-500 bg-red-50"
                     : "border-transparent hover:border-slate-200"
                     } overflow-hidden focus:outline-none`}
-                  style={{ width: 58, height: 58 }}
+                  style={{
+                    width: isSelected ? "auto" : 58,
+                    height: 58,
+                    maxWidth: isSelected ? 160 : 58
+                  }}
                   aria-pressed={isSelected}
                 >
-                  <div className="w-full h-full rounded-[6px] overflow-hidden relative bg-slate-100">
+                  <div className="w-[50px] h-[50px] flex-shrink-0 rounded-[6px] overflow-hidden relative bg-slate-100 transition-all duration-300">
                     {v.url ? (
                       <img src={v.url} alt={v.name} className="w-full h-full object-cover" />
                     ) : (
@@ -46,14 +50,24 @@ export default function ThumbnailList({
                         {v.name}
                       </div>
                     )}
-                    {/* Variant Name Overlay (Simplified) */}
-                    <div className={`absolute bottom-0 left-0 right-0 p-0.5 bg-black/60 backdrop-blur-[1px] transition-transform duration-300 ${isSelected ? "translate-y-0" : "translate-y-full group-hover:translate-y-0"
-                      }`}>
-                      <p className="text-[7px] font-black text-white truncate text-center leading-none">
+                    {/* Normal overlay for non-selected items (optional, hidden when selected) */}
+                    {!isSelected && (
+                      <div className="absolute bottom-0 left-0 right-0 p-0.5 bg-black/60 backdrop-blur-[1px] transition-transform duration-300 translate-y-full group-hover:translate-y-0">
+                        <p className="text-[7px] font-black text-white truncate text-center leading-none">
+                          {v.name}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Active Selected Name on the Right */}
+                  {isSelected && (
+                    <div className="flex-1 px-2 overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">
+                      <p className="text-[9px] font-bold text-slate-800 leading-[1.2] line-clamp-2 text-left">
                         {v.name}
                       </p>
                     </div>
-                  </div>
+                  )}
                 </button>
               );
             })}
