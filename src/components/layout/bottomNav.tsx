@@ -73,7 +73,7 @@ export default function BottomNav() {
       title: "Discover",
       href: "/discover",
       iconOutline: <HomeIcon className="w-5 h-5" aria-hidden />,
-      iconSolid: <HomeIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
+      iconSolid: <HomeIconSolid className="w-5 h-5 text-rose-500" aria-hidden />,
       protected: false,
     },
     {
@@ -81,7 +81,7 @@ export default function BottomNav() {
       title: "Market",
       href: "/market",
       iconOutline: <ShoppingBagIcon className="w-5 h-5" aria-hidden />,
-      iconSolid: <ShoppingBagIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
+      iconSolid: <ShoppingBagIconSolid className="w-5 h-5 text-rose-500" aria-hidden />,
       protected: false,
     },
     {
@@ -98,7 +98,7 @@ export default function BottomNav() {
       title: "Message",
       href: "/messages",
       iconOutline: <ChatBubbleLeftRightIcon className="w-5 h-5" aria-hidden />,
-      iconSolid: <ChatBubbleLeftRightIconSolid className="w-5 h-5 text-red-500" aria-hidden />,
+      iconSolid: <ChatBubbleLeftRightIconSolid className="w-5 h-5 text-rose-500" aria-hidden />,
       badge: unreadCount,
       protected: true,
     },
@@ -112,9 +112,9 @@ export default function BottomNav() {
         <UserCircleIcon className="h-6 w-6" aria-hidden />
       ),
       iconSolid: isLoggedIn && profileImage ? (
-        <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border-2 border-red-500" />
+        <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border-2 border-rose-500" />
       ) : (
-        <UserCircleIconSolid className="h-6 w-6 text-red-500" aria-hidden />
+        <UserCircleIconSolid className="h-6 w-6 text-rose-500" aria-hidden />
       ),
       protected: true,
     },
@@ -163,21 +163,21 @@ export default function BottomNav() {
                   key={it.id}
                   onClick={handleClick}
                   className={`flex-1 min-w-0 flex flex-col md:flex-row items-center justify-center gap-0.5 md:gap-2 px-1 py-0.5 rounded-lg transition
-                    ${active ? "text-red-500" : "text-slate-500 hover:text-slate-900"}`}
+                    ${active ? "text-rose-500" : "text-slate-500 hover:text-slate-900"}`}
                   aria-current={active ? "page" : undefined}
                   aria-label={it.title}
                 >
-                  <div className={`relative flex items-center justify-center transition-all ${isRelease ? "bg-red-500 rounded-[0.5rem] p-1 px-4 shadow-lg shadow-red-200 active:scale-95" : "bg-transparent mt-0 mb-0"}`}>
+                  <div className={`relative flex items-center justify-center transition-all ${isRelease ? "bg-rose-500 rounded-[0.5rem] p-1 px-4 shadow-lg shadow-rose-200 active:scale-95" : "bg-transparent mt-0 mb-0"}`}>
                     {active ? it.iconSolid : it.iconOutline}
                     {isLoggedIn && it.badge ? (
-                      <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white ring-1 ring-white">
+                      <span className="absolute -top-1.5 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] font-bold text-white ring-1 ring-white">
                         {it.badge > 99 ? "99+" : it.badge}
                       </span>
                     ) : null}
                   </div>
 
                   {!isRelease && (
-                    <span className={`text-[9px] sm:text-[10px] md:text-sm md:inline-block whitespace-nowrap mt-0.5 md:mt-0 ${active ? "font-bold text-red-500" : "font-medium"}`}>
+                    <span className={`text-[9px] sm:text-[10px] md:text-sm md:inline-block whitespace-nowrap mt-0.5 md:mt-0 ${active ? "font-bold text-rose-500" : "font-medium"}`}>
                       {it.title}
                     </span>
                   )}

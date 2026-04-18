@@ -17,6 +17,7 @@ interface OrderItem {
 
 interface MasterOrder {
   sale_id: number | null;
+  stoqle_order_id?: string | number | null;
   payment_ref: string | null;
   full_name: string;
   email: string;
@@ -161,7 +162,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
     >
       {/* WATERMARK SECTION */}
       <div className="absolute print:fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.05] pointer-events-none -rotate-45 select-none z-0 whitespace-nowrap">
-        <span className="text-[250px] font-black tracking-[0.1em] text-red-500">stoqle</span>
+        <span className="text-[250px] font-black tracking-[0.1em] text-rose-500">stoqle</span>
       </div>
 
       {/* VERTICAL VERIFICATION SLIP (RIGHT EDGE) */}
@@ -170,7 +171,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
           className="text-[12px] font-black tracking-[0.5em]  text-slate-600"
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
         >
-          ——  Stoqle Order Verification Slip — ID: #{order.sale_id} — Validated by Anti-Tamper System —
+          ——  Stoqle Order Verification Slip — ID: #{order.stoqle_order_id || order.sale_id} — Validated by Anti-Tamper System —
         </div>
       </div>
 
@@ -186,7 +187,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
             <div className="inline-block bg-slate-100 text-slate-800 text-[10px] font-black px-3 py-1.5 rounded-lg tracking-widest  mb-3">
               {order.status.replace(/_/g, ' ')}
             </div>
-            <div className="text-sm font-bold text-slate-950 mb-1">Order ID: #{order.sale_id}</div>
+            <div className="text-sm font-bold text-slate-950 mb-1">Order ID: #{order.stoqle_order_id || order.sale_id}</div>
             <div className="text-xs text-slate-500 font-medium tracking-tight">Placed on {dateStr} at {timeStr}</div>
           </div>
         </header>

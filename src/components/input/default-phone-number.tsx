@@ -24,9 +24,9 @@ export default function NumberInput({
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const raw = e.target.value;
         const clean = raw.replace(/\D/g, "");
-        
+
         if (maxLength && clean.length > maxLength) return;
-        
+
         onChange(clean);
     };
 
@@ -34,7 +34,7 @@ export default function NumberInput({
         <div className={`flex items-center gap-2 ${isCompact ? "p-1 border-none" : "p-2 border-b border-slate-200"} bg-transparent`}>
             {!isCompact && (
                 <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
-                    {label} {required && <span className="text-red-500">*</span>}
+                    {label} {required && <span className="text-rose-500">*</span>}
                 </span>
             )}
 
@@ -46,7 +46,7 @@ export default function NumberInput({
                 onChange={handleChange}
                 maxLength={11}
                 placeholder={placeholder || (isCompact ? label : "")}
-                className={`${isCompact ? "px-3 py-1.5 text-xs bg-slate-50 border border-slate-200" : "px-4 py-2 text-sm bg-white"} flex-1 rounded-full text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-red-400`}
+                className={`${isCompact ? "px-3 py-1.5 text-xs bg-slate-50 border border-slate-200" : "px-4 py-2 text-sm bg-white"} flex-1 rounded-full text-black caret-rose-500 outline-none transition focus:ring-1 focus:ring-rose-400`}
             />
 
             {maxLength && (

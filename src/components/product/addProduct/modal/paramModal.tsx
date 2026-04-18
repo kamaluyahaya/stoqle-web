@@ -80,7 +80,7 @@ export default function ParamsModal({ open, initialData, onClose, onSubmit }: Pr
         <div className="mt-5 flex flex-col sm:flex-row justify-end gap-2 w-full">
           <button
             onClick={handleSubmit}
-            className="w-full sm:w-auto px-4 py-2 rounded-full bg-red-500 text-white text-sm"
+            className="w-full sm:w-auto px-4 py-2 rounded-full bg-rose-500 text-white text-sm"
           >
             {initialData ? "Edit" : "Add"}
           </button>

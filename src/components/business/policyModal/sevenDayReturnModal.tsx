@@ -3,6 +3,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 
 type Props = {
   open: boolean;
@@ -19,6 +20,13 @@ export default function SevenDayReturnModal({ open, onClose }: Props) {
     return () => {
       document.body.style.overflow = "unset";
     };
+  }, [open]);
+
+  const [modalZIndex, setModalZIndex] = React.useState(() => getNextZIndex());
+  React.useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
   }, [open]);
 
   const content = `<b><center>📄 7-Day No-Reason Return Service Description</center></b><br/><br/>
@@ -151,7 +159,13 @@ The original product packaging is not missing, and the overall packaging structu
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[20100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div 
+          className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4" 
+          style={{ zIndex: modalZIndex }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

@@ -126,7 +126,7 @@ export default function PhoneVerificationModal({ isOpen, onClose, onSuccess }: P
         // Update user in context
         const updatedNo = `+234${phone}`;
         const updatedUser = { ...user, phone_no: updatedNo };
-        
+
         if (onPhoneVerified) {
           onPhoneVerified(updatedUser);
         } else {
@@ -216,7 +216,7 @@ export default function PhoneVerificationModal({ isOpen, onClose, onSuccess }: P
                     <button
                       type="submit"
                       disabled={loading || !phone}
-                      className="w-full bg-red-500 text-white py-3 rounded-full font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest"
+                      className="w-full bg-rose-500 text-white py-3 rounded-full font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest"
                     >
                       {loading ? (
                         <div className="w-5 h-5  rounded-full animate-spin" />

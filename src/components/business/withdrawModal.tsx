@@ -253,7 +253,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
         <>
             <AnimatePresence>
                 {isOpen && (
-                    <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[100002] flex items-center justify-center p-4">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -322,7 +322,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                 </div>
                                                 <button
                                                     onClick={!account ? onEditAccount : onClose}
-                                                    className="w-full py-3 bg-red-500 text-white rounded-full text-sm font-bold shadow-md active:scale-95 transition"
+                                                    className="w-full py-3 bg-rose-500 text-white rounded-full text-sm font-bold shadow-md active:scale-95 transition"
                                                 >
                                                     {!account ? "Set up Account" : (account?.isStaged ? "Go to Dashboard" : "Close")}
                                                 </button>
@@ -351,7 +351,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                 <div className="space-y-4">
                                                     <div className="flex justify-between items-end px-1">
                                                         <label className="text-[10px] font-black text-slate-400  tracking-widest">Enter Amount (₦)</label>
-                                                        <button onClick={() => setAmount(availableBalance.toString())} className="text-[9px] font-black text-red-600 bg-red-50 px-2.5 py-1 rounded-full hover:bg-red-100 transition">MAX</button>
+                                                        <button onClick={() => setAmount(availableBalance.toString())} className="text-[9px] font-black text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full hover:bg-rose-100 transition">MAX</button>
                                                     </div>
                                                     <div className=" overflow-hidden border-2 border-transparent focus-within:bg-white transition">
                                                         <NumberInput
@@ -369,7 +369,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                         onClick={handleProceed}
                                                         className={`w-full py-3 rounded-full text-sm font-medium transition-all
                                                 ${(amount && parseFloat(amount) >= 50)
-                                                                ? "bg-red-500 text-white active:scale-95"
+                                                                ? "bg-rose-500 text-white active:scale-95"
                                                                 : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                             `}
                                                     >
@@ -409,7 +409,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                     disabled={isSubmitting}
                                                     className={`w-full py-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-3
                                             ${(!isSubmitting)
-                                                            ? "bg-red-500 text-white shadow-md active:scale-95"
+                                                            ? "bg-rose-500 text-white shadow-md active:scale-95"
                                                             : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                         `}
                                                 >
@@ -468,7 +468,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                 <div className="space-y-3 pt-4">
                                                     <button
                                                         onClick={handleViewHistory}
-                                                        className="w-full py-3 bg-red-500 text-white rounded-full text-sm font-medium shadow-md active:scale-95 transition flex items-center justify-center gap-3 group"
+                                                        className="w-full py-3 bg-rose-500 text-white rounded-full text-sm font-medium shadow-md active:scale-95 transition flex items-center justify-center gap-3 group"
                                                     >
                                                         <FaHistory size={14} className="group-hover:rotate-12 transition" />
                                                         <span>View Transfer History</span>
@@ -526,7 +526,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                             <button
                                                                 onClick={() => syncStatus(item.withdrawal_id)}
                                                                 disabled={syncingId === item.withdrawal_id}
-                                                                className="mt-2 text-[8px] font-black text-red-600 bg-red-50 border border-red-100 px-3 py-1 rounded-full hover:bg-red-100 transition active:scale-95 disabled:opacity-50"
+                                                                className="mt-2 text-[8px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full hover:bg-rose-100 transition active:scale-95 disabled:opacity-50"
                                                             >
                                                                 {syncingId === item.withdrawal_id ? "SYNCING..." : "SYNC STATUS"}
                                                             </button>

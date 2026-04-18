@@ -7,6 +7,7 @@ import {
 } from "@heroicons/react/24/outline";
 import SevenDayReturnModal from "../../../business/policyModal/sevenDayReturnModal";
 import ReturnShippingSubsidyModal from "../../../business/policyModal/returnShippingSubsidyModal";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 
 type PolicyModalProps = {
   open: boolean;
@@ -19,12 +20,24 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
   const [copied, setCopied] = useState(false);
   const [showSevenDayModal, setShowSevenDayModal] = useState(false);
   const [showSubsidyModal, setShowSubsidyModal] = useState(false);
+  const [modalZIndex, setModalZIndex] = React.useState(() => getNextZIndex());
+  React.useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [open]);
 
   if (!open) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-[600000] flex items-end lg:items-center justify-center p-0 lg:p-4">
+      <div
+        className="fixed inset-0 flex items-end lg:items-center justify-center p-0 lg:p-4"
+        style={{ zIndex: modalZIndex }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Backdrop */}
         <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
@@ -35,7 +48,7 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
           onTouchStart={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="bg-white sticky top-0 z-30 lg:rounded-t-[0.5rem] md:rounded-t-[0.5rem] rounded-t-[0.5rem] border-b border-slate-50">
+          <div className="bg-white sticky top-0 z-30 lg:rounded-t-[0.5rem] md:rounded-t-[0.5rem] rounded-t-[0.5rem]">
             <div className="relative flex items-center px-5 h-14">
               <div className="w-9 h-9" />
               <h3 className="absolute left-1/2 -translate-x-1/2 text-lg font-medium text-slate-800 truncate max-w-[70%] text-center">
@@ -44,7 +57,7 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
 
               <button
                 onClick={onClose}
-                className="ml-auto w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all duration-200"
+                className="ml-auto w-10 h-10 flex items-center justify-center rounded-full text-slate-500 hover:bg-rose-50 hover:text-rose-500 transition-all duration-200"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
@@ -83,7 +96,7 @@ export default function PolicyModal({ open, title, body, onClose }: PolicyModalP
                                 if (isSevenDay) setShowSevenDayModal(true);
                                 else if (isSubsidy) setShowSubsidyModal(true);
                               }}
-                              className="text-[11px] font-bold text-red-500 hover:text-red-700 hover:underline transition-colors"
+                              className="text-[11px] font-bold text-rose-500 hover:text-rose-700 hover:underline transition-colors"
                             >
                               View details
                             </button>

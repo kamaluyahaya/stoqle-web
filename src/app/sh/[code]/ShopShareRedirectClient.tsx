@@ -1,0 +1,43 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { API_BASE_URL } from '@/src/lib/config';
+
+export default function ShopShareRedirectClient({ code }: { code: string }) {
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!code) return;
+
+        const resolveLink = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/shop/resolve/${code}`, {
+                    cache: 'no-store'
+                });
+                const json = await res.json();
+
+                if (json.ok && json.data?.slug) {
+                    // Redirect to the actual shop page
+                    router.replace(`/shop/${json.data.slug}?share=${code}`);
+                } else {
+                    router.replace('/');
+                }
+            } catch (err) {
+                console.error('Failed to resolve shop share link:', err);
+                router.replace('/');
+            }
+        };
+
+        resolveLink();
+    }, [code, router]);
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 rounded-full border-4 border-rose-500 border-t-transparent animate-spin" />
+                <p className="text-sm font-bold text-slate-500 animate-pulse">Opening Shop...</p>
+            </div>
+        </div>
+    );
+}

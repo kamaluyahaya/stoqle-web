@@ -36,7 +36,7 @@ export default function DefaultInput({
     <div className={`flex items-center gap-3 bg-white p-2 border-b border-slate-200 ${disabled ? 'opacity-70' : ''}`}>
       {/* Label */}
       <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
-        {label} {required && <span className="text-red-500">*</span>}
+        {label} {required && <span className="text-rose-500">*</span>}
       </span>
 
       {/* Input */}
@@ -46,7 +46,7 @@ export default function DefaultInput({
         onChange={handleChange}
         placeholder={placeholder}
         disabled={disabled}
-        className={`flex-1 rounded-full px-4 py-2 text-sm text-black caret-red-500 outline-none transition focus:ring-gray-300 ${disabled ? 'cursor-not-allowed text-slate-500' : ''}`}
+        className={`flex-1 rounded-full px-4 py-2 text-sm text-black caret-rose-500 outline-none transition focus:ring-gray-300 ${disabled ? 'cursor-not-allowed text-slate-500' : ''}`}
       />
 
       {/* Max length */}

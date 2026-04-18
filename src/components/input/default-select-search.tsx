@@ -138,7 +138,7 @@ export default function CategorySelectionModal({
         className="flex items-center gap-6 bg-white p-1 pb-4 w-full border-b border-slate-200"
       >
         <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
-          {triggerLabel} {isRequired && <span className="text-red-500">*</span>}
+          {triggerLabel} {isRequired && <span className="text-rose-500">*</span>}
         </span>
 
         <span className=" text-sm text-slate-800 text-left">
@@ -242,7 +242,7 @@ export default function CategorySelectionModal({
                         onMouseEnter={() => setFocusedIndex(idx)}
                         className={`rounded-full px-4 py-2 text-sm border transition focus:outline-none
                           ${isSelected
-                            ? "border-red-600 bg-red-50 text-red-600"
+                            ? "border-rose-600 bg-rose-50 text-rose-600"
                             : "border-slate-200 text-slate-800 hover:bg-slate-50"}
                         ${isFocused ? "ring-2 ring-rose-200" : ""}
                         `}
@@ -270,7 +270,7 @@ export default function CategorySelectionModal({
                     disabled={!tempSelection}
                     className={`flex-1 py-3 rounded-full text-sm font-medium
                       ${tempSelection
-                        ? "bg-red-500 text-white"
+                        ? "bg-rose-500 text-white"
                         : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                     `}
                   >

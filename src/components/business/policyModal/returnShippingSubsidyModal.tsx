@@ -3,6 +3,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 
 type Props = {
   open: boolean;
@@ -19,6 +20,13 @@ export default function ReturnShippingSubsidyModal({ open, onClose }: Props) {
     return () => {
       document.body.style.overflow = "unset";
     };
+  }, [open]);
+
+  const [modalZIndex, setModalZIndex] = React.useState(() => getNextZIndex());
+  React.useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
   }, [open]);
 
   const content = `<b><center>🚚 Return Shipping Fee Coverage Service Description</center></b><br/><br/>
@@ -92,7 +100,13 @@ Instant subsidy deduction (1 kg) after pickup. No waiting for return completion.
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[600000] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div 
+          className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4" 
+          style={{ zIndex: modalZIndex }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

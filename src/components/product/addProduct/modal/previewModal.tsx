@@ -3,7 +3,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { PreviewPayload } from "@/src/types/product";
-import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon, ShareIcon, ClockIcon, ArrowPathIcon, XMarkIcon, ArrowUpOnSquareIcon, StarIcon } from "@heroicons/react/24/outline";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
+import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, HeartIcon, ShareIcon, SparklesIcon, StarIcon, ExclamationTriangleIcon } from "@heroicons/react/24/solid";
+import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
 import SmartShareButton from '@/src/components/share/SmartShareButton';
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { Review, fetchProductReviews } from "@/src/lib/api/reviewApi";
@@ -60,6 +63,9 @@ export default function ProductPreviewModal({
   zIndex,
   ignoreRouterBack,
   isFetching,
+  isFromReel,
+  onExpand,
+  onCollapse,
 }: {
   open: boolean;
   payload: PreviewPayload | null;
@@ -77,6 +83,9 @@ export default function ProductPreviewModal({
   zIndex?: number;
   ignoreRouterBack?: boolean;
   isFetching?: boolean;
+  isFromReel?: boolean;
+  onExpand?: () => void;
+  onCollapse?: () => void;
 }) {
   //
   // --- Hooks (always declared in the same order, unconditionally) ---
@@ -97,6 +106,24 @@ export default function ProductPreviewModal({
 
   const router = useRouter();
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    if (payload?.productId && modalRef.current) {
+      modalRef.current.scrollTo(0, 0);
+      setActiveTab("overview");
+      setSelectedIndex(0);
+      setViewMode("images");
+    }
+  }, [payload?.productId]);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+      // Reset expanded state when modal opens
+      setIsExpanded(false);
+    }
+  }, [open]);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const asideScrollRef = useRef<HTMLDivElement | null>(null);
@@ -273,6 +300,18 @@ export default function ProductPreviewModal({
     const onScroll = () => {
       const scrollPos = el.scrollTop;
 
+      // Only trigger expansion on mobile from Reels
+      if (isMobile && isFromReel && !isExpanded && scrollPos > 10) {
+        setIsExpanded(true);
+        if (onExpand) onExpand();
+      }
+
+      // Auto-collapse back to 80% when user scrolls back to top
+      if (isMobile && isFromReel && isExpanded && scrollPos <= 5) {
+        setIsExpanded(false);
+        if (onCollapse) onCollapse();
+      }
+
       // Calculate AppBar Opacity
       const mediaEl = sectionRefs.overview.current;
       const threshold = 100; // start fading 100px before media ends or after some scroll
@@ -305,36 +344,54 @@ export default function ProductPreviewModal({
   }, [open]);
 
   useEffect(() => {
-    if (open && payload?.productId) {
-      logUserActivity({
-        product_id: Number(payload.productId),
-        action_type: 'view',
-        category: payload.category
-      }, token || undefined).catch(() => { });
-    }
+    if (!open || !payload?.productId) return;
+    const hasIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window;
+    const id = hasIdle
+      ? (window as any).requestIdleCallback(() => {
+        logUserActivity({
+          product_id: Number(payload.productId),
+          action_type: 'view',
+          category: payload.category
+        }, token || undefined).catch(() => { });
+      })
+      : null;
+    const t = id === null
+      ? window.setTimeout(() => {
+        logUserActivity({
+          product_id: Number(payload.productId),
+          action_type: 'view',
+          category: payload.category
+        }, token || undefined).catch(() => { });
+      }, 300)
+      : null;
+    return () => {
+      if (id !== null && hasIdle) (window as any).cancelIdleCallback(id);
+      if (t !== null) clearTimeout(t);
+    };
   }, [open, payload?.productId, payload?.category, token]);
 
 
   useEffect(() => {
     if (!open || !token) return;
-
-    // Try to get default address from DB
-    fetchUserAddresses(token).then(res => {
-      const def = res.data.find((a: any) => a.is_default);
-      if (def) {
-        const mapped = {
-          recipientName: def.full_name,
-          contactNo: def.phone,
-          region: `Nigeria, ${def.state}, ${def.city}`,
-          address: def.address_line1,
-          isDefault: def.is_default,
-          latitude: def.latitude,
-          longitude: def.longitude,
-          address_id: def.address_id
-        };
-        setStoredAddress(mapped);
-      }
-    }).catch(console.error);
+    // Defer address fetch — user doesn't see the delivery card until they scroll
+    const t = setTimeout(() => {
+      fetchUserAddresses(token).then(res => {
+        const def = res.data.find((a: any) => a.is_default);
+        if (def) {
+          setStoredAddress({
+            recipientName: def.full_name,
+            contactNo: def.phone,
+            region: `Nigeria, ${def.state}, ${def.city}`,
+            address: def.address_line1,
+            isDefault: def.is_default,
+            latitude: def.latitude,
+            longitude: def.longitude,
+            address_id: def.address_id
+          });
+        }
+      }).catch(console.error);
+    }, 0);
+    return () => clearTimeout(t);
   }, [open, token]);
 
   useEffect(() => {
@@ -417,15 +474,13 @@ export default function ProductPreviewModal({
 
   useEffect(() => {
     if (!open || !payload?.productId) return;
-
-    const getReviews = async () => {
+    // Defer reviews fetch — reviews section is below the fold
+    const t = setTimeout(async () => {
       const pId = payload.productId;
       if (!pId) return;
-
       setLoadingReviews(true);
       try {
         const res = await fetchProductReviews(pId);
-        // Correctly handle the nested 'data' property from standard API responses
         const reviewData = (res as any)?.data?.reviews || (res as any)?.reviews || [];
         setReviews(reviewData);
       } catch (err) {
@@ -433,8 +488,8 @@ export default function ProductPreviewModal({
       } finally {
         setLoadingReviews(false);
       }
-    };
-    getReviews();
+    }, 0);
+    return () => clearTimeout(t);
   }, [open, payload?.productId]);
 
   const getRatingStatus = (rating: number) => {
@@ -457,7 +512,7 @@ export default function ProductPreviewModal({
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((s) => (
           s <= rating ? (
-            <StarIconSolid key={s} className={`${size} text-red-600`} />
+            <StarIconSolid key={s} className={`${size} text-rose-600`} />
           ) : (
             <StarIcon key={s} className={`${size} text-slate-200`} />
           )
@@ -468,13 +523,12 @@ export default function ProductPreviewModal({
 
   useEffect(() => {
     if (!open || !payload?.businessId) return;
-
-    const loadRecommended = async () => {
+    // Defer recommended products — they're at the bottom of the right panel
+    const t = setTimeout(async () => {
       setLoadingRecommended(true);
       try {
         const identifier = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : payload.businessId);
         if (!identifier) return;
-
         const res = await fetchBusinessProducts(identifier, 6, undefined, payload.productId, token);
         setRecommendedProducts(res?.data?.products || []);
       } catch (err) {
@@ -482,8 +536,8 @@ export default function ProductPreviewModal({
       } finally {
         setLoadingRecommended(false);
       }
-    };
-    loadRecommended();
+    }, 0);
+    return () => clearTimeout(t);
   }, [open, payload?.businessId, payload?.productId]);
 
   // Pre-select first available combo when modal opens
@@ -759,6 +813,11 @@ export default function ProductPreviewModal({
   const basePrice = basePriceValue;
 
   const handleIndexChange = useCallback((idx: number, mode?: "video" | "images" | "styles") => {
+    // Auto-expand if clicking an item in the 80% state
+    if (isMobile && isFromReel && !isExpanded) {
+      setIsExpanded(true);
+      onExpand?.();
+    }
     const finalMode = mode || viewMode;
     if (mode && mode !== viewMode) setViewMode(mode);
     setSelectedIndex(idx);
@@ -773,10 +832,11 @@ export default function ProductPreviewModal({
         }));
       }
     }
-  }, [viewMode, variantEntriesWithImages, selectedOptions]);
+  }, [viewMode, variantEntriesWithImages, selectedOptions, isMobile, isFromReel, isExpanded, onExpand]);
 
   const animateToCart = (startingElement: HTMLElement) => {
-    const cartIcon = document.getElementById("cart-icon-ref");
+    // Priority: Find the cart icon within this modal to avoid background page conflicts (like on the Shop page)
+    const cartIcon = modalRef.current?.querySelector("#preview-cart-icon-ref") || document.getElementById("preview-cart-icon-ref");
     if (!cartIcon || !payload) return;
 
     const startRect = startingElement.getBoundingClientRect();
@@ -816,7 +876,7 @@ export default function ProductPreviewModal({
     flyer.style.left = "0";
     flyer.style.width = `${startRect.width}px`;
     flyer.style.height = `${startRect.height}px`;
-    flyer.style.zIndex = "200000";
+    flyer.style.zIndex = "9999999";
     flyer.style.backgroundImage = `url("${formatUrl(productImg)}")`;
     flyer.style.backgroundColor = "#f43f5e"; // Fallback color
     flyer.style.backgroundSize = "cover";
@@ -857,6 +917,12 @@ export default function ProductPreviewModal({
 
     // Direct Add to Cart if no variants
     const hasVariants = payload.variantGroups && payload.variantGroups.length > 0;
+
+    if (!hasVariants && Number(payload.quantity || 0) <= 0) {
+      toast.error("This product is out of stock!");
+      return;
+    }
+
     if (!hasVariants) {
       const loggedIn = await auth.ensureLoggedIn();
       if (!loggedIn) return;
@@ -875,8 +941,9 @@ export default function ProductPreviewModal({
           confirmButtonText: "I understand",
           confirmButtonColor: "#f43f5e",
           customClass: {
-            popup: "rounded-[2rem]",
-            confirmButton: "rounded-xl font-bold px-6 py-3",
+            container: "!z-[9999999]",
+            popup: "rounded-[0.5rem]",
+            confirmButton: "rounded-full font-bold px-4 py-2",
           }
         });
         return;
@@ -917,6 +984,11 @@ export default function ProductPreviewModal({
 
   const handleBuyNowClick = (e?: React.MouseEvent) => {
     if (!payload) return;
+
+    if (!payload.hasVariants && Number(payload.quantity || 0) <= 0) {
+      toast.error("This product is out of stock!");
+      return;
+    }
 
     if (e) setCartClickPos({ x: e.clientX, y: e.clientY });
     else setCartClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -998,6 +1070,7 @@ export default function ProductPreviewModal({
         confirmButtonText: "I understand",
         confirmButtonColor: "#f43f5e",
         customClass: {
+          container: "!z-[9999999]",
           popup: "rounded-[2rem]",
           confirmButton: "rounded-xl font-bold px-6 py-3",
         }
@@ -1099,12 +1172,14 @@ export default function ProductPreviewModal({
     return () => clearInterval(interval);
   }, [isPromotionActive, promotion?.end_date, promotion?.end]);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Portal-safe: track whether we have a DOM to render into.
+  // We use a ref (not useState) to avoid a blank-frame re-render on mount.
+  const portalTargetRef = useRef<Element | null>(null);
+  if (typeof document !== "undefined" && !portalTargetRef.current) {
+    portalTargetRef.current = document.body;
+  }
 
-  if (!open || !payload || !mounted) return null;
+  if (!open || !payload || !portalTargetRef.current) return null;
 
   const stop = (e: React.MouseEvent | React.TouchEvent) => e.stopPropagation();
 
@@ -1139,10 +1214,14 @@ export default function ProductPreviewModal({
       <div
         role="dialog"
         aria-modal="true"
-        className={`fixed inset-0 flex items-center justify-center px-0 py-0 lg:p-4 ${!zIndex ? 'z-[500001]' : ''}`}
-        style={zIndex ? { zIndex } : {}}
-        onMouseDown={(e) => { e.stopPropagation(); onClose(); }}
-        onTouchStart={(e) => { e.stopPropagation(); onClose(); }}
+        className={`fixed inset-0 flex justify-center px-0 py-0 lg:p-4 ${isMobile && isFromReel ? 'items-end' : 'items-center'}`}
+        style={{ zIndex: modalZIndex }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
       >
         <motion.div
           initial={{ opacity: 0 }}
@@ -1156,19 +1235,30 @@ export default function ProductPreviewModal({
         <motion.div
           style={{
             transformOrigin: !isMobile && origin ? `${origin.x}px ${origin.y}px` : "center",
-            willChange: "transform, opacity"
+            willChange: "transform, opacity, height",
           }}
-          initial={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
-          animate={isMobile ? { y: 0, opacity: 1 } : { opacity: 1, scale: 1 }}
-          exit={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
+          initial={isMobile ? { y: "100%", opacity: 0, height: (isMobile && isFromReel) ? "80%" : "100%" } : { opacity: 0, scale: 0.3, height: "94vh" }}
+          animate={
+            isMobile
+              ? {
+                y: 0,
+                opacity: 1,
+                height: (isMobile && isFromReel) ? (isExpanded ? "100%" : "80%") : "100%"
+              }
+              : { opacity: 1, scale: 1, height: "94vh" }
+          }
+          exit={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3, height: "94vh" }}
           transition={
             isMobile
-              ? { type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] } // Ultra-fast hardware native ease out
-              : { type: "spring", damping: 25, stiffness: 400, mass: 0.8 } // Snappier desktop spring
+              ? (isExpanded
+                ? { type: "spring", damping: 30, stiffness: 300 }
+                : { type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] })
+              : { type: "spring", damping: 25, stiffness: 400, mass: 0.8 }
           }
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
-          className="relative z-10 w-full h-full lg:w-[96vw] lg:max-w-[1100px] lg:h-[94vh] flex flex-col items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
+          className={`relative z-10 w-full lg:w-[96vw] lg:max-w-[1100px] flex flex-col items-center justify-center ${isMobile && isFromReel && !isExpanded ? 'rounded-t-[0.5rem] overflow-hidden' : ''}`}
         >
           {/* Desktop Close Button (Outside but close to modal) */}
           <button
@@ -1191,7 +1281,7 @@ export default function ProductPreviewModal({
               boxShadow: appBarOpacity > 0.8 ? '0 4px 6px -1px rgb(0 0 0 / 0.1)' : 'none'
             }}
           >
-            <div className="flex items-center px-4 h-14 gap-3">
+            <div className={`flex items-center px-4 h-14 gap-3 transition-opacity duration-300 ${isFromReel && !isExpanded ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
               <button
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => {
@@ -1261,7 +1351,7 @@ export default function ProductPreviewModal({
                   title={payload?.title}
                   token={token}
                   variant="icon"
-
+                  zIndex={modalZIndex + 1}
                 />
               </div>
             </div>
@@ -1287,7 +1377,7 @@ export default function ProductPreviewModal({
                         {active && (
                           <motion.div
                             layoutId="activeTabUnderline"
-                            className="absolute bottom-0 left-4 right-4 h-0.5 bg-red-500 rounded-full"
+                            className="absolute bottom-0 left-4 right-4 h-0.5 bg-rose-500 rounded-full"
                           />
                         )}
                       </button>
@@ -1300,13 +1390,20 @@ export default function ProductPreviewModal({
 
           <div
             ref={modalRef}
-            onMouseDown={stop}
-            onTouchStart={stop}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            className="relative w-full h-full bg-slate-100 flex flex-col overflow-y-auto lg:flex lg:flex-row lg:w-full lg:h-full lg:rounded-2xl shadow-2xl"
+            className={`relative w-full h-full bg-slate-100 flex flex-col overflow-y-auto lg:flex lg:flex-row lg:w-full lg:h-full lg:rounded-2xl shadow-2xl ${isMobile && isFromReel && !isExpanded ? 'rounded-t-[0.5rem]' : ''}`}
             style={{ WebkitOverflowScrolling: "touch" }}
           >
+            {/* Mobile Drag Handle Indicator for 80% mode */}
+            {isMobile && isFromReel && !isExpanded && (
+              <div className="flex-shrink-0 pt-3 pb-1 bg-white">
+                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto" />
+              </div>
+            )}
 
             {/* LEFT: media */}
             <div
@@ -1324,6 +1421,8 @@ export default function ProductPreviewModal({
                 selectedIndex={selectedIndex}
                 viewMode={viewMode}
                 onIndexChange={handleIndexChange}
+                isFromReel={isFromReel}
+                isExpanded={isExpanded}
               />
             </div>
 
@@ -1355,12 +1454,12 @@ export default function ProductPreviewModal({
 
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold text-red-600">
+                      <span className="text-xl font-bold text-rose-600">
                         <span className="text-base mr-0.5">₦</span>
                         {basePrice !== null ? basePrice.toLocaleString() : "—"}
                       </span>
                       {(isPromotionActive || isSalesActive) && discountedPrice !== null && (
-                        <div className="text-xs bg-red-500 py-1 px-2 text-white rounded-full font-bold whitespace-nowrap">
+                        <div className="text-xs bg-rose-500 py-1 px-2 text-white rounded-full font-bold whitespace-nowrap">
                           Discounted price ₦{discountedPrice.toLocaleString()}
                         </div>
                       )}
@@ -1368,22 +1467,23 @@ export default function ProductPreviewModal({
 
                     <div className="text-right shrink-0">
                       <div className="text-xs text-slate-400 font-medium">
-                        {payload.soldCount && payload.soldCount > 0
-                          ? `${payload.soldCount.toLocaleString()}+ Sold`
-                          : "0 Sold"}
+                        {(() => {
+                          const sCount = Number(payload.soldCount || (payload as any).total_sold || (payload as any).sold_count || 0);
+                          return sCount > 0 ? `${sCount.toLocaleString()}+ Sold` : "0 Sold";
+                        })()}
                       </div>
                     </div>
                   </div>
                   {isPromotionActive ? (
                     <div className="flex flex-col gap-1 mb-3">
-                      <div className="flex items-center justify-between rounded-sm bg-red-50 px-2 py-1 text-xs font-semibold text-red-600 w-full">
+                      <div className="flex items-center justify-between rounded-sm bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600 w-full">
                         <span>{promotion?.title ?? promotion?.occasion ?? "Promotion"} · {promotionDiscount}% Off</span>
-                        {promoRemaining && <div className="text-[10px] border-[0.5px] border-red-500 px-1.5 py-0.5 text-red-500 rounded-sm">Ends in {promoRemaining}</div>}
+                        {promoRemaining && <div className="text-[10px] border-[0.5px] border-rose-500 px-1.5 py-0.5 text-rose-500 rounded-sm">Ends in {promoRemaining}</div>}
                       </div>
                     </div>
                   ) : isSalesActive ? (
                     <div className="flex flex-col gap-1 mb-3">
-                      <div className="flex items-center justify-between rounded-sm border-red-500 border-[0.5px] px-2 py-1 text-xs text-red-500 w-full">
+                      <div className="flex items-center justify-between rounded-sm border-rose-500 border-[0.5px] px-2 py-1 text-xs text-rose-500 w-full">
                         <span>{effectiveSaleDiscounts[0]?.discount_type ?? effectiveSaleDiscounts[0]?.type ?? "Sale"} · {salesDiscount}% Off</span>
                       </div>
                     </div>
@@ -1397,10 +1497,8 @@ export default function ProductPreviewModal({
                         </div>
 
                         {businessData?.policy?.market_affiliation?.trusted_partner === 1 && (
-                          <div className="mb-2">
-                             <span className="bg-emerald-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-sm">
-                                Verified Partner
-                              </span>
+                          <div className="mb-2 inline-flex">
+                            <VerifiedBadge size="sm" label="Verified Partner" showLabel />
                           </div>
                         )}
 
@@ -1473,7 +1571,7 @@ export default function ProductPreviewModal({
                     </div>
                     {reviews.length > 0 && (
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-red-500"> {getRatingStatus(Number(getAverageRating()))} {getAverageRating()}</span>
+                        <span className="text-sm text-rose-500"> {getRatingStatus(Number(getAverageRating()))} {getAverageRating()}</span>
                         <ChevronRightIcon className="w-4 h-4 text-slate-400" />
                       </div>
                     )}
@@ -1481,7 +1579,7 @@ export default function ProductPreviewModal({
 
                   {loadingReviews ? (
                     <div className="py-8 flex flex-col items-center justify-center gap-2">
-                      <div className="w-6 h-6 border-red-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-6 h-6 border-rose-500 border-t-transparent rounded-full animate-spin" />
                       <span className="text-xs text-slate-400">Loading reviews...</span>
                     </div>
                   ) : reviews.length === 0 ? (
@@ -1509,7 +1607,7 @@ export default function ProductPreviewModal({
                               </div>
                               <div className="min-w-0">
                                 <div
-                                  className="text-[12px] text-slate-500 truncate cursor-pointer hover:text-red-500 transition-colors"
+                                  className="text-[12px] text-slate-500 truncate cursor-pointer hover:text-rose-500 transition-colors"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`);
@@ -1519,7 +1617,7 @@ export default function ProductPreviewModal({
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
 
-                                  <span className="text-[10px] bg-red-100 text-red-500 px-1 rounded tracking-tight">
+                                  <span className="text-[10px] bg-rose-100 text-rose-500 px-1 rounded tracking-tight">
                                     {getRatingStatus(review.rating)}
                                   </span>
                                   {renderStars(review.rating, "w-2.5 h-2.5")}
@@ -1546,9 +1644,14 @@ export default function ProductPreviewModal({
                     <div
                       className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => {
+                        if (onShopClick) {
+                          onShopClick();
+                          return;
+                        }
                         const handle = businessData?.business?.business_slug || businessData?.business?.user_id;
-                        if (handle) router.push(`/${handle}`);
-                        else if (businessData?.business?.user_id) router.push(`/user/profile/${businessData.business.user_id}`);
+                        const productIdParam = payload?.productId ? `?product_id=${payload.productId}` : "";
+                        if (handle) router.push(`/${handle}${productIdParam}`);
+                        else if (businessData?.business?.user_id) router.push(`/user/profile/${businessData.business.user_id}${productIdParam}`);
                       }}
                     >
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center flex-shrink-0">
@@ -1570,7 +1673,7 @@ export default function ProductPreviewModal({
                               return (
                                 <StarIconSolid
                                   key={star}
-                                  className={`w-2.5 h-2.5 ${star <= rating ? "text-red-500" : "text-slate-200"}`}
+                                  className={`w-2.5 h-2.5 ${star <= rating ? "text-rose-500" : "text-slate-200"}`}
                                 />
                               );
                             })}
@@ -1587,12 +1690,19 @@ export default function ProductPreviewModal({
                       </div>
                     </div>
                     <button
-                      onClick={() => {
-                        const slug = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : null);
-                        if (slug) router.push(`/shop/${slug}`);
-                        onClose();
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onShopClick) {
+                          onShopClick();
+                          return;
+                        }
+                        const slug = payload?.businessSlug || (payload?.businessName ? slugify(payload.businessName) : payload?.businessId);
+                        if (slug) {
+                          onClose();
+                          router.push(`/shop/${slug}`);
+                        }
                       }}
-                      className="flex-shrink-0 whitespace-nowrap bg-red-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-red-600 transition"
+                      className="flex-shrink-0 whitespace-nowrap bg-rose-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-rose-600 transition"
                     >
                       Visit shop
                     </button>
@@ -1621,7 +1731,9 @@ export default function ProductPreviewModal({
                     <>
                       <div className="mt-6 flex items-center justify-between mb-4 pb-2" onClick={() => {
                         const slug = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : null);
-                        if (slug) router.push(`/shop/${slug}`);
+                        if (slug) {
+                          router.push(`/shop/${slug}${payload.productId ? `?product_id=${payload.productId}` : ''}`);
+                        }
                       }}>
                         <h4 className="text-[13px] font-bold text-slate-600">Shop Recommendations</h4>
 
@@ -1648,7 +1760,7 @@ export default function ProductPreviewModal({
                                 onProductClick(p.product_id, businessData?.business?.business_name, null, businessData?.business?.business_slug, false, p.slug);
                               }
                             }}>
-                              <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
+                              <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-rose-100 transition-colors">
                                 {p.first_image ? <img src={formatUrl(p.first_image)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>}
                                 {p.product_video && (
                                   <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-1.5 z-10 shadow-lg border border-white/20">
@@ -1656,14 +1768,14 @@ export default function ProductPreviewModal({
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-red-600 transition-colors">{p.title}</div>
+                              <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-rose-600 transition-colors">{p.title}</div>
 
                               {isPromoActive ? (
-                                <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
+                                <div className="text-[8px] font-bold text-rose-500 border-rose-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
                                   {p.promo_title} {p.promo_discount}% OFF
                                 </div>
                               ) : p.sale_type ? (
-                                <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
+                                <div className="text-[8px] font-bold text-rose-500 border-rose-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
                                   {p.sale_type} {p.sale_discount}% OFF
                                 </div>
                               ) : null}
@@ -1750,7 +1862,7 @@ export default function ProductPreviewModal({
                               onProductClick(p.product_id, p.business_name, null, p.business_slug, false, p.slug);
                             }
                           }}>
-                            <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-red-100 transition-colors">
+                            <div className="aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 relative border border-slate-50 group-hover:border-rose-100 transition-colors">
                               {p.first_image ? <img src={formatUrl(p.first_image)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-300">No Image</div>}
                               {p.product_video && (
                                 <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-md rounded-full p-1.5 z-10 shadow-lg border border-white/20">
@@ -1777,14 +1889,14 @@ export default function ProductPreviewModal({
                               </div>
                             )}
 
-                            <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-red-600 transition-colors">{p.title}</div>
+                            <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-rose-600 transition-colors">{p.title}</div>
 
                             {isPromoActive ? (
-                              <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
+                              <div className="text-[8px] font-bold text-rose-500 border-rose-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
                                 {p.promo_title} {p.promo_discount}% OFF
                               </div>
                             ) : p.sale_type ? (
-                              <div className="text-[8px] font-bold text-red-500 border-red-500 border-[0.5px] px-1 w-fit mb-1 tracking-tighter leading-tight">
+                              <div className="text-[8px] font-bold text-rose-500 border-rose-500 border-[0.5px] px-1 w-fit mb-1 tracking-tighter leading-tight">
                                 {p.sale_type} {p.sale_discount}% OFF
                               </div>
                             ) : null}
@@ -1796,7 +1908,7 @@ export default function ProductPreviewModal({
                     </div>
                     {globalHasMore && (
                       <div ref={loaderRef} className="py-8 flex justify-center">
-                        <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
                       </div>
                     )}
                     {!globalHasMore && globalRecommendations.length > 0 && (
@@ -1815,6 +1927,7 @@ export default function ProductPreviewModal({
                 onCartClick={onCartClick}
                 onShopClick={onShopClick}
                 cartCount={cartCount}
+                productId={payload?.productId}
                 shopLogo={businessData?.business?.logo}
                 shopProfilePic={businessData?.business?.profile_pic}
                 businessId={payload?.businessId}

@@ -409,6 +409,7 @@ export type ProductFeedItem = {
   min_variant_price?: number;
   min_sku_price?: number;
   trusted_partner?: number;
+  verified_badge?: boolean;
   market_name?: string;
   return_shipping_subsidy?: number;
   total_quantity?: number;

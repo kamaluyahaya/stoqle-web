@@ -120,7 +120,7 @@ export default function MarketModal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

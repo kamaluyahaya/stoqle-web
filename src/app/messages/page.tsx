@@ -22,6 +22,8 @@ import { Package, X, CheckCircle, ChevronRight, Zap, RefreshCw, AlertCircle, Ale
 import ImageViewer from "@/src/components/modal/imageViewer"; // Added ImageViewer import
 import { MESSAGES_CACHE } from "@/src/lib/cache";
 import { copyToClipboard } from "@/src/lib/utils/utils";
+import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
+import { fetchVendorBadgesBatch, type VendorBadge } from "@/src/lib/api/vendorApi";
 
 const formatUrl = (path?: string | null) => {
   if (!path) return "";
@@ -35,6 +37,7 @@ type ChatRoom = {
   user1_id?: string | number;
   user2_id?: string | number;
   other_user_id?: string | number;
+  other_stoqle_id?: string | number;
   full_name?: string;
   profile_pic?: string;
   username?: string;
@@ -42,6 +45,7 @@ type ChatRoom = {
   business_logo?: string | null;
   business_slug?: string | null;
   business_category?: string | null;
+  business_id?: string | number | null;
   created_at?: string | null;
   updated_at?: string | null;
   message_content?: string | null;
@@ -55,6 +59,7 @@ type Message = {
   message_id?: string | number;
   chat_room_id: string | number;
   sender_id: string | number;
+  sender_stoqle_id?: string | number;
   sender_name?: string;
   sender_profile_pic?: string;
   sender_business_name?: string | null;
@@ -109,6 +114,7 @@ function MessagesPageContent({
   const [isSending, setIsSending] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [vendorBadges, setVendorBadges] = useState<Record<string, VendorBadge>>({});
   const [taggedProduct, setTaggedProduct] = useState<{
     id: string;
     name: string;
@@ -242,6 +248,16 @@ function MessagesPageContent({
       chatDb.saveRooms(roomsList as any);
       MESSAGES_CACHE.chatSessions = roomsList;
 
+      // Batch-fetch vendor badges for all business rooms (non-blocking)
+      const businessIds = roomsList
+        .filter((r: any) => r.business_id)
+        .map((r: any) => Number(r.business_id));
+      if (businessIds.length > 0) {
+        fetchVendorBadgesBatch(businessIds)
+          .then(badges => setVendorBadges(badges))
+          .catch(() => { });
+      }
+
       // Initialize unreadMap from the API data
       const initialUnread: Record<string | number, number> = {};
       roomsList.forEach((r: any) => {
@@ -288,7 +304,7 @@ function MessagesPageContent({
       setIsMessagesLoading(false); // Bypasses loader entirely
       // Synchronous scroll for instant feel
       setTimeout(() => scrollToBottom("auto"), 5);
-      
+
       // We removed the early return here as well. Data will continuously
       // sync via SWR behind the scenes if there are changes.
     } else {
@@ -1464,7 +1480,7 @@ function MessagesPageContent({
   return (
     <div className="bg-slate-100 overflow-hidden pt-[env(safe-area-inset-top)] sm:pt-0 overscroll-none">
       {/* ⚡ VISUAL VIEWPORT SYNC: By using visibleHeight, we precisely track the top of the mobile keyboard */}
-      <div 
+      <div
         className={`flex ${isShowingChat ? 'h-dvh' : 'h-[calc(100dvh-56px)]'} sm:h-[calc(100dvh-64px)] overflow-hidden overscroll-none`}
         style={visibleHeight && isShowingChat ? { height: `${visibleHeight}px` } : {}}
       >
@@ -1484,13 +1500,13 @@ function MessagesPageContent({
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setIsSearchingList(true)}
-                      className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                      className="p-2 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-colors"
                     >
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </button>
-                    <button onClick={fetchRooms} className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                    <button onClick={fetchRooms} className="p-2 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-colors">
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
@@ -1506,7 +1522,7 @@ function MessagesPageContent({
                   className="relative group w-full"
                 >
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
@@ -1515,14 +1531,14 @@ function MessagesPageContent({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search conversations..."
-                    className="w-full bg-white pl-10 pr-10 py-2.5 rounded-full border border-red-200 text-sm focus:ring-2 focus:ring-red-100 focus:border-red-500 outline-none shadow-sm"
+                    className="w-full bg-white pl-10 pr-10 py-2.5 rounded-full border border-rose-200 text-sm focus:ring-2 focus:ring-rose-100 focus:border-rose-500 outline-none shadow-sm"
                   />
                   <button
                     onClick={() => {
                       setIsSearchingList(false);
                       setQuery("");
                     }}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-red-500 transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-rose-500 transition-colors"
                   >
                     <X size={18} />
                   </button>
@@ -1559,6 +1575,7 @@ function MessagesPageContent({
                       router.push(`/messages?room=${room.chat_room_id}`);
                     }}
                     onAvatarClick={handleAvatarClick}
+                    vendorBadge={room.business_id ? vendorBadges[String(room.business_id)] : undefined}
                   />
                 ))}
 
@@ -1585,15 +1602,20 @@ function MessagesPageContent({
                             }}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-800 truncate">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
-                            <p className="text-[9px] text-slate-400 truncate">@{rec.username || "stoqleID" + rec.user_id}</p>
+                            <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
+                              {rec.business?.business_name || rec.business_name || rec.full_name}
+                              {(rec.business?.business_id || rec.business_id) && vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                                <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
+                              )}
+                            </p>
+                            <p className="text-[9px] text-slate-400 truncate">{rec.username || "stoqle ID:" + rec.stoqle_id}</p>
                           </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleStartNewChat(rec.user_id);
                             }}
-                            className="px-3 py-1 rounded-full border-[0.5px] border-red-500 text-red-500 hover:bg-red-50 text-[9px] font-bold transition-all active:scale-95"
+                            className="px-3 py-1 rounded-full border-[0.5px] border-rose-500 text-rose-500 hover:bg-rose-50 text-[9px] font-bold transition-all active:scale-95"
                           >
                             Message
                           </button>
@@ -1650,7 +1672,12 @@ function MessagesPageContent({
                               alt=""
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-slate-800 truncate">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
+                              <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
+                                {rec.business?.business_name || rec.business_name || rec.full_name}
+                                {(rec.business?.business_id || rec.business_id) && vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                                  <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
+                                )}
+                              </p>
                               <p className="text-[9px] text-slate-400 truncate">@{rec.username || "stoqleID" + rec.user_id}</p>
                             </div>
                             <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 transition-colors" />
@@ -1665,7 +1692,7 @@ function MessagesPageContent({
           </div>
         </aside>
 
-        <main className={`${isShowingChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white border-l border-slate-200`}>
+        <main className={`${isShowingChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white border-l border-slate-200 min-w-0 overflow-hidden`}>
           {!selectedRoom ? (
             (roomParam || userParam) ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/10 overflow-y-auto">
@@ -1683,7 +1710,7 @@ function MessagesPageContent({
                       <div className="h-2 w-12 bg-slate-50 rounded-full ml-1" />
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <div className="h-12 w-56 bg-red-100/50 rounded-2xl rounded-tr-none shadow-sm" />
+                      <div className="h-12 w-56 bg-rose-100/50 rounded-2xl rounded-tr-none shadow-sm" />
                       <div className="h-2 w-12 bg-slate-50 rounded-full mr-1" />
                     </div>
                     <div className="flex flex-col items-start gap-1">
@@ -1697,7 +1724,7 @@ function MessagesPageContent({
               <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/30 overflow-y-auto">
                 <div className="flex flex-col items-center max-w-2xl w-full">
                   <div className="relative mb-8">
-                    <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-2xl shadow-red-100 animate-in fade-in zoom-in duration-700">
+                    <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-2xl shadow-rose-100 animate-in fade-in zoom-in duration-700">
                       <img src="/assets/images/message-icon.png" className="w-14" alt="Messages" />
                     </div>
                     <div className="absolute -bottom-1 -right-1 bg-green-500 w-5 h-5 rounded-full border-4 border-white shadow-sm" />
@@ -1718,10 +1745,10 @@ function MessagesPageContent({
                   <div className="w-full">
                     <div className="flex items-center justify-between mb-6 px-2">
                       <h3 className="text-xs font-bold text-slate-400   flex items-center gap-2">
-                        <span className="w-2 h-2 bg-red-500 rounded-full" />
+                        <span className="w-2 h-2 bg-rose-500 rounded-full" />
                         People You May Know
                       </h3>
-                      <button onClick={fetchRecommendations} className="p-1 rounded-full hover:bg-white text-slate-300 hover:text-red-500 transition-all">
+                      <button onClick={fetchRecommendations} className="p-1 rounded-full hover:bg-white text-slate-300 hover:text-rose-500 transition-all">
                         <svg className={`h-4 w-4 ${loadingRecs ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
@@ -1740,7 +1767,7 @@ function MessagesPageContent({
                             const handle = rec.username || rec.business?.business_slug || rec.business_slug;
                             router.push(handle ? `/${handle}` : `/user/profile/${rec.user_id}`);
                           }}
-                          className="group bg-white p-4 rounded-2xl border border-slate-100 hover:border-red-100 hover:shadow-xl hover:shadow-red-500/5 transition-all cursor-pointer flex items-center gap-4"
+                          className="group bg-white p-4 rounded-2xl border border-slate-100 hover:border-rose-100 hover:shadow-xl hover:shadow-rose-500/5 transition-all cursor-pointer flex items-center gap-4"
                         >
                           <div className="relative shrink-0">
                             <img
@@ -1753,8 +1780,13 @@ function MessagesPageContent({
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-slate-800 truncate mb-0.5">{rec.business?.business_name || rec.business_name || rec.full_name}</p>
-                            <p className="text-[10px] text-slate-400 font-medium truncate  tracking-tighter">@{rec.username || "stoqleID" + rec.user_id}</p>
+                            <p className="text-sm font-bold text-slate-800 truncate mb-0.5 flex items-center gap-1">
+                              {rec.business?.business_name || rec.business_name || rec.full_name}
+                              {(rec.business?.business_id || rec.business_id) && vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                                <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
+                              )}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-medium truncate  tracking-tighter">@{rec.username || (rec.stoqle_id || rec.user_id)}</p>
                           </div>
                           <div className="shrink-0">
                             <button
@@ -1762,7 +1794,7 @@ function MessagesPageContent({
                                 e.stopPropagation();
                                 handleStartNewChat(rec.user_id);
                               }}
-                              className="px-4 py-1.5 rounded-full border-[0.5px] border-red-500 text-red-500 hover:bg-red-50 text-[10px] font-bold transition-all active:scale-95"
+                              className="px-4 py-1.5 rounded-full border-[0.5px] border-rose-500 text-rose-500 hover:bg-rose-50 text-[10px] font-bold transition-all active:scale-95"
                             >
                               Message
                             </button>
@@ -1792,26 +1824,26 @@ function MessagesPageContent({
                 }}
               />
               {/* ⚡ Subtle Brand Red Overlay */}
-              <div className="absolute inset-0 z-0 pointer-events-none bg-red-500/5" />
+              <div className="absolute inset-0 z-0 pointer-events-none bg-rose-500/5" />
 
               <header className="px-4 py-2 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-10 shrink-0 relative">
                 <div className="flex items-center">
                   <button onClick={() => {
                     setSelectedRoom(null);
                     router.push("/messages");
-                  }} className="md:hidden p-2 -ml-3 rounded-full hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-all active:scale-95">
+                  }} className="md:hidden p-2 -ml-3 rounded-full hover:bg-gray-100 text-gray-400 hover:text-rose-500 transition-all active:scale-95">
                     <ChevronLeftIcon className="h-6 w-6" />
                   </button>
                   <div
                     onClick={() => {
                       const targetId = selectedRoom.other_user_id || (String(selectedRoom.user1_id) === String(userId) ? selectedRoom.user2_id : selectedRoom.user1_id);
                       if (targetId) {
-                          if (String(targetId) === String(userId)) {
-                            router.push("/profile");
-                          } else {
-                            const handle = selectedRoom.username || selectedRoom.business_slug;
-                            router.push(handle ? `/${handle}` : `/user/profile/${targetId}`);
-                          }
+                        if (String(targetId) === String(userId)) {
+                          router.push("/profile");
+                        } else {
+                          const handle = selectedRoom.username || selectedRoom.business_slug;
+                          router.push(handle ? `/${handle}` : `/user/profile/${targetId}`);
+                        }
                       }
                     }}
                     className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity min-w-0"
@@ -1827,7 +1859,7 @@ function MessagesPageContent({
                       />
                     ) : (
                       <div
-                        className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white text-[12px] shrink-0 cursor-pointer"
+                        className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center text-white text-[12px] shrink-0 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleAvatarClick(selectedRoom.other_user_id || 0, "", selectedRoom.business_name || selectedRoom.full_name || "");
@@ -1837,7 +1869,12 @@ function MessagesPageContent({
                       </div>
                     )}
                     <div className="min-w-0">
-                      <h3 className="font-bold text-gray-900 truncate">{selectedRoom.business_name || selectedRoom.full_name || `stoqleID ${selectedRoom.other_user_id}`}</h3>
+                      <h3 className="font-bold text-gray-900 truncate flex items-center gap-1">
+                        {selectedRoom.business_name || selectedRoom.full_name || (selectedRoom.other_stoqle_id ? `Stoqle ID: ${selectedRoom.other_stoqle_id}` : `ID: ${selectedRoom.other_user_id}`)}
+                        {selectedRoom.business_id && vendorBadges[String(selectedRoom.business_id)]?.verified_badge && (
+                          <VerifiedBadge size="xs" label={vendorBadges[String(selectedRoom.business_id)].badge_label} />
+                        )}
+                      </h3>
                       <div className="flex items-center gap-1.5 truncate">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0"></span>
                         <span className="text-[10px] text-gray-400 font-medium shrink-0">Online</span>
@@ -1871,7 +1908,7 @@ function MessagesPageContent({
 
                       {/* Right shimmer bubble */}
                       <div className="flex flex-col items-end gap-2 mt-2">
-                        <div className="h-10 w-2/3 max-w-[280px] bg-red-100/30 rounded-[1.25rem] rounded-tr-none shadow-sm border border-red-50/50" />
+                        <div className="h-10 w-2/3 max-w-[280px] bg-rose-100/30 rounded-[1.25rem] rounded-tr-none shadow-sm border border-rose-50/50" />
                         <div className="h-2 w-14 bg-slate-50/50 rounded-full mr-2" />
                       </div>
 
@@ -1887,13 +1924,13 @@ function MessagesPageContent({
 
                       {/* Right shimmer bubble (Small) */}
                       <div className="flex flex-col items-end gap-2 mt-2">
-                        <div className="h-8 w-32 bg-red-100/30 rounded-[1.25rem] rounded-tr-none shadow-sm border border-red-50/50" />
+                        <div className="h-8 w-32 bg-rose-100/30 rounded-[1.25rem] rounded-tr-none shadow-sm border border-rose-50/50" />
                       </div>
                     </div>
                   ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-20 flex-1">
                       <div className="relative mb-6">
-                        <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center animate-pulse">
+                        <div className="w-24 h-24 bg-rose-50 rounded-full flex items-center justify-center animate-pulse">
                           <img src="/assets/images/message-icon.png" className="w-12 opacity-80" alt="" />
                         </div>
                         <div className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-white shadow-sm" />
@@ -1904,7 +1941,7 @@ function MessagesPageContent({
                       <p className="text-sm text-slate-400 max-w-[250px] font-medium leading-relaxed">
                         Select a friend or business to start a real-time conversation.
                       </p>
-                      <div className="mt-8 px-6 py-2 bg-slate-50 rounded-full border border-slate-100 text-[10px] font-bold text-red-500  ">
+                      <div className="mt-8 px-6 py-2 bg-slate-50 rounded-full border border-slate-100 text-[10px] font-bold text-rose-500  ">
                         Say Hello
                       </div>
                     </div>
@@ -1990,7 +2027,7 @@ function MessagesPageContent({
                     <div className="flex items-center justify-between mb-6 shrink-0">
                       <div className="flex flex-col text-left">
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Tagging Product</h3>
-                        <p className="text-[10px] font-bold text-red-500  tracking-widest font-black">Inquiry Mode</p>
+                        <p className="text-[10px] font-bold text-rose-500  tracking-widest font-black">Inquiry Mode</p>
                       </div>
                       <button
                         onClick={() => {
@@ -2002,14 +2039,14 @@ function MessagesPageContent({
                           ['product_id', 'pname', 'pprice', 'pvariant', 'pimg'].forEach(p => url.searchParams.delete(p));
                           window.history.replaceState(null, "", url.toString());
                         }}
-                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
+                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
                       >
                         <X size={20} />
                       </button>
                     </div>
 
                     <div className="flex-1 min-h-0 flex items-center justify-center relative group">
-                      <div className="relative max-w-sm rounded-[0.5rem] overflow-hidden  border-red-50- bg-white transition-all hover:shadow-red-500/10 hover:-translate-y-1">
+                      <div className="relative max-w-sm rounded-[0.5rem] overflow-hidden  border-rose-50- bg-white transition-all hover:shadow-rose-500/10 hover:-translate-y-1">
                         {taggedProduct.img && (
                           <div className="aspect-square rounded-[0.5rem] overflow-hidden mb-5  border-slate-50 shadow-inner">
                             <img src={taggedProduct.img} className="w-full h-full object-cover" alt="" />
@@ -2020,7 +2057,7 @@ function MessagesPageContent({
                         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                           <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-slate-300  tracking-widest mb-1">Total Price</span>
-                            <span className="text-xl font-black text-red-600 tracking-tighter">
+                            <span className="text-xl font-black text-rose-600 tracking-tighter">
                               ₦{Number(taggedProduct.price || 0).toLocaleString()}
                             </span>
                           </div>
@@ -2031,7 +2068,7 @@ function MessagesPageContent({
                     <div className="mt-8 mx-auto w-full max-w-xl">
                       <div className="mb-3 px-2 flex justify-between items-end">
                         <span className="text-[11px] font-black text-slate-400 tracking-widest flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                           Your Inquiry Message
                         </span>
                         <button onClick={() => {
@@ -2042,7 +2079,7 @@ function MessagesPageContent({
                           const url = new URL(window.location.href);
                           ['product_id', 'pname', 'pprice', 'pvariant', 'pimg'].forEach(p => url.searchParams.delete(p));
                           window.history.replaceState(null, "", url.toString());
-                        }} className="text-[10px] font-black text-slate-400 hover:text-red-500  tracking-widest transition-colors">Discard Tag</button>
+                        }} className="text-[10px] font-black text-slate-400 hover:text-rose-500  tracking-widest transition-colors">Discard Tag</button>
                       </div>
                       <MessageInput
                         value={newMessage}
@@ -2083,7 +2120,7 @@ function MessagesPageContent({
                           ['order_ref', 'order_id'].forEach(p => url.searchParams.delete(p));
                           window.history.replaceState(null, "", url.toString());
                         }}
-                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
+                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
                       >
                         <X size={20} />
                       </button>
@@ -2150,7 +2187,7 @@ function MessagesPageContent({
                           const url = new URL(window.location.href);
                           ['order_ref', 'order_id'].forEach(p => url.searchParams.delete(p));
                           window.history.replaceState(null, "", url.toString());
-                        }} className="text-[10px] font-black text-slate-400 hover:text-red-500 tracking-widest transition-colors">Discard Tag</button>
+                        }} className="text-[10px] font-black text-slate-400 hover:text-rose-500 tracking-widest transition-colors">Discard Tag</button>
                       </div>
                       <MessageInput
                         value={newMessage}
@@ -2187,7 +2224,7 @@ function MessagesPageContent({
                       </div>
                       <button
                         onClick={() => { setSelectedFile(null); setFilePreview(null); }}
-                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
+                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
                       >
                         <X size={20} />
                       </button>
@@ -2202,7 +2239,7 @@ function MessagesPageContent({
                         <iframe src={filePreview} className="w-full h-full min-h-[50vh] rounded-2xl" title="PDF Preview" />
                       ) : (
                         <div className="flex flex-col items-center gap-4">
-                          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center shadow-sm">
+                          <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center shadow-sm">
                             <Package size={32} />
                           </div>
                           <p className="text-xs font-bold text-slate-400  tracking-widest">{selectedFile.name}</p>
@@ -2213,7 +2250,7 @@ function MessagesPageContent({
                     <div className="mt-8 mx-auto w-full max-w-xl">
                       <div className="mb-2 px-2 flex justify-between">
                         <span className="text-[10px] font-black text-slate-400  tracking-widest">Add your caption</span>
-                        <button onClick={() => { setSelectedFile(null); setFilePreview(null); }} className="text-[10px] font-black text-red-500  tracking-widest hover:underline">Discard</button>
+                        <button onClick={() => { setSelectedFile(null); setFilePreview(null); }} className="text-[10px] font-black text-rose-500  tracking-widest hover:underline">Discard</button>
                       </div>
                       <MessageInput
                         value={newMessage}
@@ -2231,9 +2268,9 @@ function MessagesPageContent({
                 )}
               </AnimatePresence>
 
-              <div 
-                className="p-4 border-t border-gray-100 shrink-0 relative z-[110]"
-                style={{ 
+              <div
+                className="w-full p-4 border-t border-gray-100 shrink-0 relative z-[110] overflow-hidden"
+                style={{
                   paddingBottom: keyboardHeight > 50 ? '0.75rem' : 'calc(1rem + env(safe-area-inset-bottom))'
                 }}
               >
@@ -2308,7 +2345,7 @@ function MessagesPageContent({
                 </div>
                 <button
                   onClick={() => { setIsPdfViewerOpen(false); setActivePdfUrl(null); }}
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
                 >
                   <X size={20} />
                 </button>
@@ -2325,7 +2362,7 @@ function MessagesPageContent({
               <div className="p-6 bg-white border-t border-slate-50 flex justify-end shrink-0">
                 <button
                   onClick={() => { setIsPdfViewerOpen(false); setActivePdfUrl(null); }}
-                  className="px-8 py-3 bg-red-500 text-white rounded-full text-[11px] shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                  className="px-8 py-3 bg-rose-500 text-white rounded-full text-[11px] shadow-lg shadow-rose-500/20 active:scale-95 transition-all"
                 >
                   Close Review
                 </button>
@@ -2380,9 +2417,9 @@ function MessagesPageContent({
 
                     <button
                       onClick={handleDeleteMessage}
-                      className="w-full flex items-center gap-3 p-4 hover:bg-red-50 rounded-2xl transition-all text-red-600 font-bold text-sm active:scale-[0.98]"
+                      className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl transition-all text-rose-600 font-bold text-sm active:scale-[0.98]"
                     >
-                      <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-500">
+                      <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
                         <X size={16} />
                       </div>
                       Delete for everyone
@@ -2391,9 +2428,9 @@ function MessagesPageContent({
                 ) : (
                   <button
                     onClick={handleReportMessage}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-red-50 rounded-2xl transition-all text-red-600 font-bold text-sm active:scale-[0.98]"
+                    className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl transition-all text-rose-600 font-bold text-sm active:scale-[0.98]"
                   >
-                    <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-500">
+                    <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
                       <AlertCircle size={16} />
                     </div>
                     Report Message
@@ -2446,7 +2483,7 @@ function MessagesPageContent({
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-black text-slate-400  tracking-[0.2em] flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                     Replying with Update
                   </span>
                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
@@ -2467,7 +2504,7 @@ function MessagesPageContent({
     py-2
     pr-11
     text-sm
-    caret-red-500
+    caret-rose-500
     text-gray-500
     transition
     focus:outline-none focus:ring-0
@@ -2482,14 +2519,14 @@ function MessagesPageContent({
                 <div className="flex items-center justify-between mt-4 bg-white/50 -mx-6 -mb-6 p-4 px-6 border-t border-slate-200">
                   <button
                     onClick={() => setIsEditingMessage(false)}
-                    className="text-[10px] font-black text-slate-400 hover:text-red-500  tracking-widest transition-colors"
+                    className="text-[10px] font-black text-slate-400 hover:text-rose-500  tracking-widest transition-colors"
                   >
                     Discard
                   </button>
                   <div className="flex items-center gap-4">
                     <button
                       onClick={handleUpdateMessage}
-                      className="flex items-center gap-2 bg-red-500 text-white px-6 py-2.5 rounded-full font-black text-[11px] shadow-xl shadow-red-100 hover:bg-red-600 transition-all active:scale-95"
+                      className="flex items-center gap-2 bg-rose-500 text-white px-6 py-2.5 rounded-full font-black text-[11px] shadow-xl shadow-rose-100 hover:bg-rose-600 transition-all active:scale-95"
                     >
                       Save Changes
                       <CheckCircle size={14} strokeWidth={3} />
@@ -2663,7 +2700,7 @@ function ChatImageViewer({
           <div
             key={i}
             onClick={(e: any) => { e.stopPropagation(); onChange(i); }}
-            className={`w-12 h-12 rounded-lg border-2 transition-all cursor-pointer overflow-hidden shrink-0 ${currentIndex === i ? 'border-red-500 scale-110 shadow-lg shadow-red-500/50' : 'border-transparent opacity-50 hover:opacity-100'
+            className={`w-12 h-12 rounded-lg border-2 transition-all cursor-pointer overflow-hidden shrink-0 ${currentIndex === i ? 'border-rose-500 scale-110 shadow-lg shadow-rose-500/50' : 'border-transparent opacity-50 hover:opacity-100'
               }`}
           >
             {(img?.includes('.mp4') || img?.includes('.webm') || img?.includes('.ogg') || img?.includes('blob:http') && !img?.includes('image')) ? (
@@ -2712,7 +2749,7 @@ function OrderTrackingModal({ orderId, orderRef, open, onClose }: any) {
       <div className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
         <header className="px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center text-white shadow-sm ring-4 ring-red-50">
+            <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center text-white shadow-sm ring-4 ring-rose-50">
               <Package size={20} />
             </div>
             <div>
@@ -2747,7 +2784,7 @@ function OrderTrackingModal({ orderId, orderRef, open, onClose }: any) {
                         key={s.id || idx}
                         onClick={() => setSelectedShipmentIdx(idx)}
                         className={`px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${selectedShipmentIdx === idx
-                          ? "bg-red-500 text-white shadow-md shadow-red-500/20"
+                          ? "bg-rose-500 text-white shadow-md shadow-rose-500/20"
                           : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                           }`}
                       >

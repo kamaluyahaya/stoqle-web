@@ -12,6 +12,7 @@ import EditBusinessProfileWithBusinessInfo from "@/src/components/business/busin
 import { Business, BusinessPolicy } from "@/src/types/business";
 import { ChevronLeftIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
+import { idbGet, idbSet } from "@/src/lib/utils/idb";
 
 
 export default function BusinessStatusPage() {
@@ -31,8 +32,27 @@ export default function BusinessStatusPage() {
 
   useEffect(() => {
     let mounted = true;
+
     async function load(isPolling = false) {
-      if (!isPolling) setLoading(true);
+      if (!isPolling) {
+        // 1. Initial hydration from IDB for "Blink-Eye" rendering
+        try {
+          const cached = await idbGet<any>("business_status_cache");
+          if (cached && mounted) {
+            setStaffStatus(cached.staffStatus);
+            setIsBusiness(cached.isBusiness);
+            setBusiness(cached.business);
+            setBusinessPolicy(cached.policy);
+            setWallet(cached.wallet);
+            setPendingOrdersCount(cached.pendingOrdersCount);
+            setCustomerDeliveredCount(cached.customerDeliveredCount);
+            setLoading(false);
+          }
+        } catch (e) {
+          console.error("IDB hydration error:", e);
+        }
+      }
+
       setError(null);
 
       try {
@@ -59,17 +79,33 @@ export default function BusinessStatusPage() {
         const payload = await res.json();
         if (!mounted) return;
 
-        setStaffStatus(payload.data?.staff?.status ?? null);
-        setIsBusiness(Boolean(payload.isBusiness));
-        setBusiness(payload.data?.business ?? null);
-        setBusinessPolicy(payload.data?.policy ?? null);
-        setWallet(payload.data?.wallet ?? null);
-        setPendingOrdersCount(payload.data?.pendingOrdersCount ?? 0);
-        setCustomerDeliveredCount(payload.data?.customerDeliveredCount ?? 0);
+        const newData = {
+          staffStatus: payload.data?.staff?.status ?? null,
+          isBusiness: Boolean(payload.isBusiness),
+          business: payload.data?.business ?? null,
+          policy: payload.data?.policy ?? null,
+          wallet: payload.data?.wallet ?? null,
+          pendingOrdersCount: payload.data?.pendingOrdersCount ?? 0,
+          customerDeliveredCount: payload.data?.customerDeliveredCount ?? 0,
+        };
 
-        // Removed refreshUser() as it might trigger a re-render loop if not memoized in context
+        setStaffStatus(newData.staffStatus);
+        setIsBusiness(newData.isBusiness);
+        setBusiness(newData.business);
+        setBusinessPolicy(newData.policy);
+        setWallet(newData.wallet);
+        setPendingOrdersCount(newData.pendingOrdersCount);
+        setCustomerDeliveredCount(newData.customerDeliveredCount);
+
+        // Update IDB cache silently
+        idbSet("business_status_cache", { ...newData, updatedAt: Date.now() }).catch(console.error);
+
       } catch (err: any) {
-        if (!isPolling) setError(err?.message ?? "Failed to load business status");
+        // If we already have cached data, don't show the error as a full page error unless it's the very first load
+        if (!isPolling) {
+          const cached = await idbGet("business_status_cache");
+          if (!cached) setError(err?.message ?? "Failed to load business status");
+        }
       } finally {
         if (mounted && !isPolling) setLoading(false);
       }
@@ -224,7 +260,7 @@ export default function BusinessStatusPage() {
               <div className="space-y-3">
                 <button
                   onClick={() => router.push("/market")}
-                  className="w-full py-3 bg-red-500 text-white rounded-full  hover:bg-slate-800 transition-all active:scale-[0.98]"
+                  className="w-full py-3 bg-rose-500 text-white rounded-full  hover:bg-slate-800 transition-all active:scale-[0.98]"
                 >
                   Go to Market
                 </button>

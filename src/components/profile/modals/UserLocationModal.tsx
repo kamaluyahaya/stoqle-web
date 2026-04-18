@@ -85,7 +85,7 @@ export default function UserLocationModal({ open, initialValue, onClose, onSave 
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center" role="dialog">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center" role="dialog">
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -149,9 +149,8 @@ export default function UserLocationModal({ open, initialValue, onClose, onSave 
                       <li key={s}>
                         <button
                           onClick={() => handleSelectState(s)}
-                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition ${
-                            s === selectedState ? "text-rose-600 font-semibold" : "text-slate-700"
-                          }`}
+                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition ${s === selectedState ? "text-rose-600 font-semibold" : "text-slate-700"
+                            }`}
                         >
                           <span className="text-sm">{s}</span>
                           {s === selectedState && (
@@ -176,9 +175,8 @@ export default function UserLocationModal({ open, initialValue, onClose, onSave 
                         <button
                           onClick={() => !saving && handleSelectLga(l)}
                           disabled={saving}
-                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition disabled:opacity-50 ${
-                            l === selectedLga ? "text-rose-600 font-semibold" : "text-slate-700"
-                          }`}
+                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition disabled:opacity-50 ${l === selectedLga ? "text-rose-600 font-semibold" : "text-slate-700"
+                            }`}
                         >
                           <span className="text-sm">{l}</span>
                           {l === selectedLga && (

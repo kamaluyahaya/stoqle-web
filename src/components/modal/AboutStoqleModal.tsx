@@ -112,7 +112,7 @@ function SheetContent({ onClose, rows }: { onClose: () => void, rows: any[] }) {
       {/* Center Logo and Version */}
       <div className="flex flex-col items-center justify-center pt-2 pb-6 shrink-0">
 
-        <h2 className="text-xl font-extrabold text-slate-100 tracking-tight bg-red-500 px-4 py-1 rounded-full">stoqle</h2>
+        <h2 className="text-xl font-extrabold text-slate-100 tracking-tight bg-rose-500 px-4 py-1 rounded-full">stoqle</h2>
         <p className="text-sm font-medium text-slate-400 mt-1">Version 1.0.0</p>
       </div>
 
@@ -141,11 +141,11 @@ function SheetContent({ onClose, rows }: { onClose: () => void, rows: any[] }) {
           © 2024–2026 Stoqle. All Rights Reserved.
         </p>
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <PhoneIcon className="w-3.5 h-3.5 text-red-400" />
+          <PhoneIcon className="w-3.5 h-3.5 text-rose-400" />
           <span>Official Hotline:</span>
           <a
             href="tel:8127494994"
-            className="font-semibold text-red-500 hover:underline"
+            className="font-semibold text-rose-500 hover:underline"
           >
             8127494994
           </a>

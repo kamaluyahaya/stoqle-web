@@ -46,7 +46,7 @@ export default function NumberInput({
       {/* Label - hide if compact to save space, or make tiny */}
       {!isCompact && (
         <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
-          {label} {required && <span className="text-red-500">*</span>}
+          {label} {required && <span className="text-rose-500">*</span>}
         </span>
       )}
 
@@ -58,7 +58,7 @@ export default function NumberInput({
         value={typeof value === 'number' && isNaN(value) ? "" : value}
         onChange={handleChange}
         placeholder={placeholder || (isCompact ? label : "")}
-        className={`${isCompact ? "px-3 py-1.5 text-xs bg-slate-50 border border-slate-200" : "px-4 py-2 text-sm bg-white"} flex-1 rounded-full text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-red-400`}
+        className={`${isCompact ? "px-3 py-1.5 text-xs bg-slate-50 border border-slate-200" : "px-4 py-2 text-sm bg-white"} flex-1 rounded-full text-black caret-rose-500 outline-none transition focus:ring-1 focus:ring-rose-400`}
       />
     </div>
   );

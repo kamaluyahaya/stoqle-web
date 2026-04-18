@@ -90,7 +90,7 @@ export default function HelpCenterModal({ isOpen, onClose }: HelpCenterModalProp
         text: "Thank you for your feedback! We will get back to you soon.",
         icon: "success",
         confirmButtonText: "Okay",
-        confirmButtonColor: "#dc2626", // Red-600
+        confirmButtonColor: "#dc2626", // rose-600
         background: "#ffffff",
         customClass: {
           title: "text-lg font-bold text-slate-900",
@@ -203,7 +203,7 @@ export default function HelpCenterModal({ isOpen, onClose }: HelpCenterModalProp
           {/* Footer */}
           <div className="p-4 bg-white md:rounded-b-3xl">
             {(description.length > 0 && description.length < 30) || (phoneNumber.length > 0 && phoneNumber.length < 11) ? (
-              <p className="text-[10px] text-red-500 mb-2 font-medium text-center">
+              <p className="text-[10px] text-rose-500 mb-2 font-medium text-center">
                 {description.length < 30
                   ? "Description must be at least 30 characters"
                   : "Phone number must be 11 digits"}
@@ -212,7 +212,7 @@ export default function HelpCenterModal({ isOpen, onClose }: HelpCenterModalProp
             <button
               onClick={handleSubmit}
               disabled={description.length < 30 || phoneNumber.length < 11 || isSubmitting}
-              className="w-full py-2 bg-red-600 disabled:bg-red-200 disabled:text-slate-100 disabled:shadow-none text-white rounded-full  flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-red-600/20"
+              className="w-full py-2 bg-rose-600 disabled:bg-rose-200 disabled:text-slate-100 disabled:shadow-none text-white rounded-full  flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-rose-600/20"
             >
               {isSubmitting ? (
                 <>

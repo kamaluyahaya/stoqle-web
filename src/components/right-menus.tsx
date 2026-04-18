@@ -89,7 +89,7 @@ function HoverMenu({ label, description, items = [], className = "", avatar }: M
                 >
                   <span>{it.label}</span>
                   {it.badge !== undefined && (it.badge as number) > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+                    <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
                       {it.badge}
                     </span>
                   )}

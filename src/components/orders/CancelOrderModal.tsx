@@ -61,13 +61,13 @@ export default function CancelOrderModal({
     return (
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
                     />
                     <motion.div
                         initial={{ opacity: 0, y: "100%" }}

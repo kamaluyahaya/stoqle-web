@@ -103,7 +103,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {loading && (
                             <div className="flex items-center justify-center py-10">
-                                <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
                             </div>
                         )}
 
@@ -117,7 +117,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                         {addresses.map((addr) => (
                             <div
                                 key={addr.address_id}
-                                className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${addr.is_default ? "border-red-100 bg-red-50/30" : "border-slate-100 hover:border-red-50"
+                                className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${addr.is_default ? "border-rose-100 bg-rose-50/30" : "border-slate-100 hover:border-rose-50"
                                     }`}
                                 onClick={() => onSelect(addr)}
                             >
@@ -125,7 +125,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                     <div className="flex items-center gap-2">
                                         <span className="font-bold text-slate-900">{addr.full_name}</span>
                                         {addr.is_default && (
-                                            <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold  tracking-wider">Default</span>
+                                            <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold  tracking-wider">Default</span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -135,7 +135,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                                 setEditingAddress(addr);
                                                 setShowAddModal(true);
                                             }}
-                                            className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-red-500 transition shadow-sm"
+                                            className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-rose-500 transition shadow-sm"
                                         >
                                             <PencilSquareIcon className="w-4 h-4" />
                                         </button>
@@ -144,7 +144,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                                 e.stopPropagation();
                                                 handleDelete(addr.address_id);
                                             }}
-                                            className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-red-500 transition shadow-sm"
+                                            className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-rose-500 transition shadow-sm"
                                         >
                                             <TrashIcon className="w-4 h-4" />
                                         </button>
@@ -160,7 +160,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                                 e.stopPropagation();
                                                 handleSetDefault(addr.address_id);
                                             }}
-                                            className="text-[10px] font-bold text-red-600 hover:underline"
+                                            className="text-[10px] font-bold text-rose-600 hover:underline"
                                         >
                                             Set as default
                                         </button>
@@ -176,7 +176,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                 setEditingAddress(null);
                                 setShowAddModal(true);
                             }}
-                            className="w-full py-3 rounded-full bg-red-500 hover:bg-slate-800 text-white font-bold transition flex items-center justify-center gap-2"
+                            className="w-full py-3 rounded-full bg-rose-500 hover:bg-slate-800 text-white font-bold transition flex items-center justify-center gap-2"
                         >
                             <PlusIcon className="w-5 h-5" />
                             <span>Add New Address</span>

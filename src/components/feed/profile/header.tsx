@@ -19,8 +19,9 @@ import { copyToClipboard } from "@/src/lib/utils/utils";
 import { EyeIcon, EyeSlashIcon, ArrowLeftIcon, UserPlusIcon, CheckIcon, EllipsisHorizontalIcon, ChevronLeftIcon, QrCodeIcon, PlusIcon, MapPinIcon, Cog6ToothIcon, XMarkIcon, UserGroupIcon, LinkIcon, FlagIcon, NoSymbolIcon, BuildingStorefrontIcon, Bars3Icon } from "@heroicons/react/24/outline";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircleMore, Settings, ShoppingBag, Share, Star } from "lucide-react";
+import { MessageCircleMore, Settings, ShoppingBag, Share, Star, QrCode, Download, Share2, Scan } from "lucide-react";
 import { formatUrl } from "@/src/lib/utils/media";
+import { toPng } from "html-to-image";
 
 
 import ImageViewer from "../../../components/modal/imageViewer";
@@ -115,6 +116,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   const [showCropper, setShowCropper] = useState(false);
   const [unfollowConfirmOpen, setUnfollowConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [showFlyer, setShowFlyer] = useState(false);
 
 
   const [hideBalance, setHideBalance] = useState<boolean>(() => {
@@ -312,18 +314,18 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   }, [isOwner, profileApi?.dm_preference, profileApi?.is_follower]);
 
   const profilePic = formatUrl(
-    profileApi?.business?.business_logo || 
-    profileApi?.user?.profile_pic || 
-    profileApi?.business?.logo || 
+    profileApi?.business?.business_logo ||
+    profileApi?.user?.profile_pic ||
+    profileApi?.business?.logo ||
     profileApi?.profile_pic
   );
 
   // Extract dominant color from background/profile picture
   useEffect(() => {
     const bgUrl = formatUrl(
-        profileApi?.bg_photo_url || 
-        profileApi?.user?.bg_photo_url || 
-        profileApi?.business?.bg_photo_url
+      profileApi?.bg_photo_url ||
+      profileApi?.user?.bg_photo_url ||
+      profileApi?.business?.bg_photo_url
     );
     if (!bgUrl || bgUrl.includes('favio.png')) return;
 
@@ -690,7 +692,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         toast.error(json.message || `Failed to ${isCurrentlyBlocked ? 'unblock' : 'block'} user`);
       }
     } catch (err) {
-      toast.error("An error occurred");
+      toast.error("An error occurrose");
     }
   };
 
@@ -814,7 +816,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           }}
                           className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
                         >
-                          <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white">
+                          <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center text-white">
                             <Share className="w-4 h-4" />
                           </div>
                           Share to Friends
@@ -901,7 +903,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           }}
                           className="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
                         >
-                          <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white">
+                          <div className="w-10 h-10 rounded-full bg-rose-500 flex items-center justify-center text-white">
                             <Share className="w-5 h-5" />
                           </div>
                           Share to Friends
@@ -1065,7 +1067,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 {!isFollowing ? (
                   <button
                     onClick={followUser}
-                    className="bg-red-500 text-white px-5 py-1 rounded-full text-xs active:scale-95 transition-all shadow-md"
+                    className="bg-rose-500 text-white px-5 py-1 rounded-full text-xs active:scale-95 transition-all shadow-md"
                   >
                     Follow
                   </button>
@@ -1118,7 +1120,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
       </motion.header>
 
 
-      <div className={`relative z-10 rounded-2xl overflow-visible mb-6 transition-colors duration-300 ${hasBg ? 'bg-transparent lg:bg-white' : ''}`}>
+      <div className={`relative z-[60] rounded-2xl overflow-visible mb-6 transition-colors duration-300 ${hasBg ? 'bg-transparent lg:bg-white' : ''}`}>
         <div className="max-w-4xl mx-auto pt-20 px-4">
           {/* Mobile */}
           <div className="lg:hidden">
@@ -1175,9 +1177,31 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       animate={{ opacity: 1, y: 0 }}
                       className="mt-1 flex flex-col gap-0.5"
                     >
-                      <p className={`text-[10px] mt-1 ${hasBg ? 'text-white/80 lg:text-slate-400' : 'text-slate-400'}`}>
-                        Stoqle ID: {profileApi?.user?.user_id || profileApi?.user?.id || ""}
-                      </p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <p
+                          onClick={() => {
+                            const sid = profileApi?.user?.stoqle_id || profileApi?.user?.user_id || profileApi?.user?.id || "";
+                            if (sid) {
+                              copyToClipboard(sid);
+                              toast.success("Stoqle ID copied!");
+                            }
+                          }}
+                          className={`text-[10px] cursor-pointer hover:opacity-80 transition-opacity active:scale-95 ${hasBg ? 'text-white/80 lg:text-slate-400' : 'text-slate-400'}`}
+                        >
+                          Stoqle ID: {profileApi?.user?.stoqle_id || profileApi?.user?.user_id || profileApi?.user?.id || ""}
+                        </p>
+                        {isOwner && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowFlyer(true);
+                            }}
+                            className={`p-1 rounded-full hover:bg-black/5 transition-colors ${hasBg ? 'text-white/80 lg:text-slate-400' : 'text-slate-400'}`}
+                          >
+                            <QrCode className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                       {!isOwner && (profileApi?.latest_location || profileApi?.latest_ip) && (
                         <div className="flex items-center gap-1.5 mt-1">
                           <p className={`text-[10px] max-w-xl leading-snug ${hasBg ? 'text-white/80 lg:text-slate-400' : 'text-slate-400'}`}>IP location: {profileApi.latest_location || profileApi.latest_ip}</p>
@@ -1266,7 +1290,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     ) : isOwner ? (
                       <div className="flex gap-1">
                         <button
-                          className="bg-red-500 text-white rounded-full px-2 py-1 text-sm whitespace-nowrap active:scale-95 transition-transform"
+                          className="bg-rose-500 text-white rounded-full px-2 py-1 text-sm whitespace-nowrap active:scale-95 transition-transform"
                           onClick={() => {
                             if (!token) {
                               setShowLoginModal(true);
@@ -1297,7 +1321,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                                 Following
                               </button> */}
                               <button
-                                className="rounded-full px-3 py-1 text-sm shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
+                                className="rounded-full px-3 py-1 text-sm shadow whitespace-nowrap transition-all bg-rose-500 text-white border border-transparent hover:bg-rose-600 active:scale-95"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onVisitShop?.();
@@ -1500,9 +1524,31 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     animate={{ opacity: 1, y: 0 }}
                     className="mt-1 flex flex-col gap-0.5"
                   >
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Stoqle ID: {profileApi?.user?.user_id || profileApi?.user?.id || ""}
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <p
+                        onClick={() => {
+                          const sid = profileApi?.user?.stoqle_id || profileApi?.user?.user_id || profileApi?.user?.id || "";
+                          if (sid) {
+                            copyToClipboard(sid);
+                            toast.success("Stoqle ID copied!");
+                          }
+                        }}
+                        className="text-[10px] text-slate-400 cursor-pointer hover:opacity-80 transition-opacity active:scale-95"
+                      >
+                        Stoqle ID: {profileApi?.user?.stoqle_id || profileApi?.user?.user_id || profileApi?.user?.id || ""}
+                      </p>
+                      {isOwner && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowFlyer(true);
+                          }}
+                          className="p-1 rounded-full text-slate-400 hover:bg-black/5 transition-colors"
+                        >
+                          <QrCode className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                     {!isOwner && (profileApi?.latest_location || profileApi?.latest_ip) && (
                       <div className="flex items-center gap-1.5 mt-1">
                         <p className="text-[10px] text-slate-400 max-w-xl leading-snug">IP location: {profileApi.latest_location || profileApi.latest_ip}</p>
@@ -1586,7 +1632,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               ) : isOwner ? (
                 <>
                   <button
-                    className="bg-red-500 text-white rounded-full px-5 py-1 text-sm shadow active:scale-95 transition-transform"
+                    className="bg-rose-500 text-white rounded-full px-5 py-1 text-sm shadow active:scale-95 transition-transform"
                     onClick={() => router.push("/profile/edit")}
                   >
                     Edit profile
@@ -1605,7 +1651,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           Following
                         </button>
                         <button
-                          className="rounded-full px-5 py-1 text-sm shadow whitespace-nowrap transition-all bg-red-500 text-white border border-transparent hover:bg-red-600 active:scale-95"
+                          className="rounded-full px-5 py-1 text-sm shadow whitespace-nowrap transition-all bg-rose-500 text-white border border-transparent hover:bg-rose-600 active:scale-95"
                           onClick={(e) => {
                             e.stopPropagation();
                             onVisitShop?.();
@@ -1793,9 +1839,16 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         onConfirm={unfollowUser}
         name={displayName}
       />
+      {showFlyer && (
+        <FlyerModal
+          isOpen={showFlyer}
+          onClose={() => setShowFlyer(false)}
+          user={profileApi?.user}
+          business={profileApi?.business}
+        />
+      )}
     </div>
   );
-
 }
 
 function UnfollowConfirmModal({ isOpen, onClose, onConfirm, name }: any) {
@@ -1823,7 +1876,7 @@ function UnfollowConfirmModal({ isOpen, onClose, onConfirm, name }: any) {
               onConfirm();
               onClose();
             }}
-            className="flex-1 py-2.5 rounded-full bg-red-500 text-white text-sm active:scale-[0.98] transition-all"
+            className="flex-1 py-2.5 rounded-full bg-rose-500 text-white text-sm active:scale-[0.98] transition-all"
           >
             Unfollow
           </button>
@@ -1855,9 +1908,237 @@ function BlockConfirmModal({ isOpen, onClose, onConfirm, name }: any) {
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2 rounded-full bg-red-500 text-white text-sm active:scale-[0.98] transition-all shadow-lg shadow-red-200"
+            className="flex-1 py-2 rounded-full bg-rose-500 text-white text-sm active:scale-[0.98] transition-all shadow-lg shadow-rose-200"
           >
             Block
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onClose: () => void, user: any, business: any }) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const flyerRef = useRef<HTMLDivElement>(null);
+  const backFlyerRef = useRef<HTMLDivElement>(null);
+
+  const bgImage = formatUrl(business?.bg_photo_url || user?.bg_photo_url) || "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop";
+  const logo = formatUrl(business?.business_logo || user?.profile_pic || user?.avatar_url);
+  // Remote QR services cannot fetch images from localhost. 
+  // We also MUST ensure the URL is never 'undefined' to avoid 404s from the QR API.
+  const isLocalLogo = logo?.includes("localhost") || logo?.includes("127.0.0.1");
+  const fallbackLogo = "https://stoqle.com/logo.png";
+  const safeLogo = (isLocalLogo || !logo) ? fallbackLogo : logo;
+  const roundedLogo = safeLogo.includes("ui-avatars.com")
+    ? safeLogo
+    : `https://images.weserv.nl/?url=${encodeURIComponent(safeLogo)}&mask=circle&mtype=png`;
+
+  const name = business?.business_name || user?.full_name || user?.name || user?.username || "NAME";
+  const sid = user?.stoqle_id || user?.user_id || user?.id || "00000000001";
+  const slug = business?.business_slug || user?.username || sid;
+  const qrData = `${typeof window !== "undefined" ? window.location.origin : ""}/${slug}`;
+
+  const handleDownload = async () => {
+    const activeRef = isFlipped ? backFlyerRef : flyerRef;
+    if (!activeRef.current) return;
+
+    const toastId = toast.loading("Preparing your flyer...");
+    try {
+      // Small delay to ensure any animations are settled
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const dataUrl = await toPng(activeRef.current, {
+        cacheBust: true,
+        backgroundColor: '#ffffff',
+        skipFonts: true, // Speeds up capture and avoids CORS font errors
+        pixelRatio: 2,   // High resolution for clear QR scanning
+        style: {
+          borderRadius: '2rem'
+        }
+      });
+
+      const link = document.createElement('a');
+      link.download = `Stoqle-Flyer-${name.replace(/\s+/g, '-')}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      toast.success("Flyer downloaded successfully!", { id: toastId });
+    } catch (err) {
+      console.error("Flyer capture failed:", err);
+      toast.error("Failed to download flyer. Please try again.", { id: toastId });
+    }
+  };
+
+  const handleShare = async () => {
+    const url = qrData;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Connect with ${name} on Stoqle`,
+          text: `Check out my profile on Stoqle! My ID is ${sid}`,
+          url,
+        });
+      } catch (err) { }
+    } else {
+      copyToClipboard(url);
+      toast.success("Profile link copied!");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-[100] p-2 bg-black/20 backdrop-blur-md rounded-full text-white hover:bg-black/30 transition-colors"
+        >
+          <XMarkIcon className="w-5 h-5" />
+        </button>
+
+        {/* Flyer Container with Switch Logic */}
+        <div
+          className="relative w-full aspect-[4/6] cursor-pointer group"
+          onClick={() => setIsFlipped(!isFlipped)}
+        >
+          <AnimatePresence initial={false}>
+            {!isFlipped ? (
+              <motion.div
+                key="front"
+                initial={{ opacity: 0, rotateY: -110 }}
+                animate={{ opacity: 1, rotateY: 0 }}
+                exit={{ opacity: 0, rotateY: 110 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 450,
+                  damping: 30,
+                  mass: 0.5
+                }}
+                className="w-full h-full absolute inset-0"
+              >
+                <div ref={flyerRef} className="w-full h-full bg-white overflow-hidden border-[6px] border-white rounded-t-[2rem] relative shadow-xl">
+                  {/* Banner Header */}
+                  <div className="absolute top-0 left-0 right-0 h-[40%] z-0">
+                    <img src={bgImage} crossOrigin="anonymous" className="w-full h-full object-cover" alt="Banner" />
+                    <div className="absolute inset-0 bg-black/10"></div>
+                  </div>
+
+                  {/* rose Block - Elevated Content Area */}
+                  <div className="absolute bottom-0 left-0 right-0 h-[72%] bg-rose-600 rounded-t-[2.5rem] z-10 shadow-[0_-15px_50px_rgba(0,0,0,0.3)]">
+                    <div className="relative h-full flex flex-col p-8 justify-between text-white">
+                      {/* Header */}
+                      <div className="flex flex-col items-start mt-4">
+                        <div className="w-16 h-16 rounded-full border-2 border-white/80 mb-4 overflow-hidden shadow-xl">
+                          {logo ? (
+                            <img src={logo} crossOrigin="anonymous" className="w-full h-full object-cover" alt="Logo" />
+                          ) : (
+                            <div className="w-full h-full bg-white flex items-center justify-center text-rose-600">
+                              <UserGroupIcon className="w-8 h-8" />
+                            </div>
+                          )}
+                        </div>
+                        <h3 className="text-xl font-bold tracking-tight mb-1">{name}</h3>
+                        <p className="text-[10px] text-white/80 font-medium">Stoqle ID: {sid}</p>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="w-full h-px bg-white/20 my-2"></div>
+
+                      {/* Bottom */}
+                      <div className="flex items-end justify-between w-full">
+                        <div className="flex flex-col items-start gap-4">
+                          <div className="bg-white px-3 py-1 rounded-full shadow-lg">
+                            <span className="text-rose-600 font-black text-sm tracking-tight">stoqle</span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <p className="text-xs text-white/70 font-medium leading-tight">Scan QR code</p>
+                            <p className="text-xs text-white font-bold tracking-wide">Find me on Stoqle</p>
+                          </div>
+                        </div>
+
+                        <div className="relative w-24 h-24 bg-white rounded-2xl p-1 shadow-2xl flex items-center justify-center transform border-2 border-white overflow-hidden">
+                          <img
+                            src={`https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=150&ecLevel=M`}
+                            crossOrigin="anonymous"
+                            alt="QR Code"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="back"
+                initial={{ opacity: 0, rotateY: 110 }}
+                animate={{ opacity: 1, rotateY: 0 }}
+                exit={{ opacity: 0, rotateY: -110 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 450,
+                  damping: 30,
+                  mass: 0.5
+                }}
+                className="w-full h-full absolute inset-0"
+              >
+                <div ref={backFlyerRef} className="w-full h-full bg-white  border-white rounded-t-[2rem] flex flex-col items-center justify-center p-8 text-center relative ">
+                  {/* Big QR Code with Integrated Center Logo */}
+                  <div className="w-56 h-56 bg-white rounded-[2.5rem] p-6  mb-10 mt-6 relative flex items-center justify-center">
+                    <img
+                      src={`https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=300&ecLevel=H&centerImageUrl=${encodeURIComponent(roundedLogo)}&centerImageWidth=40&centerImageHeight=40`}
+                      crossOrigin="anonymous"
+                      alt="Large QR Code"
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute inset-0 -rose-500/10 rounded-[2.5rem] animate-pulse pointer-events-none"></div>
+                  </div>
+
+                  {/* User Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{name}</h3>
+                    <div className="inline-flex">
+                      <span className="text-sm text-slate-400 font-semibold">stoqle ID:{sid}</span>
+                    </div>
+                  </div>
+
+                  {/* Scan Instructions */}
+                  <div className="mt-20 space-y-2">
+                    <p className="text-slate-600 text-sm font-semibold">Scan QR code, Find me on Stoqle</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="px-8 py-6 bg-white flex justify-around items-center border-t border-slate-50">
+          <button onClick={() => toast.info("Hold your phone camera over the QR code")} className="flex flex-col items-center gap-1.5 group">
+            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors">
+              <Scan className="w-5 h-5 text-slate-600" />
+            </div>
+            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Scan</span>
+          </button>
+
+          <button onClick={handleDownload} className="flex flex-col items-center gap-1.5 group">
+            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors">
+              <Download className="w-5 h-5 text-slate-600" />
+            </div>
+            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Download</span>
+          </button>
+
+          <button onClick={handleShare} className="flex flex-col items-center gap-1.5 group">
+            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors">
+              <Share2 className="w-5 h-5 text-slate-600" />
+            </div>
+            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Share</span>
           </button>
         </div>
       </motion.div>

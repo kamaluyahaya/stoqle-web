@@ -2,6 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 import { XMarkIcon, StarIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { Review } from "@/src/lib/api/reviewApi";
@@ -74,6 +75,12 @@ export default function ReviewListModal({
   const [replyText, setReplyText] = useState("");
   const [burstingReviewId, setBurstingReviewId] = useState<number | null>(null);
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [open]);
 
   useEffect(() => {
     setLocalReviews(reviews);
@@ -169,7 +176,7 @@ export default function ReviewListModal({
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((s) => (
           s <= rating ? (
-            <StarIconSolid key={s} className={`${size} text-red-600`} />
+            <StarIconSolid key={s} className={`${size} text-rose-600`} />
           ) : (
             <StarIcon key={s} className={`${size} text-slate-200`} />
           )
@@ -216,10 +223,12 @@ export default function ReviewListModal({
   return (
     <AnimatePresence>
       {open && (
-        <div 
-          className="fixed inset-0 z-[600000] flex items-center justify-center overflow-hidden"
+        <div
+          className="fixed inset-0 flex items-end sm:items-center justify-center overflow-hidden"
+          style={{ zIndex: modalZIndex }}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           {/* Backdrop */}
           <motion.div
@@ -279,7 +288,7 @@ export default function ReviewListModal({
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${stats.percentages[star as keyof typeof stats.percentages]}%` }}
-                          className="h-full bg-red-600 rounded-full"
+                          className="h-full bg-rose-600 rounded-full"
                           transition={{ duration: 0.8, ease: "easeOut" }}
                         />
                       </div>
@@ -299,7 +308,7 @@ export default function ReviewListModal({
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-11 h-11 rounded-full overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer ring-offset-2 ring-red-500 hover:ring-2 transition-all"
+                        className="w-11 h-11 rounded-full overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer ring-offset-2 ring-rose-500 hover:ring-2 transition-all"
                         onClick={() => router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`)}
                       >
                         <img
@@ -310,13 +319,13 @@ export default function ReviewListModal({
                       </div>
                       <div className="min-w-0">
                         <div
-                          className="text-[13px] font-bold text-slate-500 truncate cursor-pointer hover:text-red-600 transition-colors"
+                          className="text-[13px] font-bold text-slate-500 truncate cursor-pointer hover:text-rose-600 transition-colors"
                           onClick={() => router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`)}
                         >
                           {review.full_name}
                         </div>
                         <div className="flex items-center gap-2.5 mt-1">
-                          <span className="text-[10px] font-black bg-red-100 text-red-400  tracking-widest px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-black bg-rose-100 text-rose-400  tracking-widest px-1.5 py-0.5 rounded">
                             {getRatingStatus(review.rating)}
                           </span>
                           {renderStars(review.rating, "w-3.5 h-3.5")}
@@ -343,7 +352,7 @@ export default function ReviewListModal({
 
                       <button
                         onClick={() => handleToggleLike(review.review_id)}
-                        className={`ml-auto flex items-center gap-1.5 text-xs font-bold transition-colors relative ${review.liked_by_user ? "text-red-500" : "text-slate-400 hover:text-slate-600"}`}
+                        className={`ml-auto flex items-center gap-1.5 text-xs font-bold transition-colors relative ${review.liked_by_user ? "text-rose-500" : "text-slate-400 hover:text-slate-600"}`}
                       >
                         <div className="relative flex items-center justify-center">
                           {burstingReviewId === review.review_id && <LikeBurst />}
@@ -375,13 +384,13 @@ export default function ReviewListModal({
                             <div className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-200">
                               <img src={user?.profile_pic || "/assets/images/favio.png"} alt="User" className="w-full h-full object-cover" />
                             </div>
-                            <div className="flex-1 space-y-2">
+                            <div className="flex-1 space-y-2 m-2">
                               <textarea
                                 autoFocus
                                 value={replyText}
                                 onChange={(e) => setReplyText(e.target.value)}
                                 placeholder="Write a reply..."
-                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 resize-none"
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm focus:outline-none focus:ring-1 focus:ring-rose-500 resize-none"
                                 rows={2}
                               />
                               <div className="flex justify-end gap-2">
@@ -394,7 +403,7 @@ export default function ReviewListModal({
                                 <button
                                   onClick={() => handleAddReply(review.review_id)}
                                   disabled={!replyText.trim() || isSubmittingReply}
-                                  className="px-4 py-1.5 text-xs font-bold bg-red-600 text-white rounded-full hover:bg-red-700 disabled:opacity-50 transition-colors"
+                                  className="px-4 py-1.5 text-xs font-bold bg-rose-600 text-white rounded-full hover:bg-rose-700 disabled:opacity-50 transition-colors"
                                 >
                                   {isSubmittingReply ? "Posting..." : "Post Reply"}
                                 </button>
@@ -410,7 +419,7 @@ export default function ReviewListModal({
                       <div className="mt-6 space-y-4 border-l-2 border-slate-50 pl-4">
                         {review.replies.map((reply) => (
                           <div key={reply.reply_id} className="flex items-start gap-3 group/reply">
-                            <div 
+                            <div
                               className="h-8 w-8 rounded-full overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-200 cursor-pointer"
                               onClick={() => router.push(reply.username ? `/${reply.username}` : `/user/profile/${reply.user_id}`)}
                             >
@@ -418,14 +427,14 @@ export default function ReviewListModal({
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
-                                <span 
-                                  className="text-xs font-bold text-slate-800 cursor-pointer hover:text-red-600"
+                                <span
+                                  className="text-xs font-bold text-slate-800 cursor-pointer hover:text-rose-600"
                                   onClick={() => router.push(reply.username ? `/${reply.username}` : `/user/profile/${reply.user_id}`)}
                                 >
                                   {reply.author_name}
                                 </span>
                                 {Number(reply.user_id) === Number(businessData?.business?.user_id) && (
-                                  <span className="text-[8px] font-black bg-red-50 text-red-600 px-1 py-0.5 rounded tracking-tighter">Vendor</span>
+                                  <span className="text-[8px] font-black bg-rose-50 text-rose-600 px-1 py-0.5 rounded tracking-tighter">Vendor</span>
                                 )}
                                 <span className="text-[10px] text-slate-400 font-medium ml-auto">
                                   {new Date(reply.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}

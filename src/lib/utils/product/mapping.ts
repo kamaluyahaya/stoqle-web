@@ -80,7 +80,7 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
         })(),
         useCombinations: dbProduct.use_combinations === 1,
         params: (dbProduct.params || []).map((p: any) => ({ key: p.param_key, value: p.param_value })),
-        soldCount: dbProduct.sold_count,
+        soldCount: Number(dbProduct.sold_count || dbProduct.total_sold || 0),
         samePriceForAll: dbProduct.same_price_for_all === 1,
         sharedPrice: dbProduct.price ?? "",
         variantGroups: (dbProduct.variant_groups || dbProduct.variants_structure || dbProduct.variantGroups || dbProduct.groups || []).map((g: any) => ({
@@ -142,28 +142,35 @@ export function mapProductToPreviewPayload(dbProduct: any, customFormatUrl?: (ur
             },
             useStoreDefaultPromotions: !!dbProduct.policy_settings.use_store_default_promotions,
             promotions: (() => {
-                const data = typeof dbProduct.policy_settings.promotions_data === 'string'
-                    ? JSON.parse(dbProduct.policy_settings.promotions_data)
-                    : dbProduct.policy_settings.promotions_data;
-                if (!Array.isArray(data)) return [];
-                return data.map((p: any) => ({
-                    ...p,
-                    discount_percent: p.discount_percent ?? p.discount ?? 0,
-                    isActive: p.isActive ?? p.is_active ?? true,
-                    title: p.title ?? p.occasion ?? "Promotion"
-                }));
+                try {
+                    const data = typeof dbProduct.policy_settings?.promotions_data === 'string'
+                        ? JSON.parse(dbProduct.policy_settings.promotions_data)
+                        : dbProduct.policy_settings?.promotions_data;
+                    if (!Array.isArray(data)) return [];
+                    return data.map((p: any) => ({
+                        ...p,
+                        discount_percent: p.discount_percent ?? p.discount ?? 0,
+                        isActive: p.isActive ?? p.is_active ?? true,
+                        title: p.title ?? p.occasion ?? p.promo_title ?? "Promotion"
+                    }));
+                } catch (e) {
+                    return [];
+                }
             })(),
             saleDiscount: (() => {
-                const data = typeof dbProduct.policy_settings.sale_discount_data === 'string'
-                    ? JSON.parse(dbProduct.policy_settings.sale_discount_data)
-                    : dbProduct.policy_settings.sale_discount_data;
-                if (!data) return null;
-                // Normalize keys if they differ from what the frontend expects
-                return {
-                    ...data,
-                    discount_percent: data.discount_percent ?? data.discount ?? 0,
-                    discount_type: data.discount_type ?? data.type ?? "Sales Discount"
-                };
+                try {
+                    const data = typeof dbProduct.policy_settings?.sale_discount_data === 'string'
+                        ? JSON.parse(dbProduct.policy_settings.sale_discount_data)
+                        : dbProduct.policy_settings?.sale_discount_data;
+                    if (!data) return null;
+                    return {
+                        ...data,
+                        discount_percent: data.discount_percent ?? data.discount ?? 0,
+                        discount_type: data.discount_type ?? data.type ?? "Sales Discount"
+                    };
+                } catch (e) {
+                    return null;
+                }
             })(),
         } : undefined
     };

@@ -19,16 +19,18 @@ import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { copyToClipboard } from "@/src/lib/utils/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import NextImage from "next/image";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 type ShopHeaderProps = {
     profileApi: any | null;
     displayName: string;
     searchTerm?: string;
     onSearchChange?: (val: string) => void;
+    onShare?: () => void;
 };
 
 
-export default function ShopHeader({ profileApi, displayName, searchTerm, onSearchChange }: ShopHeaderProps) {
+export default function ShopHeader({ profileApi, displayName, searchTerm, onSearchChange, onShare }: ShopHeaderProps) {
     const router = useRouter();
     const auth = useAuth();
     const { user: currentUser, token } = auth;
@@ -148,16 +150,22 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
         business?.bg_photo_url
     );
 
-    const logo = formatUrl(
-        business?.business_logo ||
-        profileApi?.business_logo ||
-        profileApi?.user?.profile_pic ||
-        profileApi?.profile_pic ||
-        business?.logo ||
-        profileApi?.logo
-    );
-
+    const [logoSrc, setLogoSrc] = useState(NO_IMAGE_PLACEHOLDER);
     const isLoading = !profileApi;
+
+    useEffect(() => {
+        const resolvedLogo = formatUrl(
+            business?.business_logo ||
+            business?.logo ||
+            profileApi?.business_logo ||
+            profileApi?.logo ||
+            business?.profile_pic ||
+            profileApi?.user?.profile_pic ||
+            profileApi?.profile_pic ||
+            NO_IMAGE_PLACEHOLDER
+        );
+        setLogoSrc(resolvedLogo);
+    }, [profileApi, business]);
 
     // rating calculation
     const rating = Number(stats?.rating ?? stats?.avg_rating ?? (policy?.customer_service?.good_reviews_threshold ? (policy.customer_service.good_reviews_threshold / 20) : 5.0));
@@ -165,6 +173,10 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
     const totalReviews = Number(stats?.total_reviews || 0);
 
     const handleShare = async () => {
+        if (onShare) {
+            onShare();
+            return;
+        }
         if (navigator.share) {
             try {
                 await navigator.share({
@@ -248,7 +260,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                             >
                                 <div className="w-7 h-7 rounded-full overflow-hidden border border-white/40 shadow-sm bg-white relative">
                                     <NextImage
-                                        src={logo}
+                                        src={logoSrc}
                                         fill
                                         sizes="28px"
                                         className="object-cover"
@@ -378,7 +390,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                             >
                                 <div className="h-20 w-20 sm:h-24 sm:w-24 md:h-36 md:w-36 rounded-full overflow-hidden border-4 border-white shadow-2xl bg-white relative">
                                     <NextImage
-                                        src={logo}
+                                        src={logoSrc}
                                         alt={displayName}
                                         fill
                                         priority

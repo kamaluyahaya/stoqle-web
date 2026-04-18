@@ -14,6 +14,8 @@ import { fetchUserAddresses, deleteUserAddress, setDefaultAddress } from "@/src/
 import { motion, AnimatePresence } from 'framer-motion';
 import { copyToClipboard } from '@/src/lib/utils/utils';
 import { toast } from "sonner";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
+
 
 type ShippingModalProps = {
   open: boolean;
@@ -31,6 +33,12 @@ export default function ShippingModal({ open, title, body, onClose, onAddressCha
   const [activeAddressId, setActiveAddressId] = useState<string | null>(null);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<any>(null);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [open]);
 
   const loadAddresses = async () => {
     if (!token) {
@@ -111,7 +119,13 @@ export default function ShippingModal({ open, title, body, onClose, onAddressCha
   console.log("ShippingModal deliveryNotice prop:", deliveryNotice);
 
   return (
-    <div className="fixed inset-0 z-[600000] flex items-end lg:items-center justify-center p-0 lg:p-4">
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ zIndex: modalZIndex }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       <div
@@ -156,7 +170,7 @@ export default function ShippingModal({ open, title, body, onClose, onAddressCha
               <h2 className="text-[12px] text-slate-800">Select delivery address</h2>
               <button
                 onClick={() => { setEditingAddress(null); setAddressModalOpen(true); }}
-                className="text-red-500 text-xs  rounded-full hover:bg-red-50 transition-colors flex items-center gap-1"
+                className="text-rose-500 text-xs  rounded-full hover:bg-rose-50 transition-colors flex items-center gap-1"
               >
                 Add Address
               </button>
@@ -185,7 +199,7 @@ export default function ShippingModal({ open, title, body, onClose, onAddressCha
                     <div
                       key={addr.id}
                       onClick={() => handleSelectAddress(addr)}
-                      className={`relative p-4 rounded-[0.5rem] border transition-all cursor-pointer ${isActive ? "border-red-500 bg-red-50/10 shadow-sm" : "border-slate-100 bg-white hover:border-slate-200"
+                      className={`relative p-4 rounded-[0.5rem] border transition-all cursor-pointer ${isActive ? "border-rose-500 bg-rose-50/10 shadow-sm" : "border-slate-100 bg-white hover:border-slate-200"
                         }`}
                     >
                       {/* Name | Masked Phone */}
@@ -193,7 +207,7 @@ export default function ShippingModal({ open, title, body, onClose, onAddressCha
                         <span className=" text-[13px] text-slate-900">
                           {addr.recipientName} | {maskPhone(addr.contactNo)}
                         </span>
-                        {isActive && <CheckCircleIcon className="w-3.5 h-3.5 text-red-500" />}
+                        {isActive && <CheckCircleIcon className="w-3.5 h-3.5 text-rose-500" />}
                       </div>
 
                       {/* Info lines */}
@@ -247,7 +261,7 @@ export default function ShippingModal({ open, title, body, onClose, onAddressCha
                               e.stopPropagation();
                               handleDeleteAddress(addr.address_id);
                             }}
-                            className="text-[11px]  text-slate-400 hover:text-red-500"
+                            className="text-[11px]  text-slate-400 hover:text-rose-500"
                           >
                             Delete
                           </button>

@@ -323,12 +323,12 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
       localStorage.setItem(prefKey, fullPayload);
       if (onSave) await onSave(fullPayload);
 
-      Swal.fire({ 
-        icon: backendMsg?.includes("progress") ? "info" : "success", 
-        title: backendMsg?.includes("progress") ? "Saved & Syncing" : "Saved", 
-        text: backendMsg || "Account verified and saved.", 
-        confirmButtonColor: "#10b981", 
-        timer: backendMsg?.includes("progress") ? 4000 : 2000 
+      Swal.fire({
+        icon: backendMsg?.includes("progress") ? "info" : "success",
+        title: backendMsg?.includes("progress") ? "Saved & Syncing" : "Saved",
+        text: backendMsg || "Account verified and saved.",
+        confirmButtonColor: "#10b981",
+        timer: backendMsg?.includes("progress") ? 4000 : 2000
       });
       onClose();
     } catch (e: any) {
@@ -351,7 +351,7 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
     <>
       <AnimatePresence>
         {open && (
-          <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="fixed inset-0 z-[100001] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden">
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -389,7 +389,7 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
                           onSelected={(v) => { setBankName(v); setBankCode(getBankCodeByName(v)); }}
                           hintText="Choose your bank provider" isRequired triggerLabel="Bank Name"
                         />
-                        <DefaultInput label="Account Name" value={isResolving ? "Resolving..." : accountName} onChange={() => {}} disabled={true} placeholder="Resolves automatically" />
+                        <DefaultInput label="Account Name" value={isResolving ? "Resolving..." : accountName} onChange={() => { }} disabled={true} placeholder="Resolves automatically" />
                       </div>
                     </section>
 

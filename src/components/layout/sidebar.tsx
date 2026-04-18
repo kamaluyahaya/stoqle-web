@@ -164,7 +164,7 @@ export default function Sidebar({ navHeight, width }: Props) {
           <span>{label}</span>
         </div>
         {badgeCount > 0 && (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
             {badgeCount > 99 ? "99+" : badgeCount}
           </span>
         )}
@@ -185,7 +185,7 @@ export default function Sidebar({ navHeight, width }: Props) {
         <span className="text-gray-500">{label}</span>
         <div className="flex items-center gap-2">
           {badge !== undefined && (badge as number) > 0 && (
-            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+            <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
               {badge}
             </span>
           )}
@@ -246,7 +246,7 @@ export default function Sidebar({ navHeight, width }: Props) {
               onClick={() => {
                 auth.openLogin();
               }}
-              className="w-full rounded-full bg-red-500 text-white py-3 text-sm font-medium shadow-sm hover:bg-red-600 transition"
+              className="w-full rounded-full bg-rose-500 text-white py-3 text-sm font-medium shadow-sm hover:bg-rose-600 transition"
             >
               Log in now
             </button>

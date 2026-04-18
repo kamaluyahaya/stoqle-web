@@ -2,6 +2,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { FaCat, FaChevronRight, FaStore, FaBox, FaShoppingCart, FaWallet, FaArrowDown } from "react-icons/fa";
 import { KEYS } from "@/src/lib/utils/business/profilePrefs";
 import RefundsModal from "./policyModal/refundsModal";
@@ -86,7 +87,7 @@ export default function EditBusinessProfile({
     saveProfile,
     // dirty keys
     dirtyKeys,
-  } = useEditBusinessProfile({ apiBase, business, businessPolicy });
+  } = useEditBusinessProfile({ apiBase, business, businessPolicy, onRefresh });
 
   const displayName = business?.business_name ?? name ?? "Business name";
 
@@ -374,23 +375,23 @@ export default function EditBusinessProfile({
         {/* Action grid */}
         <div className="mt-2 w-full">
           <div className="grid grid-cols-4 gap-2 lg:gap-5">
-            <a href="/profile/business/customer-order" className="block">
+            <Link href="/profile/business/customer-order" className="block">
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
                   <FaShoppingCart className="text-slate-700" size={18} />
                 </div>
                 <span className="text-xs font-medium text-slate-700">Orders</span>
               </div>
-            </a>
+            </Link>
 
-            <a href="/profile/business/inventory" className="block">
+            <Link href="/profile/business/inventory" className="block">
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                   <FaBox className="text-slate-700" size={18} />
                 </div>
                 <span className="text-xs font-medium text-slate-700">Inventory</span>
               </div>
-            </a>
+            </Link>
 
             <div
               className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition cursor-pointer"

@@ -35,7 +35,7 @@ export default function UserGenderModal({ open, initialValue, onClose, onSave }:
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -57,11 +57,10 @@ export default function UserGenderModal({ open, initialValue, onClose, onSave }:
                 <button
                   key={opt.value}
                   onClick={() => setGender(opt.value)}
-                  className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-sm font-semibold transition border-2 ${
-                    gender === opt.value
+                  className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-sm font-semibold transition border-2 ${gender === opt.value
                       ? "bg-rose-50 border-rose-500 text-rose-600"
                       : "bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100"
-                  }`}
+                    }`}
                 >
                   <span className={gender === opt.value ? "text-rose-500" : "text-slate-400"}>{opt.icon}</span>
                   {opt.label}

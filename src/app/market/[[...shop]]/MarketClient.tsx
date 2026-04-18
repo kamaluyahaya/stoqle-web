@@ -27,11 +27,17 @@ import { MARKET_CACHE } from "@/src/lib/cache";
 import { fetchActionableSummary } from "@/src/lib/api/orderApi";
 import { ArrowUp, ShoppingCart } from "lucide-react";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
+import { VerifiedBadge, PartnerPill } from "@/src/components/common/VerifiedBadge";
 
 type Props = {
     params: Promise<{ shop?: string[] }>;
     postCount?: number;
-    initialCategoriesPromise?: Promise<any>;
+    /** Pre-resolved category data from the RSC server layer (plain data, not a Promise). */
+    initialCategories?: any[] | null;
+    hideTabs?: boolean;
+    initialCategory?: string;
+    softCategory?: boolean;
+    relatedVendorIds?: number[];
 };
 
 const slugify = (str: string) =>
@@ -79,6 +85,7 @@ const ProductCard = React.memo(({
     handleReelsClick,
     handleLikeClick,
     handlePostLikeClick,
+    handlePrefetch,
     isLiked,
     likeCount,
     postLikeData,
@@ -139,7 +146,7 @@ const ProductCard = React.memo(({
                 ref={cardRef as any}
                 initial={{ opacity: 0, scale: 0.98, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="rounded-[0.8rem] bg-white border border-emerald-50 p-4 shadow-sm shadow-emerald-100/40 flex flex-col justify-between h-full group relative overflow-hidden"
+                className="rounded-[0.5rem] bg-white border border-emerald-50 p-4 shadow-sm shadow-emerald-100/40 flex flex-col justify-between h-full group relative overflow-hidden"
             >
                 {/* Micro-animation background hint */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
@@ -226,6 +233,7 @@ const ProductCard = React.memo(({
                     const pSlug = p.slug || p.product_slug;
                     if (pSlug) router.prefetch(`/product/${pSlug}`);
                     if (p.business_slug) router.prefetch(`/shop/${p.business_slug}`);
+                    handlePrefetch && handlePrefetch(p.product_id, pSlug);
                 }}
                 className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden relative"
             >
@@ -324,7 +332,7 @@ const ProductCard = React.memo(({
                                         animate={{ scale: 1, opacity: 1 }}
                                         exit={{ scale: 0.5, opacity: 0 }}
                                         transition={{ type: "spring", stiffness: 450, damping: 15 }}
-                                        className={`absolute flex items-center justify-center ${postLd.liked ? 'text-red-500' : 'text-slate-400'}`}
+                                        className={`absolute flex items-center justify-center ${postLd.liked ? 'text-rose-500' : 'text-slate-400'}`}
                                     >
                                         {postLd.liked ? <FaHeart size={12} /> : <FaRegHeart size={12} />}
                                     </motion.div>
@@ -335,14 +343,14 @@ const ProductCard = React.memo(({
                                         initial={{ scale: 1, opacity: 1 }}
                                         animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                                         transition={{ duration: 0.6 }}
-                                        className="absolute text-red-500 pointer-events-none"
+                                        className="absolute text-rose-500 pointer-events-none"
                                     >
                                         <FaHeart size={16} />
                                     </motion.div>
                                 )}
                             </div>
 
-                            <span className={`text-[10px]  transition-colors duration-200 ${postLd.liked ? 'text-red-500' : 'text-slate-400'}`}>
+                            <span className={`text-[10px]  transition-colors duration-200 ${postLd.liked ? 'text-rose-500' : 'text-slate-400'}`}>
                                 {postLd.count > 0 ? postLd.count : 'Like'}
                             </span>
                         </div>
@@ -368,6 +376,7 @@ const ProductCard = React.memo(({
                 const pSlug = p.slug || p.product_slug;
                 if (pSlug) router.prefetch(`/product/${pSlug}`);
                 if (p.business_slug) router.prefetch(`/shop/${p.business_slug}`);
+                handlePrefetch && handlePrefetch(p.product_id, pSlug);
             }}
             className={`group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border overflow-hidden ${isPartnerTab ? "border-emerald-100 shadow-sm shadow-emerald-50/50" : "border-slate-100"}`}
             style={{
@@ -436,9 +445,7 @@ const ProductCard = React.memo(({
                         <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-1" title={p.title}>
                             {p.trusted_partner === 1 && (
                                 <span className="inline-flex items-center gap-1 shrink-0 mr-1.5 align-text-bottom">
-                                    <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm  tracking-wider">
-                                        Partner
-                                    </span>
+                                    <PartnerPill />
                                 </span>
                             )}
                             <span className="align-middle ">{p.title || "Untitled Product"}</span>
@@ -447,15 +454,15 @@ const ProductCard = React.memo(({
                         {(isPromoActive || p.sale_type || (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) || p.return_shipping_subsidy === 1 || p.market_name || (p.followers_count > 1)) && (
                             <div className=" flex items-center min-h-[16px]">
                                 {isPromoActive ? (
-                                    <span className="text-[10px] font-medium text-rose-500 border-red-500 border-[0.5px] px-1  truncate">
+                                    <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1  truncate">
                                         {p.promo_title} {p.promo_discount}% Off
                                     </span>
                                 ) : p.sale_type ? (
-                                    <span className="text-[10px]  text-rose-500 border-red-500 border-[0.5] px-1  truncate">
+                                    <span className="text-[10px]  text-rose-500 border-rose-500 border-[0.5] px-1  truncate">
                                         {p.sale_type} {p.sale_discount}% Off
                                     </span>
                                 ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-red-600' : 'text-rose-500'} truncate`}>
+                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-600' : 'text-rose-500'} truncate`}>
                                         {Number(p.total_quantity) <= 0 ? 'Out of stock' : `Only ${Number(p.total_quantity)} left`}
                                     </span>
                                 ) : p.return_shipping_subsidy === 1 ? (
@@ -535,7 +542,7 @@ const ProductCard = React.memo(({
                                             {p.business_name || "Unknown Store"}
                                         </span>
                                         {p.trusted_partner === 1 && (
-                                            <svg className="w-3 h-3 text-emerald-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" /></svg>
+                                            <VerifiedBadge label={p.market_name || "Trusted Partner"} size="xs" />
                                         )}
                                     </div>
                                 </div>
@@ -544,9 +551,7 @@ const ProductCard = React.memo(({
                         <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-1" title={p.title}>
                             {p.trusted_partner === 1 && (
                                 <span className="inline-flex items-center gap-1 shrink-0 mr-1.5 align-text-bottom">
-                                    <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm  tracking-wider">
-                                        Partner
-                                    </span>
+                                    <PartnerPill />
                                 </span>
                             )}
                             <span className="align-middle ">{p.title || "Untitled Product"}</span>
@@ -555,15 +560,15 @@ const ProductCard = React.memo(({
                         {(isPromoActive || p.sale_type || (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) || p.return_shipping_subsidy === 1 || p.market_name || (p.followers_count > 1)) && (
                             <div className=" flex items-center min-h-[16px]">
                                 {isPromoActive ? (
-                                    <span className="text-[10px] font-medium text-rose-500 border-red-500 border-[0.5px] px-1  truncate">
+                                    <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1  truncate">
                                         {p.promo_title} {p.promo_discount}% Off
                                     </span>
                                 ) : p.sale_type ? (
-                                    <span className="text-[10px]  text-rose-500 border-red-500 border-[0.5] px-1  truncate">
+                                    <span className="text-[10px]  text-rose-500 border-rose-500 border-[0.5] px-1  truncate">
                                         {p.sale_type} {p.sale_discount}% Off
                                     </span>
                                 ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-red-600' : 'text-rose-500'} truncate`}>
+                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-600' : 'text-rose-500'} truncate`}>
                                         {Number(p.total_quantity) <= 0 ? 'Out of stock' : `Only ${Number(p.total_quantity)} left`}
                                     </span>
                                 ) : p.return_shipping_subsidy === 1 ? (
@@ -604,7 +609,7 @@ const ProductCard = React.memo(({
 });
 ProductCard.displayName = "ProductCard";
 
-const MasonryGrid = ({ items, likeData, postLikeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, handlePostLikeClick, formatUrl, router, isRestored, isPartnerTab }: any) => {
+const MasonryGrid = ({ items, likeData, postLikeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, handlePostLikeClick, handlePrefetch, formatUrl, router, isRestored, isPartnerTab }: any) => {
     const [columns, setColumns] = useState(5);
 
     useEffect(() => {
@@ -656,6 +661,7 @@ const MasonryGrid = ({ items, likeData, postLikeData, fetchingProductId, handleP
                                     handleReelsClick={(id: number | string, b: string, e: any, s: string, ps?: string) => handleReelsClick(id, b, e, s, ps)}
                                     handleLikeClick={handleLikeClick}
                                     handlePostLikeClick={handlePostLikeClick}
+                                    handlePrefetch={handlePrefetch}
                                     isLiked={ld.liked}
                                     likeCount={ld.count}
                                     postLikeData={postLikeData}
@@ -682,18 +688,18 @@ if (typeof window !== "undefined") {
     if (catCache && MARKET_CACHE.categories.length === 0) {
         try { MARKET_CACHE.categories = JSON.parse(catCache); } catch (e) { }
     }
-    
+
     // Legacy Cleanup
     localStorage.removeItem("stoqle_market_cache_products");
-    
+
     MARKET_CACHE.lastFetchedAt = Number(localStorage.getItem("stoqle_market_cache_time") || 0);
 }
 
-export default function MarketClient({ params, postCount = 100, initialCategoriesPromise }: Props) {
-    const routeParams = React.use(params);
-    const [activeCategory, setActiveCategory] = useState<string>(MARKET_CACHE.category);
-    const [products, setProducts] = useState<any[]>(MARKET_CACHE.products);
-    const [loading, setLoading] = useState<boolean>(MARKET_CACHE.products.length === 0);
+export default function MarketClient({ params: paramsPromise, initialCategories, hideTabs, initialCategory, softCategory, relatedVendorIds }: Props) {
+    const routeParams = React.use(paramsPromise);
+    const [activeCategory, setActiveCategory] = useState<string>(initialCategory || MARKET_CACHE.category);
+    const [products, setProducts] = useState<any[]>(initialCategory && initialCategory !== MARKET_CACHE.category ? [] : MARKET_CACHE.products);
+    const [loading, setLoading] = useState<boolean>(initialCategory && initialCategory !== MARKET_CACHE.category ? true : MARKET_CACHE.products.length === 0);
     const [isRestoring, setIsRestoring] = useState<boolean>(MARKET_CACHE.products.length > 0);
     const [error, setError] = useState<string | null>(null);
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
@@ -733,7 +739,7 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
 
     useEffect(() => {
         const handleScroll = () => {
-            if (window.scrollY > 10) {
+            if (window.scrollY > 50) {
                 setIsScrolled(true);
             } else {
                 setIsScrolled(false);
@@ -802,13 +808,13 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
     }, []);
 
     useEffect(() => {
-        // 1. Try Memory Cache
+        // 1. Try Memory Cache (fastest — module-level, survives soft navigations)
         if (MARKET_CACHE.categories.length > 0) {
             setFetchedCategories(MARKET_CACHE.categories);
             return;
         }
 
-        // 2. Try LocalStorage Cache (Persists across refreshes)
+        // 2. Try LocalStorage Cache (persists across hard refreshes)
         const cached = localStorage.getItem("stoqle_business_categories");
         if (cached) {
             try {
@@ -817,37 +823,39 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                 if (filtered.length > 0) {
                     setFetchedCategories(filtered);
                     MARKET_CACHE.categories = filtered;
+                    // Already have data — server data will still override below if better
                 }
             } catch (err) {
                 console.error("Failed to parse cached categories", err);
             }
         }
 
-        // 3. Wait for initialCategoriesPromise if provided, fallback to standard fetch
-        if (initialCategoriesPromise) {
-            initialCategoriesPromise.then(resolveCache).catch(() => {
-                fetchBusinessCategories()
-                    .then(res => resolveCache(res))
-                    .catch(console.error);
-            });
+        // 3. Use server-resolved categories if provided (array of category objects),
+        //    otherwise fall back to a direct client-side fetch.
+        //
+        //    NOTE: initialCategories is plain data (already awaited in the RSC layer).
+        //    Never treat it as a Promise — Promises are not serializable across the
+        //    RSC → Client boundary and arrive as undefined.
+        if (Array.isArray(initialCategories) && initialCategories.length > 0) {
+            applyCategories(initialCategories);
         } else {
             fetchBusinessCategories()
-                .then(res => resolveCache(res))
+                .then(res => {
+                    if (res?.status === "success" || res?.success || res?.ok) {
+                        applyCategories(res.data || res);
+                    }
+                })
                 .catch(console.error);
         }
 
-        function resolveCache(res: any) {
-            if (res?.status === "success" || res?.success || res?.ok) {
-                const data = res.data || res;
-                const cats = data.map((c: any) => c.name);
-                const finalCats = ["For you", "PARTNERS", ...cats];
-
-                setFetchedCategories(finalCats);
-                MARKET_CACHE.categories = finalCats;
-                localStorage.setItem("stoqle_business_categories", JSON.stringify(finalCats));
-            }
+        function applyCategories(data: any[]) {
+            const cats = data.map((c: any) => (typeof c === "string" ? c : c.name)).filter(Boolean);
+            const finalCats = ["For you", "PARTNERS", ...cats];
+            setFetchedCategories(finalCats);
+            MARKET_CACHE.categories = finalCats;
+            localStorage.setItem("stoqle_business_categories", JSON.stringify(finalCats));
         }
-    }, [initialCategoriesPromise]);
+    }, [initialCategories]);
 
     useEffect(() => {
         if (token) {
@@ -963,21 +971,22 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
             let nextPosts: any[] = [];
 
             if (activeCategory === "PARTNERS") {
-                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true);
+                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true, softCategory, relatedVendorIds);
                 nextProducts = res?.data || [];
             } else {
                 const bizCat = activeCategory === "For you" ? null : activeCategory;
-                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, bizCat);
+                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, bizCat, false, softCategory, relatedVendorIds);
                 nextProducts = res?.data || [];
 
                 // Fetch social posts with linked products using the dynamic Smart Reels engine
-                if (activeCategory === "For you" || activeCategory === "PARTNERS") {
+                if (activeCategory === "For you" || activeCategory === "PARTNERS" || softCategory) {
                     try {
                         const { posts, nextCursor } = await fetchSmartReels({
                             limit: LIMIT_SOCIAL,
                             cursor: pageNum === 0 ? null : socialCursor,
                             token: token || undefined,
-                            is_product_linked: true
+                            is_product_linked: true,
+                            softCategory
                         });
                         nextPosts = posts;
                         setSocialCursor(nextCursor);
@@ -1058,7 +1067,7 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                         post.interacted_by_user != null ||
                         (post.feed_score != null && post.feed_score < -10000)
                     );
-                    if (alreadySeen) {
+                    if (alreadySeen && !softCategory) {
                         stalePosts.push(post);
                     } else {
                         freshPosts.push(post);
@@ -1110,15 +1119,17 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                 const unique = combined.filter((p) => !existingIds.has(p.product_id));
                 const finalProducts = pageNum === 0 ? combined : [...prev, ...unique];
 
-                MARKET_CACHE.products = finalProducts;
-                MARKET_CACHE.page = pageNum + 1;
-                MARKET_CACHE.hasMore = nextProducts.length >= LIMIT;
-                MARKET_CACHE.likeData = { ...likeData, ...nextLikeData };
+                if (!hideTabs) {
+                    MARKET_CACHE.products = finalProducts;
+                    MARKET_CACHE.page = pageNum + 1;
+                    MARKET_CACHE.hasMore = nextProducts.length >= LIMIT;
+                    MARKET_CACHE.likeData = { ...likeData, ...nextLikeData };
 
-                // Persist for next session's "blink eye" load via IDB
-                if (typeof window !== "undefined" && pageNum === 0) {
-                    idbSet("stoqle_market_cache_products", finalProducts).catch(console.error);
-                    localStorage.setItem("stoqle_market_cache_time", Date.now().toString());
+                    // Persist for next session's "blink eye" load via IDB
+                    if (typeof window !== "undefined" && pageNum === 0) {
+                        idbSet("stoqle_market_cache_products", finalProducts).catch(console.error);
+                        localStorage.setItem("stoqle_market_cache_time", Date.now().toString());
+                    }
                 }
 
                 return finalProducts;
@@ -1149,13 +1160,14 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
             const needsPersonalization = token && !MARKET_CACHE.personalized && activeCategory !== "Trending";
 
             if (!needsPersonalization && isFresh) {
+                setProducts(MARKET_CACHE.products);
                 setLoading(false);
                 return;
             }
         }
 
         // Only clear if category actually changed and it's not the restored state
-        if (MARKET_CACHE.category !== activeCategory) {
+        if (!hideTabs && MARKET_CACHE.category !== activeCategory) {
             MARKET_CACHE.products = [];
             MARKET_CACHE.page = 0;
             MARKET_CACHE.hasMore = true;
@@ -1171,6 +1183,15 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
         fetchPage(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isHydrated, token, activeCategory, refreshKey]);
+
+    // Sync active category if initialCategory prop changes (e.g. from cart updates)
+    useEffect(() => {
+        if (initialCategory && initialCategory !== activeCategory) {
+            // If the category actually changed, we MUST clear products and re-fetch
+            setActiveCategory(initialCategory);
+            // We don't call fetchPage(0) here because the effect above will trigger on activeCategory change
+        }
+    }, [initialCategory, activeCategory]);
 
     // Center active tab automatically on change
     useEffect(() => {
@@ -1262,7 +1283,11 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                 params.delete("reels");
             }
 
-            let newUrl = `/market/${bizSlug}`;
+            // Context-Aware Routing: Use current base path (market, cart, etc)
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            const currentBase = pathParts[0] || 'market';
+            let newUrl = `/${currentBase}/${bizSlug}`;
+
             // Always prefer slug in the URL — never expose numeric product_id
             params.delete("product_id");
             if (productSlug) {
@@ -1285,7 +1310,9 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
             const search = params.toString();
             // If we have a shop/biz slug from props or state, keep it.
             const currentBiz = routeParams?.shop?.[0];
-            const newUrl = currentBiz ? `/market/${currentBiz}${search ? `?${search}` : ""}` : `/market${search ? `?${search}` : ""}`;
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            const currentBase = pathParts[0] || 'market';
+            const newUrl = currentBiz ? `/${currentBase}/${currentBiz}${search ? `?${search}` : ""}` : `/${currentBase}${search ? `?${search}` : ""}`;
 
             if (newUrl !== window.location.pathname + window.location.search) {
                 if (replace) {
@@ -1310,6 +1337,44 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
             setSelectedSocialPost(null);
         }
     }, [pathname, searchParams]);
+
+    /**
+     * EAGER PREFETCH ENGINE
+     * 
+     * Dynamically imported components (next/dynamic) normally download only when triggered.
+     * This creates a 'First-Click Delay' where the user's first tap feels laggy while the code downloads.
+     * 
+     * We solve this by prefetching all heavy modal chunks in the background once the page is idle.
+     */
+    useEffect(() => {
+        const prefetchModals = () => {
+            // Trigger background fetches of the actual JS bundles
+            // These catch errors silently because we only care about filling the cache
+            import("@/src/components/product/addProduct/modal/previewModal").catch(() => { });
+            import("@/src/components/product/addProduct/modal/reelsModal").catch(() => { });
+            import("@/src/components/modal/postModal").catch(() => { });
+            import("@/src/components/modal/auth/loginModal").catch(() => { });
+        };
+
+        if (typeof window !== "undefined") {
+            if ("requestIdleCallback" in window) {
+                window.requestIdleCallback(() => prefetchModals());
+            } else {
+                setTimeout(prefetchModals, 2000);
+            }
+        }
+    }, []);
+
+    const handlePrefetch = React.useCallback(async (productId: number | string, productSlug?: string) => {
+        const isNumericId = typeof productId === 'number' || (typeof productId === 'string' && /^\d+$/.test(productId));
+        const pid = isNumericId ? Number(productId) : null;
+        const identifier = productSlug || (isNumericId ? pid : productId);
+        if (!identifier) return;
+
+        // Trigger fetchBusinessCategories and fetchProductById in parallel for background warmth
+        // This fills the browser's fetch cache and the server-side revalidation cache.
+        fetchProductById(identifier, token).catch(() => { });
+    }, [token]);
 
     const handleProductClick = React.useCallback(async (productId: number | string, businessName?: string, e?: React.MouseEvent, businessSlug?: string, isSocialPost: boolean = false, productSlug?: string) => {
         if (fetchingProductId) return;
@@ -1336,7 +1401,10 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
         const pid = isNumericId ? Number(productId) : null;
         const identifier = productSlug || (isNumericId ? pid : productId);
 
-        if (!identifier) return;
+        if (!identifier || identifier === "undefined" || identifier === "null") {
+            setFetchingProductId(null);
+            return;
+        }
 
         updateUrl(pid, businessName, false, businessSlug, false, productSlug);
 
@@ -1368,25 +1436,24 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                 if (!modalOpen) setModalOpen(true);
 
                 // Log view IMMEDIATELY
-                const viewHeaders: any = { 'Content-Type': 'application/json', Accept: 'application/json' };
-                if (token) viewHeaders.Authorization = `Bearer ${token}`;
-                fetch(`${API_BASE_URL}/api/activity/log`, {
-                    method: 'POST',
-                    headers: viewHeaders,
-                    body: JSON.stringify({
-                        product_id: dbProduct.product_id,
-                        action_type: 'view',
-                        category: dbProduct.category,
-                        business_id: dbProduct.business_id
-                    }),
-                    keepalive: true
-                }).catch(() => { });
+                logUserActivity({
+                    product_id: dbProduct.product_id,
+                    action_type: 'view',
+                    category: dbProduct.category,
+                    business_id: dbProduct.business_id
+                }, token).catch(() => { });
 
                 // Update URL with slug (clean URL)
                 updateUrl(dbProduct.product_id, dbProduct.business_name, false, dbProduct.business_slug, false, dbProduct.slug || dbProduct.product_slug);
             }
-        } catch (err) {
-            console.error(err);
+        } catch (err: any) {
+            console.error("Critical handleProductClick failed:", {
+                message: err?.message || "Unknown error",
+                status: err?.status,
+                body: err?.body,
+                identifier,
+                rawError: err,
+            });
         } finally {
             setFetchingProductId(null);
         }
@@ -1402,25 +1469,34 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
             const params = new URLSearchParams(window.location.search);
             const isReels = params.get("reels") === "true";
             const currentPath = window.location.pathname;
-            const shopSegments = currentPath.startsWith('/market') ? currentPath.slice(7).split('/').filter(Boolean) : [];
-            // URL shape: /market/{bizSlug}/{productSlug}
-            const currentSlug = shopSegments.length >= 2 ? shopSegments[1] : null;
+            const pathParts = currentPath.split('/').filter(Boolean);
+            // URL shape: /{base}/{bizSlug}/{productSlug}
+            const currentSlug = pathParts.length >= 3 ? pathParts[2] : (pathParts.length === 2 ? pathParts[1] : null);
 
             if (currentSlug) {
+                const alreadyOpenProduct = modalOpen && selectedProductPayload?.slug === currentSlug;
+                const alreadyOpenSocial = socialPostModalOpen && (selectedSocialPost?.product_slug === currentSlug || selectedSocialPost?.slug === currentSlug);
+
                 if (isReels) {
-                    // Slug-based reels: try to find the post in the current list
-                    if (!socialPostModalOpen && !fetchingProductId) {
+                    if (alreadyOpenSocial) {
+                        if (modalOpen) setModalOpen(false);
+                        return;
+                    }
+                    if (!fetchingProductId) {
                         const post = products.find(p => p.is_social_post && p.product_slug === currentSlug);
                         if (post) {
                             setSelectedSocialPost(post);
                             setSocialPostModalOpen(true);
-                        } else if (selectedProductPayload?.slug !== currentSlug) {
-                            // Fallback to fetching product details if post not found in list
+                        } else {
                             handleProductClick("", undefined, undefined, undefined, false, currentSlug);
                         }
                     }
                 } else {
-                    if (!modalOpen && !fetchingProductId && selectedProductPayload?.slug !== currentSlug) {
+                    if (alreadyOpenProduct) {
+                        if (socialPostModalOpen) setSocialPostModalOpen(false);
+                        return;
+                    }
+                    if (!fetchingProductId) {
                         handleProductClick("", undefined, undefined, undefined, false, currentSlug);
                     }
                 }
@@ -1432,6 +1508,10 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                 if (reelsModalOpen) {
                     setReelsModalOpen(false);
                     setSelectedProductId(null);
+                }
+                if (socialPostModalOpen) {
+                    setSocialPostModalOpen(false);
+                    setSelectedSocialPost(null);
                 }
             }
         };
@@ -1448,102 +1528,104 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
     return (
         <>
             <section className={`min-h-screen transition-colors duration-500 pb-10 ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-slate-50"}`}>
-                <div className={`sticky transition-all duration-300 ${isScrolled ? "top-0 z-[1100] translate-y-0" : "top-16 z-20"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"}`}>
-                    <div ref={tabsRef} className="flex px-4 py-2.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
-                        {CATEGORIES.map((item) => (
-                            <button
-                                key={item}
-                                data-active={activeCategory === item}
-                                onClick={() => setActiveCategory(item)}
-                                className={`whitespace-nowrap relative rounded-full px-3 py-1.5 text-sm transition-all ${activeCategory === "PARTNERS"
-                                    ? item === "PARTNERS"
-                                        ? "text-emerald-600 font-bold italic tracking-tighter"
-                                        : activeCategory === item
-                                            ? "text-white bg-emerald-600 font-bold italic shadow-md shadow-emerald-100"
-                                            : "hover:bg-emerald-100 text-emerald-700"
-                                    : item === "PARTNERS"
-                                        ? "text-emerald-600 font-bold italic tracking-tighter"
-                                        : activeCategory === item
-                                            ? "text-red-500 font-bold monospace italic"
-                                            : "hover:bg-slate-200 text-slate-600"
-                                    }`}
-                            >
-                                {item === "PARTNERS" && activeCategory === "PARTNERS" && (
-                                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white text-red-500 text-[7px] font-bold border-[0.5px] border-red-500 px-1.5 rounded-full z-10  tracking-tighter shadow-sm py-0.5">Verified</span>
-                                )}
-                                {item}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Actionable Orders Marquee - hide when scrolled to reduce height */}
-                    {!isScrolled && actionableData && (actionableData.vendorPendingCount > 0 || actionableData.customerDeliveredCount > 0 || actionableData.customerOutForDeliveryCount > 0) && (
-                        <div
-                            className={`w-full py-1.5 overflow-hidden group cursor-pointer ${actionableData.vendorPendingCount > 0
-                                ? "bg-orange-50 border-orange-100"
-                                : "bg-blue-50 border-blue-100"
-                                }`}
-                            onClick={() => {
-                                if (actionableData.vendorPendingCount > 0) {
-                                    router.push("/profile/business/customer-order");
-                                } else {
-                                    router.push("/profile/orders");
-                                }
-                            }}
-                        >
-                            <div className="flex animate-marquee-market whitespace-nowrap">
-                                <div className="flex items-center gap-12 px-4">
-                                    {actionableData.vendorPendingCount > 0 ? (
-                                        <>
-                                            <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
-
-                                            </span>
-                                            <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
-                                            </span>
-                                            <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            {actionableData.customerOutForDeliveryCount > 0 && (
-                                                <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                                    📦 You have ({actionableData.customerOutForDeliveryCount}) {actionableData.customerOutForDeliveryCount === 1 ? 'order' : 'orders'} out for delivery! Please share the delivery code with the vendor or rider if the product has delivered to you.
-                                                </span>
-                                            )}
-                                            {actionableData.customerDeliveredCount > 0 && (
-                                                <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                                    📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
-                                                </span>
-                                            )}
-                                            {/* Repeating for marquee effect if both or either has content */}
-                                            {actionableData.customerOutForDeliveryCount > 0 && (
-                                                <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                                    📦 You have ({actionableData.customerOutForDeliveryCount}) {actionableData.customerOutForDeliveryCount === 1 ? 'order' : 'orders'} out for delivery! Please share the delivery code with the vendor or rider if the product has delivered to you.
-                                                </span>
-                                            )}
-                                            {actionableData.customerDeliveredCount > 0 && (
-                                                <span className="text-[10px] font-bold text-blue-700  tracking-wider flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                                    📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
-                                                </span>
-                                            )}
-                                        </>
+                {!hideTabs && (
+                    <div className={`sticky transition-all duration-500 ${isScrolled ? "top-0 z-[2500] " : "top-[64px] z-20"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"}`}>
+                        <div ref={tabsRef} className="flex px-4 py-2.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+                            {CATEGORIES.map((item) => (
+                                <button
+                                    key={item}
+                                    data-active={activeCategory === item}
+                                    onClick={() => setActiveCategory(item)}
+                                    className={`whitespace-nowrap relative rounded-full px-3 py-1.5 text-sm transition-all ${activeCategory === "PARTNERS"
+                                        ? item === "PARTNERS"
+                                            ? "text-emerald-600 font-bold italic tracking-tighter"
+                                            : activeCategory === item
+                                                ? "text-white bg-emerald-600 font-bold italic shadow-md shadow-emerald-100"
+                                                : "hover:bg-emerald-100 text-emerald-700"
+                                        : item === "PARTNERS"
+                                            ? "text-emerald-600 font-bold italic tracking-tighter"
+                                            : activeCategory === item
+                                                ? "text-rose-500 font-bold monospace italic"
+                                                : "hover:bg-slate-200 text-slate-600"
+                                        }`}
+                                >
+                                    {item === "PARTNERS" && activeCategory === "PARTNERS" && (
+                                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white text-rose-500 text-[7px] font-bold border-[0.5px] border-rose-500 px-1.5 rounded-full z-10  tracking-tighter shadow-sm py-0.5">Verified</span>
                                     )}
+                                    {item}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Actionable Orders Marquee - hide when scrolled to reduce height */}
+                        {!isScrolled && actionableData && (actionableData.vendorPendingCount > 0 || actionableData.customerDeliveredCount > 0 || actionableData.customerOutForDeliveryCount > 0) && (
+                            <div
+                                className={`w-full py-1.5 overflow-hidden group cursor-pointer ${actionableData.vendorPendingCount > 0
+                                    ? "bg-orange-50 border-orange-100"
+                                    : "bg-blue-50 border-blue-100"
+                                    }`}
+                                onClick={() => {
+                                    if (actionableData.vendorPendingCount > 0) {
+                                        router.push("/profile/business/customer-order");
+                                    } else {
+                                        router.push("/profile/orders");
+                                    }
+                                }}
+                            >
+                                <div className="flex animate-marquee-market whitespace-nowrap">
+                                    <div className="flex items-center gap-12 px-4">
+                                        {actionableData.vendorPendingCount > 0 ? (
+                                            <>
+                                                <span className="text-[10px] font-bold text-orange-700  tracking-wider flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                                    ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible to maintain your vendor rating. Click here to view and ship orders.
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                {actionableData.customerOutForDeliveryCount > 0 && (
+                                                    <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                        📦 You have ({actionableData.customerOutForDeliveryCount}) {actionableData.customerOutForDeliveryCount === 1 ? 'order' : 'orders'} out for delivery! Please share the delivery code with the vendor or rider if the product has delivered to you.
+                                                    </span>
+                                                )}
+                                                {actionableData.customerDeliveredCount > 0 && (
+                                                    <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                        📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-12 px-4">
+                                        {actionableData.vendorPendingCount > 0 ? (
+                                            <span className="text-[10px] font-bold text-orange-700 tracking-wider flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                                ⚠️ You have ({actionableData.vendorPendingCount}) new {actionableData.vendorPendingCount === 1 ? 'order' : 'orders'} waiting to be shipped! Please process them as soon as possible.
+                                            </span>
+                                        ) : (
+                                            <>
+                                                {actionableData.customerOutForDeliveryCount > 0 && (
+                                                    <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                        📦 You have ({actionableData.customerOutForDeliveryCount}) {actionableData.customerOutForDeliveryCount === 1 ? 'order' : 'orders'} out for delivery! Please share the delivery code with the vendor or rider if the product has delivered to you.
+                                                    </span>
+                                                )}
+                                                {actionableData.customerDeliveredCount > 0 && (
+                                                    <span className="text-[10px] font-bold text-blue-700 tracking-wider flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                                        📦 You have ({actionableData.customerDeliveredCount}) {actionableData.customerDeliveredCount === 1 ? 'order' : 'orders'} delivered! Please click here to confirm receipt and release payment.
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
 
                 <AnimatePresence>
                     {showManualLoading && (
@@ -1576,21 +1658,37 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
                         </button>
                     </div>
                 ) : (
-                    <div className="p-2 sm:p-4 ">
-                        <MasonryGrid
-                            items={filteredProducts}
-                            likeData={likeData}
-                            postLikeData={postLikeData}
-                            fetchingProductId={fetchingProductId}
-                            handleProductClick={handleProductClick}
-                            handleReelsClick={handleReelsClick}
-                            handleLikeClick={handleLikeClick}
-                            handlePostLikeClick={handlePostLikeClick}
-                            formatUrl={formatUrl}
-                            router={router}
-                            isRestored={isRestoring}
-                            isPartnerTab={activeCategory === "PARTNERS"}
-                        />
+                    <div className="px-1">
+                        {filteredProducts.length > 0 ? (
+                            <MasonryGrid
+                                items={filteredProducts}
+                                likeData={likeData}
+                                postLikeData={postLikeData}
+                                fetchingProductId={fetchingProductId}
+                                handleProductClick={handleProductClick}
+                                handleReelsClick={handleReelsClick}
+                                handleLikeClick={handleLikeClick}
+                                handlePostLikeClick={handlePostLikeClick}
+                                handlePrefetch={handlePrefetch}
+                                formatUrl={formatUrl}
+                                router={router}
+                                isRestored={isRestoring}
+                                isPartnerTab={activeCategory === "PARTNERS"}
+                            />
+                        ) : (
+                            <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+                                <div className="w-20 h-20 opacity-20 mb-4">
+                                    <ShoppingCart className="w-full h-full" />
+                                </div>
+                                <p className="text-sm font-medium">No results found in this category</p>
+                                <button
+                                    onClick={() => setActiveCategory("For you")}
+                                    className="mt-4 text-xs font-bold text-rose-500 hover:underline"
+                                >
+                                    View all products
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1717,6 +1815,21 @@ export default function MarketClient({ params, postCount = 100, initialCategorie
             />
 
             <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+
+            {/* --- WARMING INSTANCE (Zero-Delay Optimization) --- 
+                We render a hidden instance of the modal once the page has products.
+                This ensures React parses the component, initializes hooks, and prepares 
+                the animation engine BEFORE the user ever clicks.
+            */}
+            {isHydrated && products.length > 0 && !modalOpen && (
+                <div className="hidden pointer-events-none" aria-hidden="true">
+                    <ProductPreviewModal
+                        open={false}
+                        payload={null}
+                        onClose={() => { }}
+                    />
+                </div>
+            )}
 
             <style jsx global>{`
                 @keyframes fadeIn {

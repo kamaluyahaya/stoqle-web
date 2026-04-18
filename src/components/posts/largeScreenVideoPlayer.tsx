@@ -120,7 +120,7 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
       setIsManagerActive(active);
     };
     checkActive();
-    
+
     return videoPlaybackManager.subscribe((activeId) => {
       const active = activeId === playerId;
       setIsManagerActive(active);
@@ -167,12 +167,12 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
           .then((forcedMute) => { if (forcedMute) setInternalMuteFallback(true); })
           .catch(() => setHasTriggeredPlay(false));
       }
-      
+
       // Secondary check: if it's been active for a while but stuck in paused state without manual pause
       const heartbeat = setInterval(() => {
         if (isActive && !userManualPause && video.paused && !loading && !isBuffering) {
           videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
-            .catch(() => {});
+            .catch(() => { });
         }
       }, 3000);
       return () => clearInterval(heartbeat);
@@ -306,7 +306,7 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
       {isBuffering && isNativeReady && isFullyPainted && !seeking && (
         <div className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none">
           <div className="w-1 h-32 bg-white/5 rounded-full overflow-hidden relative">
-            <motion.div animate={{ y: ["-100%", "100%"] }} transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", repeatType: "reverse" }} className="absolute inset-x-0 h-1/2 bg-red-500/30" />
+            <motion.div animate={{ y: ["-100%", "100%"] }} transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", repeatType: "reverse" }} className="absolute inset-x-0 h-1/2 bg-rose-500/30" />
           </div>
         </div>
       )}

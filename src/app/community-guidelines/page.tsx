@@ -2,17 +2,17 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence, useScroll, useSpring } from "framer-motion";
-import { 
-  Shield, 
-  Heart, 
-  ShoppingBag, 
-  AlertTriangle, 
-  Lock, 
-  Zap, 
-  Package, 
-  RefreshCcw, 
-  UserCheck, 
-  Gavel, 
+import {
+  Shield,
+  Heart,
+  ShoppingBag,
+  AlertTriangle,
+  Lock,
+  Zap,
+  Package,
+  RefreshCcw,
+  UserCheck,
+  Gavel,
   Flag,
   ChevronDown,
   ChevronLeft,
@@ -53,7 +53,7 @@ const guidelines = [
   },
   {
     id: "prohibited",
-    icon: <AlertTriangle className="w-6 h-6 text-red-500" />,
+    icon: <AlertTriangle className="w-6 h-6 text-rose-500" />,
     title: "Prohibited Items",
     short: "What you cannot sell on Stoqle.",
     content: "To maintain safety, we prohibit the sale of illegal drugs, weapons, hazardous materials, and regulated items. We also restrict items that violate intellectual property rights. Please refer to our Full Prohibited List for details."
@@ -102,7 +102,7 @@ const guidelines = [
   },
   {
     id: "reporting",
-    icon: <Flag className="w-6 h-6 text-red-600" />,
+    icon: <Flag className="w-6 h-6 text-rose-600" />,
     title: "Reporting",
     short: "How to flag suspicious or harmful activity.",
     content: "Community policing is vital. Use the 'Report' button on any post, profile, or listing to alert our safety team. All reports are reviewed by humans within 24–48 hours."
@@ -116,12 +116,12 @@ const GuidelineCard = ({ item }: { item: typeof guidelines[0] }) => {
   const [reaction, setReaction] = useState<"up" | "down" | null>(null);
 
   return (
-    <motion.div 
+    <motion.div
       id={item.id}
       layout
       className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden mb-6"
     >
-      <div 
+      <div
         onClick={() => setIsOpen(!isOpen)}
         className="p-6 cursor-pointer flex items-start gap-4"
       >
@@ -159,22 +159,22 @@ const GuidelineCard = ({ item }: { item: typeof guidelines[0] }) => {
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Was this helpful?</span>
                   <div className="flex items-center gap-1">
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); setReaction("up"); }}
                       className={`p-2 rounded-full transition-colors ${reaction === "up" ? "bg-green-100 text-green-600" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"}`}
                     >
                       <ThumbsUp className="w-4 h-4" />
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); setReaction("down"); }}
-                      className={`p-2 rounded-full transition-colors ${reaction === "down" ? "bg-red-100 text-red-600" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"}`}
+                      className={`p-2 rounded-full transition-colors ${reaction === "down" ? "bg-rose-100 text-rose-600" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"}`}
                     >
                       <ThumbsDown className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-red-500 transition-colors">
+                  <button className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors">
                     <Bookmark className="w-4 h-4" /> Save
                   </button>
                 </div>
@@ -221,7 +221,7 @@ export default function CommunityGuidelinesPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-black text-slate-900 dark:text-white font-sans">
       {/* Back Button (Fixed) */}
       <div className="fixed top-6 left-6 z-[200]">
-        <button 
+        <button
           onClick={() => router.back()}
           className="p-2.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-full shadow-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
         >
@@ -229,24 +229,24 @@ export default function CommunityGuidelinesPage() {
         </button>
       </div>
       {/* Scroll Progress Indicator */}
-      <motion.div 
-        className="fixed top-0 left-0 right-0 h-1 bg-red-600 z-[101] origin-left" 
+      <motion.div
+        className="fixed top-0 left-0 right-0 h-1 bg-rose-600 z-[101] origin-left"
         style={{ scaleX }}
       />
 
       {/* Hero Section */}
       <section className="relative pt-24 pb-12 lg:pt-32 lg:pb-20 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-red-50/50 to-transparent dark:from-red-950/20 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-rose-50/50 to-transparent dark:from-rose-950/20 pointer-events-none" />
         <div className="max-w-7xl mx-auto px-6 text-center relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold mb-6"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-bold mb-6"
           >
             <Shield className="w-3.5 h-3.5" />
             Last updated: April 10, 2026
           </motion.div>
-          <motion.h1 
+          <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -254,13 +254,13 @@ export default function CommunityGuidelinesPage() {
           >
             Stoqle Community Guidelines
           </motion.h1>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed"
           >
-            Building a safe, trusted, and inclusive marketplace for businesses and individuals worldwide. 
+            Building a safe, trusted, and inclusive marketplace for businesses and individuals worldwide.
             Our guidelines help us grow together.
           </motion.p>
         </div>
@@ -275,13 +275,12 @@ export default function CommunityGuidelinesPage() {
                 <a
                   key={item.id}
                   href={`#${item.id}`}
-                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    activeSection === item.id 
-                    ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400" 
-                    : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSection === item.id
+                      ? "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400"
+                      : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+                    }`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full transition-all ${activeSection === item.id ? "bg-red-600 scale-100" : "bg-transparent scale-0"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full transition-all ${activeSection === item.id ? "bg-rose-600 scale-100" : "bg-transparent scale-0"}`} />
                   {item.title}
                 </a>
               ))}
@@ -310,21 +309,21 @@ export default function CommunityGuidelinesPage() {
           ))}
 
           {/* Trust Elements Section */}
-          <section className="mt-12 p-8 lg:p-12 bg-red-600 rounded-3xl text-white relative overflow-hidden">
+          <section className="mt-12 p-8 lg:p-12 bg-rose-600 rounded-3xl text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
               <Shield className="w-64 h-64" />
             </div>
             <div className="relative z-10 max-w-xl">
               <h2 className="text-2xl font-bold mb-4">Agreement & Enforcement</h2>
-              <p className="text-red-50 leading-relaxed mb-8">
+              <p className="text-rose-50 leading-relaxed mb-8">
                 By using Stoqle, you agree to follow these guidelines. Violating these rules affects the safety of our entire community and may result in the permanent termination of your account.
               </p>
-              
+
               <div className="flex flex-wrap gap-4">
-                <button className="px-8 py-3 bg-white text-red-600 rounded-full font-bold shadow-xl hover:bg-red-50 transition-colors flex items-center gap-2">
+                <button className="px-8 py-3 bg-white text-rose-600 rounded-full font-bold shadow-xl hover:bg-rose-50 transition-colors flex items-center gap-2">
                   Agree & Continue <ArrowRight className="w-4 h-4" />
                 </button>
-                <button className="px-8 py-3 bg-red-700/50 backdrop-blur-sm border border-red-500/30 text-white rounded-full font-bold hover:bg-red-700 transition-colors flex items-center gap-2">
+                <button className="px-8 py-3 bg-rose-700/50 backdrop-blur-sm border border-rose-500/30 text-white rounded-full font-bold hover:bg-rose-700 transition-colors flex items-center gap-2">
                   Report a Violation
                 </button>
               </div>
@@ -371,22 +370,22 @@ export default function CommunityGuidelinesPage() {
               Your Vision, Our Innovation. Building the future of commerce through community and trust.
             </p>
           </div>
-          
+
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-12">
             <div>
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Navigate</h4>
               <ul className="space-y-2 text-sm font-bold text-slate-600 dark:text-slate-300">
-                <li><Link href="/" className="hover:text-red-500 transition-colors">Home</Link></li>
-                <li><Link href="/shop" className="hover:text-red-500 transition-colors">Marketplace</Link></li>
-                <li><Link href="/discover" className="hover:text-red-500 transition-colors">Discover</Link></li>
+                <li><Link href="/" className="hover:text-rose-500 transition-colors">Home</Link></li>
+                <li><Link href="/shop" className="hover:text-rose-500 transition-colors">Marketplace</Link></li>
+                <li><Link href="/discover" className="hover:text-rose-500 transition-colors">Discover</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Legal</h4>
               <ul className="space-y-2 text-sm font-bold text-slate-600 dark:text-slate-300">
-                <li><Link href="/privacy" className="hover:text-red-500 transition-colors">Privacy Policy</Link></li>
-                <li><Link href="/terms" className="hover:text-red-500 transition-colors">Terms of Service</Link></li>
-                <li><Link href="/help" className="hover:text-red-500 transition-colors">Support</Link></li>
+                <li><Link href="/privacy" className="hover:text-rose-500 transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-rose-500 transition-colors">Terms of Service</Link></li>
+                <li><Link href="/help" className="hover:text-rose-500 transition-colors">Support</Link></li>
               </ul>
             </div>
             <div className="col-span-2 lg:col-span-1">

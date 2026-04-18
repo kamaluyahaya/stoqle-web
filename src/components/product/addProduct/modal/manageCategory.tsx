@@ -123,7 +123,7 @@ export default function ManageCategoriesModal({ open, onClose, categories, onUpd
                       maxLength={100}
                     />
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => saveEdit(c.category_id)} disabled={loadingId === c.category_id} className="px-3 py-2 rounded-full bg-red-500 text-white text-sm">
+                      <button onClick={() => saveEdit(c.category_id)} disabled={loadingId === c.category_id} className="px-3 py-2 rounded-full bg-rose-500 text-white text-sm">
                         {loadingId === c.category_id ? "Saving..." : "Save"}
                       </button>
                       <button onClick={cancelEdit} className="px-3 py-2 rounded-full  text-sm">Cancel</button>

@@ -221,8 +221,8 @@ export default function SettingsPage() {
           />
           <SettingsRow
             label="Logout"
-            icon={<ArrowRightOnRectangleIcon className="w-5 h-5 text-red-500" />}
-            labelClassName="text-red-500 font-semibold"
+            icon={<ArrowRightOnRectangleIcon className="w-5 h-5 text-rose-500" />}
+            labelClassName="text-rose-500 font-semibold"
             onClick={() => setShowLogout(true)}
             hideChevron
           />

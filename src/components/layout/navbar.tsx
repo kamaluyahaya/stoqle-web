@@ -104,7 +104,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
         <span className="text-gray-500">{label}</span>
         <div className="flex items-center gap-2">
           {badge !== undefined && (badge as number) > 0 && (
-            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
+            <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
               {badge}
             </span>
           )}
@@ -340,8 +340,8 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                           }}
                           className="flex flex-col items-center gap-1 group"
                         >
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-red-500 transition-all">
-                            <item.icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-rose-500 transition-all">
+                            <item.icon className="w-4 h-4 text-slate-400 group-hover:text-rose-500 transition-colors" />
                           </div>
                           <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
                             {item.label}
@@ -356,8 +356,8 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                         href={item.href}
                         className="flex flex-col items-center gap-1 group"
                       >
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-red-500 transition-all">
-                          <item.icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-rose-500 transition-all">
+                          <item.icon className="w-4 h-4 text-slate-400 group-hover:text-rose-500 transition-colors" />
                         </div>
                         <span className="text-[10px] font-bold text-slate-400 group-hover:text-slate-900 transition-colors">
                           {item.label}
@@ -373,13 +373,13 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
       </AnimatePresence>
 
       <header
-        className={`fixed top-0 inset-x-0 bg-white backdrop-blur-md p-2 ${hideHeaderOnMobile ? "hidden lg:block" : (pathname === "/messages" || pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory") ? "hidden sm:block" : "")}`}
-        style={{ height, zIndex: (showMobileMenu || showMobileSearch) ? 300000 : 1000 }}
+        className={`fixed top-0 inset-x-0 bg-white backdrop-blur-md p-2 ${pathname === "/messages" ? "hidden" : (hideHeaderOnMobile ? "hidden lg:block" : (pathname?.startsWith("/shop") || pathname === "/profile/business/customer-order" || pathname?.includes("/track/") || pathname?.startsWith("/profile/business/inventory") ? "hidden sm:block" : ""))}`}
+        style={{ height, zIndex: (showMobileMenu || showMobileSearch) ? 300000 : 2000 }}
       >
         <div className="mx-auto flex h-full items-center px-4 w-full">
           {/* ---------- Desktop & Tablet: Logo & main search ---------- */}
           <Link href="/discover" className="flex min-w-[32px] sm:min-w-[160px] items-center cursor-pointer">
-            <div className="rounded-full bg-red-500 px-3 py-1.5 text-md font-semibold text-white">
+            <div className="rounded-full bg-rose-500 px-3 py-1.5 text-md font-semibold text-white">
               stoqle
             </div>
           </Link>
@@ -562,7 +562,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                             onClick={async () => {
                               await openLogin();
                             }}
-                            className="w-[90%] rounded-full bg-red-500 text-white px-6 py-2 text-sm font-bold shadow-sm active:scale-95 transition-all"
+                            className="w-[90%] rounded-full bg-rose-500 text-white px-6 py-2 text-sm font-bold shadow-sm active:scale-95 transition-all"
                           >
                             Login
                           </button>
@@ -611,14 +611,14 @@ function DrawerItem({
   const content = (
     <div className="flex items-center justify-between p-4 hover:bg-slate-100 active:bg-slate-200 transition-all group active:scale-[0.99] cursor-pointer">
       <div className="flex items-center gap-4">
-        <Icon className="w-5 h-5 text-slate-500 group-hover:text-red-500 transition-colors" />
+        <Icon className="w-5 h-5 text-slate-500 group-hover:text-rose-500 transition-colors" />
         <span className="font-bold text-slate-800 text-[14px] tracking-tight">
           {label}
         </span>
       </div>
       <div className="flex items-center gap-2">
         {badge !== undefined && badge > 0 && (
-          <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold min-w-[18px] text-center shadow-sm">
+          <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-extrabold min-w-[18px] text-center shadow-sm">
             {badge}
           </span>
         )}

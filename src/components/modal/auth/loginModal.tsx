@@ -9,7 +9,8 @@ import { getCurrentLocationName } from "@/src/lib/location";
 import { auth as firebaseAuth, googleProvider } from "@/src/lib/firebase";
 import { signInWithPopup } from "firebase/auth";
 import Swal from "sweetalert2";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 
 type Props = {
   isOpen: boolean;
@@ -50,6 +51,12 @@ export default function LoginModal({ isOpen, onClose }: Props) {
   // loading + error
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (isOpen) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -375,7 +382,8 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
-      className="fixed inset-0 z-[200000] flex items-center justify-center lg:px-4 lg:py-6 "
+      className="fixed inset-0 flex items-center justify-center lg:px-4 lg:py-6"
+      style={{ zIndex: modalZIndex }}
       onMouseDown={onClose}
     >
       <div className="absolute inset-0 bg-black/50 " aria-hidden />
@@ -417,7 +425,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
 
           {/* MOBILE BRANDING (Top of inputs) */}
           <div className="lg:hidden flex flex-col items-center gap-3 mb-6">
-            <div className="rounded-full bg-red-500 px-4 py-1.5 text-xs font-semibold text-white">
+            <div className="rounded-full bg-rose-500 px-4 py-1.5 text-xs font-semibold text-white">
               Stoqle
             </div>
             <div className="bg-blue-50 text-blue-500 px-4 py-2 font-bold text-xs rounded-full text-center">
@@ -437,7 +445,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="Phone number or Email"
-                  className="w-full rounded-full bg-gray-100 px-5 py-3 pr-11 text-sm text-slate-500 font-medium caret-red-500 outline-none transition"
+                  className="w-full rounded-full bg-gray-100 px-5 py-3 pr-11 text-sm text-slate-500 font-medium caret-rose-500 outline-none transition"
                   aria-label="Phone number or email"
                   required
                 />
@@ -590,7 +598,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Full name"
-                  className="w-full rounded-full bg-gray-100 px-5 py-3 pr-11 text-sm text-slate-500 font-medium caret-red-500 outline-none transition"
+                  className="w-full rounded-full bg-gray-100 px-5 py-3 pr-11 text-sm text-slate-500 font-medium caret-rose-500 outline-none transition"
                 />
 
                 {error && <div className="text-sm text-rose-500">{error}</div>}
@@ -631,7 +639,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
           </div>
 
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-            <div className="hidden lg:block rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white">
+            <div className="hidden lg:block rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white">
               Stoqle
             </div>
 

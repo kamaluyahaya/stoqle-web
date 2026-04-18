@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 import {
   ChevronLeftIcon,
   MagnifyingGlassIcon,
@@ -71,15 +72,15 @@ const PostCard = React.memo(({
   setShowLoginModal,
   router,
   getNoteStyles,
-  isRestored = false
+  isRestorose = false
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
 
   // Animation variants
   const entryVariants = {
-    initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
+    initial: isRestorose ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
     animate: { opacity: 1, scale: 1, y: 0 },
-    transition: isRestored ? { duration: 0 } : {
+    transition: isRestorose ? { duration: 0 } : {
       duration: 0.9,
       delay: Math.min(index * 0.1, 1.2),
       ease: [0.21, 1.11, 0.81, 0.99] as any
@@ -218,7 +219,7 @@ const PostCard = React.memo(({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
+                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-rose-500' : 'text-slate-400'}`}
                 >
                   {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
                 </motion.div>
@@ -228,7 +229,7 @@ const PostCard = React.memo(({
                   initial={{ scale: 1, opacity: 1 }}
                   animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                   transition={{ duration: 0.6 }}
-                  className="absolute text-red-500 pointer-events-none"
+                  className="absolute text-rose-500 pointer-events-none"
                 >
                   <FaHeart size={14} />
                 </motion.div>
@@ -245,7 +246,7 @@ const PostCard = React.memo(({
 });
 PostCard.displayName = "PostCard";
 
-const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles, isRestored }: any) => {
+const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles, isRestorose }: any) => {
   const [columns, setColumns] = useState(2);
 
   useEffect(() => {
@@ -288,7 +289,7 @@ const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginMod
                 setShowLoginModal={setShowLoginModal}
                 router={router}
                 getNoteStyles={getNoteStyles}
-                isRestored={isRestored}
+                isRestorose={isRestorose}
               />
             ))}
           </div>
@@ -311,7 +312,7 @@ const ProductCard = React.memo(({
   fetchingProduct,
   router,
   onClose,
-  isRestored = false,
+  isRestorose = false,
   isPartnerTab = false
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
@@ -357,9 +358,9 @@ const ProductCard = React.memo(({
   const discountedPrice = computeDiscountedPrice(p.price, promoInfo?.discount);
 
   const entryVariants = {
-    initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
+    initial: isRestorose ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
     animate: { opacity: 1, scale: 1, y: 0 },
-    transition: isRestored ? { duration: 0 } : {
+    transition: isRestorose ? { duration: 0 } : {
       duration: 0.9,
       delay: Math.min(index * 0.1, 1.2),
       ease: [0.21, 1.11, 0.81, 0.99] as any
@@ -496,7 +497,7 @@ const ProductCard = React.memo(({
                   Only {Number(p.total_quantity)} left
                 </span>
               ) : promoInfo ? (
-                <span className="text-[10px] font-medium text-rose-500 border-red-500 border-[0.5px] px-1 truncate">
+                <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1 truncate">
                   {promoInfo.title} {promoInfo.discount}% Off
                 </span>
               ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) === 0) ? (
@@ -549,7 +550,7 @@ const ProductCard = React.memo(({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-slate-400'}`}
+                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-rose-500' : 'text-slate-400'}`}
                 >
                   {isLiked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
                 </motion.div>
@@ -569,7 +570,7 @@ const ProductCard = React.memo(({
 });
 ProductCard.displayName = "ProductCard";
 
-const ProductMasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, formatUrl, router, onClose, isRestored }: any) => {
+const ProductMasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, formatUrl, router, onClose, isRestorose }: any) => {
   const [columns, setColumns] = useState(2);
 
   useEffect(() => {
@@ -617,7 +618,7 @@ const ProductMasonryGrid = ({ items, likeData, fetchingProductId, handleProductC
                   fetchingProduct={fetchingProductId === p.product_id}
                   router={router}
                   onClose={onClose}
-                  isRestored={isRestored}
+                  isRestorose={isRestorose}
                 />
               );
             })}
@@ -641,12 +642,18 @@ interface SearchResultsModalProps {
 }
 
 type TabType = "all" | "users" | "products" | "posts" | "location";
-type ProductSubTab = "featured" | "shop" | "best-seller" | "price-low" | "price-high";
+type ProductSubTab = "featurose" | "shop" | "best-seller" | "price-low" | "price-high";
 
 export default function SearchResultsModal({ isOpen, onClose, onSearchClick, initialQuery, initialTab, isPage = false }: SearchResultsModalProps) {
   const { token, user } = useAuth();
   const pathname = usePathname();
   const [originPath, setOriginPath] = useState<string | null>(null);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (isOpen) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -660,7 +667,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   const shouldHideModal = isOpen && originPath !== null && isNavigationTarget;
 
   const [productLikeData, setProductLikeData] = useState<Record<number, { liked: boolean, count: number }>>({});
-  const [fetchingProductId, setFetchingProductId] = useState<number | null>(null);
+  const [fetchingProductId, setFetchingProductId] = useState<number | string | null>(null);
   const [reelsModalOpen, setReelsModalOpen] = useState(false);
   const [productPreviewOpen, setProductPreviewOpen] = useState(false);
   const [cartCount, setCartCount] = useState<number>(0);
@@ -752,13 +759,20 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     index
   });
 
-  const handleProductClick = useCallback(async (productId: number, businessName?: string, e?: React.MouseEvent) => {
+  const handleProductClick = useCallback(async (productId: number | string, businessName?: string, e?: any, businessSlug?: string, isSocialPost?: boolean, productSlug?: string) => {
     if (e) e.stopPropagation();
     if (fetchingProductId) return;
 
+    // Favor productSlug (identifier) if provided
+    const isNumeric = typeof productId === 'number' || (typeof productId === 'string' && /^\d+$/.test(productId));
+    const pid = isNumeric ? Number(productId) : null;
+    const identifier = productSlug || (isNumeric ? pid : productId);
+
+    if (!identifier) return;
+
     try {
-      setFetchingProductId(productId);
-      const res = await fetchProductById(productId, token || undefined);
+      setFetchingProductId(identifier);
+      const res = await fetchProductById(identifier, token || undefined);
       if (res?.data?.product) {
         const dbProduct = res.data.product;
         const mappedPayload = mapProductToPreviewPayload(dbProduct, formatProductUrl);
@@ -777,8 +791,8 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     }
   }, [token, fetchingProductId, formatProductUrl]);
 
-  const handleReelsClick = useCallback((productId: number, businessName?: string, e?: React.MouseEvent) => {
-    handleProductClick(productId, businessName, e);
+  const handleReelsClick = useCallback((productId: number | string, businessName?: string, e?: any, businessSlug?: string, isSocialPost?: boolean, productSlug?: string) => {
+    handleProductClick(productId, businessName, e, businessSlug, isSocialPost, productSlug);
   }, [handleProductClick]);
 
   const handleProductLike = async (e: React.MouseEvent, productId: number, baseCount: number) => {
@@ -809,7 +823,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   };
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState<TabType>("all");
-  const [productSubTab, setProductSubTab] = useState<ProductSubTab>("featured");
+  const [productSubTab, setProductSubTab] = useState<ProductSubTab>("featurose");
 
   // SWR Caching Logic
   const { data: swrData, error: swrError, isLoading: swrLoading, isValidating, mutate } = useSWR(
@@ -1000,7 +1014,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         <h4 className="text-[14px] font-bold text-slate-900 truncate">{p.name}</h4>
         <p className="text-[12px] text-slate-500 line-clamp-1 mt-0.5">{p.description}</p>
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[14px] font-black text-red-600">₦{p.price?.toLocaleString()}</span>
+          <span className="text-[14px] font-black text-rose-600">₦{p.price?.toLocaleString()}</span>
           {p.sold_count > 0 && (
             <span className="text-[10px] font-bold text-slate-400">{p.sold_count} sold</span>
           )}
@@ -1040,7 +1054,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
           onClick={() => {
             if (s.business_slug) router.push(`/shop/${s.business_slug}`);
           }}
-          className="px-4 py-1 bg-white text-red-500 border-[0.5px] text-[11px] font-black rounded-full tracking-tighter shadow-sm hover:bg-red-700 transition-colors"
+          className="px-4 py-1 bg-white text-rose-500 border-[0.5px] text-[11px] font-black rounded-full tracking-tighter shadow-sm hover:bg-rose-700 transition-colors"
         >
           Shop
         </button>
@@ -1121,7 +1135,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-rose-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-400 font-medium">Fetching best results...</p>
         </div>
       );
@@ -1144,7 +1158,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               <section className="bg-white">
                 <div className="px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                   <h6 className="text-[10px] font-black  tracking-widest text-slate-600">Products</h6>
-                  <button onClick={() => setActiveTab('products')} className="text-[10px] font-bold text-red-600">See All</button>
+                  <button onClick={() => setActiveTab('products')} className="text-[10px] font-bold text-rose-600">See All</button>
                 </div>
                 <div className="p-3">
                   <ProductMasonryGrid
@@ -1157,7 +1171,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                     formatUrl={formatProductUrl}
                     router={router}
                     onClose={onClose}
-                    isRestored={false}
+                    isRestorose={false}
                   />
                 </div>
               </section>
@@ -1169,7 +1183,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                   <button onClick={() => {
                     setActiveTab('products');
                     setProductSubTab('shop');
-                  }} className="text-[10px] font-bold text-red-600">See All</button>
+                  }} className="text-[10px] font-bold text-rose-600">See All</button>
                 </div>
                 {results.shops.slice(0, 3).map(renderShopItem)}
               </section>
@@ -1178,7 +1192,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               <section className="bg-white border-t-8 border-slate-50">
                 <div className="px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                   <h6 className="text-[10px] font-black  tracking-widest text-slate-600">People</h6>
-                  <button onClick={() => setActiveTab('users')} className="text-[10px] font-bold text-red-600">See All</button>
+                  <button onClick={() => setActiveTab('users')} className="text-[10px] font-bold text-rose-600">See All</button>
                 </div>
                 <div className="divide-y divide-slate-50">
                   {results.users.slice(0, 3).map((u: any) => (
@@ -1208,7 +1222,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               <section className="bg-white border-t-8 border-slate-50">
                 <div className="px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                   <h6 className="text-[10px] font-black  tracking-widest text-slate-600">Social Feed</h6>
-                  <button onClick={() => setActiveTab('posts')} className="text-[10px] font-bold text-red-600">See All</button>
+                  <button onClick={() => setActiveTab('posts')} className="text-[10px] font-bold text-rose-600">See All</button>
                 </div>
                 <div className="p-3 bg-slate-50/20">
                   <MasonryGrid
@@ -1219,7 +1233,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                     setShowLoginModal={setShowLoginModal}
                     router={router}
                     getNoteStyles={getNoteStyles}
-                    isRestored={false}
+                    isRestorose={false}
                   />
                 </div>
               </section>
@@ -1296,7 +1310,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                 setShowLoginModal={setShowLoginModal}
                 router={router}
                 getNoteStyles={getNoteStyles}
-                isRestored={false}
+                isRestorose={false}
               />
             ) : (
               <div className="col-span-full py-20 text-center text-slate-400">
@@ -1312,7 +1326,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
           <div className="flex flex-col h-full bg-white">
             <div className="flex items-center gap-6 px-5 h-11  border-slate-50 overflow-x-auto no-scrollbar sticky top-0 bg-white z-10 ">
               {[
-                { id: "featured", label: "Featured" },
+                { id: "featurose", label: "Featurose" },
                 { id: "shop", label: "Shops" },
                 { id: "best-seller", label: "Best Seller" },
                 { id: "price-low", label: "Price Low" },
@@ -1321,12 +1335,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                 <button
                   key={tab.id}
                   onClick={() => setProductSubTab(tab.id as ProductSubTab)}
-                  className={`text-[12px] font-bold whitespace-nowrap transition-colors relative h-full ${productSubTab === tab.id ? "text-red-600" : "text-slate-400"
+                  className={`text-[12px] font-bold whitespace-nowrap transition-colors relative h-full ${productSubTab === tab.id ? "text-rose-600" : "text-slate-400"
                     }`}
                 >
                   {tab.label}
                   {productSubTab === tab.id && (
-                    <motion.div layoutId="prodSubUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600" />
+                    <motion.div layoutId="prodSubUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-600" />
                   )}
                 </button>
               ))}
@@ -1349,7 +1363,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                     handleLikeClick={handleProductLike}
                     formatUrl={formatProductUrl}
                     router={router}
-                    isRestored={false}
+                    isRestorose={false}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
@@ -1388,8 +1402,8 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
           initial={isPage ? { opacity: 1 } : { opacity: 0, scale: 1.05 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={isPage ? { opacity: 1 } : { opacity: 0, scale: 1.05 }}
-          className="fixed inset-0 z-[600000] bg-white backdrop-blur-2xl flex flex-col"
-          style={{ display: shouldHideModal ? "none" : "flex" }}
+          className="fixed inset-0 bg-white backdrop-blur-2xl flex flex-col"
+          style={{ display: shouldHideModal ? "none" : "flex", zIndex: modalZIndex }}
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
@@ -1433,7 +1447,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               >
                 {tab.label}
                 {activeTab === tab.id && (
-                  <motion.div layoutId="mainTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full" />
+                  <motion.div layoutId="mainTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />
                 )}
               </button>
             ))}
@@ -1470,6 +1484,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               open={productPreviewOpen}
               onClose={() => setProductPreviewOpen(false)}
               payload={selectedProductData}
+              onProductClick={handleProductClick}
             />
           )}
         </motion.div>
@@ -1483,11 +1498,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
             // onClose(); // optionally close search modal before navigating
             router.push("/cart");
           }}
-          className="fixed bottom-24 right-6 z-[100001] bg-red-600 text-white p-3 rounded-full shadow-2xl hover:bg-red-700 transition-all active:scale-90 flex items-center justify-center border-4 border-white group"
+          className="fixed bottom-24 right-6 bg-rose-600 text-white p-3 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-90 flex items-center justify-center border-4 border-white group"
+          style={{ zIndex: modalZIndex + 1 }}
         >
           <ShoppingCartIcon className="w-6 h-6" />
           {cartCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-white text-red-600 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md border-[1.5px] border-red-600 group-hover:scale-110 transition-transform">
+            <span className="absolute -top-1 -right-1 bg-white text-rose-600 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md border-[1.5px] border-rose-600 group-hover:scale-110 transition-transform">
               {cartCount > 99 ? "99+" : cartCount}
             </span>
           )}

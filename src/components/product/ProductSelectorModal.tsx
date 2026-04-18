@@ -95,7 +95,7 @@ export default function ProductSelectorModal({ onClose, onSelect, selectedId }: 
         {selectedId && (
           <button
             onClick={() => { onSelect(null); onClose(); }}
-            className="mx-4 mt-3 flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-red-300 hover:text-red-500 transition-all text-xs font-bold"
+            className="mx-4 mt-3 flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-rose-300 hover:text-rose-500 transition-all text-xs font-bold"
           >
             <XMarkIcon className="w-4 h-4" />
             Remove linked product
@@ -105,7 +105,7 @@ export default function ProductSelectorModal({ onClose, onSelect, selectedId }: 
         <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-3">
-              <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-xs font-medium text-slate-400">Loading your products...</p>
             </div>
           ) : products.length === 0 ? (
@@ -128,11 +128,10 @@ export default function ProductSelectorModal({ onClose, onSelect, selectedId }: 
                     onSelect(isSelected ? null : p);
                     onClose();
                   }}
-                  className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all border-2 ${
-                    isSelected
-                      ? "border-red-500 bg-red-50/50"
+                  className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all border-2 ${isSelected
+                      ? "border-rose-500 bg-rose-50/50"
                       : "border-slate-50 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200"
-                  }`}
+                    }`}
                 >
                   {/* Product thumbnail — clicking opens preview */}
                   <div
@@ -162,7 +161,7 @@ export default function ProductSelectorModal({ onClose, onSelect, selectedId }: 
                   {/* Product info */}
                   <div className="flex-1 text-left min-w-0">
                     <p className="text-sm font-bold text-slate-900 truncate">{p.title}</p>
-                    <p className="text-xs font-black text-red-500">
+                    <p className="text-xs font-black text-rose-500">
                       ₦{Number(displayPrice).toLocaleString()}
                       {(p.min_variant_price || p.min_sku_price) && (
                         <span className="text-[10px] font-medium ml-1">Starts at</span>
@@ -172,9 +171,8 @@ export default function ProductSelectorModal({ onClose, onSelect, selectedId }: 
 
                   {/* Check mark */}
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                      isSelected ? "bg-red-500 text-white" : "bg-slate-200 text-transparent"
-                    }`}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${isSelected ? "bg-rose-500 text-white" : "bg-slate-200 text-transparent"
+                      }`}
                   >
                     <CheckIcon className="w-4 h-4" />
                   </div>

@@ -18,29 +18,22 @@ import {
     ShoppingCartIcon,
     CheckIcon
 } from "@heroicons/react/24/outline";
-import { ShoppingCartIcon as ShoppingCartIconSolid } from "@heroicons/react/24/solid";
 import { fetchMarketFeed, fetchProductById, toggleProductLike, logUserActivity, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import ReelsModal from "@/src/components/product/addProduct/modal/reelsModal";
 import PostModal from "@/src/components/modal/postModal";
-import { fetchLinkedProductPosts, fetchSocialPostById } from "@/src/lib/api/social";
+import { fetchLinkedProductPosts, fetchSocialPostById, toggleSocialPostLike } from "@/src/lib/api/social";
 import PhoneVerificationModal from "@/src/components/modal/phoneVerificationModal";
+import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
+import { fetchVendorBadgesBatch, type VendorBadge } from "@/src/lib/api/vendorApi";
 import type { PreviewPayload, ProductSku } from "@/src/types/product";
-import { FaHeart, FaRegHeart } from "react-icons/fa";
-import { formatDuration } from "@/src/lib/utils/product/duration";
-import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toast } from "sonner";
 import { fetchUserAddresses, UserAddress } from "@/src/lib/api/addressApi";
-
-const slugify = (str: string) =>
-    String(str || "")
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-");
+import dynamic from "next/dynamic";
 import { estimateDelivery, EstimationResult } from "@/src/lib/deliveryEstimation";
+
+const MarketClient = dynamic(() => import("../market/[[...shop]]/MarketClient"), { ssr: false, loading: () => <ShimmerGrid count={10} /> });
 
 interface CartItem {
     cart_id: number;
@@ -70,413 +63,10 @@ interface CartItem {
     business_latitude: number;
     business_longitude: number;
     shipping_policies: any[];
+    category?: string;
+    profile_pic?: string;
 }
 
-function LikeBurst() {
-    const particles = Array.from({ length: 12 });
-    const colors = ["#EF4444", "#3B82F6", "#10B981", "#F59E0B"];
-    return (
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50">
-            {particles.map((_, i) => (
-                <motion.div
-                    key={i}
-                    initial={{ x: 0, y: 0, scale: 0, opacity: 1, rotate: 0 }}
-                    animate={{
-                        x: Math.cos((i * 30) * Math.PI / 180) * 60,
-                        y: Math.sin((i * 30) * Math.PI / 180) * 60,
-                        scale: [0.2, 1.2, 1.8, 0],
-                        opacity: [1, 1, 1, 0],
-                        rotate: [0, 45, 90]
-                    }}
-                    transition={{ duration: 0.7, ease: "easeOut" }}
-                    className="absolute"
-                >
-                    <FaHeart size={12} style={{ color: colors[i % colors.length] }} className="drop-shadow-sm" />
-                </motion.div>
-            ))}
-        </div>
-    );
-}
-
-const ProductCard = React.memo(({
-    p,
-    index = 0,
-    isVideoCover,
-    formatUrl,
-    handleProductClick,
-    handleReelsClick,
-    handleLikeClick,
-    isLiked,
-    likeCount,
-    fetchingProduct,
-    router,
-    isRestored = false
-}: any) => {
-    const [showBurst, setShowBurst] = useState(false);
-
-    const isPromoActive = useMemo(() => {
-        return !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
-    }, [p.promo_title, p.promo_discount, p.promo_end]);
-
-    const shippingDuration = useMemo(() => {
-        const shippingAvg = (p.shipping_policies || p.shipping_duration || []).find((s: any) => s.kind === "avg" || s.type === "avg");
-        return shippingAvg ? formatDuration(shippingAvg.value, shippingAvg.unit) : null;
-    }, [p.shipping_policies, p.shipping_duration]);
-
-    // Animation variants
-    const entryVariants = {
-        initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
-        animate: { opacity: 1, scale: 1, y: 0 },
-        transition: isRestored ? { duration: 0 } : {
-            duration: 0.9,
-            delay: Math.min(index * 0.1, 1.2),
-            ease: [0.21, 1.11, 0.81, 0.99] as any
-        }
-    };
-
-    return (
-        <article
-            key={`${p.product_id}${isVideoCover ? '-vid' : ''}`}
-            onClick={(e) => {
-                if (isVideoCover) {
-                    handleReelsClick(p.product_id, p.business_name, e);
-                } else {
-                    handleProductClick(p.product_id, false, e);
-                }
-            }}
-            className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
-            style={{
-                willChange: "transform, opacity",
-                contentVisibility: "auto",
-                containIntrinsicSize: "auto 400px"
-            }}
-        >
-            <div className="relative w-full overflow-hidden bg-slate-100">
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-                </div>
-                {/* Placeholder frame indicator */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="flex flex-col items-center gap-2">
-                        <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
-                    </div>
-                </div>
-                <motion.div
-                    initial={entryVariants.initial}
-                    animate={entryVariants.animate}
-                    transition={entryVariants.transition}
-                    className="w-full h-full relative z-[1]"
-                >
-                    {p.product_video && isVideoCover ? (
-                        <video
-                            src={formatUrl(p.product_video!)}
-                            poster={formatUrl(p.first_image)}
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="w-full min-h-[180px] sm:min-h-[200px] max-h-[300px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                    ) : (
-                        <div className="relative w-full h-auto">
-                            <style jsx global>{`
-                            @keyframes fadeIn {
-                                from { opacity: 0; }
-                                to { opacity: 1; }
-                            }
-                        `}</style>
-                            <img
-                                src={formatUrl(p.first_image)}
-                                alt={p.title}
-                                className="w-full min-h-[180px] sm:min-h-[200px] max-h-[300px] sm:max-h-[350px] object-cover transition-all duration-700 group-hover:scale-110"
-                                loading="lazy"
-                                onLoad={(e) => {
-                                    (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
-                                }}
-                                style={{ opacity: 0 }}
-                            />
-                        </div>
-                    )}
-
-                    {isVideoCover && (
-                        <div className="absolute top-3 right-3 bg-black/30 backdrop-blur-md rounded-full  z-10  p-1">
-                            <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5.14v14l11-7-11-7z" />
-                            </svg>
-                        </div>
-                    )}
-
-                    {!isVideoCover && fetchingProduct && (
-                        <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
-                            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                    )}
-                </motion.div>
-
-
-            </div>
-
-            <div className="p-3">
-                {isVideoCover ? (
-                    <>
-                        <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded p-1 mb-2">
-                            <div className="w-8 h-8 relative rounded shrink-0 overflow-hidden border border-slate-200">
-                                <Image
-                                    src={formatUrl(p.first_image)}
-                                    alt="product thumbnail"
-                                    fill
-                                    sizes="32px"
-                                    className="object-cover"
-                                />
-                            </div>
-                            <span className="text-slate-900 text-sm font-bold tracking-tight pr-1">₦{Number(p.price || 0).toLocaleString()}</span>
-                            {p.sold_count > 0 && (
-                                <span className="text-[10px] text-slate-500 font-medium ml-auto pr-1">{p.sold_count.toLocaleString()} Sold</span>
-                            )}
-                        </div>
-                        <h3 className="text-sm text-slate-800 line-clamp-1 leading-snug mb-2" title={p.title}>
-                            {p.title || "Untitled Product"}
-                        </h3>
-                        <div className="flex items-center justify-between">
-                            <div
-                                className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (p.business_id) {
-                                        const slug = p.business_slug || p.business_id;
-                                        router.push(`/shop/${slug}`);
-                                    }
-                                }}
-                            >
-                                <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
-                                    <Image
-                                        src={p.logo ? formatUrl(p.logo) : (p.profile_pic ? formatUrl(p.profile_pic) : "/assets/images/favio.png")}
-                                        fill
-                                        sizes="20px"
-                                        className="object-cover"
-                                        alt="Vendor"
-                                    />
-                                </div>
-                                <span className="truncate text-[11px] font-semibold text-slate-600 hover:text-slate-900 transition-colors max-w-[120px]">
-                                    {p.business_name || "Unknown Store"}
-                                </span>
-                            </div>
-                            <div
-                                className="flex items-center gap-1 cursor-pointer relative"
-                                onClick={(e) => {
-                                    if (!isLiked) {
-                                        setShowBurst(true);
-                                        setTimeout(() => setShowBurst(false), 800);
-                                    }
-                                    handleLikeClick(e, p.product_id, p.likes_count || 0);
-                                }}
-                            >
-                                {showBurst && <LikeBurst />}
-
-                                <div className="relative w-4 h-4 flex items-center justify-center">
-                                    <AnimatePresence>
-                                        <motion.div
-                                            key={isLiked ? "liked" : "unliked"}
-                                            initial={{ scale: 0.5, opacity: 0 }}
-                                            animate={{ scale: 1, opacity: 1 }}
-                                            exit={{ scale: 0.5, opacity: 0 }}
-                                            transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                                            className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-slate-400'}`}
-                                        >
-                                            {isLiked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
-                                        </motion.div>
-                                    </AnimatePresence>
-                                </div>
-                                <span className="text-xs font-semibold text-slate-600 ml-0.5">{likeCount}</span>
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="flex items-center justify-between pt-1 border-slate-50">
-                            <div
-                                className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (p.business_id) {
-                                        const slug = p.business_slug || p.business_id;
-                                        router.push(`/shop/${slug}`);
-                                    }
-                                }}
-                            >
-                                <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
-                                    <Image
-                                        src={p.logo ? formatUrl(p.logo) : (p.profile_pic ? formatUrl(p.profile_pic) : "/assets/images/favio.png")}
-                                        fill
-                                        sizes="20px"
-                                        className="object-cover"
-                                        alt="Vendor"
-                                    />
-                                </div>
-                                <div className="flex flex-col">
-                                    <div className="flex items-center gap-1">
-                                        <span className="truncate text-[11px] text-orange-600 hover:text-slate-900 transition-colors">
-                                            {p.business_name || "Unknown Store"}
-                                        </span>
-                                        {p.trusted_partner === 1 && (
-                                            <svg className="w-3 h-3 text-emerald-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" /></svg>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-2.5 mt-2" title={p.title}>
-                            {p.trusted_partner === 1 && (
-                                <span className="inline-flex items-center gap-1 shrink-0 mr-1.5 align-text-bottom">
-                                    <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm  tracking-wider">
-                                        Partner
-                                    </span>
-                                </span>
-                            )}
-                            <span className="align-middle ">{p.title || "Untitled Product"}</span>
-                        </h3>
-
-                        <div className=" flex items-center min-h-[16px]">
-                            {isPromoActive ? (
-                                <span className="text-[10px] font-bold text-rose-500 border-red-500 border px-1  truncate">
-                                    {p.promo_title} {p.promo_discount}% OFF
-                                </span>
-                            ) : p.sale_type ? (
-                                <span className="text-[10px] font-bold text-rose-500 border-red-500 border  truncate">
-                                    {p.sale_type} {p.sale_discount}% Off
-                                </span>
-                            ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                <span className="text-[10px] font-bold text-rose-500   truncate">
-                                    Only {Number(p.total_quantity)} Left
-                                </span>
-                            ) : p.return_shipping_subsidy === 1 ? (
-                                <span className="text-[10px] font-bold text-green-700   truncate">
-                                    Return Shipping Subsidy
-                                </span>
-                            ) : shippingDuration ? (
-                                <span className="text-[10px] font-bold text-orange-600   truncate">
-                                    Ships in {shippingDuration}
-                                </span>
-                            ) : p.market_name ? (
-                                <span className="text-[10px] font-bold text-rose-500   truncate">
-                                    {p.market_name}
-                                </span>
-                            ) : null}
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 h-4">
-                                {isPromoActive || p.sale_type ? (
-                                    <>
-                                        <span className="text-slate-900 text-base font-bold">₦{Math.round(Number(p.price || 0) * (1 - (p.promo_discount || p.sale_discount || 0) / 100)).toLocaleString()}</span>
-                                        <span className="text-[11px] text-red-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
-                                    </>
-                                ) : (
-                                    <span className="text-slate-900 text-base font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
-                                )}
-                            </div>
-                            <div
-                                className="flex items-center gap-1 cursor-pointer relative"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!isLiked) {
-                                        setShowBurst(true);
-                                        setTimeout(() => setShowBurst(false), 800);
-                                    }
-                                    handleLikeClick(e, p.product_id, p.likes_count || 0);
-                                }}
-                            >
-                                {showBurst && <LikeBurst />}
-
-                                <div className="relative w-4 h-4 flex items-center justify-center">
-                                    <AnimatePresence>
-                                        <motion.div
-                                            key={isLiked ? "liked" : "unliked"}
-                                            initial={{ scale: 0.5, opacity: 0 }}
-                                            animate={{ scale: 1, opacity: 1 }}
-                                            exit={{ scale: 0.5, opacity: 0 }}
-                                            transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                                            className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-slate-400'}`}
-                                        >
-                                            {isLiked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
-                                        </motion.div>
-                                    </AnimatePresence>
-                                </div>
-                                <span className="text-xs font-semibold text-slate-600 ml-0.5">{likeCount}</span>
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-        </article >
-    );
-}, (prev, next) => {
-    return prev.p.product_id === next.p.product_id &&
-        prev.isLiked === next.isLiked &&
-        prev.likeCount === next.likeCount &&
-        prev.fetchingProduct === next.fetchingProduct &&
-        prev.isVideoCover === next.isVideoCover;
-});
-ProductCard.displayName = "ProductCard";
-
-const MasonryGrid = ({ items, likeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, formatUrl, router }: any) => {
-    const [columns, setColumns] = useState(5);
-    useEffect(() => {
-        const updateColumns = () => {
-            const w = window.innerWidth;
-            if (w < 700) setColumns(2);
-            else if (w < 1210) setColumns(3);
-            else if (w < 1430) setColumns(4);
-            else setColumns(5);
-        };
-        updateColumns();
-        window.addEventListener('resize', updateColumns);
-        return () => window.removeEventListener('resize', updateColumns);
-    }, []);
-
-    const columnData = useMemo(() => {
-        const data = Array.from({ length: columns }, () => [] as any[]);
-        items.forEach((item: any, index: number) => {
-            data[index % columns].push(item);
-        });
-        return data;
-    }, [items, columns]);
-
-    return (
-        <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
-            {columnData.map((colItems, colIdx) => {
-                let visibilityClass = "flex-1 flex flex-col gap-2 sm:gap-6 min-w-0";
-                if (colIdx === 2) visibilityClass += " hidden [@media(min-width:700px)]:flex";
-                if (colIdx === 3) visibilityClass += " hidden [@media(min-width:1210px)]:flex";
-                if (colIdx === 4) visibilityClass += " hidden [@media(min-width:1430px)]:flex";
-
-                return (
-                    <div key={colIdx} className={visibilityClass}>
-                        {colItems.map((p: any, idx: number) => {
-                            const ld = likeData[p.product_id] || { liked: !!p.isLiked, count: p.likes_count || 0 };
-                            return (
-                                <ProductCard
-                                    key={`${p.product_id}-${idx}-${p.originalIndex}`}
-                                    index={p.originalIndex}
-                                    p={p}
-                                    isVideoCover={!!p.product_video}
-                                    formatUrl={formatUrl}
-                                    handleProductClick={handleProductClick}
-                                    handleReelsClick={handleReelsClick}
-                                    handleLikeClick={handleLikeClick}
-                                    isLiked={ld.liked}
-                                    likeCount={ld.count}
-                                    fetchingProduct={fetchingProductId === p.product_id}
-                                    router={router}
-                                />
-                            );
-                        })}
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
 
 export default function CartPage() {
     const router = useRouter();
@@ -485,9 +75,7 @@ export default function CartPage() {
     const [loading, setLoading] = useState(true);
     const [updatingIds, setUpdatingIds] = useState<number[]>([]);
 
-    // Recommendations State
-    const [recommendedProducts, setRecommendedProducts] = useState<any[]>([]);
-    const [loadingRecs, setLoadingRecs] = useState(false);
+    // Recommendations State (Deprecated - Now using MarketClient)
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [reelsModalOpen, setReelsModalOpen] = useState(false);
@@ -500,6 +88,10 @@ export default function CartPage() {
     const [editingCartId, setEditingCartId] = useState<number | null>(null);
     const [selectedCartIds, setSelectedCartIds] = useState<number[]>([]);
     const [address, setAddress] = useState<UserAddress | null>(null);
+    const [vendorBadges, setVendorBadges] = useState<Record<number, VendorBadge>>({});
+    const [isClient, setIsClient] = useState(false);
+
+    const marketParams = useMemo(() => Promise.resolve({ shop: [] }), []);
 
     const fetchCart = async () => {
         if (!token) {
@@ -517,6 +109,14 @@ export default function CartPage() {
                 );
 
                 setItems(uniqueItems);
+
+                // Batch-fetch vendor badges in one round-trip (non-blocking)
+                const uniqueBusinessIds = [...new Set(uniqueItems.map(i => i.business_id))];
+                if (uniqueBusinessIds.length > 0) {
+                    fetchVendorBadgesBatch(uniqueBusinessIds)
+                        .then(badges => setVendorBadges(badges))
+                        .catch(() => { });
+                }
 
                 const savedIds = sessionStorage.getItem("stoqle_checkout_ids");
                 if (savedIds) {
@@ -556,60 +156,10 @@ export default function CartPage() {
     };
 
     const fetchRecommendations = async () => {
-        setLoadingRecs(true);
-        try {
-            const res = await fetchPersonalizedFeed(20, 0, token);
-            const nextProducts = res?.data || [];
-
-            let nextPosts: any[] = [];
-            try {
-                const posts = await fetchLinkedProductPosts({ limit: 5, offset: 0, token: token! });
-                nextPosts = posts;
-            } catch (e) { }
-
-            const mappedProducts = nextProducts.map((p: any, i: number) => {
-                const media = p.media || [];
-                const imgs = media.filter((m: any) => m.type === "image");
-                const coverRef = p.first_image || p.image_url;
-                const foundCover = imgs.find((m: any) => m.is_cover === 1 || (coverRef && m.url && m.url.includes(coverRef))) || imgs[0];
-                return {
-                    ...p,
-                    originalIndex: i,
-                    first_image: foundCover?.url || coverRef || (media[0]?.type === 'image' ? media[0].url : "") || "",
-                    product_video: p.product_video || media.find((m: any) => m.type === 'video')?.url || "",
-                };
-            });
-
-            const mappedSocialPosts = nextPosts.map((p: any, i: number) => ({
-                ...p,
-                product_id: `post-${p.id}`,
-                is_social_post: true,
-                title: p.caption || p.linked_product?.title || "Social Post",
-                first_image: p.thumbnail || p.src,
-                price: p.linked_product?.price || 0,
-                business_name: p.user?.name || "Member",
-                logo: p.user?.avatar,
-                originalIndex: mappedProducts.length + i,
-            }));
-
-            let combined: any[] = [];
-            const socialStep = Math.max(3, Math.ceil(mappedProducts.length / (mappedSocialPosts.length || 1)));
-            let socialIdx = 0;
-            mappedProducts.forEach((prod: any, i: number) => {
-                combined.push(prod);
-                if (i > 0 && i % socialStep === 0 && socialIdx < mappedSocialPosts.length) {
-                    combined.push(mappedSocialPosts[socialIdx++]);
-                }
-            });
-            while (socialIdx < mappedSocialPosts.length) combined.push(mappedSocialPosts[socialIdx++]);
-
-            setRecommendedProducts(combined);
-        } catch (err) {
-            console.error("Fetch recs error", err);
-        } finally {
-            setLoadingRecs(false);
-        }
+        // Now handled by MarketClient instance below
     };
+
+    const [isScrolled, setIsScrolled] = useState(false);
 
     useEffect(() => {
         if (!isHydrated) return;
@@ -630,7 +180,16 @@ export default function CartPage() {
             fetchCart();
         };
 
+        const handleScroll = () => {
+            if (window.scrollY > 50) {
+                setIsScrolled(true);
+            } else {
+                setIsScrolled(false);
+            }
+        };
+
         window.addEventListener("cart-updated", handleCartUpdate);
+        window.addEventListener("scroll", handleScroll, { passive: true });
 
         // Sync across tabs
         const channel = typeof window !== 'undefined' ? new BroadcastChannel('stoqle_cart_sync') : null;
@@ -723,6 +282,7 @@ export default function CartPage() {
             business_id: number;
             business_name: string;
             business_logo: string;
+            profile_pic?: string;
             business_slug?: string;
             items: CartItem[];
             estimation: EstimationResult | null;
@@ -745,7 +305,8 @@ export default function CartPage() {
                 group = {
                     business_id: item.business_id,
                     business_name: item.business_name,
-                    business_logo: item.business_logo,
+                    business_logo: item.business_logo || item.profile_pic || "",
+                    profile_pic: item.profile_pic,
                     business_slug: item.business_slug,
                     items: [],
                     estimation: est
@@ -756,6 +317,18 @@ export default function CartPage() {
         });
         return groupList;
     }, [items, address]);
+
+    const cartVendorIds = useMemo(() => {
+        if (!items || !Array.isArray(items)) return [];
+        return Array.from(new Set(items.map(item => item.business_id)));
+    }, [items]);
+
+    const relatedCategory = useMemo(() => {
+        if (!items || items.length === 0) return undefined;
+        // Logic: Pick the first available category from the items in the cart
+        const itemWithCategory = items.find(item => item.category);
+        return itemWithCategory?.category;
+    }, [items]);
 
     const outOfStockItems = useMemo(() => {
         if (!items || !Array.isArray(items)) return [];
@@ -772,11 +345,8 @@ export default function CartPage() {
     const formatUrl = (url: string) => {
         if (!url) return "";
         let formatted = url;
-        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(formatted)) {
-            formatted = formatted.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "");
-        }
-        if (!formatted.startsWith("http")) {
-            formatted = formatted.startsWith("/public") ? `${API_BASE_URL}${formatted}` : `${API_BASE_URL}/public/${formatted}`;
+        if (!url.startsWith("http")) {
+            formatted = url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
         }
         return encodeURI(formatted);
     };
@@ -814,6 +384,8 @@ export default function CartPage() {
         } else {
             setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
         }
+
+        // --- OPTIMISTIC OPEN for Social Posts (Deprecated for local feed) ---
 
         if (!isSocial) updateUrl(productId, replaceUrl);
 
@@ -855,15 +427,24 @@ export default function CartPage() {
             const isReels = urlParams.get("reels") === "true";
 
             if (productId) {
-                const pid = Number(productId);
+                const isSocial = productId.startsWith('post-');
+
                 if (isReels) {
+                    const pid = isSocial ? productId : Number(productId);
                     if (!reelsModalOpen) {
-                        setSelectedProductId(pid);
+                        setSelectedProductId(pid as any);
                         setReelsModalOpen(true);
                     }
                 } else {
-                    if (!modalOpen && !fetchingProduct && selectedProductPayload?.productId !== pid) {
-                        handleProductClick(pid, undefined, undefined, undefined, false);
+                    if (isSocial) {
+                        if (!selectedSocialPost && !fetchingProduct) {
+                            handleProductClick(productId, undefined, undefined, undefined, true);
+                        }
+                    } else {
+                        const pid = Number(productId);
+                        if (!modalOpen && !fetchingProduct && selectedProductPayload?.productId !== pid) {
+                            handleProductClick(pid, undefined, undefined, undefined, false);
+                        }
                     }
                 }
             } else {
@@ -882,24 +463,43 @@ export default function CartPage() {
         return () => window.removeEventListener('popstate', handleRouteChange);
     }, [modalOpen, fetchingProduct, selectedProductPayload]);
 
-    const handleLikeClick = async (e: React.MouseEvent, productId: number, baseCount: number) => {
+    const handleLikeClick = async (e: React.MouseEvent, productId: number | string, baseCount: number) => {
         e.stopPropagation();
         if (!user || !token) {
             toast.error("Please login to like products");
             return;
         }
-        const current = likeData[productId] || { liked: false, count: baseCount };
+
+        const isSocial = typeof productId === 'string' && productId.startsWith('post-');
+        const cacheKey = productId as any;
+
+        const current = likeData[cacheKey] || { liked: false, count: baseCount };
         const newLiked = !current.liked;
         const newCount = newLiked ? current.count + 1 : Math.max(0, current.count - 1);
-        setLikeData(prev => ({ ...prev, [productId]: { liked: newLiked, count: newCount } }));
+        setLikeData(prev => ({ ...prev, [cacheKey]: { liked: newLiked, count: newCount } }));
+
         try {
-            const res = await toggleProductLike(productId, token);
-            setLikeData(prev => ({ ...prev, [productId]: { liked: res.data.liked, count: res.data.likes_count } }));
-            if (res.data.liked) {
-                logUserActivity({ product_id: productId, action_type: 'like' }, token);
+            if (isSocial) {
+                const realId = String(productId).replace('post-', '');
+                const res = await toggleSocialPostLike(realId, token);
+                if (res) {
+                    setLikeData(prev => ({
+                        ...prev,
+                        [cacheKey]: {
+                            liked: res.liked !== undefined ? !!res.liked : newLiked,
+                            count: Number(res.likes_count ?? res.likeCount ?? newCount)
+                        }
+                    }));
+                }
+            } else {
+                const res = await toggleProductLike(Number(productId), token);
+                setLikeData(prev => ({ ...prev, [cacheKey]: { liked: res.data.liked, count: res.data.likes_count } }));
+                if (res.data.liked) {
+                    logUserActivity({ product_id: Number(productId), action_type: 'like' }, token);
+                }
             }
         } catch (err) {
-            setLikeData(prev => ({ ...prev, [productId]: current }));
+            setLikeData(prev => ({ ...prev, [cacheKey]: current }));
         }
     };
 
@@ -911,9 +511,9 @@ export default function CartPage() {
                     <div className="w-24 h-4 shimmer-bg rounded-md" />
                     <div className="w-8 h-8 rounded-full shimmer-bg" />
                 </div>
-                <div className="p-4 space-y-6">
+                <div className=" space-y-6">
                     {[1, 2].map((i) => (
-                        <div key={i} className="bg-white border border-slate-100 rounded-lg overflow-hidden space-y-px">
+                        <div key={i} className="bg-white border border-slate-100 rounded overflow-hidden space-y-px">
                             <div className="p-4 border-b border-slate-50 flex items-center gap-3">
                                 <div className="w-4 h-4 rounded-full shimmer-bg" />
                                 <div className="w-6 h-6 rounded-full shimmer-bg" />
@@ -942,7 +542,7 @@ export default function CartPage() {
 
     if (items.length === 0) {
         return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center">
+            <div className=" bg-slate-50 flex flex-col items-center">
                 <div className="w-full flex flex-col items-center p-6 py-20">
                     <div className="w-32 h-32 rounded-full flex items-center justify-center">
                         <img src="/assets/images/cart.png" alt="" />
@@ -951,68 +551,28 @@ export default function CartPage() {
                         Your cart is empty, Add items now!
                     </p>
                 </div>
-                <div className="w-full px-2 sm:px-4">
-                    <h2 className="text-lg font-bold text-slate-900 mb-4">You might also like</h2>
-                    {loadingRecs ? (
-                        <ShimmerGrid count={10} />
-                    ) : (
-                        <MasonryGrid
-                            items={recommendedProducts}
-                            likeData={likeData}
-                            fetchingProductId={selectedProductPayload?.productId}
-                            handleProductClick={handleProductClick}
-                            handleReelsClick={handleReelsClick}
-                            handleLikeClick={handleLikeClick}
-                            formatUrl={formatUrl}
-                            router={router}
-                        />
-                    )}
+                <div className="px-4 mb-2">
+                    <h2 className="text-lg font-bold text-slate-900 mb-1 font-primary">You might also like</h2>
                 </div>
-                {modalOpen && selectedProductPayload && (
-                    <ProductPreviewModal
-                        open={modalOpen}
-                        payload={selectedProductPayload}
-                        origin={clickPos}
-                        onClose={() => { setModalOpen(false); setSelectedProductPayload(null); updateUrl(null); fetchCart(); }}
-                        onCartClick={() => { setModalOpen(false); setSelectedProductPayload(null); updateUrl(null); fetchCart(); }}
-                        onProductClick={handleProductClick}
-                        onReelsClick={handleReelsClick}
-                    />
-                )}
 
-                <ReelsModal
-                    open={reelsModalOpen}
-                    initialProductId={selectedProductId}
-                    origin={clickPos}
-                    onClose={() => {
-                        setReelsModalOpen(false);
-                        setSelectedProductId(null);
-                        updateUrl(selectedProductPayload?.productId || null);
-                    }}
-                    onActiveProductChange={(pid, bizName) => {
-                        setSelectedProductId(pid);
-                        updateUrl(pid, true, true);
-                    }}
-                />
-
-                {selectedSocialPost && (
-                    <PostModal
-                        open={!!selectedSocialPost}
-                        post={selectedSocialPost}
-                        onClose={() => setSelectedSocialPost(null)}
-                        onToggleLike={() => fetchRecommendations()}
-                        userToken={token}
-                        origin={clickPos}
-                        isProductLinkedOnly={true}
+                <div className=" ">
+                    <MarketClient
+                        params={marketParams}
+                        hideTabs={true}
+                        initialCategory={relatedCategory}
+                        softCategory={true}
+                        relatedVendorIds={cartVendorIds}
                     />
-                )}
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-32">
-            <header className="sticky top-0 z-[1100] bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="min-h-screen bg-slate-50 pb-32 lg:pt-0">
+            <header
+                className={`sticky transition-all duration-500 bg-white/95 backdrop-blur-md  px-4 py-3 flex items-center justify-between ${isScrolled ? 'top-0 z-[2500] ' : 'top-[64px] z-[1100]'}`}
+            >
                 <div className="flex items-center gap-4">
                     <button
                         onClick={() => {
@@ -1029,15 +589,15 @@ export default function CartPage() {
                     <h1 className="text-xl font-bold text-slate-900">Cart ({items.length})</h1>
                 </div>
             </header>
-            <main className="px-4 py-4 space-y-2">
+            <main className=" py-4 space-y-2">
                 {groupedItems.map((group) => (
-                    <div key={group.business_id}>
-                        <section className="bg-white border border-slate-100 overflow-hidden mb-4 rounded-xl">
+                    <div className="px-2" key={group.business_id}>
+                        <section className="bg-white overflow-hidden mb-4 ">
                             <div className="px-6 mt-2 bg-slate-50/50 flex items-center justify-between py-1">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => toggleShopSelection(group.business_id, group.items.map(i => i.cart_id))}
-                                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${group.items.every(item => selectedCartIds.includes(item.cart_id)) ? "bg-rose-500 border-rose-500 shadow-sm shadow-rose-200" : "bg-white border-slate-300"}`}
+                                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${group.items.every(item => selectedCartIds.includes(item.cart_id)) ? "bg-rose-500 border-rose-500 shadow-rose-200" : "bg-white border-slate-300"}`}
                                     >
                                         {group.items.every(item => selectedCartIds.includes(item.cart_id)) && (
                                             <CheckIcon className="w-2.5 h-2.5 text-white stroke-[3]" />
@@ -1050,19 +610,29 @@ export default function CartPage() {
                                         }}
                                         className="flex items-center gap-2 cursor-pointer hover:opacity-75 transition-opacity"
                                     >
-                                        <Image src={formatUrl(group.business_logo) || "/assets/images/favio.png"} alt={group.business_name} className="rounded-full object-cover border border-slate-200" width={20} height={20} />
+                                        <Image
+                                            src={formatUrl(group.business_logo) || formatUrl(group.profile_pic || "") || "/assets/images/favio.png"}
+                                            alt={group.business_name}
+                                            className="rounded-full object-cover border border-slate-200"
+                                            width={20}
+                                            height={20}
+                                            unoptimized
+                                        />
                                         <span className="text-[12px] font-bold text-slate-800">{group.business_name}</span>
+                                        {vendorBadges[group.business_id]?.verified_badge && (
+                                            <VerifiedBadge label={vendorBadges[group.business_id].badge_label} size="xs" />
+                                        )}
                                         <ChevronRightIcon className="w-3 h-3 text-slate-400" />
                                     </div>
                                 </div>
                             </div>
 
                             {group.estimation && !group.estimation.is_available && (
-                                <div className="mx-6 my-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                                    <p className="text-[11px] text-red-600 font-bold leading-relaxed whitespace-pre-wrap">
+                                <div className="mx-6 my-2 p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                                    <p className="text-[11px] text-rose-600 font-bold leading-relaxed whitespace-pre-wrap">
                                         ⚠️ {group.estimation.message}
                                     </p>
-                                    <p className="text-[10px] text-red-500 mt-1 italic">
+                                    <p className="text-[10px] text-rose-500 mt-1 italic">
                                         Please remove items from this vendor to proceed with checkout.
                                     </p>
                                 </div>
@@ -1078,24 +648,23 @@ export default function CartPage() {
                                                 <CheckIcon className="w-2.5 h-2.5 text-white stroke-[3] animate-in zoom-in duration-200" />
                                             )}
                                         </button>
-                                        <div onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-50 relative group cursor-pointer">
+                                        <div onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} style={{ transform: "translateZ(0)" }} className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-50 relative group cursor-pointer">
                                             <div className="absolute inset-0 flex items-center justify-center">
                                                 <span className="text-[10px] font-black text-slate-300 opacity-40 select-none">stoqle</span>
                                             </div>
                                             <Image src={formatUrl(item.product_image)} alt={item.product_title} fill sizes="96px" className="object-cover transition-transform duration-500 group-hover:scale-110 relative z-[1]" />
                                             {item.total_quantity !== undefined && item.total_quantity > 0 && item.total_quantity <= 4 && (
-                                                <>
-                                                    <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
-                                                    <div className="absolute bottom-1.5 left-0 right-0 py-0.5 flex items-center justify-center z-10">
-                                                        <span className="text-[10px] font-bold text-white tracking-wider drop-shadow-sm">Only {item.total_quantity} items(s)</span>
-                                                    </div>
-                                                </>
+                                                <div className="absolute inset-x-0 bottom-0 h-9 z-[2] pointer-events-none flex items-end justify-center pb-1.5">
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent rounded-b-[11px]" />
+                                                    <div className="absolute inset-0 backdrop-blur-[2px] rounded-b-[11px] mask-gradient-to-t" style={{ WebkitMaskImage: 'linear-gradient(to top, black 30%, transparent 100%)', maskImage: 'linear-gradient(to top, black 30%, transparent 100%)' }} />
+                                                    <span className="text-[9px] font-bold text-white tracking-wider relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">Only {item.total_quantity} left</span>
+                                                </div>
                                             )}
                                         </div>
                                         <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                                             <div>
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-sm text-slate-900 line-clamp-2 leading-snug flex-1 cursor-pointer hover:text-red-600 transition-colors">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-sm text-slate-900 line-clamp-2 leading-snug flex-1 cursor-pointer hover:text-rose-600 transition-colors">
                                                         {item.product_title}
                                                     </h3>
                                                     <div className="flex-shrink-0">
@@ -1105,7 +674,7 @@ export default function CartPage() {
                                                                     <MinusIcon className="w-3 h-3 text-slate-700 stroke-[3]" />
                                                                 </button>
                                                                 <span className="text-xs font-bold text-slate-800 min-w-[1.5rem] text-center">{item.quantity}</span>
-                                                                <button onClick={() => { if (item.quantity >= (item.total_quantity ?? Infinity)) { toast.error(`Only ${item.total_quantity} items(s)`); return; } handleUpdateQuantity(item.cart_id, item.quantity + 1); }} disabled={updatingIds.includes(item.cart_id) || item.quantity >= (item.total_quantity ?? Infinity)} className="w-7 h-7 rounded-full bg-white flex items-center justify-center shadow-sm active:scale-90 transition-all disabled:opacity-30 disabled:grayscale">
+                                                                <button onClick={() => { if (item.quantity >= (item.total_quantity ?? Infinity)) { toast.error(`Only ${item.total_quantity} items(s)`); return; } handleUpdateQuantity(item.cart_id, item.quantity + 1); }} disabled={updatingIds.includes(item.cart_id) || item.quantity >= (item.total_quantity ?? Infinity)} className="w-7 h-7 rounded-full bg-white flex items-center justify-center active:scale-90 transition-all disabled:opacity-30 disabled:grayscale">
                                                                     <PlusIcon className="w-3 h-3 text-slate-700 stroke-[3]" />
                                                                 </button>
                                                             </div>
@@ -1125,10 +694,10 @@ export default function CartPage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-baseline gap-2">
-                                                    <span className="text-base font-bold text-red-600">₦{((item.price ?? 0) * (item.quantity || 1)).toLocaleString()}</span>
+                                                    <span className="text-base font-bold text-rose-600">₦{((item.price ?? 0) * (item.quantity || 1)).toLocaleString()}</span>
                                                     {(item.base_price ?? 0) > (item.price ?? 0) && <span className="text-xs text-slate-400 line-through">₦{(item.base_price ?? 0).toLocaleString()}</span>}
                                                 </div>
-                                                <button onClick={() => handleRemoveItem(item.cart_id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                                                <button onClick={() => handleRemoveItem(item.cart_id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
                                             </div>
@@ -1140,7 +709,7 @@ export default function CartPage() {
                     </div>
                 ))}
                 {outOfStockItems.length > 0 && (
-                    <div className="mt-8 ">
+                    <div className="mt-8 px-2">
                         <h2 className="text-[11px] font-bold text-slate-500  px-2 mb-2 ">Following item(s) unavailable</h2>
                         <section className="bg-white rounded-xl overflow-hidden border border-slate-100">
                             {outOfStockItems.map((item, idx) => (
@@ -1162,14 +731,14 @@ export default function CartPage() {
                                     </div>
                                     <div className="flex-1 min-w-0 py-1 flex flex-col justify-between">
                                         <div>
-                                            <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-xs font-bold text-slate-400 line-clamp-1 cursor-pointer hover:text-red-500 transition-colors">{item.product_title}</h3>
+                                            <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-xs font-bold text-slate-400 line-clamp-1 cursor-pointer hover:text-rose-500 transition-colors">{item.product_title}</h3>
                                             {item.variant_label && <p className="text-[10px] text-slate-400 font-medium  tracking-tight mt-0.5">{item.variant_label}</p>}
                                         </div>
                                         <div className="flex items-center justify-between mt-2">
                                             <span className="text-[10px] text-slate-400 font-bold  tracking-wider">Sold Out</span>
                                             <div className="flex items-center gap-2">
                                                 <button onClick={() => { const query = encodeURIComponent(item.product_title); router.push(`/market/feed?search=${query}`); }} className="text-[9px] font-bold text-rose-500 hover:bg-rose-50 px-3 py-1.5 rounded-full border border-rose-200 transition-all  ">Find similar</button>
-                                                <button onClick={() => handleRemoveItem(item.cart_id)} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"><TrashIcon className="w-4 h-4" /></button>
+                                                <button onClick={() => handleRemoveItem(item.cart_id)} className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"><TrashIcon className="w-4 h-4" /></button>
                                             </div>
                                         </div>
                                     </div>
@@ -1178,22 +747,21 @@ export default function CartPage() {
                         </section>
                     </div>
                 )}
-                <div className="mt-12 px-2 sm:px-4">
-                    <h2 className="text-lg font-bold text-slate-900 mb-6 font-primary">You might also like</h2>
-                    {loadingRecs ? (
-                        <ShimmerGrid count={10} />
-                    ) : (
-                        <MasonryGrid
-                            items={recommendedProducts}
-                            likeData={likeData}
-                            fetchingProductId={selectedProductPayload?.productId}
-                            handleProductClick={handleProductClick}
-                            handleReelsClick={handleReelsClick}
-                            handleLikeClick={handleLikeClick}
-                            formatUrl={formatUrl}
-                            router={router}
+                <div className="mt-6">
+                    <div className="px-2 mb-2">
+                        <h2 className="text-lg font-bold text-slate-900 mb-1 font-primary">You might also like</h2>
+                    </div>
+
+                    {/* INJECT EXACT MARKET CONTENT: Zero-compromise marketplace experience inside the cart */}
+                    <div className="lg:px-2">
+                        <MarketClient
+                            params={marketParams}
+                            hideTabs={true}
+                            initialCategory={relatedCategory}
+                            softCategory={true}
+                            relatedVendorIds={cartVendorIds}
                         />
-                    )}
+                    </div>
                 </div>
             </main>
             {modalOpen && selectedProductPayload && (
@@ -1221,6 +789,17 @@ export default function CartPage() {
                     updateUrl(pid, true, true);
                 }}
             />
+            {selectedSocialPost && (
+                <PostModal
+                    open={!!selectedSocialPost}
+                    post={selectedSocialPost}
+                    onClose={() => setSelectedSocialPost(null)}
+                    onToggleLike={() => fetchRecommendations()}
+                    userToken={token}
+                    origin={clickPos}
+                    isProductLinkedOnly={true}
+                />
+            )}
             <div
                 className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-50 py-2 pb-[calc(0.25rem+env(safe-area-inset-bottom))]"
             >
@@ -1244,7 +823,7 @@ export default function CartPage() {
                     {/* Middle: Total Price */}
                     <div className="flex flex-col items-center justify-center min-w-0">
                         <span className="text-[9px]  flex-1 tracking-tighter">Total Price</span>
-                        <span className="text-sm text-red-500 tracking-tight leading-none">₦{totalPrice.toLocaleString()}</span>
+                        <span className="text-sm text-rose-500 tracking-tight leading-none">₦{totalPrice.toLocaleString()}</span>
                     </div>
 
                     {/* Right: Checkout */}
@@ -1275,7 +854,7 @@ export default function CartPage() {
                                 sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
                                 router.push(`/checkout`);
                             }}
-                            className="w-fit px-6 bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2 rounded-xl shadow-lg shadow-red-100 hover:shadow-red-200 transition-all active:scale-[0.98]  items-center justify-center gap-2 text-xs"
+                            className="w-fit px-6 bg-gradient-to-r from-rose-600 to-rose-600 text-white font-bold py-2 rounded-full shadow-lg shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98]  items-center justify-center gap-2 text-xs"
                         >
                             Checkout({selectedCartIds.length})
                         </button>

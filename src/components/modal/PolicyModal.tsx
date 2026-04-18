@@ -53,7 +53,7 @@ export default function PolicyModal({ open, onClose, title, endpoint }: Props) {
             className="fixed inset-0 z-[700000] bg-black/50"
             onClick={onClose}
           />
-          
+
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
@@ -111,7 +111,7 @@ function PolicyContent({
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {loading ? (
           <div className="flex justify-center items-center py-10">
-            <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : data.length === 0 ? (
           <p className="text-center text-slate-500 text-sm py-10">No information available.</p>

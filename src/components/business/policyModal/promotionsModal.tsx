@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 
 // Types
 export type Occasion = {
@@ -265,6 +266,12 @@ export default function PromotionsModal({
   onSave,
 }: Props) {
   const [mounted, setMounted] = useState(false);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [open]);
   useEffect(() => setMounted(true), []);
 
   const [loading, setLoading] = useState(true);
@@ -623,7 +630,7 @@ export default function PromotionsModal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" style={{ zIndex: modalZIndex }}>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

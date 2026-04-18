@@ -143,12 +143,12 @@ function SheetContent({
         {/* Logout */}
         <button
           onClick={onConfirmLogout}
-          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-red-50 hover:bg-red-100 active:scale-[0.98] transition-all"
+          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-[0.98] transition-all"
         >
-          <div className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center border border-red-100">
-            <ArrowRightOnRectangleIcon className="w-5 h-5 text-red-500" />
+          <div className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center border border-rose-100">
+            <ArrowRightOnRectangleIcon className="w-5 h-5 text-rose-500" />
           </div>
-          <span className="text-sm font-semibold text-red-500">Logout</span>
+          <span className="text-sm font-semibold text-rose-500">Logout</span>
         </button>
 
         {/* Cancel */}

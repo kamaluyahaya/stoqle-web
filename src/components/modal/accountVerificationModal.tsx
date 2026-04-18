@@ -308,8 +308,8 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                   }
                 </h2>
                 <div className="flex gap-1 mt-1">
-                  <div className={`h-1 w-8 rounded-full ${verifyType === "phone" ? "bg-red-500" : "bg-slate-700"}`} />
-                  <div className={`h-1 w-8 rounded-full ${verifyType === "email" ? "bg-red-500" : "bg-slate-700"}`} />
+                  <div className={`h-1 w-8 rounded-full ${verifyType === "phone" ? "bg-rose-500" : "bg-slate-700"}`} />
+                  <div className={`h-1 w-8 rounded-full ${verifyType === "email" ? "bg-rose-500" : "bg-slate-700"}`} />
                 </div>
               </div>
 
@@ -363,18 +363,18 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                                   variant="compact"
                                 />
                               </div>
-                              {checkingAvailability && <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full mr-1" />}
+                              {checkingAvailability && <div className="animate-spin h-4 w-4 border-2 border-rose-500 border-t-transparent rounded-full mr-1" />}
                               {isAvailable === true && <span className="text-emerald-500 text-sm">✓</span>}
-                              {isAvailable === false && <span className="text-red-500 text-sm">✕</span>}
+                              {isAvailable === false && <span className="text-rose-500 text-sm">✕</span>}
                             </div>
                           </div>
                           {isAvailable === false && (
-                            <p className="text-[10px] text-red-500 font-bold -mt-4 pl-1">{availabilityError}</p>
+                            <p className="text-[10px] text-rose-500 font-bold -mt-4 pl-1">{availabilityError}</p>
                           )}
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-red-500/50 transition-all">
+                          <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl focus-within:border-rose-500/50 transition-all">
                             <IoMailOutline className="text-slate-400 ml-1" size={20} />
                             <input
                               type="email"
@@ -389,12 +389,12 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                               required
                               autoFocus
                             />
-                            {checkingAvailability && <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full" />}
+                            {checkingAvailability && <div className="animate-spin h-4 w-4 border-2 border-rose-500 border-t-transparent rounded-full" />}
                             {isAvailable === true && <span className="text-emerald-500 text-sm">✓</span>}
-                            {isAvailable === false && <span className="text-red-500 text-sm">✕</span>}
+                            {isAvailable === false && <span className="text-rose-500 text-sm">✕</span>}
                           </div>
                           {isAvailable === false && (
-                            <p className="text-[10px] text-red-500 font-bold -mt-4 pl-1">{availabilityError}</p>
+                            <p className="text-[10px] text-rose-500 font-bold -mt-4 pl-1">{availabilityError}</p>
                           )}
                         </>
                       )}
@@ -402,7 +402,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                       <button
                         type="submit"
                         disabled={loading || checkingAvailability || isAvailable === false || (verifyType === "phone" ? !phone : !email)}
-                        className="w-full bg-red-500 text-white py-3 rounded-full font-bold transition-all hover:bg-red-600 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-red-500/20"
+                        className="w-full bg-rose-500 text-white py-3 rounded-full font-bold transition-all hover:bg-rose-600 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-rose-500/20"
                       >
                         {loading ? (
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -440,7 +440,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                           onChange={(e) => handleOtpChange(idx, e.target.value)}
                           onKeyDown={(e) => handleKeyDown(idx, e)}
                           onPaste={idx === 0 ? handlePaste : undefined}
-                          className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold bg-white/5 border-white/10 text-white focus:bg-white/10 focus:border-red-500 border-2 rounded-xl transition-all outline-none"
+                          className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold bg-white/5 border-white/10 text-white focus:bg-white/10 focus:border-rose-500 border-2 rounded-xl transition-all outline-none"
                           autoFocus={idx === 0}
                         />
                       ))}
@@ -454,7 +454,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                       ) : (
                         <button
                           onClick={handleSendOtp}
-                          className="text-red-500 text-xs font-bold hover:text-red-400 transition-colors  tracking-widest"
+                          className="text-rose-500 text-xs font-bold hover:text-rose-400 transition-colors  tracking-widest"
                         >
                           Resend New Code
                         </button>
@@ -476,7 +476,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
 
                     {loading && (
                       <div className="mt-8 flex justify-center">
-                        <div className="w-6 h-6 border-2 border-white/20 border-t-red-500 rounded-full animate-spin" />
+                        <div className="w-6 h-6 border-2 border-white/20 border-t-rose-500 rounded-full animate-spin" />
                       </div>
                     )}
                   </motion.div>

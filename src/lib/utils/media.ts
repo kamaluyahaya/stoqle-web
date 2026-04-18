@@ -17,6 +17,11 @@ export const formatUrl = (url: string | undefined): string => {
     
     // Resolve relative paths
     if (!url.startsWith("http") && !url.startsWith("blob:") && !url.startsWith("data:")) {
+        // Skip resolution for local Next.js assets
+        if (url.startsWith("/assets/") || url.startsWith("/static/") || url.startsWith("/favicon")) {
+            return url;
+        }
+
         const baseUrl = API_BASE_URL?.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
         const normalizedPath = url.startsWith("/") ? url : `/${url}`;
         

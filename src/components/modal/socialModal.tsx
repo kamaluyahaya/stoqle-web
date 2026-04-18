@@ -19,6 +19,7 @@ type SocialUser = {
   total_followers?: number;
   total_posts?: number;
   bio?: string;
+  stoqle_id?: string | number;
 };
 
 type SocialTab = "friends" | "followers" | "following" | "recommend";
@@ -42,6 +43,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
   const cacheRef = useRef<Record<string, { users: SocialUser[]; timestamp: number }>>({});
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   const auth = useAuth() as any;
+  const currentUserId = auth?.user?.user_id || auth?.user?.id;
   const token = auth?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
   const router = useRouter();
 
@@ -125,25 +127,25 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
 
       const list: SocialUser[] = (Array.isArray(rawList) ? rawList : []).map((u: any) => ({
         ...u,
-        user_id: u.user_id || u.id,
+        user_id: u.user_id || u.id || u.staff_id || u.owner_id,
         full_name: u.business_name || u.full_name || u.name || "Stoqle User",
-        profile_pic: u.business_logo || u.profile_pic || u.avatar || `https://i.pravatar.cc/150?u=${u.user_id || u.id}`
+        profile_pic: u.business_logo || u.profile_pic || u.avatar || `https://i.pravatar.cc/150?u=${u.user_id || u.id || u.staff_id}`
       }));
 
-      let filteredList = list;
+      let filteroseList = list;
       if (activeTab === "friends") {
-        filteredList = list.filter((u: SocialUser) => u.is_following_viewer);
+        filteroseList = list.filter((u: SocialUser) => u.is_following_viewer);
       }
 
-      setUsers(filteredList);
+      setUsers(filteroseList);
       setError(null);
 
       // Update Tab Cache
-      cacheRef.current[cacheKey] = { users: filteredList, timestamp: Date.now() };
+      cacheRef.current[cacheKey] = { users: filteroseList, timestamp: Date.now() };
 
       // Fetch recommendations if not on recommend tab
       if (activeTab !== "recommend") {
-        fetchRecommendations(filteredList);
+        fetchRecommendations(filteroseList);
       } else {
         setRecommendedUsers([]);
       }
@@ -170,9 +172,9 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
 
       const recList: SocialUser[] = (Array.isArray(recRawList) ? recRawList : []).map((u: any) => ({
         ...u,
-        user_id: u.user_id || u.id,
+        user_id: u.user_id || u.id || u.staff_id || u.owner_id,
         full_name: u.business_name || u.full_name || u.name || "Stoqle User",
-        profile_pic: u.business_logo || u.profile_pic || u.avatar || `https://i.pravatar.cc/150?u=${u.user_id || u.id}`
+        profile_pic: u.business_logo || u.profile_pic || u.avatar || `https://i.pravatar.cc/150?u=${u.user_id || u.id || u.staff_id}`
       }));
 
       // Cache the raw recommendations list
@@ -245,7 +247,17 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
           "Authorization": `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error("Failed to update follow status");
+      if (res.status === 401) {
+        onClose();
+        router.push("/login");
+        return;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Follow update failed:", res.status, errData);
+        throw new Error(errData.message || "Failed to update follow status");
+      }
 
       // ✅ Notify parent about the update
       onFollowUpdate?.(targetUserId, !currentStatus);
@@ -257,13 +269,13 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
           if (prev.find(u => String(u.user_id) === String(targetUserId))) {
             return prev.map(u => String(u.user_id) === String(targetUserId) ? targetUser : u);
           }
-          return [...prev, targetUser]; // Put it back if it was filtered
+          return [...prev, targetUser]; // Put it back if it was filterose
         });
       }
     }
   };
 
-  const filteredUsers = users.filter(u =>
+  const filteroseUsers = users.filter(u =>
     (u.full_name || u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
     (u.username || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -290,7 +302,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
         {isOpen && (
           <div
             key="social-modal-overlay"
-            className="fixed inset-0 z-[1000] flex items-center justify-center sm:p-6"
+            className="fixed inset-0 z-[10000] flex items-center justify-center sm:p-6"
           >
             <motion.div
               key="social-modal-backdrop"
@@ -332,7 +344,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                         setSearchQuery("");
                       }}
                       className={`relative py-3 text-sm font-bold whitespace-nowrap transition-all ${isActive
-                        ? "text-red-500"
+                        ? "text-rose-500"
                         : "text-slate-400 hover:text-slate-600"
                         }`}
                     >
@@ -340,7 +352,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                       {isActive && (
                         <motion.div
                           layoutId="activeTabSocial"
-                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-t-full"
+                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-t-full"
                           transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                         />
                       )}
@@ -354,7 +366,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                 <div className="px-6 py-3 shrink-0 flex flex-col gap-3">
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                      <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
+                      <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
                     </div>
                     <input
                       type="text"
@@ -366,7 +378,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                       }
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-red-100 placeholder:text-slate-400 focus:bg-white transition-all outline-none"
+                      className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-rose-100 placeholder:text-slate-400 focus:bg-white transition-all outline-none"
                     />
                   </div>
                   <div className="text-xs font-bold text-slate-900 pl-1 capitalize">
@@ -379,10 +391,10 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
               <div className="flex-1 overflow-y-auto px-4 pb-6 custom-scrollbar">
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-3 border-rose-500 border-t-transparent rounded-full animate-spin" />
                     <p className="text-xs font-medium text-slate-400 animate-pulse">Gathering community...</p>
                   </div>
-                ) : (filteredUsers.length === 0 || error) ? (
+                ) : (filteroseUsers.length === 0 || error) ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-10">
                     <img src="/assets/images/message-icons.png" alt="No users found" className="w-24 opacity-50 mb-4" />
                     <p className="text-sm font-bold text-slate-900">
@@ -418,7 +430,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {filteredUsers.map((user, idx) => (
+                    {filteroseUsers.map((user, idx) => (
                       <motion.div
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -446,7 +458,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                           </h4>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] text-slate-400 font-medium truncate">
-                              @{user.username || 'stoqleID' + user.user_id}
+                              {user.username || 'stoqleID: ' + (user.stoqle_id || user.user_id)}
                             </span>
                             {user.total_followers !== undefined && (
                               <>
@@ -459,26 +471,28 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                           </div>
                         </div>
 
-                        <div className="shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (user.is_followed_by_viewer) {
-                                setUnfollowConfirm(user);
-                              } else {
-                                handleFollowToggle(user.user_id, !!user.is_followed_by_viewer);
-                              }
-                            }}
-                            className={`px-2.5 py-0.5 rounded-full border-[0.5px] text-[9px] font-bold transition-all active:scale-95 ${user.is_followed_by_viewer
-                              ? "border-slate-200 text-slate-400 hover:bg-slate-50"
-                              : "border-red-500 text-red-500 hover:bg-red-50"
-                              }`}
-                          >
-                            {user.is_followed_by_viewer
-                              ? (activeTab === 'friends' ? 'Friends' : 'Following')
-                              : (activeTab === 'followers' ? 'Follow Back' : 'Follow')}
-                          </button>
-                        </div>
+                        {String(user.user_id) !== String(currentUserId) && (
+                          <div className="shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (user.is_followed_by_viewer) {
+                                  setUnfollowConfirm(user);
+                                } else {
+                                  handleFollowToggle(user.user_id, !!user.is_followed_by_viewer);
+                                }
+                              }}
+                              className={`px-2.5 py-0.5 rounded-full border-[0.5px] text-[9px] font-bold transition-all active:scale-95 ${user.is_followed_by_viewer
+                                ? "border-slate-200 text-slate-400 hover:bg-slate-50"
+                                : "border-rose-500 text-rose-500 hover:bg-rose-50"
+                                }`}
+                            >
+                              {user.is_followed_by_viewer
+                                ? (activeTab === 'friends' ? 'Friends' : 'Following')
+                                : (activeTab === 'followers' ? 'Follow Back' : 'Follow')}
+                            </button>
+                          </div>
+                        )}
                       </motion.div>
                     ))}
                   </div>
@@ -494,7 +508,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                           setActiveTab("recommend");
                           setSearchQuery("");
                         }}
-                        className="text-xs font-bold text-red-500 hover:text-red-600 px-2"
+                        className="text-xs font-bold text-rose-500 hover:text-rose-600 px-2"
                       >
                         See all
                       </button>
@@ -528,7 +542,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                             </h4>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] text-slate-400 font-medium truncate">
-                                @{user.username || 'stoqleID' + user.user_id}
+                                @{user.username || 'stoqleID' + (user.stoqle_id || user.user_id)}
                               </span>
                               {user.total_followers !== undefined && (
                                 <>
@@ -541,24 +555,26 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                             </div>
                           </div>
 
-                          <div className="shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (user.is_followed_by_viewer) {
-                                  setUnfollowConfirm(user);
-                                } else {
-                                  handleFollowToggle(user.user_id, !!user.is_followed_by_viewer);
-                                }
-                              }}
-                              className={`px-3 py-1 rounded-full border-[0.5px] text-[10px] font-bold transition-all active:scale-95 ${user.is_followed_by_viewer
-                                ? "border-slate-200 text-slate-400 hover:bg-slate-50"
-                                : "border-red-500 text-red-500 hover:bg-red-50"
-                                }`}
-                            >
-                              {user.is_followed_by_viewer ? 'Following' : 'Follow'}
-                            </button>
-                          </div>
+                          {String(user.user_id) !== String(currentUserId) && (
+                            <div className="shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (user.is_followed_by_viewer) {
+                                    setUnfollowConfirm(user);
+                                  } else {
+                                    handleFollowToggle(user.user_id, !!user.is_followed_by_viewer);
+                                  }
+                                }}
+                                className={`px-3 py-1 rounded-full border-[0.5px] text-[10px] font-bold transition-all active:scale-95 ${user.is_followed_by_viewer
+                                  ? "border-slate-200 text-slate-400 hover:bg-slate-50"
+                                  : "border-rose-500 text-rose-500 hover:bg-rose-50"
+                                  }`}
+                              >
+                                {user.is_followed_by_viewer ? 'Following' : 'Follow'}
+                              </button>
+                            </div>
+                          )}
                         </motion.div>
                       ))}
                     </div>
@@ -569,10 +585,10 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
               {/* Footer Stats / PWA Hint */}
               <div className="px-6 py-3 bg-slate-50/50 flex items-center justify-between shrink-0">
                 <span className="text-[10px] font-bold text-slate-400  tracking-widest">
-                  {filteredUsers.length} Users Listed
+                  {filteroseUsers.length} Users Listed
                 </span>
                 <div className="flex items-center gap-1.5 opacity-40">
-                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+                  <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
                   <span className="text-[10px] font-bold text-slate-900 ">Live Updates</span>
                 </div>
               </div>
@@ -583,7 +599,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
 
       <AnimatePresence>
         {unfollowConfirm && (
-          <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -618,7 +634,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                     handleFollowToggle(unfollowConfirm.user_id, true);
                     setUnfollowConfirm(null);
                   }}
-                  className="w-full py-2.5 rounded-xl bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-100"
+                  className="w-full py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors shadow-lg shadow-rose-100"
                 >
                   Unfollow
                 </button>

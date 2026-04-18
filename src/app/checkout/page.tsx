@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
-import { ChevronLeftIcon, MapPinIcon, CreditCardIcon, ChatBubbleLeftEllipsisIcon, BackwardIcon } from "@heroicons/react/24/outline";
+import { ChevronLeftIcon, MapPinIcon } from "@heroicons/react/24/outline";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
@@ -20,8 +20,11 @@ import PinVerifyModal from "@/src/components/business/pinVerifyModal";
 import PinSetupModal from "@/src/components/business/pinSetupModal";
 import { logUserActivity } from "@/src/lib/api/productApi";
 import ImageViewer from "@/src/components/modal/imageViewer";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import AccountVerificationModal from "@/src/components/modal/accountVerificationModal";
+import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
+import { fetchVendorBadgesBatch, type VendorBadge } from "@/src/lib/api/vendorApi";
 
 interface CartItem {
     cart_id: number;
@@ -53,6 +56,7 @@ interface CartItem {
     shipping_policies: any[];
     seven_day_no_reason?: number;
     return_shipping_subsidy?: number;
+    profile_pic?: string;
 }
 
 function formatDuration(value: number | string | undefined | null, unit?: string) {
@@ -212,6 +216,7 @@ export default function CheckoutPage() {
     const [vendorNotes, setVendorNotes] = useState<Record<number, string>>({});
     const [paymentMethod, setPaymentMethod] = useState("paystack");
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isScrolled, setIsScrolled] = useState(false);
 
     // Global Wallet Context
     const { wallet, refreshWallet, isLoading: walletLoading } = useWallet();
@@ -223,6 +228,7 @@ export default function CheckoutPage() {
 
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerSrc, setViewerSrc] = useState<string | null>(null);
+    const [vendorBadges, setVendorBadges] = useState<Record<number, VendorBadge>>({});
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -268,6 +274,18 @@ export default function CheckoutPage() {
         }
     }, [isProcessing]);
 
+    useEffect(() => {
+        const handleScroll = () => {
+            if (window.scrollY > 50) {
+                setIsScrolled(true);
+            } else {
+                setIsScrolled(false);
+            }
+        };
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
     const fetchCart = async () => {
         if (!token) return;
         try {
@@ -281,10 +299,18 @@ export default function CheckoutPage() {
                 );
 
                 // ONLY show items that were selected for checkout
-                const filtered = uniqueItems.filter(item => selectedIds.includes(item.cart_id));
-                setItems(filtered);
+                const filterose = uniqueItems.filter(item => selectedIds.includes(item.cart_id));
+                setItems(filterose);
 
-                if (filtered.length === 0 && !loading) {
+                // Batch-fetch vendor badges in one network call
+                const uniqueBusinessIds = [...new Set(filterose.map(i => i.business_id))];
+                if (uniqueBusinessIds.length > 0) {
+                    fetchVendorBadgesBatch(uniqueBusinessIds)
+                        .then(badges => setVendorBadges(badges))
+                        .catch(() => { }); // badge fetch is non-critical
+                }
+
+                if (filterose.length === 0 && !loading) {
                     toast.error("No items selected for checkout");
                     router.push("/cart");
                 }
@@ -355,6 +381,7 @@ export default function CheckoutPage() {
             business_id: number;
             business_name: string;
             business_logo: string;
+            profile_pic?: string;
             shipments: {
                 shipment_id: string; // duration based key
                 items: CartItem[];
@@ -375,7 +402,8 @@ export default function CheckoutPage() {
                 vendorGroup = {
                     business_id: item.business_id,
                     business_name: item.business_name,
-                    business_logo: item.business_logo,
+                    business_logo: item.business_logo || item.profile_pic || "",
+                    profile_pic: item.profile_pic,
                     shipments: []
                 };
                 groupList.push(vendorGroup);
@@ -770,8 +798,8 @@ export default function CheckoutPage() {
                 }}
             />
             {/* Header & Sticky Address Area */}
-            <div className="sticky top-0 z-[1100] bg-white ">
-                <header className="px-6 py-4 flex items-center gap-4">
+            <div className={`sticky transition-all duration-500 bg-white ${isScrolled ? "top-0 z-[2500] " : "top-[64px] z-[1100]"}`}>
+                <header className="px-4 py-2 flex items-center gap-4">
                     <button
                         onClick={() => router.back()}
                         className="p-2 hover:bg-slate-100 rounded-full lg:hidden"
@@ -782,10 +810,10 @@ export default function CheckoutPage() {
                 </header>
 
                 {/* Address Section */}
-                <section className="px-5 pb-3 border-t border-slate-50">
+                <section className="px-5 pb-3  border-slate-50">
                     <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-2 text-xs text-slate-800">
-                            <MapPinIcon className="w-4 h-4 text-red-500" />
+                            <MapPinIcon className="w-4 h-4 text-rose-500" />
                             {address ? (
                                 <span className="font-semibold">{address.recipientName}  +234 {address.contactNo}</span>
                             ) : (
@@ -794,7 +822,7 @@ export default function CheckoutPage() {
                         </div>
                         <button
                             onClick={() => setAddressModalOpen(true)}
-                            className="text-[10px] font-bold   text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full border border-red-100 transition-all"
+                            className="text-[10px] font-bold   text-rose-500 hover:bg-rose-50 px-3 py-1.5 rounded-full border border-rose-100 transition-all"
                         >
                             {address ? "Change" : "Select Address"}
                         </button>
@@ -810,12 +838,11 @@ export default function CheckoutPage() {
                     <section key={group.business_id} className="bg-white overflow-hidden space-y-4 pb-4">
                         {/* Vendor Header */}
                         <div className="px-5 py-3 flex items-center gap-2 border-b border-slate-50">
-                            <img
-                                src={formatUrl(group.business_logo) || "/assets/images/favio.png"}
-                                alt={group.business_name}
-                                className="w-5 h-5 rounded-full object-cover border border-slate-200"
-                            />
+                            <img src={formatUrl(group.business_logo) || formatUrl(group.profile_pic || "") || "/assets/images/favio.png"} alt={group.business_name} className="w-5 h-5 rounded-full object-cover border border-slate-200" />
                             <span className="text-sm font-bold text-slate-800">{group.business_name}</span>
+                            {vendorBadges[group.business_id]?.verified_badge && (
+                                <VerifiedBadge label={vendorBadges[group.business_id].badge_label} size="xs" />
+                            )}
                         </div>
 
                         {group.shipments.map((shipment, sIdx) => (
@@ -830,11 +857,11 @@ export default function CheckoutPage() {
                                 )}
 
                                 {shipment.estimation && !shipment.estimation.is_available && (
-                                    <div className="mx-5 mb-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                                        <p className="text-[11px] text-red-600 font-bold leading-relaxed whitespace-pre-wrap">
+                                    <div className="mx-5 mb-2 p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                                        <p className="text-[11px] text-rose-600 font-bold leading-relaxed whitespace-pre-wrap">
                                             ⚠️ {shipment.estimation.message}
                                         </p>
-                                        <p className="text-[10px] text-red-500 mt-1 italic">
+                                        <p className="text-[10px] text-rose-500 mt-1 italic">
                                             Please remove items in this shipment to proceed.
                                         </p>
                                     </div>
@@ -934,7 +961,7 @@ export default function CheckoutPage() {
                                 {globalSummary.breakdowns.map(([name, amount], i) => (
                                     <div key={i} className="flex justify-between items-center text-xs text-slate-600 font-medium">
                                         <span>{name}</span>
-                                        <span className="text-red-500">-₦{amount.toLocaleString()}</span>
+                                        <span className="text-rose-500">-₦{amount.toLocaleString()}</span>
                                     </div>
                                 ))}
                                 <div className="flex justify-between items-center text-sm text-rose-600 font-bold pt-1 border-t border-rose-50/50">
@@ -969,7 +996,7 @@ export default function CheckoutPage() {
                                 key={pm.id}
                                 onClick={() => setPaymentMethod(pm.id)}
                                 className={`w-full flex items-center justify-between p-4 rounded-2xl  transition-all text-left ${paymentMethod === pm.id
-                                    ? "border-red-500 bg-red-50/30"
+                                    ? "border-rose-500 bg-rose-50/30"
                                     : "border-slate-100 bg-white hover:border-slate-200"
                                     }`}
                             >
@@ -977,20 +1004,20 @@ export default function CheckoutPage() {
                                     <div className="relative w-10 h-10 rounded-xl bg-white p-2 flex items-center justify-center shrink-0 ">
                                         <img src={pm.icon} alt={pm.label} className="w-full h-full object-contain" />
                                         {pm.id === 'stoqle_pay' && pm.insufficient && (
-                                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">!</div>
+                                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">!</div>
                                         )}
                                     </div>
                                     <div>
                                         <div className="text-sm text-slate-800 flex items-center gap-2">
                                             {pm.label}
                                             {pm.id === 'stoqle_pay' && pm.insufficient && (
-                                                <span className="text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">Insufficient</span>
+                                                <span className="text-[10px] text-rose-500 font-bold bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100">Insufficient</span>
                                             )}
                                         </div>
-                                        <div className={`text-[10px] ${pm.id === 'stoqle_pay' && pm.insufficient ? 'text-red-400 font-bold' : 'text-slate-500'}`}>{pm.sub}</div>
+                                        <div className={`text-[10px] ${pm.id === 'stoqle_pay' && pm.insufficient ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>{pm.sub}</div>
                                     </div>
                                 </div>
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === pm.id ? "border-red-500 bg-red-500" : "border-slate-200"}`}>
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === pm.id ? "border-rose-500 bg-rose-500" : "border-slate-200"}`}>
                                     {paymentMethod === pm.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                                 </div>
                             </button>
@@ -1003,14 +1030,14 @@ export default function CheckoutPage() {
             <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100 p-2">
                 <div className="max-w-3xl mx-auto flex items-center justify-between gap-6">
                     <div className="flex-1 flex-col">
-                        <span className="text-[12px]  text-slate-800 ">Total</span>
-                        <span className="text-sm  text-red-600 tracking-tight">₦{grandTotal.toLocaleString()}</span>
+                        <span className="text-[12px]  text-slate-800 ">Total: </span>
+                        <span className="text-sm  text-rose-600 tracking-tight">₦{grandTotal.toLocaleString()}</span>
                     </div>
 
                     <button
                         onClick={handlePlaceOrder}
                         disabled={isProcessing || items.length === 0 || (paymentMethod === 'stoqle_pay' && wallet?.available_balance !== null && (wallet?.available_balance ?? 0) < grandTotal)}
-                        className=" bg-gradient-to-r from-red-600 to-rose-600 text-white px-4 py-1 rounded-2xl  hover:shadow-red-300 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale flex items-center justify-center"
+                        className=" bg-gradient-to-r from-rose-600 to-rose-600 text-white px-4 py-1 rounded-2xl  hover:shadow-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale flex items-center justify-center"
                     >
                         {isProcessing ? (
                             <div className="flex items-center gap-2">

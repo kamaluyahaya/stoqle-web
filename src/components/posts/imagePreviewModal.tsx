@@ -121,7 +121,7 @@ export default function ImagePreviewModal({
                 </button>
                 <button
                   onClick={() => setStep(1)}
-                  className="rounded-full bg-red-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-600"
+                  className="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-600"
                 >
                   Next
                 </button>
@@ -173,7 +173,7 @@ export default function ImagePreviewModal({
                   </div>
                 </div>
 
-                {error && <div className="text-sm text-red-600">{error}</div>}
+                {error && <div className="text-sm text-rose-600">{error}</div>}
               </div>
 
               <div className="mt-4 flex justify-between items-center">
@@ -186,9 +186,8 @@ export default function ImagePreviewModal({
                   <button
                     onClick={submit}
                     disabled={loading}
-                    className={`rounded-full px-4 py-2 text-sm font-medium text-white shadow-sm ${
-                      loading ? "bg-gray-300 cursor-not-allowed" : "bg-red-500 hover:bg-red-600"
-                    }`}
+                    className={`rounded-full px-4 py-2 text-sm font-medium text-white shadow-sm ${loading ? "bg-gray-300 cursor-not-allowed" : "bg-rose-500 hover:bg-rose-600"
+                      }`}
                   >
                     {loading ? "Posting…" : "Post"}
                   </button>

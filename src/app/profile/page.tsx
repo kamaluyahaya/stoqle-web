@@ -206,7 +206,7 @@ const PostCard = React.memo(({
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
         {post.isPinned && (
-          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
           </div>
         )}
@@ -307,7 +307,7 @@ const PostCard = React.memo(({
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.5, opacity: 0 }}
                     transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                    className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
+                    className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-rose-500' : 'text-slate-400'}`}
                   >
                     {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
                   </motion.div>
@@ -317,7 +317,7 @@ const PostCard = React.memo(({
                     initial={{ scale: 1, opacity: 1 }}
                     animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                     transition={{ duration: 0.6 }}
-                    className="absolute text-red-500 pointer-events-none"
+                    className="absolute text-rose-500 pointer-events-none"
                   >
                     <FaHeart size={14} />
                   </motion.div>
@@ -355,7 +355,7 @@ const PostCard = React.memo(({
                       onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onPin?.(post); }}
                       className="w-full px-4 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                     >
-                      <FaThumbtack className={post.isPinned ? "text-red-500" : "text-slate-400"} />
+                      <FaThumbtack className={post.isPinned ? "text-rose-500" : "text-slate-400"} />
                       {post.isPinned ? "Unpin" : "Pin post"}
                     </button>
                     <button
@@ -366,9 +366,9 @@ const PostCard = React.memo(({
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete?.(post); }}
-                      className="w-full px-4 py-2 text-left text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-50"
+                      className="w-full px-4 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 border-t border-slate-50"
                     >
-                      <FaTrash className="text-red-400" /> Delete
+                      <FaTrash className="text-rose-400" /> Delete
                     </button>
                   </motion.div>
                 )}
@@ -491,7 +491,7 @@ const ProductCard = React.memo(({
           <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
         </div>
         {p.isPinned && (
-          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
           </div>
         )}
@@ -579,7 +579,7 @@ const ProductCard = React.memo(({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-slate-400'}`}
+                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-rose-500' : 'text-slate-400'}`}
                 >
                   {isLiked ? <FaHeart className="text-xs" /> : <FaRegHeart className="text-xs" />}
                 </motion.div>
@@ -589,7 +589,7 @@ const ProductCard = React.memo(({
                   initial={{ scale: 1, opacity: 1 }}
                   animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                   transition={{ duration: 0.6 }}
-                  className="absolute text-red-500 pointer-events-none"
+                  className="absolute text-rose-500 pointer-events-none"
                 >
                   <FaHeart size={14} />
                 </motion.div>
@@ -604,7 +604,7 @@ const ProductCard = React.memo(({
         <div className="mt-2 min-h-[14px] flex items-center justify-between">
           <div className="flex flex-wrap gap-1">
             {effectivePromo ? (
-              <span className="text-[9px] text-rose-500 border-red-500 border-[0.2px] px-1.5 py-0.5 ">
+              <span className="text-[9px] text-rose-500 border-rose-500 border-[0.2px] px-1.5 py-0.5 ">
                 {effectivePromo.title ? `${effectivePromo.title}: ` : "Sale: "}{effectivePromo.discount}% OFF
               </span>
             ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
@@ -642,7 +642,7 @@ const ProductCard = React.memo(({
                     onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onPin?.(p); }}
                     className="w-full px-4 py-2 text-left text-[11px] text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                   >
-                    <FaThumbtack className={p.isPinned ? "text-red-500" : "text-slate-400"} />
+                    <FaThumbtack className={p.isPinned ? "text-rose-500" : "text-slate-400"} />
                     {p.isPinned ? "Unpin" : "Pin product"}
                   </button>
                   <button
@@ -995,11 +995,37 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       );
     });
 
+    socket.on('profile_update', (updatedProfile: any) => {
+      const profileId = profileApi?.user?.user_id || profileApi?.user?.id || profileApi?.user_id;
+      const updatedId = updatedProfile?.user?.user_id || updatedProfile?.user?.id || updatedProfile?.user_id;
+
+      if (String(updatedId) === String(profileId)) {
+        setProfileApi(updatedProfile);
+        PROFILE_CACHE.profileApi = updatedProfile;
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketUserIdRef.current = null;
     };
   }, [auth?.user?.user_id, auth?.user?.id]);
+
+  const handleFollowUpdate = (targetUserId: string | number, following: boolean) => {
+    // Since this is the "me" profile page, any follow action from the modal
+    // (follow/unfollow someone else) affects the viewer's "following" count.
+    setProfileApi((prev: any) => {
+      if (!prev) return prev;
+      const currentFollowing = Number(prev.stats?.following ?? 0);
+      return {
+        ...prev,
+        stats: {
+          ...prev.stats,
+          following: following ? currentFollowing + 1 : Math.max(0, currentFollowing - 1)
+        }
+      };
+    });
+  };
 
   // Tabs state & animation
   const [activeTabIndex, setActiveTabIndex] = useState(PROFILE_CACHE.activeTabIndex);
@@ -1873,7 +1899,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
             {i === activeTabIndex && (
               <motion.div
                 layoutId="activeTabUnderline"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
@@ -1899,7 +1925,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
                 }}
-                className="mt-4 px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                className="mt-4 px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -1938,7 +1964,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
               <p className="text-sm font-medium">No note found. Create your first one!</p>
               <button
                 onClick={() => setCreateNoteOpen(true)}
-                className="px-4 py-2 bg-red-500 text-white text-sm  rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                className="px-4 py-2 bg-rose-500 text-white text-sm  rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -1978,7 +2004,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
                     // onClick={() => {
                     //   window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
                     // }}
-                    className="mt-4 px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                    className="mt-4 px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -2021,7 +2047,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
               <div className="p-2 sm:p-4 post-grid-container">
                 <div className="mb-4 px-1 flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-100 rounded-full px-3 py-1">
-                    <svg className="w-3.5 h-3.5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                    <svg className="w-3.5 h-3.5 text-rose-400" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M13.828 10.172a4 4 0 0 0-5.656 0l-4 4a4 4 0 1 0 5.656 5.656l1.102-1.101m-.758-4.899a4 4 0 0 0 5.656 0l4-4a4 4 0 0 0-5.656-5.656l-1.1 1.1" />
                     </svg>
                     {sortedLinkedPosts.length} post{sortedLinkedPosts.length !== 1 ? 's' : ''} with linked products
@@ -2201,6 +2227,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           onClose={() => setSocialModalOpen(false)}
           userId={profileApi.user.user_id || profileApi.user.id}
           initialTab={activeSocialTab === "liked" ? "followers" : activeSocialTab as any}
+          onFollowUpdate={handleFollowUpdate}
         />
       )}
     </div>

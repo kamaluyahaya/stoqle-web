@@ -106,7 +106,7 @@ export default function PinVerifyModal({
                                         value={pin[i]}
                                         onChange={(e) => handlePinChange(e.target.value, i)}
                                         onKeyDown={(e) => handleKeyDown(e, i)}
-                                        className="w-14 h-16 bg-slate-50 border-2 border-slate-100 focus:border-red-500/20 focus:bg-white rounded-2xl text-center text-2xl font-black text-slate-900 transition-all outline-none"
+                                        className="w-14 h-16 bg-slate-50 border-2 border-slate-100 focus:border-rose-500/20 focus:bg-white rounded-2xl text-center text-2xl font-black text-slate-900 transition-all outline-none"
                                     />
                                 ))}
                             </div>
@@ -115,16 +115,16 @@ export default function PinVerifyModal({
                                 <motion.div
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-3"
+                                    className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex items-start gap-3"
                                 >
-                                    <div className="text-red-500 mt-0.5 shrink-0 text-xs font-bold font-serif italic border border-red-500 rounded-full w-4 h-4 flex items-center justify-center">!</div>
-                                    <p className="text-[11px] font-bold text-red-600 leading-relaxed">{errorMessage}</p>
+                                    <div className="text-rose-500 mt-0.5 shrink-0 text-xs font-bold font-serif italic border border-rose-500 rounded-full w-4 h-4 flex items-center justify-center">!</div>
+                                    <p className="text-[11px] font-bold text-rose-600 leading-relaxed">{errorMessage}</p>
                                 </motion.div>
                             )}
 
                             {isLoading && (
                                 <div className="flex flex-col items-center justify-center">
-                                    <div className="w-6 h-6 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+                                    <div className="w-6 h-6 border-2 border-rose-500/30 border-t-rose-500 rounded-full animate-spin" />
                                     <p className="mt-2 text-[10px] font-black text-slate-400  tracking-widest">Verifying PIN...</p>
                                 </div>
                             )}

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import DescriptionTextarea from "../../input/defaultDescTextarea";
 import { motion, AnimatePresence } from "framer-motion";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 
 type Unit = "hours" | "days" | "weeks" | "km";
 
@@ -144,6 +145,12 @@ function parseInitial(
 }
 
 export default function ShippingInfoModal({ open, prefKey, initialValue, onClose, onSave }: Props) {
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    }
+  }, [open]);
   const [items, setItems] = useState<ShippingPolicyItem[]>([
     { type: "avg", value: 16, unit: "hours" },
     { type: "promise", value: 48, unit: "hours" },
@@ -328,7 +335,7 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center " role="dialog" aria-modal="true">
+        <div className="fixed inset-0 flex items-end sm:items-center justify-center " role="dialog" aria-modal="true" style={{ zIndex: modalZIndex }}>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

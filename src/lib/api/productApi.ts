@@ -225,13 +225,15 @@ export async function fetchTrendingProducts(limit = 20, offset = 0) {
   return json;
 }
 
-export async function fetchPersonalizedFeed(limit = 20, offset = 0, token?: string | null, businessCategory?: string | null, isPartner?: boolean) {
+export async function fetchPersonalizedFeed(limit = 20, offset = 0, token?: string | null, businessCategory?: string | null, isPartner?: boolean, softCategory?: boolean, relatedVendorIds?: number[]) {
   const headers: any = { "Accept": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-
+  
   let url = `${API_BASE_URL}/api/activity/personalized?limit=${limit}&offset=${offset}`;
   if (businessCategory) url += `&business_category=${encodeURIComponent(businessCategory)}`;
   if (isPartner) url += `&is_partner=true`;
+  if (softCategory) url += `&soft_category=true`;
+  if (relatedVendorIds && relatedVendorIds.length > 0) url += `&related_vendor_ids=${relatedVendorIds.join(',')}`;
 
   const res = await fetch(url, {
     method: "GET",

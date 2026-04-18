@@ -198,75 +198,13 @@ const MobileVideoPlayer = memo(function MobileVideoPlayer({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !isActive) return;
-
-    videoPlaybackManager.setManualPause(playerId, userManualPause || false);
-
-    if (userManualPause) {
-      if (hasTriggeredPlay) {
-        setHasTriggeredPlay(false);
-      }
-      video.pause();
-    } else {
-      // 🚨 AUTOMATIC RECOVERY SYSTEM:
-      // If we are active but not playing and not having a successful play session, trigger it.
-      if (video.paused && !hasTriggeredPlay) {
-        setHasTriggeredPlay(true);
-        
-        // Reels (autoFitPortrait) go immediately. No delay.
-        if (autoFitPortrait) {
-          videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
-            .then((forcedMute) => {
-              if (forcedMute) setInternalMuteFallback(true);
-            })
-            .catch(() => {
-              setHasTriggeredPlay(false);
-            });
-        } else {
-          // Post Modal details keep a small delay for layout stability
-          const timer = setTimeout(() => {
-            if (isActive && !userManualPause && video.paused) {
-              videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
-                .then((forcedMute) => {
-                  if (forcedMute) setInternalMuteFallback(true);
-                })
-                .catch(() => setHasTriggeredPlay(false));
-            }
-          }, 200);
-          return () => clearTimeout(timer);
-        }
-      }
-    }
-  }, [userManualPause, isActive, playerId, hasTriggeredPlay]);
-
-  const appliedVideoClass = useMemo(() => {
-    // ELITE DISCOVERY: Default to object-cover if it's an active reel to prevent sizing 'pop'
-    if (autoFitPortrait) {
-      if (aspectRatio === null) return `object-cover ${videoClassName}`;
-      return aspectRatio < 0.8 ? `object-cover ${videoClassName}` : `object-contain ${videoClassName}`;
-    }
-    return videoClassName;
-  }, [autoFitPortrait, aspectRatio, videoClassName]);
-
-  const updateBuffer = () => {
-    const v = videoRef.current;
-    if (!v || !v.buffered.length) return;
-
-    try {
-      const bufferedEnd = v.buffered.end(v.buffered.length - 1);
-      const d = v.duration || 1;
-      setBufferProgress((bufferedEnd / d) * 100);
-    } catch { }
-  };
-
-  useEffect(() => {
-    const video = videoRef.current;
     if (!video || !src) return;
 
     setLoading(true);
     setError(null);
     setIsNativeReady(false);
     setIsFullyPainted(false);
+    setHasTriggeredPlay(false);
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
@@ -423,7 +361,70 @@ const MobileVideoPlayer = memo(function MobileVideoPlayer({
       }
 
     };
-  }, [src, loop, playsInline, playerId]); // STRICT CORE DEPENDENCIES: Removing finalMuted/finalVolume/seeking to prevent blink-reloads
+  }, [src, loop, playsInline, playerId]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isActive) return;
+
+    videoPlaybackManager.setManualPause(playerId, userManualPause || false);
+
+    if (userManualPause) {
+      if (hasTriggeredPlay) {
+        setHasTriggeredPlay(false);
+      }
+      video.pause();
+    } else {
+      // 🚨 AUTOMATIC RECOVERY SYSTEM:
+      // If we are active but not playing and not having a successful play session, trigger it.
+      // Crucial: Wait for source readiness (especially for first mount)
+      if (video.paused && !hasTriggeredPlay && (video.src || video.currentSrc || hlsRef.current)) {
+        setHasTriggeredPlay(true);
+
+        // Reels (autoFitPortrait) go immediately. No delay.
+        if (autoFitPortrait) {
+          videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
+            .then((forcedMute) => {
+              if (forcedMute) setInternalMuteFallback(true);
+            })
+            .catch(() => {
+              setHasTriggeredPlay(false);
+            });
+        } else {
+          // Post Modal details keep a small delay for layout stability
+          const timer = setTimeout(() => {
+            if (isActive && !userManualPause && video.paused) {
+              videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
+                .then((forcedMute) => {
+                  if (forcedMute) setInternalMuteFallback(true);
+                })
+                .catch(() => setHasTriggeredPlay(false));
+            }
+          }, 200);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [userManualPause, isActive, playerId, hasTriggeredPlay, src]);
+  const appliedVideoClass = useMemo(() => {
+    // ELITE DISCOVERY: Default to object-cover if it's an active reel to prevent sizing 'pop'
+    if (autoFitPortrait) {
+      if (aspectRatio === null) return `object-cover ${videoClassName}`;
+      return aspectRatio < 0.8 ? `object-cover ${videoClassName}` : `object-contain ${videoClassName}`;
+    }
+    return videoClassName;
+  }, [autoFitPortrait, aspectRatio, videoClassName]);
+
+  const updateBuffer = () => {
+    const v = videoRef.current;
+    if (!v || !v.buffered.length) return;
+
+    try {
+      const bufferedEnd = v.buffered.end(v.buffered.length - 1);
+      const d = v.duration || 1;
+      setBufferProgress((bufferedEnd / d) * 100);
+    } catch { }
+  };
 
   useEffect(() => {
     const wrap = videoRef.current?.parentElement;
@@ -581,7 +582,7 @@ const MobileVideoPlayer = memo(function MobileVideoPlayer({
                   initial={{ x: "-100%" }}
                   animate={{ x: "100%" }}
                   transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                  className="w-full h-full bg-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
+                  className="w-full h-full bg-rose-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
                 />
               </div>
             </div>
@@ -603,7 +604,7 @@ const MobileVideoPlayer = memo(function MobileVideoPlayer({
                 ease: "easeInOut",
                 repeatType: "reverse"
               }}
-              className="absolute inset-x-0 h-1/2 bg-gradient-to-b from-transparent via-red-500/40 to-transparent"
+              className="absolute inset-x-0 h-1/2 bg-gradient-to-b from-transparent via-rose-500/40 to-transparent"
             />
           </div>
         </div>
@@ -639,7 +640,7 @@ const MobileVideoPlayer = memo(function MobileVideoPlayer({
                   initial={{ x: "-100%" }}
                   animate={{ x: "100%" }}
                   transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                  className="w-full h-full bg-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
+                  className="w-full h-full bg-rose-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
                 />
               </div>
             </div>

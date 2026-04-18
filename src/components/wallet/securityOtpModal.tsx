@@ -116,10 +116,10 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
-                                        className="bg-red-50 border border-red-100 p-4 rounded-3xl flex items-start gap-3"
+                                        className="bg-rose-50 border border-rose-100 p-4 rounded-3xl flex items-start gap-3"
                                     >
-                                        <FaExclamationTriangle className="text-red-500 mt-0.5 shrink-0" size={14} />
-                                        <p className="text-[11px] font-bold text-red-600 leading-relaxed  tracking-tight">{errorMessage}</p>
+                                        <FaExclamationTriangle className="text-rose-500 mt-0.5 shrink-0" size={14} />
+                                        <p className="text-[11px] font-bold text-rose-600 leading-relaxed  tracking-tight">{errorMessage}</p>
                                     </motion.div>
                                 )}
 

@@ -12,6 +12,7 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { FaPlay, FaPause, FaVolumeMute, FaVolumeUp, FaTimes, FaStore, FaHeart, FaRegHeart, FaShare, FaCheckCircle } from "react-icons/fa";
 import { useAuth } from "@/src/context/authContext";
 import { toast } from "sonner";
+import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 
 const formatUrl = (url: string) => {
     if (!url) return "";
@@ -138,6 +139,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
             likes_count: p.likes_count || 0,
             isLiked: p.liked || p.isLiked || false,
             trusted_partner: p.trusted_partner || p.business?.trusted_partner || 0,
+            verified_badge: p.verified_badge || p.business?.verified_badge || false,
             images: mediaImages.length > 0 ? mediaImages : (p.first_image ? [p.first_image] : []),
             params: (p.params || []).map((ext: any) => ({
                 key: ext.param_key || ext.key,
@@ -388,7 +390,7 @@ export default function ReelsModal({ open, onClose, initialProductId, origin, on
     return (
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 z-[11000] flex items-center justify-center pointer-events-none">
+                <div className="fixed inset-0 z-[700001] flex items-center justify-center pointer-events-none">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -552,6 +554,7 @@ function MarqueeLane({ items, speed, reverse = false }: { items: any[], speed: n
 }
 
 import VideoPlayer from "@/src/components/posts/videoPlayer";
+import VerifiedBadge from "@/src/components/common/VerifiedBadge";
 
 function ReelItem({
     product,
@@ -647,7 +650,7 @@ function ReelItem({
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.5, opacity: 0 }}
                                 transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                                className={`absolute inset-0 flex items-center justify-center ${product.isLiked ? 'text-red-500' : 'text-white'}`}
+                                className={`absolute inset-0 flex items-center justify-center ${product.isLiked ? 'text-rose-500' : 'text-white'}`}
                             >
                                 {product.isLiked ? <FaHeart size={22} /> : <FaRegHeart size={22} />}
                             </motion.div>
@@ -659,7 +662,7 @@ function ReelItem({
                                 initial={{ scale: 1, opacity: 1 }}
                                 animate={{ scale: [1, 1.6, 1], opacity: [1, 0.4, 0] }}
                                 transition={{ duration: 0.6 }}
-                                className="absolute text-red-500 pointer-events-none"
+                                className="absolute text-rose-500 pointer-events-none"
                             >
                                 <FaHeart size={22} />
                             </motion.div>
@@ -693,9 +696,11 @@ function ReelItem({
                     <div className="flex flex-col">
                         <div className="flex items-center gap-1">
                             <span className="text-white font-bold text-sm drop-shadow-md">{product.business_name}</span>
-                            {product.trusted_partner === 1 && (
-                                <FaCheckCircle className="text-blue-400" size={14} />
-                            )}
+                            {!!product.verified_badge ? (
+                                <VerifiedBadge size="xs" label="Trusted Partner" className="drop-shadow-sm" />
+                            ) : !!product.trusted_partner ? (
+                                <CheckBadgeIcon className="w-4 h-4 text-blue-500 shrink-0 drop-shadow-sm" title="Verified Account" />
+                            ) : null}
                         </div>
                         {product.category && (
                             <span className="text-white/70 text-[10px]  tracking-wider font-bold">{product.category}</span>
@@ -714,7 +719,7 @@ function ReelItem({
                         <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-xl pr-3 relative">
                             {/* Discount Badge */}
                             {(product.promo_discount || product.sale_discount) && (
-                                <div className="absolute -top-6 left-0 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-lg flex items-center gap-1">
+                                <div className="absolute -top-6 left-0 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-lg flex items-center gap-1">
                                     <span>{product.promo_title || product.sale_type || "SALE"}</span>
                                     <span>{product.promo_discount || product.sale_discount}% OFF</span>
                                 </div>
@@ -757,7 +762,7 @@ function ReelItem({
 
                         <button
                             onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
-                            className="bg-red-600 text-white text-[10px] font-black px-5 py-2.5 rounded-full active:scale-95 transition-all shadow-lg hover:bg-red-700 whitespace-nowrap"
+                            className="bg-rose-600 text-white text-[10px] font-black px-5 py-2.5 rounded-full active:scale-95 transition-all shadow-lg hover:bg-rose-700 whitespace-nowrap"
                         >
                             Buy Now
                         </button>

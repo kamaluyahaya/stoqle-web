@@ -69,7 +69,7 @@ export default function AddCategoryModal({ open, onClose, onCreated }: Props) {
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-full bg-slate-50">Cancel</button>
-          <button onClick={handleCreate} disabled={loading} className="px-4 py-2 rounded-full bg-red-500 text-white">
+          <button onClick={handleCreate} disabled={loading} className="px-4 py-2 rounded-full bg-rose-500 text-white">
             {loading ? "Saving..." : "Create"}
           </button>
         </div>

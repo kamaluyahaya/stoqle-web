@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 import { ChevronLeftIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import DefaultInput from "../../../input/default-input";
 import NumberInput from "../../../input/default-phone-number";
@@ -59,6 +60,12 @@ export default function DeliveryAddressModal({
     const loadAttemptedRef = useRef(false);
 
     const { token } = useAuth();
+    const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+    useEffect(() => {
+        if (open) {
+            setModalZIndex(getNextZIndex());
+        }
+    }, [open]);
 
     const debug = (...args: any[]) => {
         console.log("[DeliveryAddressModal]", ...args);
@@ -585,7 +592,8 @@ export default function DeliveryAddressModal({
             {open && (
                 <div
                     key="delivery-address-container"
-                    className="fixed inset-0 z-[610000] flex items-end sm:items-center justify-center p-0 outline-none"
+                    className="fixed inset-0 flex items-end sm:items-center justify-center p-0 outline-none"
+                    style={{ zIndex: modalZIndex }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
                     role="dialog"
@@ -627,11 +635,11 @@ export default function DeliveryAddressModal({
                                     initial={{ height: 0, opacity: 0 }}
                                     animate={{ height: "auto", opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
-                                    className="overflow-hidden bg-red-50/50 border-b border-red-100"
+                                    className="overflow-hidden bg-rose-50/50 border-b border-rose-100"
                                 >
                                     <div className="p-4 flex items-center justify-between gap-3">
                                         <div className="flex-1">
-                                            <p className="text-[11px] font-bold text-red-600  tracking-wider mb-1">
+                                            <p className="text-[11px] font-bold text-rose-600  tracking-wider mb-1">
                                                 Paste copied address?
                                             </p>
                                             <p className="text-[12px] text-slate-600 line-clamp-1 italic">
@@ -647,7 +655,7 @@ export default function DeliveryAddressModal({
                                             </button>
                                             <button
                                                 onClick={handleApplyPasted}
-                                                className="px-4 py-1.5 text-[11px] font-bold bg-white text-red-600 border border-red-200 rounded-full shadow-sm hover:bg-red-50"
+                                                className="px-4 py-1.5 text-[11px] font-bold bg-white text-rose-600 border border-rose-200 rounded-full shadow-sm hover:bg-rose-50"
                                             >
                                                 Paste
                                             </button>
@@ -660,7 +668,7 @@ export default function DeliveryAddressModal({
                         {/* Paste Confirmation Modal Overlay */}
                         <AnimatePresence>
                             {pastePromptOpen && (
-                                <div className="fixed inset-0 z-[620000] flex items-center justify-center p-4">
+                                <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: modalZIndex + 1 }}>
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -675,7 +683,7 @@ export default function DeliveryAddressModal({
                                         className="relative bg-white w-full max-w-sm rounded-[1.2rem] shadow-2xl p-6 overflow-hidden"
                                     >
                                         <div className="text-center mb-6">
-                                            <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                                            <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
                                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                                 </svg>
@@ -708,7 +716,7 @@ export default function DeliveryAddressModal({
                                         <div className="flex flex-col gap-3">
                                             <button
                                                 onClick={handleApplyPasted}
-                                                className="w-full py-3 rounded-full bg-red-600 text-white font-black text-sm shadow-lg shadow-red-100 active:scale-95 transition-all"
+                                                className="w-full py-3 rounded-full bg-rose-600 text-white font-black text-sm shadow-lg shadow-rose-100 active:scale-95 transition-all"
                                             >
                                                 Confirm & Fill
                                             </button>
@@ -735,7 +743,7 @@ export default function DeliveryAddressModal({
                                 />
                                 <button
                                     onClick={handlePickContact}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition shadow-sm"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition shadow-sm"
                                     title="Pick from contacts"
                                 >
                                     <UserCircleIcon className="w-5 h-5" />
@@ -826,7 +834,7 @@ export default function DeliveryAddressModal({
                                                         }}
                                                         className="w-full text-left px-5 py-4 hover:bg-slate-50 border-b border-slate-50 last:border-b-0 transition-colors flex flex-col gap-0.5 group"
                                                     >
-                                                        <div className="text-sm text-slate-900 font-bold group-hover:text-red-600 transition truncate">
+                                                        <div className="text-sm text-slate-900 font-bold group-hover:text-rose-600 transition truncate">
                                                             {p.structured_formatting?.main_text || p.description}
                                                         </div>
                                                         <div className="text-[11px] text-slate-400 truncate font-semibold">
@@ -837,7 +845,7 @@ export default function DeliveryAddressModal({
 
                                                 <div className="p-3 bg-slate-50/30 flex justify-end">
                                                     <img
-                                                        src="https://maps.gstatic.com/mapfiles/api-3/images/powered-by-google-on-white3.png"
+                                                        src="https://maps.gstatic.com/mapfiles/api-3/images/powerose-by-google-on-white3.png"
                                                         alt="Powered by Google"
                                                         className="h-3 opacity-40 grayscale hover:grayscale-0 transition"
                                                     />
@@ -858,7 +866,7 @@ export default function DeliveryAddressModal({
                                 </div>
                                 <button
                                     onClick={() => setIsDefault(!isDefault)}
-                                    className={`w-12 h-6 rounded-full transition-all relative ${isDefault ? "bg-red-500" : "bg-slate-200"
+                                    className={`w-12 h-6 rounded-full transition-all relative ${isDefault ? "bg-rose-500" : "bg-slate-200"
                                         }`}
                                 >
                                     <div
@@ -870,16 +878,13 @@ export default function DeliveryAddressModal({
 
                             <div className="border-b border-slate-200"></div>
 
-                            <div className="text-[10px] text-slate-400 leading-relaxed">
-                                Open the browser console to see Google Places debug logs.
-                            </div>
                         </div>
 
                         <div className="p-1 border-slate-100 bg-white px-4">
                             <button
                                 onClick={handleSave}
                                 disabled={isGeocoding}
-                                className={`w-full py-2 mb-5 rounded-full bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-red-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""
+                                className={`w-full py-2 mb-5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-black text-sm shadow-rose-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""
                                     }`}
                             >
                                 {isGeocoding ? (
@@ -917,7 +922,7 @@ export default function DeliveryAddressModal({
 
             <AnimatePresence>
                 {showGeocodeWarning && (
-                    <div className="fixed inset-0 z-[21000] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: modalZIndex + 2 }}>
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}

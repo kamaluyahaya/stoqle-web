@@ -29,7 +29,7 @@ export default function UserOccupationModal({ open, initialValue, onClose, onSav
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"

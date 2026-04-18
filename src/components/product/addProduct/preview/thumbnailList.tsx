@@ -32,7 +32,7 @@ export default function ThumbnailList({
                   onClick={() => onIndexChange(i, "styles")}
                   onMouseDown={(e) => e.stopPropagation()}
                   className={`flex-shrink-0 flex items-center group relative rounded-lg border p-0.5 transition-all duration-500 ease-in-out ${isSelected
-                    ? "border-red-500 bg-red-50"
+                    ? "border-rose-500 bg-rose-50"
                     : "border-transparent hover:border-slate-200"
                     } overflow-hidden focus:outline-none`}
                   style={{
@@ -83,7 +83,7 @@ export default function ThumbnailList({
               onClick={(e) => { e.stopPropagation(); onAllStyles?.(); }}
               className="pointer-events-auto flex flex-col items-center justify-center whitespace-nowrap active:scale-95 transition-transform"
             >
-              <span className="text-[10px] font-black text-red-500 hover:text-red-700 transition-colors p-0.5">
+              <span className="text-[10px] font-black text-rose-500 hover:text-rose-700 transition-colors p-0.5">
                 All {variantImages.length} styles
               </span>
             </button>

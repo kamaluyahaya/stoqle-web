@@ -7,6 +7,7 @@ export type User = {
   author_handle?: string;
   is_trusted?: boolean;
   is_partner?: boolean;
+  verified_badge?: boolean;
 };
 
 export type APIComment = {
@@ -22,7 +23,9 @@ export type APIComment = {
   author_pic?: string;
   author_handle?: string;
   author_is_trusted?: boolean;
+  author_is_partner?: boolean;
   is_partner?: boolean;
+  verified_badge?: boolean;
   likes_count: number;
   author_liked?: boolean;
   followers_count?: number;
@@ -83,5 +86,9 @@ export type Post = {
     seven_day_no_reason_return?: boolean;
     promotions_data?: any;
     sale_discount_data?: any;
+    verified_badge?: boolean;
+    trusted_partner?: boolean;
   } | null;
+  verified_badge?: boolean;
+  author_is_partner?: boolean;
 };

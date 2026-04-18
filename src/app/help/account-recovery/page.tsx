@@ -21,8 +21,8 @@ export default function AccountRecoveryPage() {
 
             <div className="p-8 max-w-lg mx-auto space-y-8">
                 <div className="text-center space-y-3">
-                    <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-                        <LifebuoyIcon className="w-8 h-8 text-red-500" />
+                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto">
+                        <LifebuoyIcon className="w-8 h-8 text-rose-500" />
                     </div>
                     <h1 className="text-xl font-black text-slate-900">Cant access your account?</h1>
                     <p className="text-slate-500 text-sm font-medium">Choose a recovery method below to regain access to your Stoqle account.</p>
@@ -57,9 +57,9 @@ export default function AccountRecoveryPage() {
 
 function RecoveryOption({ icon, label, desc }: any) {
     return (
-        <button className="w-full p-5 text-left bg-white border border-slate-200 rounded-2xl hover:border-red-500 hover:shadow-lg hover:shadow-red-500/5 transition-all group active:scale-[0.98]">
+        <button className="w-full p-5 text-left bg-white border border-slate-200 rounded-2xl hover:border-rose-500 hover:shadow-lg hover:shadow-rose-500/5 transition-all group active:scale-[0.98]">
             <div className="flex gap-4">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-red-50 group-hover:text-red-500 transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-rose-50 group-hover:text-rose-500 transition-colors">
                     {icon}
                 </div>
                 <div className="flex-1">
@@ -67,7 +67,7 @@ function RecoveryOption({ icon, label, desc }: any) {
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">{desc}</p>
                 </div>
                 <div className="self-center">
-                    <FaChevronRight size={10} className="text-slate-300 group-hover:text-red-400 transition-colors" />
+                    <FaChevronRight size={10} className="text-slate-300 group-hover:text-rose-400 transition-colors" />
                 </div>
             </div>
         </button>

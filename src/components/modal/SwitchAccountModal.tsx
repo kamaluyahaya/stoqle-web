@@ -17,6 +17,7 @@ export type SavedAccount = {
   profile_pic?: string;
   email?: string;
   phone_no?: string;
+  stoqle_id?: string | number;
   token: string;
 };
 
@@ -59,6 +60,7 @@ export function upsertSavedAccount(user: any, token: string) {
     profile_pic: user.profile_pic || user.avatar,
     email: user.email,
     phone_no: user.phone_no,
+    stoqle_id: user.stoqle_id,
     token,
   };
   const updated = existing.some((a) => a.user_id === id)
@@ -128,6 +130,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
         profile_pic: liveUser?.profile_pic || acc.profile_pic,
         email: liveUser?.email || acc.email,
         phone_no: liveUser?.phone_no || acc.phone_no,
+        stoqle_id: liveUser?.stoqle_id || acc.stoqle_id,
       };
 
       // 2. Persist new active account (Full data)
@@ -136,7 +139,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
 
       // 3. Update auth context (Immediate UI feedback)
       _onLoginSuccess(userObj, acc.token);
-      
+
       // Auto-update the saved list with the most recent info too
       upsertSavedAccount(userObj, acc.token);
 
@@ -191,7 +194,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
       }
 
       toast.error("Failed to restore full account info. Retrying with basic info...");
-      
+
       // Fallback: switch with base metadata if API fails
       localStorage.setItem("token", acc.token);
       localStorage.setItem("user", JSON.stringify(acc));
@@ -212,7 +215,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
       text: "This will remove the account from your saved list.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#ef4444", // red-500
+      confirmButtonColor: "#ef4444", // rose-500
       cancelButtonColor: "#94a3b8", // slate-400
       confirmButtonText: "Yes, remove it",
     });
@@ -238,9 +241,9 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
   };
 
   const activeUserId = user?.user_id || user?.id;
-  const activeUsername = user?.user_id || user?.id || "you";
+  const activeUsername = user?.stoqle_id || user?.user_id || user?.id || "you";
 
-  // Responsive: bottom-sheet on mobile, centered dialog on lg
+  // Responsive: bottom-sheet on mobile, centerose dialog on lg
   return (
     <AnimatePresence>
       {open && (
@@ -278,7 +281,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
             />
           </motion.div>
 
-          {/* Desktop: Centered Dialog */}
+          {/* Desktop: Centerose Dialog */}
           <motion.div
             initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -307,7 +310,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
   );
 }
 
-// ── Shared modal content ──────────────────────────────────────
+// ── Sharose modal content ──────────────────────────────────────
 function ModalContent({
   accounts,
   activeUserId,
@@ -369,7 +372,7 @@ function ModalContent({
                 onClick={() => switchTo(acc)}
                 className={`flex items-center gap-3 p-3 rounded-2xl transition-all cursor-pointer select-none
                   ${active
-                    ? "bg-red-50 border border-red-100"
+                    ? "bg-rose-50 border border-rose-100"
                     : isLoading
                       ? "bg-slate-100 opacity-70"
                       : "bg-slate-50 hover:bg-slate-100 active:scale-[0.98]"
@@ -390,17 +393,17 @@ function ModalContent({
                   )}
                   {isLoading && (
                     <div className="absolute inset-0 rounded-full bg-white/60 flex items-center justify-center">
-                      <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </div>
 
                 {/* Name & ID */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${active ? "text-red-600" : "text-slate-800"}`}>
+                  <p className={`text-sm ${active ? "text-rose-600" : "text-slate-800"}`}>
                     {getDisplayName(acc)}
                   </p>
-                  <p className="text-xs text-slate-400 truncate">stoqle ID: {acc.user_id}</p>
+                  <p className="text-xs text-slate-400 truncate">stoqle ID: {acc.stoqle_id || acc.user_id}</p>
                 </div>
 
                 {/* Status */}
@@ -413,7 +416,7 @@ function ModalContent({
                   ) : (
                     <button
                       onClick={(e) => removeAccount(acc.user_id, e)}
-                      className="text-[10px]  text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 px-2 py-1 rounded-full transition-colors"
+                      className="text-[10px]  text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 px-2 py-1 rounded-full transition-colors"
                     >
                       Remove
                     </button>
@@ -428,13 +431,13 @@ function ModalContent({
         <div className="px-4 pt-3 pb-6">
           <button
             onClick={handleAddAccount}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 hover:border-red-300 hover:bg-red-50/40 transition-all group active:scale-[0.98]"
+            className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 transition-all group active:scale-[0.98]"
           >
-            <div className="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-red-100 flex items-center justify-center transition-colors shrink-0">
-              <PlusCircleIcon className="w-6 h-6 text-slate-400 group-hover:text-red-500 transition-colors" />
+            <div className="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-rose-100 flex items-center justify-center transition-colors shrink-0">
+              <PlusCircleIcon className="w-6 h-6 text-slate-400 group-hover:text-rose-500 transition-colors" />
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm text-slate-500 group-hover:text-red-500 transition-colors">
+              <p className="text-sm text-slate-500 group-hover:text-rose-500 transition-colors">
                 Add another account
               </p>
               <p className="text-xs text-slate-400">Log in with a different account</p>

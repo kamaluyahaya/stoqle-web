@@ -12,7 +12,9 @@ export default function MediaViewer({
   variantImages = [],
   selectedIndex,
   viewMode = "images",
-  onIndexChange
+  onIndexChange,
+  isFromReel,
+  isExpanded
 }: {
   main: { url?: string; name?: string; groupTitle?: string } | null;
   payload: PreviewPayload;
@@ -21,6 +23,8 @@ export default function MediaViewer({
   selectedIndex: number;
   viewMode?: "video" | "images" | "styles";
   onIndexChange: (index: number, mode?: "video" | "images" | "styles") => void;
+  isFromReel?: boolean;
+  isExpanded?: boolean;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -29,6 +33,7 @@ export default function MediaViewer({
   const [direction, setDirection] = useState(1);
   const prevIndexRef = useRef(selectedIndex);
   const prevModeRef = useRef(viewMode);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (selectedIndex !== prevIndexRef.current || viewMode !== prevModeRef.current) {
@@ -38,11 +43,72 @@ export default function MediaViewer({
     }
   }, [selectedIndex, viewMode]);
 
+  const hasVideo = !!payload.productVideo?.url;
   const hasStyles = variantImages.length > 1;
+
+  // Unified media list for carousel and tabs with stable IDs
+  const mediaItems = React.useMemo(() => {
+    const items: any[] = [];
+    if (hasVideo) {
+      items.push({
+        id: 'video-main',
+        type: 'video',
+        url: payload.productVideo?.url,
+        poster: images[0]?.url,
+        mode: 'video' as const,
+        index: -1
+      });
+    }
+    images.forEach((img, idx) => {
+      items.push({
+        id: `img-${idx}`,
+        type: 'image',
+        url: img.url,
+        mode: 'images' as const,
+        index: idx
+      });
+    });
+    variantImages.forEach((img, idx) => {
+      items.push({
+        id: `style-${idx}`,
+        type: 'image',
+        url: img.url,
+        mode: 'styles' as const,
+        index: idx
+      });
+    });
+    return items;
+  }, [hasVideo, payload.productVideo?.url, images, variantImages]);
+
+  const currentMediaId = viewMode === 'video' ? 'video-main' : 
+                         viewMode === 'images' ? `img-${selectedIndex}` : 
+                         `style-${selectedIndex}`;
+
+  // Sync scroll position with tab clicking (in compact mode)
+  const scrollToMode = (mode: "video" | "images" | "styles") => {
+    if (!scrollRef.current) return;
+    const firstIdx = mediaItems.findIndex(m => m.mode === mode);
+    if (firstIdx !== -1) {
+      const itemWidth = scrollRef.current.offsetWidth * 0.5;
+      scrollRef.current.scrollTo({ left: firstIdx * itemWidth, behavior: 'smooth' });
+    }
+  };
+
+  // Sync tab highlighting with scroll position (in compact mode)
+  const handleScroll = () => {
+    if (!scrollRef.current || !isFromReel || isExpanded) return;
+    const { scrollLeft, offsetWidth } = scrollRef.current;
+    if (offsetWidth === 0) return;
+    const itemWidth = offsetWidth * 0.5;
+    const activeIdx = Math.round(scrollLeft / itemWidth);
+    const item = mediaItems[activeIdx];
+    if (item && item.mode !== viewMode) {
+      onIndexChange(item.index, item.mode);
+    }
+  };
 
   const paginate = (newDirection: number) => {
     setDirection(newDirection);
-    const hasVideo = !!payload.productVideo?.url;
     const currentList = viewMode === "styles" ? variantImages : images;
 
     if (newDirection === 1) {
@@ -91,6 +157,120 @@ export default function MediaViewer({
     return Math.abs(offset) * velocity;
   };
 
+  // Compact View (Horizontal Scroll) for Reels 80% state
+  if (isFromReel && !isExpanded) {
+    return (
+      <div className="w-full bg-slate-100 animate-in fade-in duration-300 relative">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex gap-0 p-0 overflow-x-auto no-scrollbar snap-x snap-mandatory"
+        >
+          {mediaItems.map((item, idx) => (
+            <motion.div
+              key={item.id}
+              layoutId={item.id}
+              className="flex-none w-[50%] aspect-[1/1] relative overflow-hidden bg-slate-50 snap-start active:scale-95 transition-transform cursor-pointer"
+              onClick={() => onIndexChange(item.index, item.mode)}
+            >
+              {item.type === 'video' ? (
+                <div 
+                  className="w-full h-full relative bg-black group/compact-video"
+                  onClick={(e) => {
+                    if (!isExpanded) {
+                      e.stopPropagation();
+                      const v = e.currentTarget.querySelector('video');
+                      if (v) {
+                        if (v.paused) v.play();
+                        else v.pause();
+                      }
+                    }
+                  }}
+                >
+                  <video
+                    src={item.url}
+                    poster={item.poster}
+                    className="w-full h-full object-contain"
+                    muted
+                    playsInline
+                    autoPlay={false}
+                    loop={false}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-active/compact-video:scale-110 transition-transform">
+                    <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
+                      <PlayIcon className="w-6 h-6 text-white drop-shadow-md fill-white" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full h-full relative bg-slate-100">
+                  <img src={item.url} alt="" className="w-full h-full object-contain" />
+                </div>
+              )}
+            </motion.div>
+          ))}
+          {/* Subtle placeholder to hint at more items or end spacing */}
+          <div className="flex-none w-2 h-full" />
+        </div>
+
+        {/* Media Toggle or Image Counter inside Compact View */}
+        {(payload.productVideo?.url || hasStyles) ? (
+          <div className="absolute bottom-2 right-2 z-40 transform scale-90 origin-bottom-right">
+            <div className="flex p-0.5 bg-black/60 backdrop-blur-md rounded-full border border-white/20 relative shadow-lg">
+              {payload.productVideo?.url && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); scrollToMode("video"); onIndexChange(-1, "video"); }}
+                  className={`relative px-2.5 py-1 text-[7px] font-black transition-colors duration-300 whitespace-nowrap ${viewMode === "video" ? "text-slate-900" : "text-white/70"}`}
+                >
+                  {viewMode === "video" && (
+                    <motion.div layoutId="activeTabBackgroundCompact" className="absolute inset-0 bg-white rounded-full z-0" transition={{ type: "spring", stiffness: 380, damping: 30 }} />
+                  )}
+                  <span className="relative z-10">Video</span>
+                </button>
+              )}
+              {images.length > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); scrollToMode("images"); onIndexChange(0, "images"); }}
+                  className={`relative px-2.5 py-1 text-[7px] font-black transition-colors duration-300 whitespace-nowrap ${viewMode === "images" ? "text-slate-900" : "text-white/70"}`}
+                >
+                  {viewMode === "images" && (
+                    <motion.div layoutId="activeTabBackgroundCompact" className="absolute inset-0 bg-white rounded-full z-0" transition={{ type: "spring", stiffness: 380, damping: 30 }} />
+                  )}
+                  <span className="relative z-10">
+                    Images {viewMode === "images" ? `${selectedIndex + 1}/${images.length}` : ""}
+                  </span>
+                </button>
+              )}
+              {hasStyles && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); scrollToMode("styles"); onIndexChange(0, "styles"); }}
+                  className={`relative px-2.5 py-1 text-[7px] font-black transition-colors duration-300 whitespace-nowrap ${viewMode === "styles" ? "text-slate-900" : "text-white/70"}`}
+                >
+                  {viewMode === "styles" && (
+                    <motion.div layoutId="activeTabBackgroundCompact" className="absolute inset-0 bg-white rounded-full z-0" transition={{ type: "spring", stiffness: 380, damping: 30 }} />
+                  )}
+                  <span className="relative z-10">
+                    Styles {viewMode === "styles" ? `${selectedIndex + 1}/${variantImages.length}` : ""}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : images.length > 1 && (
+          <div className="absolute bottom-4 right-4 z-40 pointer-events-none">
+            <div className="px-2.5 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 shadow-xl flex items-center gap-1.5 transition-all duration-500 scale-95 group-hover:scale-100">
+              <span className="text-[10px] font-black text-white drop-shadow-sm">
+                {selectedIndex + 1}
+                <span className="opacity-40 mx-0.5">/</span>
+                {images.length}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`w-full flex-1 flex items-center justify-center relative overflow-hidden group bg-slate-100 h-[50vh] max-h-[50vh] lg:h-full lg:max-h-none lg:min-h-0`}>
       {/* Hidden Ghost Media to define width behavior (for non-video view on mobile) */}
@@ -112,7 +292,9 @@ export default function MediaViewer({
             initial="enter"
             animate="center"
             exit="exit"
+            layoutId={currentMediaId}
             transition={{
+              layout: { type: "spring", stiffness: 300, damping: 30 },
               x: { type: "spring", stiffness: 300, damping: 30 },
               opacity: { duration: 0.2 }
             }}
@@ -308,8 +490,9 @@ export default function MediaViewer({
         on={{ view: ({ index }) => onIndexChange(index, viewMode) }}
         slides={(viewMode === "styles" ? variantImages : images).map(img => ({ src: img.url || "" }))}
         portal={{ root: typeof document !== "undefined" ? document.body : undefined }}
+        controller={{ closeOnBackdropClick: true, closeOnPullDown: true }}
         styles={{
-          root: { zIndex: 30000 },
+          root: { zIndex: 9999999 },
           container: { backgroundColor: "rgba(0,0,0,0.95)" }
         }}
       />

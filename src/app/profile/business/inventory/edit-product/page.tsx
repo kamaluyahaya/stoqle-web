@@ -632,7 +632,7 @@ export default function EditProductPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-4 border-rose-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-slate-500 font-medium">Loading product data...</p>
         </div>
       </div>
@@ -739,7 +739,7 @@ export default function EditProductPage() {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-bold shadow-lg shadow-red-200 transition-all disabled:opacity-50"
+              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-sm font-bold shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               Update
             </button>
@@ -768,7 +768,7 @@ export default function EditProductPage() {
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs p-1 font-medium text-red-700"><button onClick={() => setOpenManageCategories(true)} className="">Manage</button>
+                    <span className="text-xs p-1 font-medium text-rose-700"><button onClick={() => setOpenManageCategories(true)} className="">Manage</button>
                     </span>
 
                     <button
@@ -809,7 +809,7 @@ export default function EditProductPage() {
                 <button
                   type="button"
                   onClick={() => onToggleHasVariants(false)}
-                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'simple' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'simple' ? "border-rose-500 bg-rose-50 text-rose-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
                 >
                   <span className="text-sm  tracking-tight">Simple Product</span>
                   <p className="text-[10px] font-medium text-center opacity-70">Single price and fixed stock quantity</p>
@@ -818,7 +818,7 @@ export default function EditProductPage() {
                 <button
                   type="button"
                   onClick={() => onToggleHasVariants(true)}
-                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'variant' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'variant' ? "border-rose-500 bg-rose-50 text-rose-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
                 >
                   <span className="text-sm  tracking-tight">Variant Product</span>
                   <p className="text-[10px] font-medium text-center opacity-70">Multiple sizes, colors or options</p>
@@ -897,13 +897,13 @@ export default function EditProductPage() {
                       <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200">
                         <button
                           onClick={() => seedAndApplySharedPrice(true)}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-red-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-rose-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
                         >
                           Single Price
                         </button>
                         <button
                           onClick={() => seedAndApplySharedPrice(false)}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-red-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-rose-500 text-white" : "text-slate-500 hover:text-slate-700"}`}
                         >
                           Different price
                         </button>
@@ -914,7 +914,7 @@ export default function EditProductPage() {
                             type="number"
                             value={sharedPrice ?? ""}
                             onChange={(e) => setSharedPrice(e.target.value === "" ? null : Number(e.target.value))}
-                            className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-red-100 outline-none"
+                            className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-rose-100 outline-none"
                             placeholder="Shared Price"
                           />
                         </div>
@@ -977,7 +977,7 @@ export default function EditProductPage() {
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
+                            <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-rose-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-800 tracking-tight">Advanced Combination Logic</span>
@@ -1101,7 +1101,7 @@ export default function EditProductPage() {
                 <button
                   onClick={() => handleSubmit()}
                   disabled={submitting}
-                  className="w-full py-3 bg-red-500 hover:bg-red-600 rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/40 active:scale-95 disabled:opacity-50"
+                  className="w-full py-3 bg-rose-500 hover:bg-rose-600 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 active:scale-95 disabled:opacity-50"
                 >
                   {submitting ? "Updating..." : "Confirm & Update"}
                 </button>
@@ -1199,7 +1199,7 @@ export default function EditProductPage() {
 
                       <button
                         onClick={resetModals}
-                        className="w-full py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-slate-800 transition-all"
+                        className="w-full py-3 rounded-full bg-rose-500 text-white font-bold text-sm hover:bg-slate-800 transition-all"
                       >
                         I Understand
                       </button>
@@ -1223,7 +1223,7 @@ export default function EditProductPage() {
                         <button
                           onClick={handleConvertToVariant}
                           disabled={submitting || checkingSafety}
-                          className="w-full py-3.5 rounded-2xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 shadow-lg shadow-red-200 active:scale-[0.98] transition-all disabled:opacity-50"
+                          className="w-full py-3.5 rounded-2xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all disabled:opacity-50"
                         >
                           {submitting ? "Converting..." : "Yes, Convert Now"}
                         </button>
@@ -1307,7 +1307,7 @@ export default function EditProductPage() {
                         <div className="flex gap-3 mt-8 pb-8">
                           <button
                             onClick={resetModals}
-                            className="w-full py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-slate-800 transition-all font-medium"
+                            className="w-full py-3 rounded-full bg-rose-500 text-white font-bold text-sm hover:bg-slate-800 transition-all font-medium"
                           >
                             I Understand
                           </button>
@@ -1324,13 +1324,13 @@ export default function EditProductPage() {
                             <button
                               key={entry.id}
                               onClick={() => setSelectedPrimaryVariantId(entry.id)}
-                              className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${selectedPrimaryVariantId === entry.id ? 'border-red-500 bg-red-50' : 'border-slate-100 hover:border-slate-300 bg-slate-50'}`}
+                              className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${selectedPrimaryVariantId === entry.id ? 'border-rose-500 bg-rose-50' : 'border-slate-100 hover:border-slate-300 bg-slate-50'}`}
                             >
                               <div>
-                                <span className={`block font-bold text-sm ${selectedPrimaryVariantId === entry.id ? 'text-red-900' : 'text-slate-700'}`}>{entry.name}</span>
+                                <span className={`block font-bold text-sm ${selectedPrimaryVariantId === entry.id ? 'text-rose-900' : 'text-slate-700'}`}>{entry.name}</span>
                                 <span className="text-[10px] text-slate-500">Stock: {entry.quantity} | Price: {entry.price}</span>
                               </div>
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedPrimaryVariantId === entry.id ? 'border-red-500 bg-red-500' : 'border-slate-300 bg-white'}`}>
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedPrimaryVariantId === entry.id ? 'border-rose-500 bg-rose-500' : 'border-slate-300 bg-white'}`}>
                                 {selectedPrimaryVariantId === entry.id && <div className="w-2 h-2 rounded-full bg-white" />}
                               </div>
                             </button>
@@ -1352,7 +1352,7 @@ export default function EditProductPage() {
                         <button
                           onClick={handleConvertToSimple}
                           disabled={submitting || !selectedPrimaryVariantId}
-                          className="flex-1 py-3.5 rounded-2xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 shadow-lg shadow-red-200 active:scale-[0.98] transition-all disabled:opacity-50"
+                          className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all disabled:opacity-50"
                         >
                           {submitting ? "Converting..." : "Finalize"}
                         </button>
@@ -1395,6 +1395,83 @@ export default function EditProductPage() {
         payload={previewPayload}
         onClose={() => setPreviewPayload(null)}
       />
+
+      {/* Mobile Bottom Navigation (Update + Preview) */}
+      <div className="fixed bottom-0 left-0 right-0 z-[1000]  bg-white border-t border-slate-200 px-6 py-2 pb-[env(safe-area-inset-bottom,16px)] sm:hidden flex items-center gap-4 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md bg-white/90">
+        <button
+          onClick={() => {
+            const payload: PreviewPayload = {
+              productId: productId ? Number(productId) : undefined,
+              businessId: businessId ? Number(businessId) : undefined,
+              title,
+              description,
+              category,
+              price: price === "" ? 0 : Number(price),
+              quantity: quantity === "" ? 0 : Number(quantity),
+              hasVariants,
+              useCombinations,
+              productImages: productImages.map((img, i) => ({
+                url: typeof img === "string" ? img : URL.createObjectURL(img),
+                file: typeof img === "string" ? undefined : img,
+                name: `Image ${i + 1}`,
+              })),
+              productVideo: productVideo ? {
+                url: typeof productVideo === "string" ? productVideo : URL.createObjectURL(productVideo),
+                file: typeof productVideo === "string" ? undefined : productVideo,
+                name: "Product Video"
+              } : null,
+              params: params.map(p => ({ key: p.key, value: p.value })),
+              variantGroups: variantGroups.map(g => ({
+                id: g.id,
+                title: g.title,
+                allowImages: g.allowImages,
+                entries: g.entries.map(e => ({
+                  id: e.id,
+                  name: e.name,
+                  quantity: e.quantity,
+                  price: e.price,
+                  images: e.images?.map((img, idx) => ({
+                    url: typeof img === "string" ? img : URL.createObjectURL(img),
+                    file: typeof img === "string" ? undefined : img,
+                    name: `Variant Image ${idx + 1}`
+                  })) || []
+                }))
+              })),
+              skus: skus || [],
+              samePriceForAll,
+              sharedPrice,
+              policyOverrides: {
+                useStoreDefaultReturn,
+                returnPolicy,
+                useStoreDefaultShipping,
+                shippingPolicy,
+                useStoreDefaultPromotions,
+                promotions,
+                saleDiscount,
+              }
+            };
+            setPreviewPayload(payload);
+          }}
+          className="p-3 bg-slate-100 text-slate-600 rounded-full active:scale-95 transition-all"
+          title="Preview Product"
+        >
+          <Eye className="w-6 h-6" />
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="flex-1 py-3 bg-rose-600 active:bg-rose-700 text-white rounded-full text-[12px] font-bold shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              Updating...
+            </>
+          ) : (
+            "Update Product"
+          )}
+        </button>
+      </div>
     </div>
   );
 }

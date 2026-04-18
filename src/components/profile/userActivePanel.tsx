@@ -235,18 +235,19 @@ export default function UserActivePanel() {
 
           {/* Background Photo Card */}
           <div
-            className="px-5 py-2 bg-white rounded-xl border border-slate-100   flex items-center justify-between cursor-pointer active:bg-slate-50 transition-all"
+            className="px-5 py-2 bg-white rounded-xl border border-slate-100 flex items-center justify-between cursor-pointer active:bg-slate-50 transition-all"
             onClick={handleBgClick}
           >
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[12px] text-slate-600 ">Background Photo</span>
-            </div>
-            <div className="relative w-16 h-10 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 shadow-sm shrink-0">
-              <img src={currentBg} alt="Background" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-                <FaCamera size={10} className="text-white/90" />
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <span className="text-[12px] text-slate-500 w-[110px] shrink-0">Background Photo</span>
+              <div className="relative w-16 h-10 rounded overflow-hidden bg-slate-50 border border-slate-100 shadow-sm shrink-0">
+                <img src={currentBg} alt="Background" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
+                  <FaCamera size={10} className="text-white/90" />
+                </div>
               </div>
             </div>
+            <FaChevronRight className="text-slate-300 shrink-0 ml-2" size={13} />
           </div>
         </div>
 
@@ -280,7 +281,7 @@ export default function UserActivePanel() {
           />
           <ProfileRow
             label="Stoqle ID"
-            value={`@${user?.user_id || "—"}`}
+            value={`${user?.stoqle_id || user?.user_id || "—"}`}
             isLocked={!isVerified}
             onClick={() => openModal("name_id")}
             muted
@@ -407,7 +408,7 @@ export default function UserActivePanel() {
 
       <UserNameIdModal
         open={activeModal === "name_id"}
-        initialValue={JSON.stringify({ full_name: fullName, user_id: user?.user_id })}
+        initialValue={JSON.stringify({ full_name: fullName, stoqle_id: user?.stoqle_id || user?.user_id })}
         onClose={closeModal}
         onSave={(json) => saveEditorValue("name_id", json)}
       />

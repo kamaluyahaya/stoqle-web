@@ -173,7 +173,7 @@ const PostCard = React.memo(({
           <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
         </div>
         {post.isPinned && (
-          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
           </div>
         )}
@@ -279,7 +279,7 @@ const PostCard = React.memo(({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
+                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-rose-500' : 'text-slate-400'}`}
                 >
                   {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
                 </motion.div>
@@ -289,7 +289,7 @@ const PostCard = React.memo(({
                   initial={{ scale: 1, opacity: 1 }}
                   animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                   transition={{ duration: 0.6 }}
-                  className="absolute text-red-500 pointer-events-none"
+                  className="absolute text-rose-500 pointer-events-none"
                 >
                   <FaHeart size={14} />
                 </motion.div>
@@ -380,7 +380,7 @@ const ProductCard = React.memo(({
           <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
         </div>
         {p.isPinned && (
-          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">
+          <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
           </div>
         )}
@@ -426,7 +426,7 @@ const ProductCard = React.memo(({
             {isPromoActive ? (
               <>
                 <span className="text-slate-900 text-sm font-bold">₦{Math.round(Number(p.price || 0) * (1 - (effectivePromo.discount || 0) / 100)).toLocaleString()}</span>
-                <span className="text-[10px] text-red-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
+                <span className="text-[10px] text-rose-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
               </>
             ) : (
               <span className="text-slate-900 text-sm font-bold">₦{Number(p.price || 0).toLocaleString()}</span>
@@ -451,7 +451,7 @@ const ProductCard = React.memo(({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-slate-400'}`}
+                  className={`absolute inset-0 flex items-center justify-center ${isLiked ? 'text-rose-500' : 'text-slate-400'}`}
                 >
                   {isLiked ? <FaHeart className="text-xs" /> : <FaRegHeart className="text-xs" />}
                 </motion.div>
@@ -461,7 +461,7 @@ const ProductCard = React.memo(({
                   initial={{ scale: 1, opacity: 1 }}
                   animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                   transition={{ duration: 0.6 }}
-                  className="absolute text-red-500 pointer-events-none"
+                  className="absolute text-rose-500 pointer-events-none"
                 >
                   <FaHeart size={14} />
                 </motion.div>
@@ -473,7 +473,7 @@ const ProductCard = React.memo(({
         <h3 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug" title={p.title}>{p.title}</h3>
         <div className="mt-2 min-h-[14px]">
           {effectivePromo ? (
-            <span className="text-[9px] text-rose-500 border-red-500 border-[0.2px] px-1.5 py-0.5 ">
+            <span className="text-[9px] text-rose-500 border-rose-500 border-[0.2px] px-1.5 py-0.5 ">
               {effectivePromo.title ? `${effectivePromo.title}: ` : "Sale: "}{effectivePromo.discount}% off
             </span>
           ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
@@ -605,6 +605,11 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   useEffect(() => {
     const fc = Number(profileApi?.stats?.followers ?? profileApi?.stats?.followers_count ?? 0);
     setFollowersCount(fc);
+
+    if (profileApi) {
+      setIsFollowing(Boolean(profileApi.is_followed_by_me ?? profileApi.is_followed ?? false));
+      setIsBlocked(Boolean(profileApi.is_blocked_by_me ?? profileApi.is_blocked ?? false));
+    }
   }, [profileApi]);
 
   const [likedItems, setLikedItems] = useState<any[]>([]);
@@ -740,6 +745,15 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       });
     });
 
+    socket.on('profile_update', (updatedProfile: any) => {
+      const profileId = profileApi?.user?.user_id || profileApi?.user?.id || profileApi?.user_id || viewUserId;
+      const updatedId = updatedProfile?.user?.user_id || updatedProfile?.user?.id || updatedProfile?.user_id;
+
+      if (String(updatedId) === String(profileId)) {
+        setProfileApi(updatedProfile);
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketUserIdRef.current = null;
@@ -747,8 +761,9 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   }, [auth?.user?.user_id, auth?.user?.id]);
 
   const handleFollowUpdate = (targetUserId: string | number, following: boolean) => {
+    const profileId = profileApi?.user?.user_id || profileApi?.user?.id || profileApi?.user_id;
     // If we're on SOMEONE ELSE'S profile and we just followed/unfollowed them
-    if (!isOwner && String(targetUserId) === viewUserId) {
+    if (!isOwner && (String(targetUserId) === String(profileId) || String(targetUserId) === viewUserId)) {
       setFollowersCount(prev => following ? prev + 1 : Math.max(0, prev - 1));
       setIsFollowing(following);
     }
@@ -847,7 +862,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         setNotePosts(cached.notePosts || []);
         setProfileLoading(false);
         setPostsLoading(false);
-        
+
         // Restore active tab
         const savedTab = getActiveTab(`profile_${viewUserId}_tab`);
         if (savedTab !== null) {
@@ -896,7 +911,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         setProfileApi(normalized);
         setIsFollowing(normalized.is_following);
         setIsBlocked(normalized.is_blocked);
-        
+
         // Cache the normalized profile
         setCachedProfile(String(viewUserId), normalized);
       } catch (err: any) {
@@ -1076,7 +1091,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
         setMediaPosts(media.slice(0, postCount));
         setNotePosts(notes.slice(0, postCount));
-        
+
         // Cache the posts
         setCachedProfilePosts(String(viewUserId), media, notes);
       } catch (err: any) {
@@ -1459,7 +1474,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
               {i === activeTabIndex && (
                 <motion.div
                   layoutId="activeTabUnderline"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-full"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full"
                   initial={false}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
@@ -1512,7 +1527,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
                   }}
-                  className="mt-4 px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                  className="mt-4 px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                     <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -1547,7 +1562,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
                 <p className="text-sm font-medium">Publish your first product now.</p>
                 <button
                   onClick={() => router.push('/products/new')}
-                  className="px-4 py-2 bg-red-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
+                  className="px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                     <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -1626,7 +1641,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           setIsFollowing(val);
           setFollowersCount(prev => val ? prev + 1 : Math.max(0, prev - 1));
         }}
-        onSocialClick={(tab) => {
+        onSocialClick={async (tab) => {
+          const loggedIn = await auth.ensureLoggedIn();
+          if (!loggedIn) return;
+
           if (tab === "liked") {
             const idx = tabs.indexOf("Liked");
             if (idx !== -1) setActiveTabIndex(idx);
@@ -1647,7 +1665,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             post={selectedPost}
             onClose={closeModal}
             onToggleLike={toggleLike}
-            targetUserId={viewUserId === "me" ? auth?.user?.user_id : viewUserId}
+            targetUserId={profileApi?.user?.user_id || profileApi?.user?.id || (viewUserId === "me" ? auth?.user?.user_id : viewUserId)}
           />
         )}
       </AnimatePresence>
@@ -1709,7 +1727,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={handleFollow}
-                className="bg-red-500 text-white px-5 py-2 rounded-full text-xs  active:scale-95 transition shadow-sm whitespace-nowrap"
+                className="bg-rose-500 text-white px-5 py-2 rounded-full text-xs  active:scale-95 transition shadow-sm whitespace-nowrap"
               >
                 Follow
               </button>

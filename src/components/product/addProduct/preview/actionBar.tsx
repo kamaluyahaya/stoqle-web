@@ -13,6 +13,7 @@ export default function ActionBar({
   onShopClick,
   onWishlist,
   cartCount = 0,
+  productId,
   shopLogo,
   shopProfilePic,
   businessId,
@@ -27,7 +28,7 @@ export default function ActionBar({
   const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
   const isOwner = currentUserBizId && businessId && Number(currentUserBizId) === Number(businessId);
   const [localCount, setLocalCount] = useState(cartCount);
-  
+
   const isSoldOut = !hasVariants && Number(quantity || 0) <= 0;
 
   const slugify = (str: string) =>
@@ -75,8 +76,8 @@ export default function ActionBar({
     }
   }, [cartCount]);
 
-  const displayLogo = (shopLogo && !shopLogo.includes('favio.png')) 
-    ? shopLogo 
+  const displayLogo = (shopLogo && !shopLogo.includes('favio.png'))
+    ? shopLogo
     : (shopProfilePic && !shopProfilePic.includes('favio.png') ? shopProfilePic : null);
 
   return (
@@ -89,7 +90,9 @@ export default function ActionBar({
               onShopClick();
             } else {
               const slug = businessSlug || (businessName ? slugify(businessName) : null);
-              if (slug) router.push(`/shop/${slug}`);
+              if (slug) {
+                router.push(`/shop/${slug}${productId ? `?product_id=${productId}` : ''}`);
+              }
             }
           }}
           className="flex flex-col items-center justify-center w-14"
@@ -109,7 +112,7 @@ export default function ActionBar({
           <span className="font-bold text-[11px] text-slate-800">Service</span>
         </button>
 
-        <div id="cart-icon-ref" onClick={() => onCartClick ? onCartClick() : router.push("/cart")} className="relative flex flex-col items-center group w-14 cursor-pointer">
+        <div id="preview-cart-icon-ref" onClick={() => onCartClick ? onCartClick() : router.push("/cart")} className="relative flex flex-col items-center group w-14 cursor-pointer">
           <button onMouseDown={stop} className="rounded-xl bg-white flex items-center justify-center hover:shadow-sm transition-transform active:scale-95">
             <ShoppingCartIcon className="w-5 h-5 text-slate-600" />
           </button>
@@ -129,17 +132,18 @@ export default function ActionBar({
                 if (onWishlist) {
                   onWishlist(e);
                 } else {
-                  toast.success("Added to wishlist!");
+                  toast.success("Successfully added to your wishlist!");
                 }
               }}
-              className="flex-1 py-1.5 text-[11px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition"
+              className="flex-1 py-2.5 text-[11px] font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 transition-all active:scale-95 flex items-center justify-center gap-2 group"
             >
-              Sold out, add to wishlist
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-slate-400 transition-colors" />
+              <span>Sold out — Add to Wishlist</span>
             </button>
           ) : (
             <>
-              <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-1.5 text-[11px] font-bold text-red-500 bg-red-50 hover:bg-red-100 transition">Add to cart</button>
-              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
+              <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-2.5 text-[11px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 transition-all active:scale-95">Add to cart</button>
+              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-2.5 text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-500 transition-all active:scale-95 shadow-lg shadow-rose-200">Buy now</button>
             </>
           )}
         </div>

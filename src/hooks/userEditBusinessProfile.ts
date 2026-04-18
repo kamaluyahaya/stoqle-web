@@ -22,10 +22,12 @@ export function useEditBusinessProfile({
   apiBase = "",
   business = null,
   businessPolicy = null,
+  onRefresh = () => { },
 }: {
   apiBase?: string;
   business?: any | null;
   businessPolicy?: any | null;
+  onRefresh?: () => void;
 }) {
   const [name, setName] = useState("");
   const [shipping, setShipping] = useState("");
@@ -543,6 +545,7 @@ export function useEditBusinessProfile({
       }
 
       toast("Business profile synced successfully");
+      if (onRefresh) onRefresh();
     } catch (e: any) {
       if (e instanceof ApiError && e.code === "ACCOUNT_ALREADY_EXISTS") {
         // Friendly toast, no scary console.error

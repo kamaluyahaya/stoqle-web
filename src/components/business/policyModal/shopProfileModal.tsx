@@ -89,7 +89,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
             setIsCropperOpen(true);
         };
         reader.readAsDataURL(file);
-        
+
         // Reset input so the same file can be picked again if needed
         e.target.value = '';
     };
@@ -172,7 +172,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
     return (
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center">
+                <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}

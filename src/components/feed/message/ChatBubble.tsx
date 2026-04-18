@@ -247,7 +247,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                 {senderAvatar ? (
                     <img src={senderAvatar} className="w-8 h-8 rounded-full border border-gray-100 object-cover shadow-sm bg-gray-50" alt="" />
                 ) : (
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm ${mine ? "bg-red-600 text-white" : "bg-red-50 text-red-500 border border-red-100"}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm ${mine ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-500 border border-rose-100"}`}>
                         {senderName?.charAt(0).toUpperCase() || 'U'}
                     </div>
                 )}
@@ -269,7 +269,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                         <div className={`mb-1 relative group/image rounded-xl overflow-hidden ${status === 'sending' ? 'opacity-70 grayscale-[50%]' : ''}`}>
                             {(isImageLoading || status === 'sending') && isImage && (
                                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-100/50 backdrop-blur-[2px]">
-                                    <Loader2 className="w-5 h-5 text-red-500 animate-spin" />
+                                    <Loader2 className="w-5 h-5 text-rose-500 animate-spin" />
                                 </div>
                             )}
                             {isImage ? (
@@ -391,13 +391,13 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         {/* Status Overlays */}
                                         {status === 'sending' && (
                                             <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-4">
-                                                <Loader2 className="w-5 h-5 text-red-500 animate-spin mb-2" />
+                                                <Loader2 className="w-5 h-5 text-rose-500 animate-spin mb-2" />
                                                 <div className="w-full max-w-[120px] h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                                                     <motion.div
                                                         initial={{ width: "10%" }}
                                                         animate={{ width: "95%" }}
                                                         transition={{ duration: 5, repeat: Infinity }}
-                                                        className="h-full bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                                                        className="h-full bg-rose-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.4)]"
                                                     />
                                                 </div>
                                                 <span className="text-[8px] font-black text-slate-400 mt-1  tracking-widest">Uploading...</span>
@@ -410,7 +410,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                 onClick={() => onPdfClick?.(actualUrl || "")}
                                                 className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover/pdf:opacity-100 transition-opacity bg-black/5 cursor-pointer"
                                             >
-                                                <div className="p-2.5 rounded-full bg-white text-red-500 shadow-xl border border-red-50 scale-90 group-hover/pdf:scale-100 transition-transform">
+                                                <div className="p-2.5 rounded-full bg-white text-rose-500 shadow-xl border border-rose-50 scale-90 group-hover/pdf:scale-100 transition-transform">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                                     </svg>
@@ -447,7 +447,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             {status !== 'sending' && (
                                                 <button
                                                     onClick={() => onPdfClick?.(actualUrl || "")}
-                                                    className={`text-[9px] font-black  tracking-widest underline decoration-1 underline-offset-2 ${mine ? "text-white hover:text-red-100" : "text-red-500 hover:text-red-600"}`}
+                                                    className={`text-[9px] font-black  tracking-widest underline decoration-1 underline-offset-2 ${mine ? "text-white hover:text-rose-100" : "text-rose-500 hover:text-rose-600"}`}
                                                 >
                                                     View
                                                 </button>
@@ -469,7 +469,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             {[...Array(15)].map((_, i) => (
                                                 <div
                                                     key={i}
-                                                    className={`w-0.5 rounded-full transition-all duration-300 ${mine ? "bg-white" : "bg-red-500"} ${isVoicePlaying ? 'animate-pulse' : 'opacity-40'}`}
+                                                    className={`w-0.5 rounded-full transition-all duration-300 ${mine ? "bg-white" : "bg-rose-500"} ${isVoicePlaying ? 'animate-pulse' : 'opacity-40'}`}
                                                     style={{
                                                         height: `${Math.max(3, Math.random() * 18)}px`,
                                                         animationDelay: `${i * 0.05}s`
@@ -487,8 +487,8 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                     />
                                 </div>
                             ) : (
-                                <div className={`flex items-center gap-3 rounded-xl ${mine ? "bg-red-600" : "bg-gray-50 border border-gray-100"}`}>
-                                    <div className={`p-2 rounded-lg ${mine ? "bg-red-400" : "bg-red-100 text-red-500"}`}>
+                                <div className={`flex items-center gap-3 rounded-xl ${mine ? "bg-rose-600" : "bg-gray-50 border border-gray-100"}`}>
+                                    <div className={`p-2 rounded-lg ${mine ? "bg-rose-400" : "bg-rose-100 text-rose-500"}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                         </svg>
@@ -501,7 +501,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             href={actualUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className={`text-[11px] font-bold underline decoration-2 underline-offset-4 mt-1 block ${mine ? "text-red-100 hover:text-white" : "text-red-500 hover:text-red-600"}`}
+                                            className={`text-[11px] font-bold underline decoration-2 underline-offset-4 mt-1 block ${mine ? "text-rose-100 hover:text-white" : "text-rose-500 hover:text-rose-600"}`}
                                         >
                                             View & Download
                                         </a>
@@ -515,7 +515,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                     {product_name && (
                         <div
                             onClick={() => product_id && onProductClick?.(product_id)}
-                            className={`mb-3 p-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] ${mine ? "bg-black/10 hover:bg-black/20" : "bg-red-50 border border-red-100 hover:bg-red-100/50"}`}
+                            className={`mb-3 p-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] ${mine ? "bg-black/10 hover:bg-black/20" : "bg-rose-50 border border-rose-100 hover:bg-rose-100/50"}`}
                         >
                             {product_image && (
                                 <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/20 bg-white/50 shrink-0 shadow-sm">
@@ -525,7 +525,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2">
                                     <h4 className={`text-[10px] font-bold  tracking-tight leading-tight line-clamp-2 ${mine ? "text-white" : "text-slate-900"}`}>{product_name}</h4>
-                                    <span className={`text-[11px] font-black shrink-0 ml-auto ${mine ? "text-white" : "text-red-600"}`}>₦{Number(product_price || 0).toLocaleString()}</span>
+                                    <span className={`text-[11px] font-black shrink-0 ml-auto ${mine ? "text-white" : "text-rose-600"}`}>₦{Number(product_price || 0).toLocaleString()}</span>
                                 </div>
                                 {product_variant && (
                                     <p className={`text-[9px] font-bold mt-0.5 whitespace-normal leading-relaxed  tracking-widest ${mine ? "text-white/70" : "text-slate-400"}`}>{product_variant}</p>
@@ -552,7 +552,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         {product_image ? (
                                             <img src={product_image} className="w-full h-full object-cover" alt="" />
                                         ) : (
-                                            <div className={`w-full h-full flex items-center justify-center ${mine ? "bg-white/20 text-white" : "bg-red-50 text-red-500"}`}>
+                                            <div className={`w-full h-full flex items-center justify-center ${mine ? "bg-white/20 text-white" : "bg-rose-50 text-rose-500"}`}>
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                                                 </svg>
@@ -560,7 +560,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         )}
                                     </div>
                                     <div className="flex flex-col min-w-0 pr-1">
-                                        <span className={`text-[8px] font-black  tracking-widest ${mine ? "text-red-100" : "text-slate-400"}`}>Order Reference</span>
+                                        <span className={`text-[8px] font-black  tracking-widest ${mine ? "text-rose-100" : "text-slate-400"}`}>Order Reference</span>
                                         <span className={`text-[11px] font-bold truncate max-w-[120px] ${mine ? "text-white" : "text-slate-900"}`}>{order_ref}</span>
                                     </div>
                                 </div>
@@ -569,7 +569,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                 </div>
                             </div>
                             <div className={`h-[1px] w-full ${mine ? "bg-white/10" : "bg-slate-100"}`} />
-                            <p className={`text-[9px] font-medium leading-tight ${mine ? "text-red-100" : "text-slate-500"}`}>
+                            <p className={`text-[9px] font-medium leading-tight ${mine ? "text-rose-100" : "text-slate-500"}`}>
                                 Tap to track delivery progress or view order management options.
                             </p>
                         </div>
@@ -579,7 +579,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                     {content && (
                         <div className="relative group/text">
                             <p className={`whitespace-pre-wrap leading-relaxed px-1 p-0 py-0.5 ${actualUrl
-                                ? `text-[11px] font-medium leading-tight mt-1 ${mine ? "text-red-50/90" : "text-gray-500"}`
+                                ? `text-[11px] font-medium leading-tight mt-1 ${mine ? "text-rose-50/90" : "text-gray-500"}`
                                 : "text-sm"
                                 }`}>
                                 {content}
@@ -632,7 +632,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                 {/* Footer Only for failed messages */}
                 {status === 'failed' && (
                     <div
-                        className="flex items-center gap-1.5 mt-0.5 mb-0.5 text-[10px] font-bold tracking-tight text-red-500"
+                        className="flex items-center gap-1.5 mt-0.5 mb-0.5 text-[10px] font-bold tracking-tight text-rose-500"
                     >
                         <div
                             onClick={onRetry}

@@ -41,7 +41,7 @@ export default function DraftsModal({
                         drafts.map((draft) => (
                             <div
                                 key={draft.id}
-                                className="group flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-red-200 hover:bg-red-50/30 transition-all cursor-pointer"
+                                className="group flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-rose-200 hover:bg-rose-50/30 transition-all cursor-pointer"
                                 onClick={() => onSelect(draft)}
                             >
                                 <div className="flex-1 min-w-0">
@@ -60,7 +60,7 @@ export default function DraftsModal({
                                             e.stopPropagation();
                                             onDelete(draft.id);
                                         }}
-                                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-100 rounded-lg transition-all"
+                                        className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-100 rounded-lg transition-all"
                                         title="Delete draft"
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

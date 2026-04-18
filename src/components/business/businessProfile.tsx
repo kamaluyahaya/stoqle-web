@@ -102,7 +102,7 @@ export default function EditBusinessProfile({
         <div className="mt-6 w-full">
           <div className="grid grid-cols-4 gap-2 lg:gap-5">
             <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
                 <FaShoppingCart className="text-slate-700" size={18} />
               </div>
               <span className="text-xs font-medium text-slate-700">Orders</span>

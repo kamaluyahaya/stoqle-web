@@ -311,7 +311,7 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
   return (
     <AnimatePresence mode="wait">
       {isOpen && (
-        <div key="main-modal" className="fixed inset-0 z-[1001] flex items-center justify-center p-0 overflow-hidden">
+        <div key="main-modal" className="fixed inset-0 z-[10001] flex items-center justify-center p-0 overflow-hidden">
           {/* backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

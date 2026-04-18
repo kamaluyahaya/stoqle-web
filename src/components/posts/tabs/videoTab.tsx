@@ -63,7 +63,7 @@ export default function VideoTab({
         <div className="flex flex-col items-center justify-center">
           {!videoPreview ? (
             <div
-              className="relative group  rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden w-full h-[250px]"
+              className="relative group  rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-rose-400 hover:bg-rose-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden w-full h-[250px]"
             >
               <input
                 id="video-upload"
@@ -75,9 +75,9 @@ export default function VideoTab({
 
               <label htmlFor="video-upload" className="cursor-pointer flex flex-col items-center justify-center text-center w-full h-full relative z-10">
                 <div className="mb-4 relative">
-                  <div className="absolute inset-0 bg-red-500/10 blur-xl rounded-full scale-150 group-hover:bg-red-500/20 transition-all" />
+                  <div className="absolute inset-0 bg-rose-500/10 blur-xl rounded-full scale-150 group-hover:bg-rose-500/20 transition-all" />
                   <div className="relative inline-flex items-center justify-center rounded-2xl h-16 w-16 bg-white shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-                    <FilmIcon className="w-8 h-8 text-red-500" />
+                    <FilmIcon className="w-8 h-8 text-rose-500" />
                   </div>
                 </div>
 
@@ -164,13 +164,13 @@ export default function VideoTab({
                           {user?.profile_pic ? (
                             <img src={user.profile_pic} className="w-full h-full object-cover" alt="user" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-red-500 text-white font-bold text-[8px]">
+                            <div className="w-full h-full flex items-center justify-center bg-rose-500 text-white font-bold text-[8px]">
                               {user?.full_name?.[0] || 'S'}
                             </div>
                           )}
                         </div>
                         <span className="text-white text-[8px] font-black shadow-sm truncate max-w-[70px] flex-shrink-0">{user?.business_name || user?.full_name || user?.username || 'user'}</span>
-                        <button className="px-2 py-0.5 bg-red-500 rounded-full text-[7px] font-black text-white ml-1 flex-shrink-0">Follow</button>
+                        <button className="px-2 py-0.5 bg-rose-500 rounded-full text-[7px] font-black text-white ml-1 flex-shrink-0">Follow</button>
                       </div>
                     </div>
                   </div>
@@ -184,7 +184,7 @@ export default function VideoTab({
               <div className="absolute top-4 right-4 flex flex-col gap-2">
                 <button
                   onClick={clearVideo}
-                  className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-lg border border-slate-100 text-slate-500 hover:text-red-500 hover:scale-110 transition-all active:scale-95"
+                  className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-lg border border-slate-100 text-slate-500 hover:text-rose-500 hover:scale-110 transition-all active:scale-95"
                   title="Remove video"
                 >
                   <XMarkIcon className="w-5 h-5" />
@@ -206,7 +206,7 @@ export default function VideoTab({
                       rawCreatedAt: new Date().toISOString()
                     });
                   }}
-                  className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-lg border border-slate-100 text-slate-500 hover:text-red-600 hover:scale-110 transition-all active:scale-95"
+                  className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-lg border border-slate-100 text-slate-500 hover:text-rose-600 hover:scale-110 transition-all active:scale-95"
                   title="Preview"
                 >
                   <EyeIcon className="w-5 h-5" />
@@ -241,7 +241,7 @@ export default function VideoTab({
           className={`w-full py-2 rounded-full text-sm transition-all duration-300 flex items-center justify-center gap-3
             ${!video
               ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-              : "bg-red-500 text-white hover:bg-red-600 shadow-red-200 hover:scale-[1.02] active:scale-95"
+              : "bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200 hover:scale-[1.02] active:scale-95"
             }
           `}
         >
@@ -251,11 +251,11 @@ export default function VideoTab({
 
       {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="p-5 rounded-3xl bg-white border border-slate-100">
-          <div className="text-[10px] font-black text-red-500  tracking-widest mb-1">Resolution</div>
+          <div className="text-[10px] font-black text-rose-500  tracking-widest mb-1">Resolution</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">Recommended 720p or 1080p for best quality.</p>
         </div>
         <div className="p-5 rounded-3xl bg-white border border-slate-100">
-          <div className="text-[10px] font-black text-red-500  tracking-widest mb-1">Duration</div>
+          <div className="text-[10px] font-black text-rose-500  tracking-widest mb-1">Duration</div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed">Maximum 3 minutes for high-impact reels.</p>
         </div>
       </div> */}

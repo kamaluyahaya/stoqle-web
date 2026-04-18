@@ -67,13 +67,13 @@ export default function ImagesTab({
 
       {imagePreviews.length === 0 && (
         <div
-          className="relative group p-10 rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
+          className="relative group p-10 rounded-[0.5rem] border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-rose-400 hover:bg-rose-50/20 transition-all duration-500 ease-out cursor-pointer overflow-hidden"
         >
           <label htmlFor="images-upload" className="cursor-pointer flex flex-col items-center justify-center text-center w-full relative z-10">
             <div className="mb-4 relative">
-              <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full scale-150 group-hover:bg-red-500/30 transition-all" />
+              <div className="absolute inset-0 bg-rose-500/20 blur-xl rounded-full scale-150 group-hover:bg-rose-500/30 transition-all" />
               <div className="relative inline-flex items-center justify-center rounded-2xl h-16 w-16 bg-white shadow-xl shadow-slate-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-                <CloudArrowUpIcon className="w-8 h-8 text-red-500" />
+                <CloudArrowUpIcon className="w-8 h-8 text-rose-500" />
               </div>
             </div>
 
@@ -96,7 +96,7 @@ export default function ImagesTab({
             </div>
             <button
               onClick={clearImages}
-              className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors"
+              className="text-xs font-bold text-slate-400 hover:text-rose-500 transition-colors"
             >
               Remove All
             </button>
@@ -124,7 +124,7 @@ export default function ImagesTab({
                     e.stopPropagation();
                     removeImageAt(i);
                   }}
-                  className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-md shadow-xl transition-all hover:bg-red-500 hover:text-white flex z-20 text-white"
+                  className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-md shadow-xl transition-all hover:bg-rose-500 hover:text-white flex z-20 text-white"
                 >
                   <XMarkIcon className="w-4 h-4" />
                 </button>
@@ -143,13 +143,13 @@ export default function ImagesTab({
             {imagePreviews.length > 0 && imagePreviews.length < 5 && (
               <label
                 htmlFor="images-upload"
-                className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-red-400 hover:bg-red-50/20 transition-all duration-300 cursor-pointer aspect-square group/add"
+                className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-rose-400 hover:bg-rose-50/20 transition-all duration-300 cursor-pointer aspect-square group/add"
               >
                 <div className="flex flex-col items-center gap-1.5 p-2 text-center">
                   <div className="p-2 rounded-xl bg-white shadow-sm border border-slate-100 group-hover/add:scale-110 group-hover/add:rotate-3 transition-all duration-300">
-                    <PhotoIcon className="w-5 h-5 text-red-500" />
+                    <PhotoIcon className="w-5 h-5 text-rose-500" />
                   </div>
-                  <span className="text-[9px] text-slate-400 group-hover/add:text-red-500">Add More</span>
+                  <span className="text-[9px] text-slate-400 group-hover/add:text-rose-500">Add More</span>
                 </div>
               </label>
             )}
@@ -186,7 +186,7 @@ export default function ImagesTab({
           className={`w-full py-3 rounded-3xl text-sm transition-all duration-300 flex items-center justify-center gap-3
             ${images.length === 0
               ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-              : "bg-red-500 text-white hover:bg-red-600 shadow-red-200 hover:scale-[1.02] active:scale-95"
+              : "bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200 hover:scale-[1.02] active:scale-95"
             }
           `}
         >

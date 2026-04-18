@@ -32,7 +32,7 @@ function SettingsRow({ label, subLabel, onClick, rightElement, danger }: any) {
             className={`px-5 py-4 flex items-center justify-between transition-all active:bg-slate-50 ${onClick ? 'cursor-pointer' : ''}`}
         >
             <div className="flex-1 pr-4">
-                <p className={`text-[15px]  ${danger ? 'text-red-500' : 'text-slate-800'}`}>{label}</p>
+                <p className={`text-[15px]  ${danger ? 'text-rose-500' : 'text-slate-800'}`}>{label}</p>
                 {subLabel && <p className="text-[11px] font-bold text-slate-400  tracking-wider mt-0.5">{subLabel}</p>}
             </div>
             {rightElement ? rightElement : (onClick && <FaChevronRight size={12} className="text-slate-300 ml-auto" />)}
@@ -44,7 +44,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean, onChange: (val: boole
     return (
         <button
             onClick={() => onChange(!enabled)}
-            className={`w-10 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${enabled ? 'bg-red-500 shadow-md shadow-red-100' : 'bg-slate-200'}`}
+            className={`w-10 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${enabled ? 'bg-rose-500 shadow-md shadow-rose-100' : 'bg-slate-200'}`}
         >
             <motion.div
                 animate={{ x: enabled ? 16 : 0 }}
@@ -77,17 +77,17 @@ function SimpleSelectionModal({ open, onClose, title, options, selected, onSelec
                         <div
                             key={opt}
                             onClick={() => onSelect(opt)}
-                            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group ${selected === opt ? 'bg-white border-red-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}
+                            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group ${selected === opt ? 'bg-white border-rose-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}
                         >
                             <span className={`text-[14px] font-bold ${selected === opt ? 'text-slate-900' : 'text-slate-500'}`}>{opt}</span>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selected === opt ? "bg-red-500 border-red-500 shadow-lg shadow-red-200" : "bg-white border-slate-200"}`}>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selected === opt ? "bg-rose-500 border-rose-500 shadow-lg shadow-rose-200" : "bg-white border-slate-200"}`}>
                                 {selected === opt && <CheckIcon className="w-3 h-3 text-white stroke-[3] animate-in zoom-in duration-200" />}
                             </div>
                         </div>
                     ))}
                 </div>
                 <div className="p-6">
-                    <button onClick={onClose} className="w-full bg-red-500 text-white py-3 rounded-full font-black text-sm active:scale-[0.98] transition-transform">Confirm</button>
+                    <button onClick={onClose} className="w-full bg-rose-500 text-white py-3 rounded-full font-black text-sm active:scale-[0.98] transition-transform">Confirm</button>
                 </div>
             </motion.div>
         </div>
@@ -120,7 +120,7 @@ function ToggleModal({ open, onClose, title, items }: any) {
                     ))}
                 </div>
                 <div className="p-6">
-                    <button onClick={onClose} className="w-full bg-red-500 text-white py-3 rounded-full font-black text-sm active:scale-[0.98] transition-transform">Done</button>
+                    <button onClick={onClose} className="w-full bg-rose-500 text-white py-3 rounded-full font-black text-sm active:scale-[0.98] transition-transform">Done</button>
                 </div>
             </motion.div>
         </div>
@@ -193,7 +193,7 @@ function BlockListModal({ onClose }: { onClose: () => void }) {
                 <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                     {loading ? (
                         <div className="flex justify-center py-10">
-                            <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                            <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
                         </div>
                     ) : blockedUsers.length === 0 ? (
                         <div className="py-20 text-center">
@@ -204,19 +204,19 @@ function BlockListModal({ onClose }: { onClose: () => void }) {
                         blockedUsers.map(user => (
                             <div key={user.user_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-3">
-                                    <img 
-                                        src={user.profile_pic || "/assets/images/favio.png"} 
-                                        className="w-10 h-10 rounded-full object-cover" 
-                                        alt="" 
+                                    <img
+                                        src={user.profile_pic || "/assets/images/favio.png"}
+                                        className="w-10 h-10 rounded-full object-cover"
+                                        alt=""
                                     />
                                     <div>
-                                         <p className="font-bold text-slate-800 text-sm">{user.full_name}</p>
+                                        <p className="font-bold text-slate-800 text-sm">{user.full_name}</p>
                                         <p className="text-[10px] font-bold text-slate-400  tracking-wider">ID: {user.user_id}</p>
                                     </div>
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => handleUnblock(user.user_id)}
-                                    className="text-xs font-black text-red-500 px-4 py-2 border border-red-100 rounded-full hover:bg-red-50 transition-colors"
+                                    className="text-xs font-black text-rose-500 px-4 py-2 border border-rose-100 rounded-full hover:bg-rose-50 transition-colors"
                                 >
                                     Unblock
                                 </button>

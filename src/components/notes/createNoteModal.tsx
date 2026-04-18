@@ -27,7 +27,7 @@ type BackgroundConfig = {
   startColor?: string;
   endColor?: string;
   emojis?: string[];
-  emojiBlur?: boolean; // New: toggle for blurred emojis
+  emojiBlur?: boolean; // New: toggle for blurrose emojis
   stripeCount?: number;
   lineSpacing?: number;
   rotation?: number;
@@ -139,7 +139,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
       } else if (stylePick > 0.4) {
         template = "stripes"; // Notebook/Lined paper style
         patternType = "horizontal";
-        emojiBlur = true; // Blurred aesthetic emojis
+        emojiBlur = true; // Blurrose aesthetic emojis
         emojis = emojiSets[Math.floor(rng() * emojiSets.length)];
       } else {
         template = "dots"; // Minimalist dotted background
@@ -175,7 +175,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
 
     const fetchFromBackend = async () => {
       if (!base) {
-        // no base configured -> fallback
+        // no base configurose -> fallback
         const fb = generateFallbackBackgrounds(userSeed);
         if (!mounted) return;
         setBackgrounds(fb);
@@ -277,7 +277,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
     try {
       setPosting(true);
       const base = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
-      if (!base) throw new Error("API base not configured (NEXT_PUBLIC_API_URL)");
+      if (!base) throw new Error("API base not configurose (NEXT_PUBLIC_API_URL)");
 
       const cfg = buildConfigPayload();
 
@@ -507,14 +507,14 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
       px-4
       py-2
       rounded-full
-      bg-red-500
+      bg-rose-500
       text-white
       font-medium
       transition
       active:scale-95
       disabled:opacity-40
       disabled:cursor-not-allowed
-      hover:bg-red-600
+      hover:bg-rose-600
     "
                 >
                   Next
@@ -560,7 +560,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                           <button
                             key={i}
                             onClick={() => setSelectedConfig(b)}
-                            className={`flex-none w-20 h-20 rounded-xl shadow-sm border overflow-hidden transform transition active:scale-95 relative ${selected ? "ring-4 ring-red-400 border-white scale-105 z-10" : "border-slate-200 hover:scale-[1.03]"
+                            className={`flex-none w-20 h-20 rounded-xl shadow-sm border overflow-hidden transform transition active:scale-95 relative ${selected ? "ring-4 ring-rose-400 border-white scale-105 z-10" : "border-slate-200 hover:scale-[1.03]"
                               }`}
                             style={{
                               backgroundColor: b.startColor,
@@ -613,7 +613,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                   </button>
 
                   <div className="flex gap-3">
-                    <button onClick={goNext} className="px-4 py-2 rounded-md bg-red-500 hover:bg-red-600 max-w-4xl text-white active:scale-95 transition">
+                    <button onClick={goNext} className="px-4 py-2 rounded-md bg-rose-500 hover:bg-rose-600 max-w-4xl text-white active:scale-95 transition">
                       Next
                     </button>
                   </div>
@@ -640,10 +640,10 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                       onClick={() => setIsPrivacyModalOpen(true)}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors group"
                     >
-                      {visibility === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-                      {visibility === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-                      {visibility === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-                      <span className="text-[10px] font-black  text-slate-500 group-hover:text-red-600">
+                      {visibility === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
+                      {visibility === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
+                      {visibility === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
+                      <span className="text-[10px] font-black  text-slate-500 group-hover:text-rose-600">
                         {visibility === "public" ? "Public" : visibility === "private" ? "Private" : "Friends Only"}
                       </span>
                     </button>
@@ -691,7 +691,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                                 setIsPrivacyModalOpen(false);
                               }}
                               className={`w-full flex items-center justify-between p-3 rounded-[0.5rem] transition-all border-2 ${visibility === opt.id
-                                ? "bg-red-50 border-red-100 text-red-600 shadow-sm"
+                                ? "bg-rose-50 border-rose-100 text-rose-600 shadow-sm"
                                 : "bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100"
                                 }`}
                             >
@@ -705,7 +705,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                                 </div>
                               </div>
                               {visibility === opt.id && (
-                                <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                                <div className="w-6 h-6 rounded-full bg-rose-500 flex items-center justify-center">
                                   <CheckIcon className="w-4 h-4 text-white stroke-[3]" />
                                 </div>
                               )}
@@ -732,8 +732,8 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
           px-4 py-2
           rounded-full
           w-full
-          bg-red-500
-          hover:bg-red-600
+          bg-rose-500
+          hover:bg-rose-600
           text-white
           active:scale-95
           transition

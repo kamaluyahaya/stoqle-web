@@ -4,13 +4,13 @@ import {
   ClipboardDocumentListIcon,
   EyeIcon,
   EyeSlashIcon,
-  ArrowLeftIcon,
   ClockIcon,
   CheckCircleIcon,
   XCircleIcon,
   MapPinIcon,
   UserIcon,
   ShoppingBagIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   InformationCircleIcon,
   EnvelopeIcon,
@@ -24,6 +24,8 @@ import {
   PrinterIcon
 } from "@heroicons/react/16/solid";
 import React, { useEffect, useRef, useState } from "react";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/src/lib/config";
 import { fetchMyTransactions, fetchTransactionDetails, sendDeliveryReminder, confirmOrderReceipt, reportOrderProblem } from "@/src/lib/api/walletApi";
@@ -88,6 +90,14 @@ export default function BalanceModal({
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [processingAction, setProcessingAction] = useState(false);
+  const [txOffset, setTxOffset] = useState(0);
+  const [txHasMore, setTxHasMore] = useState(true);
+  const [isBatchLoading, setIsBatchLoading] = useState(false);
+
+  // Lightbox State
+  const [lightBoxOpen, setLightBoxOpen] = useState(false);
+  const [lightBoxIndex, setLightBoxIndex] = useState(0);
+  const [lightBoxSlides, setLightBoxSlides] = useState<{ src: string }[]>([]);
 
   // Modal States
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
@@ -119,6 +129,37 @@ export default function BalanceModal({
       });
     }
   }, [open]);
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
+      document.documentElement.style.overflow = "hidden";
+      document.documentElement.style.overscrollBehavior = "none";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
+    };
+  }, [open]);
+
+  // Load more on scroll
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (currentView !== "transactions" || !txHasMore || isBatchLoading || txLoading) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 100) {
+      fetchTransactions(true);
+    }
+  };
 
   const isSyncing = (() => {
     try {
@@ -158,17 +199,41 @@ export default function BalanceModal({
     return String(addr);
   };
 
-  const fetchTransactions = async () => {
-    setTxLoading(true);
+  const fetchTransactions = async (loadMore = false) => {
+    if (loadMore && (!txHasMore || isBatchLoading)) return;
+
+    if (!loadMore) {
+      setTxLoading(true);
+      setTransactions([]);
+      setTxOffset(0);
+      setTxHasMore(true);
+    } else {
+      setIsBatchLoading(true);
+    }
+
     try {
-      const res = await fetchMyTransactions();
+      const limit = 10;
+      const currentOffset = loadMore ? txOffset : 0;
+      const res = await fetchMyTransactions(limit, currentOffset);
+
       if (res?.data?.transactions) {
-        setTransactions(res.data.transactions);
+        const newTxs = res.data.transactions;
+        if (loadMore) {
+          setTransactions(prev => [...prev, ...newTxs]);
+        } else {
+          setTransactions(newTxs);
+        }
+
+        setTxOffset(currentOffset + limit);
+        if (newTxs.length < limit) {
+          setTxHasMore(false);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch transactions:", err);
     } finally {
       setTxLoading(false);
+      setIsBatchLoading(false);
     }
   };
 
@@ -189,6 +254,36 @@ export default function BalanceModal({
     }
   };
 
+  const handleImagePreview = (items: any[], initialIdx: number) => {
+    const slides = items
+      .map(item => {
+        let snapshot = null;
+        try {
+          snapshot = typeof item.product_snapshot === 'string'
+            ? JSON.parse(item.product_snapshot)
+            : item.product_snapshot;
+        } catch (e) { }
+        return item.product_image || snapshot?.image || null;
+      })
+      .filter(Boolean)
+      .map(url => ({ src: url }));
+
+    if (slides.length > 0) {
+      setLightBoxSlides(slides);
+      const targetItem = items[initialIdx];
+      let snapshot = null;
+      try {
+        snapshot = typeof targetItem.product_snapshot === 'string'
+          ? JSON.parse(targetItem.product_snapshot)
+          : targetItem.product_snapshot;
+      } catch (e) { }
+      const clickedUrl = targetItem.product_image || snapshot?.image;
+      const slideIdx = slides.findIndex(s => s.src === clickedUrl);
+      setLightBoxIndex(slideIdx >= 0 ? slideIdx : 0);
+      setLightBoxOpen(true);
+    }
+  };
+
   const handleShareReceipt = async () => {
     if (!txDetails || typeof window === "undefined") return;
 
@@ -204,9 +299,11 @@ export default function BalanceModal({
       receiptContent = `📄 *WALLET RECEIPT*\n\nRef: ${txDetails.reference || txDetails.transaction_id}\nType: Transfer\nAmount: ${fmt(Math.abs(txDetails.amount))}\nDate: ${dateStr}\nStatus: ${txDetails.status}\n\nShared via Stoqle Wallet`;
     } else if (txDetails.order_items?.[0]) {
       const item = txDetails.order_items[0];
+      const stoqleOrderId = item.stoqle_order_id;
+      const displayId = stoqleOrderId ? `ORD-${stoqleOrderId}` : (txDetails.reference || txDetails.transaction_id);
       targetUserId = role === 'vendor' ? item.customer_user_id : item.vendor_user_id;
       const products = txDetails.order_items.map((it: any) => `• ${it.product_name} (x${it.quantity})`).join('\n');
-      receiptContent = `📄 *PAYMENT RECEIPT*\n\nOrder ID: #${txDetails.reference || txDetails.transaction_id}\nTotal Paid: ${fmt(Math.abs(txDetails.amount))}\nDate: ${dateStr}\n\nItems:\n${products}\n\nShared via Stoqle Wallet`;
+      receiptContent = `📄 *PAYMENT RECEIPT*\n\nOrder ID: #${displayId}\nTotal Paid: ${fmt(Math.abs(txDetails.amount))}\nDate: ${dateStr}\n\nItems:\n${products}\n\nShared via Stoqle Wallet`;
     }
 
     if (!targetUserId) {
@@ -275,8 +372,9 @@ export default function BalanceModal({
   };
 
   const handleExternalShare = () => {
-    if (!txDetails) return;
-    const text = `Stoqle Receipt: ${txDetails.transaction_type} of ${fmt(Math.abs(txDetails.amount))} on ${new Date(txDetails.created_at).toLocaleDateString()}. Ref: ${txDetails.reference || txDetails.transaction_id}`;
+    const stoqleOrderId = txDetails.order_items?.[0]?.stoqle_order_id;
+    const displayId = stoqleOrderId ? `ORD-${stoqleOrderId}` : (txDetails.reference || txDetails.transaction_id);
+    const text = `Stoqle Receipt: ${txDetails.transaction_type} of ${fmt(Math.abs(txDetails.amount))} on ${new Date(txDetails.created_at).toLocaleDateString()}. Ref: #${displayId}`;
 
     if (navigator.share) {
       navigator.share({
@@ -344,10 +442,11 @@ export default function BalanceModal({
   };
 
   const handleDraftEmail = () => {
-    if (!txDetails || !txDetails.order_items?.[0]) return;
     const item = txDetails.order_items[0];
     const email = item.customer_email || item.email;
-    const subject = encodeURIComponent(`Regarding your Order #${txDetails.reference || txDetails.transaction_id} on Stoqle`);
+    const stoqleOrderId = item.stoqle_order_id;
+    const displayId = stoqleOrderId ? `${stoqleOrderId}` : (txDetails.reference || txDetails.transaction_id);
+    const subject = encodeURIComponent(`Regarding your Order #${displayId} on Stoqle`);
     const body = encodeURIComponent(`Hello ${item.full_name},\n\nI am contacting you regarding the problem report for your order...`);
     window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
   };
@@ -409,20 +508,11 @@ export default function BalanceModal({
   };
 
   useEffect(() => {
-    if (open && currentView === "transactions") {
+    if (open && currentView === "transactions" && transactions.length === 0) {
       fetchTransactions();
     }
   }, [open, currentView]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -513,7 +603,7 @@ export default function BalanceModal({
     <>
       <AnimatePresence>
         {open && (
-          <div key="balance-modal-overlay" className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
+          <div key="balance-modal-overlay" className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -529,9 +619,8 @@ export default function BalanceModal({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full sm:w-[500px] max-h-[90vh] sm:max-h-[85vh] bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] overflow-hidden flex flex-col"
+              className={`relative w-full sm:w-[500px] ${currentView === 'tx_detail' ? 'h-[80vh] sm:h-auto sm:max-h-[85vh]' : 'max-h-[90vh] sm:max-h-[85vh]'} bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] overflow-hidden flex flex-col transition-all duration-300`}
             >
-
               {/* Header */}
               <div className="px-6 py-5 flex-shrink-0">
                 <div className="flex items-center justify-between">
@@ -541,7 +630,7 @@ export default function BalanceModal({
                         onClick={() => setCurrentView(currentView === "tx_detail" ? "transactions" : "overview")}
                         className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
                       >
-                        <ArrowLeftIcon className="w-5 h-5" />
+                        <ChevronLeftIcon className="w-6 h-6" />
                       </button>
                     )}
                   </div>
@@ -560,18 +649,21 @@ export default function BalanceModal({
               </div>
 
               {/* Scrollable Content */}
-              <div className={`flex-1 overflow-y-auto px-6 py-6 pb-12 text-slate-900 ${activeFilterDropdown ? 'overflow-hidden' : ''}`}>
+              <div
+                onScroll={handleScroll}
+                className={`flex-1 overflow-y-auto px-6 py-6 pb-12 text-slate-900 ${activeFilterDropdown ? 'overflow-hidden' : ''}`}
+              >
                 {currentView === "overview" ? (
                   <div className="space-y-6">
                     {/* Primary Balance Card */}
-                    <div className="bg-rose-500 rounded-[1rem] p-7 text-white shadow-xl shadow-rose-100 relative overflow-hidden">
+                    <div className="bg-rose-500 rounded-[0.5rem] p-7 text-white  shadow-rose-100 relative overflow-hidden">
                       <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full pointer-events-none" />
 
                       <div className="relative z-10 flex justify-between items-start">
                         <div>
                           <p className="text-white/70 text-sm font-medium">Available Balance</p>
                           <div className="mt-1 flex items-center gap-3">
-                            <h3 className="text-3xl font-bold tracking-tight">
+                            <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">
                               {showBalance ? fmt(balances.available) : "••••••"}
                             </h3>
                             <button
@@ -596,28 +688,28 @@ export default function BalanceModal({
                           <>
                             <button
                               onClick={() => handleActionWithPinCheck("withdraw")}
-                              className="flex-1 h-10 rounded-full bg-white text-rose-500 font-bold text-xs shadow-sm active:scale-95 transition"
+                              className="flex-1 h-8 rounded-full bg-white text-rose-500  text-xs shadow-sm active:scale-95 transition"
                             >
                               Request Payout
                             </button>
                             <button
                               onClick={() => handleActionWithPinCheck("transfer")}
-                              className="flex-1 h-10 rounded-full bg-rose-600 text-white font-bold text-xs shadow-lg shadow-rose-100 active:scale-95 transition"
+                              className="flex-1 h-8 rounded-full bg-rose-600 text-white border border-slate-200 text-xs shadow-lg active:scale-95 transition"
                             >
-                              Transfer to StoqlePay
+                              Transfer
                             </button>
                           </>
                         ) : (
                           <>
                             <button
                               onClick={() => handleActionWithPinCheck("transfer")}
-                              className="flex-1 h-10 rounded-full bg-white text-rose-500 font-bold text-xs shadow-sm active:scale-95 transition"
+                              className="flex-1 h-8 rounded-full bg-white text-rose-500 text-xs shadow-sm active:scale-95 transition"
                             >
                               Transfer
                             </button>
                             <button
                               onClick={() => handleActionWithPinCheck("withdraw")}
-                              className="flex-1 h-10 rounded-full text-white border border-slate-200 text-xs shadow-lg active:scale-95 transition"
+                              className="flex-1 h-8 rounded-full text-white border border-slate-200 text-xs shadow-lg active:scale-95 transition"
                             >
                               Withdraw
                             </button>
@@ -629,7 +721,7 @@ export default function BalanceModal({
                         <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
                           <XCircleIcon className="w-4 h-4 text-amber-500 mt-0.5" />
                           <div className="space-y-0.5">
-                            <p className="text-[10px] font-black text-amber-900 leading-tight uppercase tracking-widest">Payout Settings Under Review</p>
+                            <p className="text-[10px] font-black text-amber-900 leading-tight ">Payout Settings Under Review</p>
                             <p className="text-[10px] text-amber-700/80 leading-tight">Your bank details are being verified by Paystack. Payouts will be enabled automatically within 15 minutes.</p>
                           </div>
                         </div>
@@ -637,7 +729,7 @@ export default function BalanceModal({
                     </div>
 
                     {/* Pending Balance Row */}
-                    <div className="bg-slate-50 rounded-[1.2rem] p-5 border border-slate-100 flex justify-between items-center group cursor-pointer hover:bg-slate-100 transition-colors"
+                    <div className="bg-slate-50 rounded-[0.5rem] p-5 border border-slate-100 flex justify-between items-center group cursor-pointer hover:bg-slate-100 transition-colors"
                     >
                       <div>
                         <p className="text-[10px] text-slate-500 font-bold  tracking-wider">Pending Balance</p>
@@ -649,9 +741,9 @@ export default function BalanceModal({
                     </div>
 
                     {/* Virtual Account Section */}
-                    <div className="bg-white rounded-[1.5rem] p-6 border border-slate-100">
+                    <div className="bg-white rounded-[0.5rem] p-6 border border-slate-100">
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-[0.5rem] bg-rose-50 flex items-center justify-center">
                           <svg className="w-5 h-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                           </svg>
@@ -675,7 +767,7 @@ export default function BalanceModal({
 
                       <button
                         onClick={handleCopyVA}
-                        className="mt-4 w-full h-11 rounded-xl bg-slate-900 text-white font-bold text-xs  tracking-widest active:scale-[0.98] transition shadow-lg shadow-slate-200"
+                        className="mt-4 w-full h-11 rounded-full bg-slate-900 text-white text-xs  tracking-widest active:scale-[0.98] transition shadow-lg shadow-slate-200"
                       >
                         Copy Account Number
                       </button>
@@ -684,13 +776,13 @@ export default function BalanceModal({
                 ) : currentView === "transactions" ? (
                   <div className="animate-in fade-in slide-in-from-right-4 duration-300 relative">
                     {/* Modern Selection Triggers */}
-                    <div className="sticky -top-6 bg-white pt-2 pb-6 z-20 space-y-3 mb-2 border-b border-slate-50">
+                    <div className="sticky -top-6 bg-white pb-6 z-20 space-y-3 mb-2 border-b border-slate-50">
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-black text-slate-400 tracking-widest pl-1">Category</label>
                           <button
                             onClick={() => setActiveFilterDropdown("category")}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-900 flex justify-between items-center transition-all active:scale-[0.98]"
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs text-slate-900 flex justify-between items-center transition-all active:scale-[0.98]"
                           >
                             <span className="truncate">{filterCategory}</span>
                             <ChevronRightIcon className="w-4 h-4 rotate-90 text-slate-400" />
@@ -796,10 +888,10 @@ export default function BalanceModal({
                             <button
                               key={tx.transaction_id}
                               onClick={() => handleTxClick(tx.transaction_id)}
-                              className="w-full text-left p-4 rounded-2xl bg-white border border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-all flex flex-col gap-3 group"
+                              className="w-full text-left p-2 lg:p-4 rounded-[0.5rem] bg-white border border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-all flex flex-col gap-3 group"
                             >
                               <div className="flex items-center gap-4 w-full">
-                                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${tx.status === 'failed' || tx.status === 'rejected'
+                                <div className={`w-8 lg:w-11 h-8 lg:h-11  rounded-[0.5rem] flex items-center justify-center flex-shrink-0 ${tx.status === 'failed' || tx.status === 'rejected'
                                   ? 'bg-rose-50 text-rose-500'
                                   : tx.status === 'pending' || tx.status === 'processing'
                                     ? 'bg-amber-50 text-amber-500'
@@ -808,21 +900,23 @@ export default function BalanceModal({
                                       : 'bg-slate-50 text-slate-500'
                                   }`}>
                                   {tx.transaction_type === 'escrow_hold' || tx.transaction_type === 'escrow_release' ? (
-                                    <ShieldCheckIcon className="w-6 h-6" />
+                                    <ShieldCheckIcon className="lg:w-6 w-4 lg:h-6 h-4" />
                                   ) : Number(tx.amount) > 0 ? (
-                                    <ArrowDownIcon className="w-6 h-6" />
+                                    <ArrowDownIcon className="lg:w-6 w-4 lg:h-6 h-4" />
                                   ) : (
-                                    <ArrowUpIcon className="w-6 h-6" />
+                                    <ArrowUpIcon className="lg:w-6 w-4 lg:h-6 h-4" />
                                   )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex justify-between items-start gap-2">
-                                    <p className="text-xs font-black text-slate-900 leading-snug">
-                                      {tx.description || tx.transaction_type.replace(/_/g, ' ')}
+                                    <p className="text-[10px] md:text-[11px] lg:text-[12px] font-bold text-slate-900 leading-snug">
+                                      {tx.stoqle_order_id
+                                        ? `Order #${tx.stoqle_order_id}${tx.transaction_type.includes('release') ? ' (Released)' : tx.transaction_type.includes('hold') ? ' (Hold)' : tx.transaction_type.includes('refund') ? ' (Refunded)' : ''}`
+                                        : (tx.description || tx.transaction_type.replace(/_/g, ' '))}
                                     </p>
                                   </div>
                                   <div className="mt-1">
-                                    <span className="text-[10px] font-bold text-slate-400 tracking-tighter">
+                                    <span className="text-[10px] text-slate-400 ">
                                       {(() => {
                                         const d = new Date(tx.created_at);
                                         const day = d.getDate();
@@ -836,7 +930,7 @@ export default function BalanceModal({
                                 </div>
 
                                 <div className="text-right">
-                                  <p className={`text-sm font-black whitespace-nowrap ${tx.status === 'failed' || tx.status === 'rejected'
+                                  <p className={`text-[10px] lg:text-sm font-black whitespace-nowrap ${tx.status === 'failed' || tx.status === 'rejected'
                                     ? 'text-rose-600'
                                     : tx.status === 'pending' || tx.status === 'processing'
                                       ? 'text-amber-500'
@@ -846,7 +940,7 @@ export default function BalanceModal({
                                     }`}>
                                     {Number(tx.amount) < 0 ? '-' : '+'}{fmt(Math.abs(tx.amount))}
                                   </p>
-                                  <span className={`text-[8px] font-black tracking-widest px-1.5 py-0.5 rounded-md ${getStatusColor(tx.escrow_status || tx.status)} inline-block mt-0.5`}>
+                                  <span className={`text-[8px] px-1.5 py-0.5 rounded-md ${getStatusColor(tx.escrow_status || tx.status)} inline-block mt-0.5`}>
                                     {tx.escrow_status
                                       ? tx.escrow_status === 'held' || tx.escrow_status === 'disputed'
                                         ? 'Escrow: Funds Held'
@@ -861,15 +955,53 @@ export default function BalanceModal({
                             </button>
                           ));
                         })()}
+
+                        {txHasMore && transactions.length > 0 && (
+                          <div className="py-8 flex justify-center">
+                            {isBatchLoading ? (
+                              <div className="flex items-center gap-3">
+                                <div className="w-5 h-5 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+                                <span className="text-[10px] font-black text-slate-400 tracking-widest ">LOADING MORE...</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => fetchTransactions(true)}
+                                className="text-[10px] font-black text-slate-300 hover:text-slate-500 tracking-widest transition-colors "
+                              >
+                                Scroll to see more
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 ) : (
                   <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
                     {detailsLoading ? (
-                      <div className="flex flex-col items-center justify-center py-20">
-                        <div className="w-12 h-12 border-4 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
-                        <p className="mt-4 text-xs font-bold text-slate-400  tracking-widest">Fetching Details...</p>
+                      <div className="animate-pulse space-y-8">
+                        {/* Summary Shimmer */}
+                        <div className="flex flex-col items-center space-y-4">
+                          <div className="w-16 h-16 bg-slate-100 rounded-[1.5rem]" />
+                          <div className="h-8 w-32 bg-slate-100 rounded-lg" />
+                          <div className="h-4 w-48 bg-slate-100 rounded-md" />
+                        </div>
+
+                        {/* Action Buttons Shimmer */}
+                        <div className="grid grid-cols-2 gap-4 pt-6">
+                          <div className="h-12 bg-slate-50 rounded-2xl" />
+                          <div className="h-12 bg-slate-50 rounded-2xl" />
+                        </div>
+
+                        {/* Content Shimmer */}
+                        <div className="space-y-4">
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="flex justify-between items-center">
+                              <div className="h-3 w-24 bg-slate-50 rounded" />
+                              <div className="h-3 w-40 bg-slate-100 rounded" />
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : !txDetails ? (
                       <div className="text-center py-10 text-slate-500">Failed to load details.</div>
@@ -915,13 +1047,13 @@ export default function BalanceModal({
                           <div className="space-y-3">
                             {/* VENDOR VIEW: Reminder & Dispute Handling */}
                             {role === 'vendor' && (txDetails.order_items?.[0]?.status === 'delivered' || txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed') && (
-                              <div className={`${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-50 border-rose-200 animate-pulse' : 'bg-amber-50 border-amber-200'} border-2 rounded-[2rem] p-6 space-y-4 shadow-lg shadow-black/5`}>
+                              <div className={`${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-50 border-rose-200 animate-pulse' : 'bg-amber-50 border-amber-200'} border-2 rounded-[0.5rem] p-6 space-y-4 shadow-lg shadow-black/5`}>
                                 <div className="flex gap-4">
-                                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                  <div className={`w-12 h-12 rounded-[0.5rem] flex items-center justify-center shrink-0 ${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
                                     {txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? <XCircleIcon className="w-7 h-7" /> : <InformationCircleIcon className="w-7 h-7" />}
                                   </div>
                                   <div className="space-y-1">
-                                    <h4 className={`text-sm font-black  tracking-tighter ${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'text-rose-700' : 'text-amber-700'}`}>
+                                    <h4 className={`text-sm   tracking-tighter ${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'text-rose-700' : 'text-amber-700'}`}>
                                       {txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'Raise Dispute Open - Reviewing' : 'Waiting for Confirmation'}
                                     </h4>
                                     <p className="text-[11px] text-slate-600 font-bold leading-relaxed">
@@ -1003,19 +1135,100 @@ export default function BalanceModal({
                           </div>
                         )}
 
+                        {/* Product Items Involved */}
+                        {txDetails.order_items && txDetails.order_items.length > 0 && (
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-xs  text-slate-400">
+                              <span>Involved Items</span>
+                            </div>
+
+                            <div className="space-y-3">
+                              {txDetails.order_items.map((item: any, idx: number) => {
+                                let snapshot = null;
+                                try {
+                                  snapshot = typeof item.product_snapshot === 'string'
+                                    ? JSON.parse(item.product_snapshot)
+                                    : item.product_snapshot;
+                                } catch (e) { }
+
+                                return (
+                                  <div key={idx} className="bg-white border border-slate-100 rounded-[0.5rem] p-4 flex gap-4 items-center">
+                                    <div
+                                      onClick={() => handleImagePreview(txDetails.order_items, idx)}
+                                      className="w-16 h-16 rounded-[0.5rem] bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100 cursor-zoom-in"
+                                    >
+                                      {item.product_image ? (
+                                        <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                                      ) : snapshot?.image ? (
+                                        <img src={snapshot.image} alt={item.product_name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                          <ShoppingBagIcon className="w-8 h-8" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-black text-slate-800 truncate">{item.product_name || snapshot?.name}</p>
+                                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                                        <p className="text-[10px] font-bold text-slate-400 tracking-tighter">Qty: {item.quantity}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 tracking-tighter">Price: {fmt(item.unit_price)}</p>
+                                      </div>
+                                      {item.business_name && (
+                                        <div className="flex items-center gap-1.5 mt-2">
+                                          <div className="w-4 h-4 rounded-[0.5rem] bg-slate-100 overflow-hidden border border-slate-200">
+                                            {item.business_logo && <img src={item.business_logo} className="w-full h-full object-cover" />}
+                                          </div>
+                                          <p className="text-[9px] text-slate-500 ">{item.business_name}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-right">
+                                      <span className={`text-[8px] font-black tracking-widest px-2 py-0.5 rounded-full ${getStatusColor(item.status)}`}>
+                                        {item.status.replace(/_/g, ' ')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Cancellation Reason if applicable */}
+                            {txDetails.order_items.some((i: any) => i.cancel_reason || i.dispute_reason) && (
+                              <div className="bg-rose-50 border border-rose-100 rounded-[0.5rem] p-4 space-y-2">
+                                <div className="flex items-center gap-2 text-[10px] font-black text-rose-500 tracking-widest uppercase">
+                                  <InformationCircleIcon className="w-4 h-4" />
+                                  <span>Reason for cancellation/dispute</span>
+                                </div>
+                                <p className="text-xs font-bold text-rose-900 leading-relaxed italic">
+                                  "{txDetails.order_items.find((i: any) => i.cancel_reason || i.dispute_reason)?.cancel_reason || txDetails.order_items.find((i: any) => i.cancel_reason || i.dispute_reason)?.dispute_reason}"
+                                </p>
+                                {txDetails.order_items.find((i: any) => i.cancel_explanation || i.delivery_review_explanation) && (
+                                  <p className="text-[10px] text-rose-700/70 font-medium">
+                                    {txDetails.order_items.find((i: any) => i.cancel_explanation || i.delivery_review_explanation)?.cancel_explanation || txDetails.order_items.find((i: any) => i.cancel_explanation || i.delivery_review_explanation)?.delivery_review_explanation}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Transaction History Data */}
                         <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-xs font-black text-slate-400  tracking-widest">
-                            <ClockIcon className="w-4 h-4" />
+                          <div className="flex items-center gap-2 text-xs text-slate-400 ">
                             <span>Transaction Data</span>
                           </div>
 
-                          <div className="bg-slate-50 border border-slate-100 rounded-[2rem] p-6 space-y-6 shadow-sm relative">
+                          <div className="bg-slate-50 border border-slate-100 rounded-[0.5rem] p-6 space-y-6 relative">
                             {/* Base Info */}
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
                                 <p className="text-[10px] font-bold text-slate-400  tracking-widest">Reference</p>
-                                <p className="text-xs font-black text-slate-800 break-all">{txDetails.reference || txDetails.transaction_id}</p>
+                                <p className="text-xs font-black text-slate-800 break-all">
+                                  #{(() => {
+                                    const sId = txDetails.order_items?.[0]?.stoqle_order_id;
+                                    return sId ? `ORD-${sId}` : (txDetails.reference || txDetails.transaction_id);
+                                  })()}
+                                </p>
                               </div>
                               <div className="space-y-1">
                                 <p className="text-[10px] font-bold text-slate-400  tracking-widest">Date & Time</p>
@@ -1094,17 +1307,19 @@ export default function BalanceModal({
 
                         {/* Linked Order/Customer Info (IF AVAILABLE) */}
                         {txDetails.order_items && txDetails.order_items.length > 0 ? (
-                          <div className="pt-5 border-t border-slate-200/50 space-y-5">
+                          <div className=" space-y-5">
                             {/* Products */}
                             <div className="space-y-3">
-                              <p className="text-[10px] font-bold text-rose-500  tracking-wider flex items-center gap-1.5 font-bold">
-                                <ShoppingBagIcon className="w-3.5 h-3.5" />
+                              <p className="text-[10px] font-bold text-rose-500  flex items-center gap-1.5 ">
                                 Linked Products
                               </p>
                               <div className="space-y-3">
                                 {txDetails.order_items.map((item: any) => (
-                                  <div key={item.id} className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-slate-100">
-                                    <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                                  <div key={item.id} className="flex items-center gap-3 bg-white p-2 rounded-[0.5rem] border border-slate-100">
+                                    <div
+                                      onClick={() => handleImagePreview(txDetails.order_items, txDetails.order_items.indexOf(item))}
+                                      className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex-shrink-0 flex items-center justify-center overflow-hidden cursor-zoom-in"
+                                    >
                                       {item.product_image ? (
                                         <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
                                       ) : (
@@ -1130,7 +1345,6 @@ export default function BalanceModal({
                             <div className="flex gap-4">
                               <div className="flex-1 space-y-1">
                                 <p className="text-[10px] font-bold text-slate-400  tracking-widest flex items-center gap-1.5 font-bold">
-                                  <UserIcon className="w-3.5 h-3.5" />
                                   Customer
                                 </p>
                                 <p className="text-xs font-black text-slate-800">{txDetails.order_items[0].full_name}</p>
@@ -1145,18 +1359,16 @@ export default function BalanceModal({
 
                             {/* Address */}
                             <div className="space-y-1.5 pt-2 pb-6">
-                              <p className="text-[10px] font-bold text-slate-400  tracking-widest flex items-center gap-1.5 font-bold">
-                                <MapPinIcon className="w-3.5 h-3.5" />
+                              <p className="text-[10px] text-slate-400 flex items-center gap-1.5 ">
                                 Delivery Address
                               </p>
-                              <p className="text-xs font-bold text-slate-700 leading-relaxed bg-white p-3 rounded-2xl border border-dashed border-slate-200 shadow-sm">
+                              <p className="text-xs font-bold text-slate-700 leading-relaxed bg-white p-3 rounded-[0.5rem] border border-dashed border-slate-200 ">
                                 {parseAddress(txDetails.order_items[0].delivery_address)}
                               </p>
                             </div>
                           </div>
                         ) : (
                           <div className="pt-4 border-t border-slate-200/50 flex items-center gap-2 text-slate-400 italic pb-6">
-                            <InformationCircleIcon className="w-4 h-4" />
                             <p className="text-[10px]">No linked order details found for this system transaction.</p>
                           </div>
                         )}
@@ -1238,8 +1450,8 @@ export default function BalanceModal({
 
       {/* Unified Report Modal for Balance Modal */}
       {isReportOpen && txDetails && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-lg rounded-[0.5rem]  overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-50 flex items-center justify-between">
               <div>
                 <h3 className="text-2xl font-black text-slate-900 leading-tight">Report a Problem</h3>
@@ -1284,6 +1496,18 @@ export default function BalanceModal({
           </div>
         </div>
       )}
+      {/* Lightbox for images */}
+      <Lightbox
+        open={lightBoxOpen}
+        close={() => setLightBoxOpen(false)}
+        index={lightBoxIndex}
+        slides={lightBoxSlides}
+        controller={{ closeOnBackdropClick: true }}
+        styles={{
+          root: { zIndex: 9999999 },
+          container: { backgroundColor: "rgba(0,0,0,0.9)" }
+        }}
+      />
     </>
   );
 }

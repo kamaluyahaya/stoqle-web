@@ -96,7 +96,11 @@ export const mapApiPost = (p: any): Post => {
         !!p.is_verified_partner ||
         !!p.is_partner ||
         !!p.author_is_trusted,
+      is_partner: !!p.author_is_partner || !!p.is_partner || !!p.author_is_verified || !!p.is_verified_partner,
+      verified_badge: !!p.verified_badge || !!p.author_is_trusted,
     },
+    author_is_partner: p.author_is_partner,
+    verified_badge: p.verified_badge,
     author_handle: p.author_handle,
     author_name: p.author_name,
     author_pic: p.author_pic,
@@ -133,6 +137,7 @@ type FetchPostsOptions = {
   targetUserId?: string | number | null;
   buffer_ids?: (string | number)[];
   is_product_linked?: boolean;
+  softCategory?: boolean;
 };
 
 /**
@@ -482,6 +487,7 @@ export async function fetchSmartReels(opts: FetchPostsOptions = {}): Promise<{ p
   if (opts.targetUserId) url.searchParams.set("target_user_id", String(opts.targetUserId));
   if (opts.buffer_ids && opts.buffer_ids.length > 0) url.searchParams.set("buffer_ids", opts.buffer_ids.join(","));
   if (opts.is_product_linked) url.searchParams.set("is_product_linked", "true");
+  if (opts.softCategory) url.searchParams.set("soft_category", "true");
 
   const headers: any = { Accept: "application/json" };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;

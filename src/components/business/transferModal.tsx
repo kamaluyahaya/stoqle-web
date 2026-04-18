@@ -217,7 +217,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
         <>
             <AnimatePresence>
                 {isOpen && (
-                    <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -261,18 +261,18 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                                     />
                                                     {isSearching && (
                                                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                                            <div className="w-4 h-4 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+                                                            <div className="w-4 h-4 border-2 border-rose-500/30 border-t-rose-500 rounded-full animate-spin" />
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 {/* Not Found Message */}
                                                 {notFound && !isSearching && !recipient && (
-                                                    <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-red-50 border border-red-100 rounded-[1.5rem] flex items-center gap-3 animate-in fade-in slide-in-from-top-1 z-50">
+                                                    <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-rose-50 border border-rose-100 rounded-[1.5rem] flex items-center gap-3 animate-in fade-in slide-in-from-top-1 z-50">
                                                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
-                                                            <FaExclamationTriangle className="text-red-500" size={14} />
+                                                            <FaExclamationTriangle className="text-rose-500" size={14} />
                                                         </div>
-                                                        <p className="text-[11px] font-bold text-red-600">No account found with this details. Please check and try again.</p>
+                                                        <p className="text-[11px] font-bold text-rose-600">No account found with this details. Please check and try again.</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -336,7 +336,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                             disabled={!recipient || isSearching}
                                             className={`w-full py-3 rounded-full text-sm font-medium transition-all
                                     ${recipient && !isSearching
-                                                    ? "bg-red-500 text-white active:scale-95"
+                                                    ? "bg-rose-500 text-white active:scale-95"
                                                     : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                 `}
                                         >
@@ -379,7 +379,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                                 disabled={!amount || parseFloat(amount) < 50}
                                                 className={`flex-[2] py-3 rounded-full text-sm font-medium transition-all
                                         ${(amount && parseFloat(amount) >= 50)
-                                                        ? "bg-red-500 text-white active:scale-95"
+                                                        ? "bg-rose-500 text-white active:scale-95"
                                                         : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                     `}
                                             >
@@ -414,7 +414,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                                 disabled={isSubmitting}
                                                 className={`w-full py-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-3
                                         ${(!isSubmitting)
-                                                        ? "bg-red-500 text-white shadow-md active:scale-95"
+                                                        ? "bg-rose-500 text-white shadow-md active:scale-95"
                                                         : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                     `}
                                             >
@@ -457,7 +457,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
 
                                         <button
                                             onClick={onClose}
-                                            className="w-full py-3 bg-red-500 text-white rounded-full text-sm font-medium shadow-md hover:bg-red-600 active:scale-95 transition"
+                                            className="w-full py-3 bg-rose-500 text-white rounded-full text-sm font-medium shadow-md hover:bg-rose-600 active:scale-95 transition"
                                         >
                                             Done
                                         </button>

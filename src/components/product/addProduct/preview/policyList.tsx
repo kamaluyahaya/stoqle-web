@@ -291,7 +291,7 @@ export default function PolicyList({
                     className="mt-1 flex flex-col group cursor-pointer"
                   >
                     {fromText && (
-                      <span className="text-[11px] text-slate-400 group-hover:text-red-500 transition-colors leading-snug truncate">
+                      <span className="text-[11px] text-slate-400 group-hover:text-rose-500 transition-colors leading-snug truncate">
                         {fromText}
                       </span>
                     )}
@@ -320,7 +320,7 @@ export default function PolicyList({
               <div className="flex items-start gap-2 min-w-0">
                 <ArrowPathIcon className="w-5 h-5 text-slate-500 flex-shrink-0" />
                 <div className="min-w-0">
-                  <div className={`font-medium truncate text-slate-600`}>
+                  <div>
                     {(() => {
                       const active = [];
                       if (returns?.return_shipping_subsidy === 1) active.push("Return shipping subsidy");
@@ -330,11 +330,20 @@ export default function PolicyList({
                       if (returns?.fake_one_pay_four === 1) active.push("Fake one pay four");
 
                       if (active.length > 0) {
-                        return <div className="truncate">{active.join(" | ")}</div>;
+                        return (
+                          <div className="truncate font-medium text-slate-600 whitespace-nowrap">
+                            {active.map((text, idx) => (
+                              <React.Fragment key={text}>
+                                {idx > 0 && <span className="text-slate-300 px-1.5">|</span>}
+                                <span>{text}</span>
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        );
                       }
 
                       return (
-                        <div className="truncate text-slate-400">
+                        <div className="truncate text-slate-600">
                           Product has no return subsidy
                         </div>
                       );

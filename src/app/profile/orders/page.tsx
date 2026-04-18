@@ -55,9 +55,15 @@ import { confirmOrderReceipt, reportOrderProblem, confirmCustomerReceipt } from 
 import { cancelOrder } from "@/src/lib/api/orderApi";
 import ReturnRefundModal from "@/src/components/orders/ReturnRefundModal";
 import SevenDayReturnModal from "@/src/components/business/policyModal/sevenDayReturnModal";
+import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
+import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
+import { fetchProductById, logUserActivity } from "@/src/lib/api/productApi";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 interface OrderItem {
     order_id: number;
+    product_id?: number | string;
     product_name: string;
     product_image: string | null;
     quantity: number;
@@ -98,6 +104,7 @@ interface VendorOrder {
     vendor_id: number;
     vendor_name: string;
     vendor_logo: string | null;
+    profile_pic?: string | null;
     reference_no: string;
     total: number;
     status: string;
@@ -117,6 +124,7 @@ interface VendorOrder {
 
 interface MasterOrder {
     order_id: number;
+    stoqle_order_id: string | number | null;
     total_amount: number;
     total_items: number;
     status: string;
@@ -141,7 +149,8 @@ interface PendingCheckout {
         business_id?: number,
         business_owner_id: number | null,
         product_image?: string | null,
-        business_logo?: string | null
+        business_logo?: string | null,
+        business_profile_pic?: string | null
     }[];
     created_at: string;
     metadata: any;
@@ -172,6 +181,9 @@ export default function MyOrdersPage() {
     const [pendingOrders, setPendingOrders] = useState<PendingCheckout[]>([]);
     const [activeTab, setActiveTab] = useState("All Orders");
     const [isLoading, setIsLoading] = useState(true);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [lightboxSlides, setLightboxSlides] = useState<{ src: string }[]>([]);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
     const [isActionLoading, setIsActionLoading] = useState<number | null>(null);
     const [messageLoading, setMessageLoading] = useState<number | null>(null);
 
@@ -214,9 +226,14 @@ export default function MyOrdersPage() {
     const [selectedDeliveryCode, setSelectedDeliveryCode] = useState<string | null>(null);
     const [selectedDeliveryOrderRef, setSelectedDeliveryOrderRef] = useState<string | null>(null);
 
+    // Product Preview State
+    const [previewProductModalOpen, setPreviewProductModalOpen] = useState(false);
+    const [selectedProductPayload, setSelectedProductPayload] = useState<any>(null);
+    const [isPreviewFetching, setIsPreviewFetching] = useState(false);
+
     // Prevent background scrolling when any modal is open
     useEffect(() => {
-        if (isTrackingModalOpen || isReviewModalOpen || isReportModalOpen || isReturnModalOpen || selectedImageUrl || isDeliveryCodeModalOpen) {
+        if (isTrackingModalOpen || isReviewModalOpen || isReportModalOpen || isReturnModalOpen || selectedImageUrl || isDeliveryCodeModalOpen || previewProductModalOpen) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
@@ -245,7 +262,7 @@ export default function MyOrdersPage() {
 
     const mainTabs = ["All Orders", "Processing", "Completed", "Cancelled"];
 
-    const formatUrl = (url: string | null) => {
+    const formatUrl = (url: string | null | undefined) => {
         if (!url) return "";
         if (url.startsWith("http")) return url;
         return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
@@ -367,6 +384,7 @@ export default function MyOrdersPage() {
         if (searchQuery) {
             result = result.filter(order =>
                 order.order_id.toString().includes(searchQuery) ||
+                (order.stoqle_order_id?.toString() || "").includes(searchQuery) ||
                 order.vendors.some(v =>
                     v.vendor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                     v.shipments.some(s => s.items.some(item => item.product_name.toLowerCase().includes(searchQuery.toLowerCase())))
@@ -500,7 +518,7 @@ export default function MyOrdersPage() {
             case "refunded":
             case "disputed":
             case "partially_cancelled":
-                return "bg-red-100 text-red-700";
+                return "bg-rose-100 text-rose-700";
 
             default: return "bg-slate-100 text-slate-700";
         }
@@ -666,7 +684,7 @@ export default function MyOrdersPage() {
                             </svg>
                         </div>
                         <p class="text-sm text-slate-600 leading-relaxed font-medium">
-                            Once cancelled, the total amount for this ${isShipment ? 'shipment' : 'order'} will be <span class="text-red-500 font-bold">instantly credited to your Stoqle Wallet</span>.
+                            Once cancelled, the total amount for this ${isShipment ? 'shipment' : 'order'} will be <span class="text-rose-500 font-bold">instantly credited to your Stoqle Wallet</span>.
                         </p>
                         <p class="text-[10px] text-slate-400">Funds in your wallet can be used for future purchases or withdrawn.</p>
                     </div>
@@ -994,6 +1012,61 @@ export default function MyOrdersPage() {
         }
     };
 
+    const handleBuyAgain = async (item: OrderItem) => {
+        const productId = item.product_id || item.snapshot_data?.product_id;
+
+        if (!productId || productId === 'undefined') {
+            toast.error("Product ID is missing on this order item");
+            return;
+        }
+
+        setIsPreviewFetching(true);
+        setPreviewProductModalOpen(true);
+
+        try {
+            const data = await fetchProductById(productId, token);
+
+            if (data && data.status === 'success' && data.data?.product) {
+                const mapped = mapProductToPreviewPayload(data.data.product, formatUrl);
+                setSelectedProductPayload(mapped);
+
+                // Log interaction
+                logUserActivity({
+                    product_id: data.data.product.product_id,
+                    action_type: 'view',
+                    category: data.data.product.category
+                }, token);
+            } else {
+                toast.error("Failed to load product details");
+                setPreviewProductModalOpen(false);
+            }
+        } catch (error) {
+            toast.error("Something went wrong while loading product");
+            setPreviewProductModalOpen(false);
+        } finally {
+            setIsPreviewFetching(false);
+        }
+    };
+
+    const handleProductClick = async (productId: number | string) => {
+        if (!productId) return;
+        setIsPreviewFetching(true);
+        setPreviewProductModalOpen(true);
+        try {
+            const data = await fetchProductById(productId, token);
+            if (data && data.status === 'success' && data.data?.product) {
+                const mapped = mapProductToPreviewPayload(data.data.product, formatUrl);
+                setSelectedProductPayload(mapped);
+            } else {
+                toast.error("Failed to load product details");
+            }
+        } catch (error) {
+            toast.error("Something went wrong while loading product");
+        } finally {
+            setIsPreviewFetching(false);
+        }
+    };
+
     const handleTrackOrder = async (orderId: number) => {
         if (!orderId) return;
         setTrackingOrderId(orderId);
@@ -1234,7 +1307,7 @@ export default function MyOrdersPage() {
                                 onClick={() => handleTabClick(tab)}
                                 className={`
                                     relative flex items-center gap-2 px-2 py-3 font-medium text-[15px] transition-all shrink-0
-                                    ${activeTab === tab ? "text-red-500" : "text-slate-400 hover:text-slate-600"}
+                                    ${activeTab === tab ? "text-rose-500" : "text-slate-400 hover:text-slate-600"}
                                 `}
                             >
                                 <span className="relative pb-1">
@@ -1245,7 +1318,7 @@ export default function MyOrdersPage() {
                                         </span>
                                     )}
                                     {activeTab === tab && (
-                                        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-red-500 rounded-full" />
+                                        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />
                                     )}
                                 </span>
                             </button>
@@ -1332,8 +1405,8 @@ export default function MyOrdersPage() {
                                                                 <div className="flex items-center justify-between border-b border-slate-50 pb-3">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden">
-                                                                            {items[0].business_logo ? (
-                                                                                <img src={formatUrl(items[0].business_logo)} alt="" className="w-full h-full object-cover" />
+                                                                            {items[0].business_logo || items[0].business_profile_pic ? (
+                                                                                <img src={formatUrl(items[0].business_logo || items[0].business_profile_pic)} alt="" className="w-full h-full object-cover" />
                                                                             ) : (
                                                                                 <div className="text-slate-200 font-bold text-lg">{items[0].business_name?.charAt(0)}</div>
                                                                             )}
@@ -1418,7 +1491,7 @@ export default function MyOrdersPage() {
 
                                     <div className="space-y-6">
                                         {groupItems.map((master) => (
-                                            <div key={`master-${master.order_id}`} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm shadow-slate-200/50">
+                                            <div key={`master-${master.order_id}`} className="bg-white border border-slate-200 rounded-[0.5rem] overflow-hidden ">
                                                 {/* Master Order Header */}
                                                 <div
                                                     onClick={() => toggleMaster(master.order_id, master.vendors.length === 1 && master.vendors[0]?.shipments.length === 1, master.vendors[0]?.sale_id)}
@@ -1431,7 +1504,7 @@ export default function MyOrdersPage() {
                                                         <div>
                                                             <div className="flex items-center gap-2.5 mb-0.5">
                                                                 <h3 className="font-bold text-slate-800 text-sm md:text-base">
-                                                                    Order <span className="text-slate-400">#{master.order_id}</span>
+                                                                    Order <span className="text-slate-400">#{master.stoqle_order_id || master.order_id}</span>
                                                                 </h3>
                                                                 <span className={`text-[9px] px-2 py-0.5 rounded-full tracking-wider ${getStatusColor(master.status)}`}>
                                                                     {master.status === 'completed_with_cancellations' ? 'Completed (with cancellations)' : master.status?.replace(/_/g, ' ')}
@@ -1464,9 +1537,9 @@ export default function MyOrdersPage() {
                                                                         <ChevronDown size={14} />
                                                                     </div>
                                                                     <div className="flex items-center gap-2.5">
-                                                                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-                                                                            {vendor.vendor_logo ? (
-                                                                                <img src={formatUrl(vendor.vendor_logo)} alt="" className="w-full h-full object-cover" />
+                                                                        <div className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                                                                            {vendor.vendor_logo || vendor.profile_pic ? (
+                                                                                <img src={formatUrl(vendor.vendor_logo || vendor.profile_pic)} alt="" className="w-full h-full object-cover" />
                                                                             ) : (
                                                                                 <div className="text-slate-300 font-bold text-xs">{vendor.vendor_name?.charAt(0)}</div>
                                                                             )}
@@ -1496,7 +1569,7 @@ export default function MyOrdersPage() {
                                                                         ) : (
                                                                             <>
                                                                                 <MessageCircle size={14} className="text-slate-400 group-hover/btn:text-slate-600" />
-                                                                                <span className="text-[10px] font-bold hidden md:inline">Contact</span>
+                                                                                <span className="text-[10px] font-bold hidden md:inline">Chat</span>
                                                                             </>
                                                                         )}
                                                                     </button>
@@ -1539,7 +1612,7 @@ export default function MyOrdersPage() {
                                                                                     {/* Shipment Items */}
                                                                                     <div className=" ">
                                                                                         {(ship.status === 'cancelled' || ship.status === 'refunded') && ship.ship_cancel_reason && (
-                                                                                            <div className="px-3 py-2 bg-red-50 text-red-700 border border-red-100 rounded-[0.5rem">
+                                                                                            <div className="px-3 py-2 bg-rose-50 text-rose-700 border border-rose-100 rounded-[0.5rem">
                                                                                                 <div className="flex items-center gap-1.5 font-bold text-[10px]">
                                                                                                     <AlertTriangle size={12} /> {ship.ship_cancel_reason.replace(/_/g, ' ')}
                                                                                                 </div>
@@ -1549,7 +1622,16 @@ export default function MyOrdersPage() {
                                                                                         <div className="divide-y divide-slate-50">
                                                                                             {ship.items.map((item, iIdx) => (
                                                                                                 <div key={`item-${item.order_id || iIdx}`} className="flex gap-3 md:gap-4 items-start py-2.5 group/item first:pt-0 last:pb-0">
-                                                                                                    <div className="w-12 h-12 md:w-14 md:h-14 bg-slate-50 rounded-lg overflow-hidden border border-slate-100 shrink-0 ">
+                                                                                                    <div
+                                                                                                        className="w-12 h-12 md:w-14 md:h-14 bg-slate-50 rounded-lg overflow-hidden border border-slate-100 shrink-0 cursor-zoom-in active:opacity-75 transition-opacity"
+                                                                                                        onClick={() => {
+                                                                                                            if (item.product_image) {
+                                                                                                                setLightboxSlides([{ src: formatUrl(item.product_image) }]);
+                                                                                                                setLightboxIndex(0);
+                                                                                                                setLightboxOpen(true);
+                                                                                                            }
+                                                                                                        }}
+                                                                                                    >
                                                                                                         {item.product_image ? (
                                                                                                             <img src={formatUrl(item.product_image)} alt={item.product_name} className="w-full h-full object-cover" />
                                                                                                         ) : (
@@ -1559,6 +1641,14 @@ export default function MyOrdersPage() {
                                                                                                     <div className="flex-1 min-w-0">
                                                                                                         <div className="flex items-center justify-between gap-2">
                                                                                                             <h4 className="text-slate-700 text-[11px] md:text-xs font-bold leading-tight line-clamp-1 flex-1">{item.product_name}</h4>
+                                                                                                            {(ship.status === 'delivered' || ship.status === 'cancelled') && (
+                                                                                                                <button
+                                                                                                                    onClick={() => handleBuyAgain(item)}
+                                                                                                                    className="text-[9px] font-bold text-blue-600 hover:text-blue-700 transition shrink-0"
+                                                                                                                >
+                                                                                                                    Buy again
+                                                                                                                </button>
+                                                                                                            )}
                                                                                                         </div>
                                                                                                         <div className="flex items-center gap-2 mt-0.5">
                                                                                                             <p className="text-[11px] font-black text-slate-900">₦{(item.unit_price * item.quantity).toLocaleString()}</p>
@@ -1611,7 +1701,7 @@ export default function MyOrdersPage() {
                                                                                                 return (
                                                                                                     <>
 
-                                                                                                        {(avgDate || ship.items[0]?.snapshot_data?.policies?.shipping?.transit_time_hrs || (promiseDate && ship.status !== 'delivered' && ship.status !== 'cancelled')) && (
+                                                                                                        {ship.status !== 'delivered' && ship.status !== 'cancelled' && (avgDate || ship.items[0]?.snapshot_data?.policies?.shipping?.transit_time_hrs || promiseDate) && (
 
                                                                                                             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
 
@@ -1635,7 +1725,7 @@ export default function MyOrdersPage() {
                                                                                                                         <span>Ride: {ship.items[0]?.snapshot_data?.policies?.shipping?.transit_time_hrs}</span>
                                                                                                                     </div>
                                                                                                                 )}
-                                                                                                                {promiseDate && ship.status !== 'delivered' && ship.status !== 'cancelled' && (
+                                                                                                                {promiseDate && (
                                                                                                                     <div className="flex items-center gap-2 border-l border-slate-300 pl-2 ml-0.5">
                                                                                                                         <div className="text-[8px] font-bold text-amber-700 bg-amber-100/50 px-1.5 py-0.5 rounded border border-amber-200/50 flex items-center gap-1 whitespace-nowrap">
                                                                                                                             <Clock size={8} />
@@ -1824,7 +1914,7 @@ export default function MyOrdersPage() {
                             <button
                                 onClick={submitReview}
                                 disabled={isActionLoading === selectedOrderForReview!.sale_id}
-                                className="w-full py-2 bg-red-500 text-white rounded-full hover:scale-[1.02] active:scale-95 transition disabled:opacity-50"
+                                className="w-full py-2 bg-rose-500 text-white rounded-full hover:scale-[1.02] active:scale-95 transition disabled:opacity-50"
                             >
                                 {isActionLoading === selectedOrderForReview!.sale_id ? 'Wait...' : 'Submit Review'}
                             </button>
@@ -2207,6 +2297,38 @@ export default function MyOrdersPage() {
             <SevenDayReturnModal
                 open={isReturnPolicyModalOpen}
                 onClose={() => setIsReturnPolicyModalOpen(false)}
+            />
+
+            {previewProductModalOpen && (
+                <ProductPreviewModal
+                    open={previewProductModalOpen}
+                    payload={selectedProductPayload}
+                    onClose={() => {
+                        setPreviewProductModalOpen(false);
+                        setSelectedProductPayload(null);
+                    }}
+                    onShopClick={() => {
+                        const slug = selectedProductPayload?.business_slug || selectedProductPayload?.vendor?.id;
+                        if (slug) {
+                            setPreviewProductModalOpen(false);
+                            router.push(`/shop/${slug}`);
+                        }
+                    }}
+                    onProductClick={handleProductClick}
+                    isFetching={isPreviewFetching}
+                />
+            )}
+
+            <Lightbox
+                open={lightboxOpen}
+                close={() => setLightboxOpen(false)}
+                index={lightboxIndex}
+                slides={lightboxSlides}
+                controller={{ closeOnBackdropClick: true, closeOnPullDown: true }}
+                styles={{
+                    root: { zIndex: 999999 },
+                    container: { backgroundColor: "rgba(0,0,0,0.9)" }
+                }}
             />
         </div>
     );

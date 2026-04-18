@@ -1029,16 +1029,19 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             >
               <Eye className="w-4 h-4" /> Preview
             </button>
+
+            {/* Save as Draft (Top Navbar on mobile) */}
             <button
-              onClick={openPreview}
-              className=" lg:hidden flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+              onClick={() => handleSaveDraft()}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-full transition-all sm:hidden"
             >
-              <Eye className="w-4 h-4" />
+              Save as Draft
             </button>
+
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm  shadow-red-200 transition-all disabled:opacity-50"
+              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-sm font-bold shadow-md shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               {submitting ? "Publishing..." : "Publish Product"}
             </button>
@@ -1049,19 +1052,19 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
       <div className="mx-auto p-4 sm:p-6 pb-24 space-y-6">
         {/* Draft Banner */}
         {drafts.length > 0 && (
-          <div className="p-4 bg-red-50 border border-red-100 rounded-[0.3px] flex items-center justify-between shadow-sm">
+          <div className="p-4 bg-rose-50 border border-rose-100 rounded-[0.3px] flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
               <div className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
               </div>
-              <span className="text-sm font-bold text-red-900">
+              <span className="text-sm font-bold text-rose-900">
                 You have {drafts.length} saved draft{drafts.length > 1 ? "s" : ""}
               </span>
             </div>
             <button
               onClick={() => setDraftsModalOpen(true)}
-              className="px-5 py-2 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-full hover:bg-red-50 shadow-sm transition-all active:scale-95"
+              className="px-5 py-2 bg-white border border-rose-200 text-rose-600 text-xs font-bold rounded-full hover:bg-rose-50 shadow-sm transition-all active:scale-95"
             >
               Restore Draft
             </button>
@@ -1088,7 +1091,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs p-1 font-medium text-red-700">
+                    <span className="text-xs p-1 font-medium text-rose-700">
                       <button onClick={() => setOpenManageCategories(true)} className="hover:underline">Manage</button>
                     </span>
                     <button
@@ -1132,7 +1135,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                     setProductType('simple');
                     setHasVariants(false);
                   }}
-                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'simple' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'simple' ? "border-rose-500 bg-rose-50 text-rose-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
                 >
                   <span className="text-sm  tracking-tight">Simple Product</span>
                   <p className="text-[10px] font-medium text-center opacity-70">Single price and fixed stock quantity</p>
@@ -1145,7 +1148,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                     setHasVariants(true);
                     if (variantGroups.length === 0) addVariantGroup();
                   }}
-                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'variant' ? "border-red-500 bg-red-50 text-red-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
+                  className={`p-4 rounded-xl border-[0.5px] transition-all flex flex-col items-center gap-2 ${productType === 'variant' ? "border-rose-500 bg-rose-50 text-rose-700 " : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"}`}
                 >
                   <span className="text-sm  tracking-tight">Variant Product</span>
                   <p className="text-[10px] font-medium text-center opacity-70">Multiple sizes, colors or options</p>
@@ -1216,13 +1219,13 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                       <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200">
                         <button
                           onClick={() => seedAndApplySharedPrice(true)}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-red-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${samePriceForAll ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                         >
                           Single Price
                         </button>
                         <button
                           onClick={() => seedAndApplySharedPrice(false)}
-                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-red-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${!samePriceForAll ? "bg-rose-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                         >
                           Different prices
                         </button>
@@ -1233,7 +1236,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                             type="number"
                             value={sharedPrice ?? ""}
                             onChange={(e) => setSharedPrice(e.target.value === "" ? null : Number(e.target.value))}
-                            className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-red-100 outline-none"
+                            className="w-full bg-white rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-900 focus:ring-1 focus:ring-rose-100 outline-none"
                             placeholder="Shared Price"
                           />
                         </div>
@@ -1267,12 +1270,12 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                           {/* Add Placeholder Button */}
                           <button
                             onClick={() => openAddEntryModal(g.id)}
-                            className="flex flex-col items-center justify-center min-h-[82px] border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100/80 hover:border-red-300 transition-all group cursor-pointer"
+                            className="flex flex-col items-center justify-center min-h-[82px] border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100/80 hover:border-rose-300 transition-all group cursor-pointer"
                           >
-                            <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-red-400 flex items-center justify-center text-slate-400 group-hover:text-red-500 transition-colors">
+                            <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-rose-400 flex items-center justify-center text-slate-400 group-hover:text-rose-500 transition-colors">
                               <span className="text-sm font-bold">+</span>
                             </div>
-                            <span className="mt-1 text-[10px] font-bold text-slate-400 group-hover:text-red-500 uppercase tracking-tighter">Add option</span>
+                            <span className="mt-1 text-[10px] font-bold text-slate-400 group-hover:text-rose-500 uppercase tracking-tighter">Add option</span>
                           </button>
                         </div>
                       </VariantGroupCard>
@@ -1295,7 +1298,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
+                            <div className="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-rose-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-6"></div>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-800 tracking-tight">Advanced Combination Logic</span>
@@ -1389,7 +1392,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                     <Globe className="w-4 h-4 text-slate-400" />
                     <h2 className="text-sm font-bold text-slate-800">Product Assets</h2>
                   </div>
-                  {!hasVariants && <span className="text-[10px] font-bold text-red-500  tracking-widest">Required</span>}
+                  {!hasVariants && <span className="text-[10px] font-bold text-rose-500  tracking-widest">Required</span>}
                 </div>
                 <div className="p-4">
                   <ProductMedia
@@ -1423,7 +1426,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="w-full py-3 bg-red-500 hover:bg-red-600 rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/40 active:scale-95 disabled:opacity-50"
+                  className="w-full py-3 bg-rose-500 hover:bg-rose-600 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 active:scale-95 disabled:opacity-50"
                 >
                   {submitting ? "Publishing..." : "Confirm & Publish"}
                 </button>
@@ -1509,9 +1512,9 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           >
             <div className="w-full max-w-md">
               <div className="relative mb-8">
-                <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full scale-150 animate-pulse" />
+                <div className="absolute inset-0 bg-rose-500/20 blur-3xl rounded-full scale-150 animate-pulse" />
                 <div className="relative h-24 w-24 mx-auto rounded-3xl bg-white shadow-2xl flex items-center justify-center">
-                  <div className="h-12 w-12 border-4 border-red-500/20 border-t-red-500 rounded-full animate-spin" />
+                  <div className="h-12 w-12 border-4 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
                 </div>
               </div>
 
@@ -1521,7 +1524,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
               <div className="space-y-3">
                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-red-500"
+                    className="h-full bg-rose-500"
                     initial={{ width: 0 }}
                     animate={{ width: `${trimmingProgress}%` }}
                   />
@@ -1535,6 +1538,31 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Bottom Navigation (Publish + Preview) */}
+      <div className="fixed bottom-0 left-0 right-0 z-[100]  bg-white border-t border-slate-200 px-6 py-2 pb-[env(safe-area-inset-bottom,16px)] sm:hidden flex items-center gap-4 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] backdrop-blur-md bg-white/90">
+        <button
+          onClick={openPreview}
+          className="p-3 bg-slate-100 text-slate-600 rounded-full active:scale-95 transition-all"
+          title="Preview Product"
+        >
+          <Eye className="w-6 h-6" />
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="flex-1 py-3 bg-rose-600 active:bg-rose-700 text-white rounded-full text-[12px]  shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              Publishing...
+            </>
+          ) : (
+            "Publish Product"
+          )}
+        </button>
+      </div>
     </div>
   );
 }

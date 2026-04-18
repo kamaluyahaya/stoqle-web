@@ -93,7 +93,7 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4">
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -132,7 +132,7 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                                                 onChange={(e) => handlePinChange(e.target.value, i, false)}
                                                 onKeyDown={(e) => handleKeyDown(e, i)}
                                                 autoFocus={i === 0}
-                                                className="w-14 h-16 bg-slate-50 border-2 border-slate-100 focus:border-red-500/20 focus:bg-white rounded-2xl text-center text-2xl font-black text-slate-900 transition-all outline-none"
+                                                className="w-14 h-16 bg-slate-50 border-2 border-slate-100 focus:border-rose-500/20 focus:bg-white rounded-2xl text-center text-2xl font-black text-slate-900 transition-all outline-none"
                                             />
                                         ))}
                                     </div>
@@ -143,7 +143,7 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                                             onClick={() => setStep(2)}
                                             className={`w-full py-3 rounded-full text-sm font-medium transition-all
                                         ${!pin.some(d => !d)
-                                                    ? "bg-red-500 text-white shadow-md active:scale-95"
+                                                    ? "bg-rose-500 text-white shadow-md active:scale-95"
                                                     : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                     `}
                                         >
@@ -174,7 +174,7 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                                                 onChange={(e) => handlePinChange(e.target.value, i, true)}
                                                 onKeyDown={(e) => handleKeyDown(e, i)}
                                                 autoFocus={i === 0}
-                                                className="w-14 h-16 bg-slate-50 border-2 border-slate-100 focus:border-red-500/20 focus:bg-white rounded-2xl text-center text-2xl font-black text-slate-900 transition-all outline-none"
+                                                className="w-14 h-16 bg-slate-50 border-2 border-slate-100 focus:border-rose-500/20 focus:bg-white rounded-2xl text-center text-2xl font-black text-slate-900 transition-all outline-none"
                                             />
                                         ))}
                                     </div>
@@ -185,7 +185,7 @@ export default function PinSetupModal({ isOpen, onClose, onSuccess }: PinSetupMo
                                             disabled={isSubmitting || confirmPin.some(d => !d)}
                                             className={`w-full py-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-3
                                         ${(!isSubmitting && !confirmPin.some(d => !d))
-                                                    ? "bg-red-500 text-white shadow-md active:scale-95"
+                                                    ? "bg-rose-500 text-white shadow-md active:scale-95"
                                                     : "bg-slate-100 text-slate-500 cursor-not-allowed"}
                                     `}
                                         >

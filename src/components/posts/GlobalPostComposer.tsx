@@ -50,7 +50,7 @@ const FALLBACK_SOUNDS = [
 const formatUrl = (url: string) => {
   if (!url) return NO_IMAGE_PLACEHOLDER;
   if (url.startsWith("http")) return url;
-  
+
   const base = (API_BASE_URL || "").replace(/\/$/, "");
   // Backend images usually need /public prefix if not absolute
   const path = url.startsWith("/public") ? url : (url.startsWith("/") ? `/public${url}` : `/public/${url}`);
@@ -128,11 +128,11 @@ function AudioRecorderButton({ onComplete, isCompact = false }: { onComplete: (b
     return (
       <button
         onClick={isRecording ? stopRecording : startRecording}
-        className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all group border-2 border-transparent ${isRecording ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-slate-50 text-slate-900 hover:bg-slate-100 hover:border-red-100'}`}
+        className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all group border-2 border-transparent ${isRecording ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' : 'bg-slate-50 text-slate-900 hover:bg-slate-100 hover:border-rose-100'}`}
       >
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform relative ${isRecording ? 'bg-white text-red-500' : 'bg-red-100 text-red-500 group-hover:scale-110'}`}>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform relative ${isRecording ? 'bg-white text-rose-500' : 'bg-rose-100 text-rose-500 group-hover:scale-110'}`}>
           {isRecording ? (
-            <div className="w-3.5 h-3.5 bg-red-500 rounded-sm animate-pulse" />
+            <div className="w-3.5 h-3.5 bg-rose-500 rounded-sm animate-pulse" />
           ) : (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -149,13 +149,13 @@ function AudioRecorderButton({ onComplete, isCompact = false }: { onComplete: (b
   return (
     <button
       onClick={isRecording ? stopRecording : startRecording}
-      className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all group ${isRecording ? 'bg-red-500 text-white' : 'bg-slate-50 text-slate-900 hover:bg-slate-100'}`}
+      className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all group ${isRecording ? 'bg-rose-500 text-white' : 'bg-slate-50 text-slate-900 hover:bg-slate-100'}`}
     >
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform relative ${isRecording ? 'bg-white text-red-500' : 'bg-red-100 text-red-500 group-hover:scale-110'}`}>
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform relative ${isRecording ? 'bg-white text-rose-500' : 'bg-rose-100 text-rose-500 group-hover:scale-110'}`}>
         {isRecording ? (
           <>
-            <div className="absolute inset-0 rounded-full bg-red-100/50 scale-[1.5] animate-ping opacity-20" />
-            <div className="w-3.5 h-3.5 bg-red-500 rounded-sm" />
+            <div className="absolute inset-0 rounded-full bg-rose-100/50 scale-[1.5] animate-ping opacity-20" />
+            <div className="w-3.5 h-3.5 bg-rose-500 rounded-sm" />
           </>
         ) : (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -629,7 +629,7 @@ function VideoPreviewModal({
                         {user?.profile_pic ? (
                           <img src={user.profile_pic} className="w-full h-full object-cover" alt="user" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-red-500 text-white font-bold text-[8px]">
+                          <div className="w-full h-full flex items-center justify-center bg-rose-500 text-white font-bold text-[8px]">
                             {user?.full_name?.[0] || 'S'}
                           </div>
                         )}
@@ -637,7 +637,7 @@ function VideoPreviewModal({
                       <div className="flex flex-col min-w-0">
                         <span className="text-white text-[9px] font-black shadow-sm truncate max-w-[80px]">{user?.business_name || user?.full_name || user?.username || 'user'}</span>
                       </div>
-                      <button className="px-2 py-0.5 bg-red-500 rounded-full text-[7px] font-black text-white ml-1">Follow</button>
+                      <button className="px-2 py-0.5 bg-rose-500 rounded-full text-[7px] font-black text-white ml-1">Follow</button>
                     </div>
                     <p className="text-white text-[8px] font-medium line-clamp-2 max-w-[80%] drop-shadow-md">
                       {text || 'Thinking of a catchy title...'}
@@ -657,7 +657,7 @@ function VideoPreviewModal({
             <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar px-1">
               {interleavedMedia.map((m, i) => (
                 <div key={i} className={`relative flex-shrink-0 group ${currentIndex === i ? 'scale-105' : 'opacity-70'}`}>
-                  <div className={`w-14 h-14 rounded-xl overflow-hidden shadow-lg border-2 transition-all ${currentIndex === i ? 'border-red-500' : 'border-slate-100'}`}>
+                  <div className={`w-14 h-14 rounded-xl overflow-hidden shadow-lg border-2 transition-all ${currentIndex === i ? 'border-rose-500' : 'border-slate-100'}`}>
                     {m.type === 'video' ? (
                       <video src={m.preview} className="w-full h-full object-cover" muted playsInline />
 
@@ -716,10 +716,10 @@ function VideoPreviewModal({
               onClick={() => setIsPrivacyModalOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors group"
             >
-              {privacy === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-              {privacy === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-              {privacy === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />}
-              <span className="text-[10px] font-bold   text-slate-500 group-hover:text-red-600">
+              {privacy === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
+              {privacy === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
+              {privacy === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
+              <span className="text-[10px] font-bold   text-slate-500 group-hover:text-rose-600">
                 {privacy === "public" ? "Public" : privacy === "private" ? "Private" : "Friends Only"}
               </span>
             </button>
@@ -761,7 +761,7 @@ function VideoPreviewModal({
                       setPrivacy(opt.id as any);
                       setIsPrivacyModalOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${privacy === opt.id ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${privacy === opt.id ? "bg-rose-50 text-rose-600" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                       }`}
                   >
                     <div className="flex items-center gap-3">
@@ -817,7 +817,7 @@ function VideoPreviewModal({
                     strokeDasharray={2 * Math.PI * 40}
                     strokeDashoffset={2 * Math.PI * 40 * (1 - uploadProgress / 100)}
                     strokeLinecap="round"
-                    className="text-red-500 transition-all duration-300"
+                    className="text-rose-500 transition-all duration-300"
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center font-bold text-2xl text-slate-900">
@@ -856,7 +856,7 @@ function VideoPreviewModal({
                   onClick={() => document.getElementById('music-upload-video')?.click()}
                   className="w-full flex items-center gap-4 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group"
                 >
-                  <div className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
                   </div>
                   <div className="text-left">
@@ -895,16 +895,16 @@ function VideoPreviewModal({
 
         <div className="p-4 sm:p-6 pb-10 sm:pb-6 mt-auto border-t border-slate-100 space-y-3">
           {audioFile && (
-            <div className="flex items-center gap-3 p-2 bg-red-50 rounded-2xl border border-red-100 animate-in slide-in-from-bottom-2 mb-2">
-              <div className="w-10 h-10 rounded-lg bg-red-500 flex items-center justify-center text-white shrink-0">
+            <div className="flex items-center gap-3 p-2 bg-rose-50 rounded-2xl border border-rose-100 animate-in slide-in-from-bottom-2 mb-2">
+              <div className="w-10 h-10 rounded-lg bg-rose-500 flex items-center justify-center text-white shrink-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black text-red-400  tracking-widest">Added Audio</p>
-                <p className="text-xs font-bold text-red-600 truncate">{audioFile.name}</p>
+                <p className="text-[10px] font-black text-rose-400  tracking-widest">Added Audio</p>
+                <p className="text-xs font-bold text-rose-600 truncate">{audioFile.name}</p>
               </div>
-              <button onClick={() => setAudioFile(null)} className="p-2 hover:bg-red-100 rounded-full transition-colors">
-                <XMarkIcon className="w-4 h-4 text-red-400" />
+              <button onClick={() => setAudioFile(null)} className="p-2 hover:bg-rose-100 rounded-full transition-colors">
+                <XMarkIcon className="w-4 h-4 text-rose-400" />
               </button>
               {audioUrl && (
                 <audio src={audioUrl} autoPlay loop className="hidden" ref={audioRefElement} />
@@ -915,7 +915,7 @@ function VideoPreviewModal({
           <div className="flex items-center justify-center mb-1">
             <button
               onClick={() => setShowAudioMenu(true)}
-              className="text-[11px] font-black  tracking-widest text-red-500 hover:text-red-600 flex items-center gap-1.5 py-1"
+              className="text-[11px] font-black  tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1.5 py-1"
             >
               <PlusIcon className="w-3.5 h-3.5" />
               {audioFile ? "Change Music" : "Add Music / Voice"}
@@ -944,7 +944,7 @@ function VideoPreviewModal({
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black text-slate-400  tracking-widest leading-tight">Linked Product</p>
                 <p className="text-xs font-bold text-slate-900 truncate leading-tight mb-0.5">{selectedProduct.title}</p>
-                <p className="text-[10px] font-black text-red-500 leading-none">
+                <p className="text-[10px] font-black text-rose-500 leading-none">
                   ₦{Number(selectedProduct.min_variant_price || selectedProduct.min_sku_price || selectedProduct.price).toLocaleString()}
                 </p>
               </div>
@@ -968,11 +968,11 @@ function VideoPreviewModal({
                 <button
                   onClick={() => setIsProductModalOpen(true)}
                   className={`flex-shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full border transition-all active:scale-95 group ${selectedProduct
-                    ? "bg-red-50 border-red-200 text-red-600"
+                    ? "bg-rose-50 border-rose-200 text-rose-600"
                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
                     }`}
                 >
-                  <PlusIcon className={`w-4 h-4 ${selectedProduct ? "text-red-500" : "text-slate-400 group-hover:text-red-500"}`} />
+                  <PlusIcon className={`w-4 h-4 ${selectedProduct ? "text-rose-500" : "text-slate-400 group-hover:text-rose-500"}`} />
                   <span className="text-xs font-bold">
                     {selectedProduct ? "Linked" : "Link Product"}
                   </span>
@@ -982,7 +982,7 @@ function VideoPreviewModal({
             <button
               onClick={submit}
               disabled={isLoading}
-              className="flex-1 py-3 rounded-full bg-red-500 text-white text-xs sm:text-sm font-bold hover:bg-red-600 active:scale-95 transition-all shadow-xl shadow-red-100 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-full bg-rose-500 text-white text-xs sm:text-sm font-bold hover:bg-rose-600 active:scale-95 transition-all shadow-xl shadow-rose-100 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? "Publishing..." : "Publish Post"}
             </button>
@@ -1321,20 +1321,20 @@ function ImagePreviewModal({
                       <h3 className="text-[10px] font-black text-slate-400  tracking-widest">Add Music / Voice</h3>
                       <button
                         onClick={() => setShowAudioList(true)}
-                        className="text-[10px] font-black text-red-500 hover:text-red-600 transition-colors"
+                        className="text-[10px] font-black text-rose-500 hover:text-rose-600 transition-colors"
                       >
                         {(audioFile || selectedPopularSound) ? "Change Sound" : "Music Library"}
                       </button>
                     </div>
 
                     {(audioFile || selectedPopularSound) ? (
-                      <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border border-red-100 group transition-all animate-in fade-in slide-in-from-bottom-1">
-                        <div className="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-200 shrink-0">
+                      <div className="flex items-center gap-3 p-3 bg-rose-50 rounded-2xl border border-rose-100 group transition-all animate-in fade-in slide-in-from-bottom-1">
+                        <div className="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center text-white shadow-lg shadow-rose-200 shrink-0">
                           <PlusIcon className="w-5 h-5 rotate-45" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-red-600 truncate">{selectedPopularSound?.title || audioFile?.name}</p>
-                          <p className="text-[9px] font-medium text-red-400 truncate">{selectedPopularSound?.creator_name || selectedPopularSound?.artist_name || "Custom Sound"}</p>
+                          <p className="text-xs font-bold text-rose-600 truncate">{selectedPopularSound?.title || audioFile?.name}</p>
+                          <p className="text-[9px] font-medium text-rose-400 truncate">{selectedPopularSound?.creator_name || selectedPopularSound?.artist_name || "Custom Sound"}</p>
                         </div>
                         <button
                           onClick={() => {
@@ -1342,7 +1342,7 @@ function ImagePreviewModal({
                             setSelectedPopularSound(null);
                             setHasUserModifiedAudio(true);
                           }}
-                          className="p-2 bg-red-100 rounded-full text-red-400 hover:bg-red-200 transition-colors"
+                          className="p-2 bg-rose-100 rounded-full text-rose-400 hover:bg-rose-200 transition-colors"
                         >
                           <XMarkIcon className="w-4 h-4" />
                         </button>
@@ -1350,9 +1350,9 @@ function ImagePreviewModal({
                     ) : (
                       <button
                         onClick={() => setShowAudioList(true)}
-                        className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 hover:border-red-200 hover:bg-slate-50 transition-all group"
+                        className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 hover:border-rose-200 hover:bg-slate-50 transition-all group"
                       >
-                        <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-red-50 group-hover:text-red-500 transition-colors">
+                        <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-rose-50 group-hover:text-rose-500 transition-colors">
                           <PlusIcon className="w-5 h-5" />
                         </div>
                         <span className="text-xs font-bold text-left text-slate-500">Pick trending music or record a voice note</span>
@@ -1367,7 +1367,7 @@ function ImagePreviewModal({
                         <button
                           onClick={() => setIndex(i)}
                           className={`relative w-16 h-16 rounded-xl overflow-hidden transition-all duration-300 ${index === i
-                            ? "ring-2 ring-red-500 ring-offset-2 scale-105"
+                            ? "ring-2 ring-rose-500 ring-offset-2 scale-105"
                             : "opacity-40 hover:opacity-70"
                             }`}
                         >
@@ -1378,7 +1378,7 @@ function ImagePreviewModal({
                             e.stopPropagation();
                             removeImageAt(i);
                           }}
-                          className="absolute -top-1 -right-1 h-5 w-5 bg-black/40 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-white hover:bg-red-500 transition-all ring-1 ring-white/20 z-10"
+                          className="absolute -top-1 -right-1 h-5 w-5 bg-black/40 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-white hover:bg-rose-500 transition-all ring-1 ring-white/20 z-10"
                         >
                           <XMarkIcon className="w-3 h-3" />
                         </button>
@@ -1387,7 +1387,7 @@ function ImagePreviewModal({
                     {imagePreviews.length < 5 && (
                       <button
                         onClick={() => document.getElementById("global-add-more")?.click()}
-                        className="relative w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 transition-all flex-shrink-0"
+                        className="relative w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:border-rose-500 transition-all flex-shrink-0"
                       >
                         <PlusIcon className="w-6 h-6" />
                       </button>
@@ -1397,7 +1397,7 @@ function ImagePreviewModal({
                   <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-slate-50 z-20 max-w-lg mx-auto w-full">
                     <button
                       onClick={() => setStep(1)}
-                      className="w-full py-4 rounded-full bg-red-500 text-white text-sm font-bold hover:bg-red-600 shadow-xl shadow-red-200 active:scale-95 transition-all"
+                      className="w-full py-4 rounded-full bg-rose-500 text-white text-sm font-bold hover:bg-rose-600 shadow-xl shadow-rose-200 active:scale-95 transition-all"
                     >
                       Continue
                     </button>
@@ -1415,17 +1415,17 @@ function ImagePreviewModal({
                           setLightboxIndex(i);
                           setLightboxOpen(true);
                         }}
-                        className={`w-14 h-14 rounded-xl overflow-hidden cursor-pointer transition-all ${i === 0 ? "ring-2 ring-red-500 scale-105" : "opacity-80 hover:opacity-100"}`}
+                        className={`w-14 h-14 rounded-xl overflow-hidden cursor-pointer transition-all ${i === 0 ? "ring-2 ring-rose-500 scale-105" : "opacity-80 hover:opacity-100"}`}
                       >
                         <img src={src} className="w-full h-full object-cover" alt={`f-thumb-${i}`} />
                         {i === 0 && (
-                          <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center pointer-events-none">
+                          <div className="absolute inset-0 bg-rose-500/20 flex items-center justify-center pointer-events-none">
                             <CheckIcon className="w-6 h-6 text-white drop-shadow-lg" />
                           </div>
                         )}
                       </div>
                       {i === 0 && (
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-red-500 text-[6px] text-white font-black px-1 rounded  tracking-tighter">Cover</div>
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-rose-500 text-[6px] text-white font-black px-1 rounded  tracking-tighter">Cover</div>
                       )}
                     </div>
                   ))}
@@ -1510,11 +1510,11 @@ function ImagePreviewModal({
                         <button
                           onClick={() => setIsProductModalOpen(true)}
                           className={`flex-shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full border transition-all active:scale-95 group ${selectedProduct
-                            ? "bg-red-50 border-red-200 text-red-600"
+                            ? "bg-rose-50 border-rose-200 text-rose-600"
                             : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
                             }`}
                         >
-                          <PlusIcon className={`w-4 h-4 ${selectedProduct ? "text-red-500" : "text-slate-400 group-hover:text-red-500"}`} />
+                          <PlusIcon className={`w-4 h-4 ${selectedProduct ? "text-rose-500" : "text-slate-400 group-hover:text-rose-500"}`} />
                           <span className="text-xs font-bold">{selectedProduct ? "Linked" : "Link Product"}</span>
                         </button>
                       )}
@@ -1522,7 +1522,7 @@ function ImagePreviewModal({
                     <button
                       onClick={submit}
                       disabled={isLoading}
-                      className="flex-1 py-3.5 rounded-full bg-red-500 text-white font-bold text-sm shadow-xl shadow-red-200 hover:bg-red-600 disabled:opacity-50 transition-all active:scale-95"
+                      className="flex-1 py-3.5 rounded-full bg-rose-500 text-white font-bold text-sm shadow-xl shadow-rose-200 hover:bg-rose-600 disabled:opacity-50 transition-all active:scale-95"
                     >
                       {isLoading ? "Publishing..." : "Publish Post"}
                     </button>
@@ -1573,9 +1573,9 @@ function ImagePreviewModal({
                       {/* Upload Option */}
                       <button
                         onClick={() => document.getElementById('popular-upload')?.click()}
-                        className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group border-2 border-transparent hover:border-red-100"
+                        className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all group border-2 border-transparent hover:border-rose-100"
                       >
-                        <div className="w-10 h-10 rounded-full bg-red-100 text-red-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center group-hover:scale-110 transition-transform">
                           <PlusIcon className="w-5 h-5" />
                         </div>
                         <div className="text-center font-bold">
@@ -1608,11 +1608,11 @@ function ImagePreviewModal({
                           setShowAudioList(false);
                         }}
                         className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all border-2 ${selectedPopularSound?.id === sound.id
-                          ? "bg-red-50 border-red-200"
+                          ? "bg-rose-50 border-rose-200"
                           : "bg-white border-slate-50 hover:bg-slate-50"
                           }`}
                       >
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all overflow-hidden ${selectedPopularSound?.id === sound.id ? "bg-red-500 text-white" : "bg-slate-100 text-slate-400"
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all overflow-hidden ${selectedPopularSound?.id === sound.id ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-400"
                           }`}>
                           {sound.creator_avatar ? (
                             <img src={sound.creator_avatar} className="w-full h-full object-cover opacity-60" alt="creator" />
@@ -1622,18 +1622,18 @@ function ImagePreviewModal({
                         </div>
                         <div className="flex-1 text-left min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className={`text-sm font-bold truncate ${selectedPopularSound?.id === sound.id ? "text-red-600" : "text-slate-900"}`}>{sound.title}</p>
+                            <p className={`text-sm font-bold truncate ${selectedPopularSound?.id === sound.id ? "text-rose-600" : "text-slate-900"}`}>{sound.title}</p>
                             {sound.isCommunity && (
                               <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded  tracking-tighter shrink-0 border border-blue-100">Library</span>
                             )}
                             {(sound.times_used > 50) && (
-                              <span className="px-1.5 py-0.5 bg-red-50 text-red-500 text-[8px] font-black rounded  tracking-tighter shrink-0 border border-red-100 italic">Hot</span>
+                              <span className="px-1.5 py-0.5 bg-rose-50 text-rose-500 text-[8px] font-black rounded  tracking-tighter shrink-0 border border-rose-100 italic">Hot</span>
                             )}
                           </div>
                           <p className="text-[10px] text-slate-400 font-medium">{sound.creator_name || sound.artist_name || sound.artist} {sound.duration ? `• ${sound.duration}` : ""}</p>
                         </div>
                         {selectedPopularSound?.id === sound.id && (
-                          <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                          <div className="w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center">
                             <CheckIcon className="w-3 h-3 text-white" />
                           </div>
                         )}
@@ -1673,7 +1673,7 @@ function ImagePreviewModal({
           {/* Overlays / Progress */}
           {isLoading && (
             <div className="absolute inset-0 z-[400] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center">
-              <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-2xl shadow-red-200 animate-pulse">
+              <div className="w-20 h-20 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-2xl shadow-rose-200 animate-pulse">
                 {uploadProgress}%
               </div>
               <p className="mt-4 text-xs font-black text-slate-900  tracking-widest text-center">Publishing Post</p>
@@ -1699,7 +1699,7 @@ function ImagePreviewModal({
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 380, damping: 38 }} className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-3 shadow-2xl">
               <p className="text-xs font-black text-slate-400  tracking-widest mb-2">Audience</p>
               {['public', 'private', 'friends'].map((p) => (
-                <button key={p} onClick={() => { setPrivacy(p as any); setIsPrivacyModalOpen(false); }} className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${privacy === p ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-600'}`}>
+                <button key={p} onClick={() => { setPrivacy(p as any); setIsPrivacyModalOpen(false); }} className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${privacy === p ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-600'}`}>
                   <span className="font-bold capitalize">{p === 'friends' ? 'Friends only' : p}</span>
                   {privacy === p && <CheckIcon className="w-5 h-5" />}
                 </button>
@@ -1765,7 +1765,7 @@ function ImagePreviewModal({
                     setLightboxIndex(nextIndex);
                   }
                 }}
-                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all rounded-full text-red-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-red-500/30"
+                className="px-6 py-3 bg-rose-500/10 hover:bg-rose-500 transition-all rounded-full text-rose-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-rose-500/30"
               >
                 <TrashIcon className="w-4 h-4" />
                 Delete Image

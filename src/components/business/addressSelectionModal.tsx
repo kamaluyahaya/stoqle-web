@@ -271,7 +271,7 @@ export default function AddressSelectionModal({
                             <div
                               className={`text-sm ${isEnabled
                                 ? isSelected
-                                  ? "text-red-600 font-semibold"
+                                  ? "text-rose-600 font-semibold"
                                   : "text-slate-900"
                                 : "text-slate-400"
                                 }`}
@@ -282,7 +282,7 @@ export default function AddressSelectionModal({
                             {!isEnabled ? (
                               <div className="text-xs text-slate-400 italic">Coming soon</div>
                             ) : isSelected ? (
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-600" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" />
                               </svg>
                             ) : null}
@@ -311,7 +311,7 @@ export default function AddressSelectionModal({
                         pr-11
                         text-sm
                         text-black
-                        caret-red-500
+                        caret-rose-500
                         outline-none
                         transition
                         focus:ring-1
@@ -344,13 +344,13 @@ export default function AddressSelectionModal({
                                 }}
                                 className={`w-full text-left py-3 flex items-center justify-between rounded-xl ${isEnabled ? "hover:bg-slate-50" : "cursor-not-allowed opacity-60"}`}
                               >
-                                <div className={`text-sm ${isEnabled ? (isSelected ? "text-red-600 font-semibold" : "text-slate-900") : "text-slate-400"}`}>
+                                <div className={`text-sm ${isEnabled ? (isSelected ? "text-rose-600 font-semibold" : "text-slate-900") : "text-slate-400"}`}>
                                   {s}
                                 </div>
                                 {!isEnabled ? (
                                   <div className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Coming soon</div>
                                 ) : isSelected ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-600" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" />
                                   </svg>
                                 ) : null}
@@ -379,7 +379,7 @@ export default function AddressSelectionModal({
                     pr-11
                     text-sm
                     text-black
-                    caret-red-500
+                    caret-rose-500
                     outline-none
                     transition
                     focus:ring-1
@@ -406,13 +406,13 @@ export default function AddressSelectionModal({
                                 onClick={() => isEnabled && handleLgaClick(l)}
                                 className={`w-full text-left py-3 flex items-center justify-between rounded-xl ${isEnabled ? "hover:bg-slate-50" : "cursor-not-allowed opacity-60"}`}
                               >
-                                <div className={`text-sm ${isEnabled ? (isSelected ? "text-red-600 font-semibold" : "text-slate-900") : "text-slate-400"}`}>
+                                <div className={`text-sm ${isEnabled ? (isSelected ? "text-rose-600 font-semibold" : "text-slate-900") : "text-slate-400"}`}>
                                   {l}
                                 </div>
                                 {!isEnabled ? (
                                   <div className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Coming Soon</div>
                                 ) : isSelected ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-600" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" />
                                   </svg>
                                 ) : null}
@@ -456,7 +456,7 @@ export default function AddressSelectionModal({
                       commitSelectionAndClose();
                     }
                   }}
-                  className={`flex-1 py-3 rounded-full text-sm font-medium ${canNext() ? "bg-red-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                  className={`flex-1 py-3 rounded-full text-sm font-medium ${canNext() ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-500"}`}
                 >
                   {level < 2 ? "Next" : "Select"}
                 </button>
@@ -481,7 +481,7 @@ export default function AddressSelectionModal({
           className="flex items-center gap-6 bg-white rounded-xl p-2 w-full"
         >
           <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
-            {title} {isRequired && <span className="text-red-500">*</span>}
+            {title} {isRequired && <span className="text-rose-500">*</span>}
           </span>
 
           <span className=" text-sm text-slate-800 text-left">

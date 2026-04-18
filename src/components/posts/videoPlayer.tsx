@@ -212,7 +212,7 @@ const VideoPlayer = memo(function VideoPlayer({
       // If we are active but not playing and not having a successful play session, trigger it.
       if (video.paused && !hasTriggeredPlay) {
         setHasTriggeredPlay(true);
-        
+
         // Reels (autoFitPortrait) go immediately. No delay.
         if (autoFitPortrait) {
           videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
@@ -581,7 +581,7 @@ const VideoPlayer = memo(function VideoPlayer({
                   initial={{ x: "-100%" }}
                   animate={{ x: "100%" }}
                   transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                  className="w-full h-full bg-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
+                  className="w-full h-full bg-rose-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
                 />
               </div>
             </div>
@@ -603,7 +603,7 @@ const VideoPlayer = memo(function VideoPlayer({
                 ease: "easeInOut",
                 repeatType: "reverse"
               }}
-              className="absolute inset-x-0 h-1/2 bg-gradient-to-b from-transparent via-red-500/40 to-transparent"
+              className="absolute inset-x-0 h-1/2 bg-gradient-to-b from-transparent via-rose-500/40 to-transparent"
             />
           </div>
         </div>
@@ -644,7 +644,7 @@ const VideoPlayer = memo(function VideoPlayer({
                   initial={{ x: "-100%" }}
                   animate={{ x: "100%" }}
                   transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                  className="w-full h-full bg-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
+                  className="w-full h-full bg-rose-500/30 shadow-[0_0_8px_rgba(239,68,68,0.3)]"
                 />
               </div>
             </div>

@@ -166,7 +166,7 @@ export default function VariantEntryModal({
               {imagePreviews.length > 0 ? (
                 <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-slate-200 ">
                   <img src={imagePreviews[0]} className="w-full h-full object-cover" alt="preview" />
-                  <button onClick={removeImage} className="absolute top-1 right-1 bg-red-500 rounded-full px-1 text-white text-xs">✕</button>
+                  <button onClick={removeImage} className="absolute top-1 right-1 bg-rose-500 rounded-full px-1 text-white text-xs">✕</button>
                 </div>
               ) : (
                 <label className="inline-block px-3 py-2 rounded-lg bg-white border border-slate-200 cursor-pointer text-sm">
@@ -179,7 +179,7 @@ export default function VariantEntryModal({
         </div>
 
         <div className="mt-5 flex flex-col sm:flex-row justify-end gap-2 w-full">
-          <button onClick={handleSubmit} className="w-full sm:w-auto px-4 py-2 rounded-full bg-red-500 text-white text-sm">
+          <button onClick={handleSubmit} className="w-full sm:w-auto px-4 py-2 rounded-full bg-rose-500 text-white text-sm">
             {initialData ? "Save" : "Add"}
           </button>
         </div>

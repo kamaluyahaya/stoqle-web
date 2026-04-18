@@ -21,7 +21,7 @@ export default function DefaultInput({
   className = "",
   id,
 }: DefaultInputProps) {
-  const baseStyles = "w-full py-3 bg-transparent border-b border-slate-200 focus:border-b-red-500 transition-all duration-300 text-sm text-slate-900 placeholder:text-slate-400 outline-none caret-red-500";
+  const baseStyles = "w-full py-3 bg-transparent border-b border-slate-200 focus:border-b-rose-500 transition-all duration-300 text-sm text-slate-900 placeholder:text-slate-400 outline-none caret-rose-500";
 
   if (type === "textarea") {
     return (

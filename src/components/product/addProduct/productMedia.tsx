@@ -131,7 +131,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
 
             <button
               onClick={() => removeProductImageAt(i)}
-              className="absolute top-1 right-1 text-red-500 bg-white rounded-full shadow px-1 text-xs"
+              className="absolute top-1 right-1 text-rose-500 bg-white rounded-full shadow px-1 text-xs"
             >
               ✕
             </button>
@@ -212,7 +212,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
                 {/* Social Sidebar Actions */}
                 <div className="absolute right-3 bottom-32 flex flex-col gap-5 items-center pointer-events-auto">
                   <div className="flex flex-col items-center gap-1">
-                    <div className="p-2 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-white hover:text-red-500 transition-colors cursor-pointer active:scale-90">
+                    <div className="p-2 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-white hover:text-rose-500 transition-colors cursor-pointer active:scale-90">
                       <Heart className="w-5 h-5 fill-none" />
                     </div>
                     <span className="text-[8px] font-bold text-white  tracking-tighter shadow-sm">3.2k</span>
@@ -239,7 +239,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
                     <h4 className="text-[11px] font-bold text-white truncate drop-shadow-lg tracking-tight leading-tight">{businessName || "Stoqle Vendor"}</h4>
                   </div>
 
-                  <button className="px-2 h-6 bg-red-500 hover:bg-red-600 active:scale-95 transition-all text-white font-black text-[8px] tracking-tight rounded-lg flex items-center justify-center shadow-lg shrink-0">
+                  <button className="px-2 h-6 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-black text-[8px] tracking-tight rounded-lg flex items-center justify-center shadow-lg shrink-0">
                     Buy now
                   </button>
                 </div>
@@ -250,7 +250,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
 
               <button
                 onClick={() => setProductVideo(null)}
-                className="absolute top-10 right-4 bg-black/40 backdrop-blur-md rounded-full p-2 shadow-lg hover:bg-red-500 transition-all text-white z-50 group-hover/phone:scale-110 pointer-events-auto"
+                className="absolute top-10 right-4 bg-black/40 backdrop-blur-md rounded-full p-2 shadow-lg hover:bg-rose-500 transition-all text-white z-50 group-hover/phone:scale-110 pointer-events-auto"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -260,7 +260,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
               {/* Progress Bar (at the very bottom of visible area) */}
               <div className="absolute bottom-1 left-0 right-0 h-0.5 bg-white/10 z-40">
                 <div
-                  className="h-full bg-red-500 transition-all duration-100 ease-linear shadow-[0_0_8px_rgba(239,68,68,0.8)]"
+                  className="h-full bg-rose-500 transition-all duration-100 ease-linear shadow-[0_0_8px_rgba(239,68,68,0.8)]"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -324,7 +324,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
                     setLightboxOpen(false);
                   }
                 }}
-                className="px-6 py-3 bg-red-500/10 hover:bg-red-500 transition-all backdrop-blur-md rounded-full text-red-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-red-500/30"
+                className="px-6 py-3 bg-rose-500/10 hover:bg-rose-500 transition-all backdrop-blur-md rounded-full text-rose-500 hover:text-white text-[10px] font-bold flex items-center gap-3 border border-rose-500/30"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete Image

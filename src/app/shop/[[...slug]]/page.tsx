@@ -13,27 +13,31 @@ import ShimmerGrid from "@/src/components/shimmer";
 import type { PreviewPayload } from "@/src/types/product";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { useCache } from "@/src/context/cacheContext";
+import { idbGet, idbSet } from "@/src/lib/utils/idb";
+import { SHOP_CACHE } from "@/src/lib/cache";
 
 // Icons for bottom navigation
 import { HomeIcon, ListBulletIcon, CalendarDaysIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { HomeIcon as HomeIconSolid, ListBulletIcon as ListBulletIconSolid, CalendarDaysIcon as CalendarDaysIconSolid } from "@heroicons/react/24/solid";
 import Image from "next/image";
+import PostShareModal from "@/src/components/modal/PostShareModal";
+import { toast } from "sonner";
 
 const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 export default function VendorShopPage() {
     const params = useParams();
     const slugArr = params?.slug as string[] | undefined;
-    const bizSlug = slugArr?.[0];
+    const bizSlug = slugArr?.[0] || "";
     const initialProductSlug = slugArr?.[1];
 
     const router = useRouter();
     const auth = useAuth();
-    const { getCachedShop, setCachedShop, getScrollPosition, setScrollPosition, getActiveTab, setActiveTab } = useCache();
+    const { getScrollPosition, setScrollPosition, getActiveTab, setActiveTab } = useCache();
 
-    const [profileApi, setProfileApi] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [products, setProducts] = useState<any[]>([]);
+    const [profileApi, setProfileApi] = useState<any>(() => bizSlug ? SHOP_CACHE[bizSlug]?.profileApi || null : null);
+    const [loading, setLoading] = useState<boolean>(() => bizSlug ? !SHOP_CACHE[bizSlug]?.products?.length : true);
+    const [products, setProducts] = useState<any[]>(() => bizSlug ? SHOP_CACHE[bizSlug]?.products || [] : []);
     const [productsLoading, setProductsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
 
@@ -53,6 +57,11 @@ export default function VendorShopPage() {
     const [clickPos, setClickPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [columns, setColumns] = useState(2);
     const [hasUnviewedReleases, setHasUnviewedReleases] = useState(false);
+
+    // Share Modal State
+    const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [shareUrl, setShareUrl] = useState("");
+    const [isSharing, setIsSharing] = useState(false);
 
     const newestReleaseId = useMemo(() => {
         if (!Array.isArray(products) || !products.length) return 0;
@@ -110,46 +119,71 @@ export default function VendorShopPage() {
 
 
 
-    // Fetch Business Profile 
+    // Hybrid IDB + Memory Cache & Revalidation Strategy
     useEffect(() => {
-        async function loadShop() {
-            if (!bizSlug) return;
+        if (!bizSlug) return;
 
-            const cached = getCachedShop(bizSlug);
-            if (cached) {
-                setProducts(cached.products);
-                setProfileApi(cached.profile);
-                setLoading(false);
+        let memoryHit = false;
 
-                // Restore tab state if needed
-                const savedTab = getActiveTab(`shop_${bizSlug}_nav`);
-                if (savedTab) setActiveNav(savedTab as any);
+        // 1. Module-Level Memory Cache Check (Instant Rendering)
+        if (SHOP_CACHE[bizSlug]) {
+            setProducts(SHOP_CACHE[bizSlug].products);
+            setProfileApi(SHOP_CACHE[bizSlug].profileApi);
+            setLoading(false);
+            memoryHit = true;
+        } else {
+            // 2. Persistent IDB Hydration Check (Blink-Eye Rendering)
+            idbGet<any>(`shop_cache_${bizSlug}`).then((cachedData) => {
+                if (cachedData && !memoryHit) {
+                    SHOP_CACHE[bizSlug] = cachedData;
+                    setProducts(cachedData.products);
+                    setProfileApi(cachedData.profileApi);
+                    setLoading(false);
+                }
+            }).catch(console.error);
+        }
 
-                return;
+        const savedTab = getActiveTab(`shop_${bizSlug}_nav`);
+        if (savedTab) setActiveNav(savedTab as any);
+
+        // 3. Background Data Fetching (Stale-while-Revalidate)
+        async function loadShopSilently() {
+            // Deduplication: Avoid fetching if the cache is extremely fresh (< 5 mins)
+            if (SHOP_CACHE[bizSlug] && SHOP_CACHE[bizSlug].lastFetchedAt) {
+                const age = Date.now() - SHOP_CACHE[bizSlug].lastFetchedAt;
+                if (age < 5 * 60 * 1000) return;
             }
-
-            setLoading(true);
             try {
                 const res = await fetch(`${API_BASE_URL}/api/products/business/${bizSlug}?limit=100`);
                 const data = await res.json();
                 const foundProducts = (data?.status === "success" && Array.isArray(data?.data?.products)) ? data.data.products : [];
-                setProducts(foundProducts);
 
                 const bizRes = await fetch(`${API_BASE_URL}/api/business/${bizSlug}`);
                 const bizData = await bizRes.json();
                 if (bizData.ok && bizData.data) {
-                    setProfileApi(bizData.data);
-                    // Cache the data
-                    setCachedShop(bizSlug, bizData.data, foundProducts);
+                    const newData = {
+                        profileApi: bizData.data,
+                        products: foundProducts,
+                        lastFetchedAt: Date.now(),
+                        activeNav: "Home",
+                        categories: []
+                    };
+
+                    setProfileApi(newData.profileApi);
+                    setProducts(newData.products);
+                    setLoading(false);
+
+                    // Sync up caching tiers silently
+                    SHOP_CACHE[bizSlug] = newData;
+                    idbSet(`shop_cache_${bizSlug}`, newData).catch(console.error);
                 }
             } catch (err) {
-                console.error("Shop load error:", err);
-            } finally {
-                setLoading(false);
+                console.error("Shop background sync error:", err);
             }
         }
-        loadShop();
-    }, [bizSlug]);
+
+        loadShopSilently();
+    }, [bizSlug, getActiveTab]);
 
     // Save active nav state
     useEffect(() => {
@@ -358,9 +392,35 @@ export default function VendorShopPage() {
                 groupsMap[dateKey].products.push(p);
             });
         }
-
         return Object.values(groupsMap).sort((a, b) => b.timestamp - a.timestamp);
     }, [products]);
+
+    const handleShopShare = async () => {
+        if (!profileApi?.business?.business_id) return;
+        setIsSharing(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/shop/share`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${auth.token}`
+                },
+                body: JSON.stringify({ business_id: profileApi.business.business_id })
+            });
+            const json = await res.json();
+            if (json.ok && json.data?.shareUrl) {
+                setShareUrl(json.data.shareUrl);
+                setShareModalOpen(true);
+            } else {
+                toast.error("Failed to generate share link");
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Network error");
+        } finally {
+            setIsSharing(false);
+        }
+    };
 
     const renderProductItem = (p: any) => {
         const promo = p.promo_discount || p.sale_discount;
@@ -395,7 +455,7 @@ export default function VendorShopPage() {
                         {promo > 0 ? (
                             <>
                                 <span className="text-xs font-bold text-slate-900">₦{Math.round(Number(p.price || 0) * (1 - promo / 100)).toLocaleString()}</span>
-                                <span className="text-[10px] text-red-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
+                                <span className="text-[10px] text-rose-500 line-through">₦{Number(p.price || 0).toLocaleString()}</span>
                             </>
                         ) : (
                             <span className="text-xs font-bold text-slate-900">₦{Number(p.price || 0).toLocaleString()}</span>
@@ -403,7 +463,7 @@ export default function VendorShopPage() {
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1 min-h-[14px]">
                         {promo > 0 ? (
-                            <span className="text-[9px] text-rose-500 border-red-500 border-[0.2px] px-1.5 py-0.5 ">
+                            <span className="text-[9px] text-rose-500 border-rose-500 border-[0.2px] px-1.5 py-0.5 ">
                                 {p.promo_title || p.sale_type || "Sale"} {promo}% OFF
                             </span>
                         ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
@@ -436,6 +496,7 @@ export default function VendorShopPage() {
                 displayName={profileApi?.business?.business_name || ""}
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
+                onShare={handleShopShare}
             />
 
             <main className="px-4 relative bg-white rounded-[0.5rem] p-4 -mt-6 z-10">
@@ -456,7 +517,7 @@ export default function VendorShopPage() {
                                     <button
                                         key={t}
                                         onClick={() => setHomeTab(t)}
-                                        className={`pb-2 text-sm font-bold transition-all whitespace-nowrap ${homeTab === t ? "text-red-500 border-b-2 border-red-500" : "text-slate-500"}`}
+                                        className={`pb-2 text-sm font-bold transition-all whitespace-nowrap ${homeTab === t ? "text-rose-500 border-b-2 border-rose-500" : "text-slate-500"}`}
                                     >
                                         {t}
                                     </button>
@@ -492,7 +553,7 @@ export default function VendorShopPage() {
                                     <button
                                         key={cat}
                                         onClick={() => setSelectedCategory(cat)}
-                                        className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-red-50 text-red-600" : "text-slate-600 hover:bg-slate-100"}`}
+                                        className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-rose-50 text-rose-600" : "text-slate-600 hover:bg-slate-100"}`}
                                     >
                                         {cat}
                                     </button>
@@ -516,7 +577,7 @@ export default function VendorShopPage() {
                     <div className="space-y-6">
                         {/* Sub-nav for dates at top */}
                         <div className="flex gap-2 sticky top-0 z-20 bg-white/90  pt-1 overflow-x-auto no-scrollbar ">
-                            {groupedByDate.map((group, idx) => (
+                            {groupedByDate.map((group: any, idx: number) => (
                                 <button
                                     key={group.label + idx}
                                     onClick={() => {
@@ -534,7 +595,7 @@ export default function VendorShopPage() {
                             ))}
                         </div>
 
-                        {groupedByDate.map((group, idx) => (
+                        {groupedByDate.map((group: any, idx: number) => (
                             <div key={group.label + idx} id={`date-group-${idx}`} className="">
                                 <div className="flex items-center justify-between mb-3 bg-white px-3 py-2 rounded-lg border border-slate-100 sticky top-12 z-10 transition-all">
                                     <h2 className="text-sm font-bold text-slate-800  tracking-tight">{group.label}</h2>
@@ -562,12 +623,12 @@ export default function VendorShopPage() {
             {/* BOTTOM NAVIGATION */}
             <nav className="fixed bottom-0 left-0 lg:left-[300px] right-0 bg-white/95 backdrop-blur-md px-6 py-2 flex items-center justify-around z-[999] pb-[calc(0.5rem+env(safe-area-inset-bottom))] transition-[left] duration-300">
                 <button onClick={() => setActiveNav("Home")} className="flex flex-col items-center gap-1 group">
-                    {activeNav === "Home" ? <HomeIconSolid className="w-4 h-4 text-red-500" /> : <HomeIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
-                    <span className={`text-[10px] font-bold ${activeNav === "Home" ? "text-red-500" : "text-slate-400"}`}>Home</span>
+                    {activeNav === "Home" ? <HomeIconSolid className="w-4 h-4 text-rose-500" /> : <HomeIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+                    <span className={`text-[10px] font-bold ${activeNav === "Home" ? "text-rose-500" : "text-slate-400"}`}>Home</span>
                 </button>
                 <button onClick={() => setActiveNav("Categories")} className="flex flex-col items-center gap-1 group">
-                    {activeNav === "Categories" ? <ListBulletIconSolid className="w-4 h-4 text-red-500" /> : <ListBulletIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
-                    <span className={`text-[10px] font-bold ${activeNav === "Categories" ? "text-red-500" : "text-slate-400"}`}>Categories</span>
+                    {activeNav === "Categories" ? <ListBulletIconSolid className="w-4 h-4 text-rose-500" /> : <ListBulletIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+                    <span className={`text-[10px] font-bold ${activeNav === "Categories" ? "text-rose-500" : "text-slate-400"}`}>Categories</span>
                 </button>
                 <button
                     onClick={() => {
@@ -580,12 +641,12 @@ export default function VendorShopPage() {
                     className="flex flex-col items-center gap-1 group"
                 >
                     <div className="relative">
-                        {activeNav === "New release" ? <CalendarDaysIconSolid className="w-4 h-4 text-red-500" /> : <CalendarDaysIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
+                        {activeNav === "New release" ? <CalendarDaysIconSolid className="w-4 h-4 text-rose-500" /> : <CalendarDaysIcon className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />}
                         {hasUnviewedReleases && activeNav !== "New release" && (
-                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-[1.5px] border-white ring-1 ring-red-500/20" />
+                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full border-[1.5px] border-white ring-1 ring-rose-500/20" />
                         )}
                     </div>
-                    <span className={`text-[10px] font-bold ${activeNav === "New release" ? "text-red-500" : "text-slate-400"}`}>New release</span>
+                    <span className={`text-[10px] font-bold ${activeNav === "New release" ? "text-rose-500" : "text-slate-400"}`}>New release</span>
                 </button>
             </nav>
 
@@ -608,15 +669,9 @@ export default function VendorShopPage() {
                         }
                     }}
                     onShopClick={() => {
-                        const params = new URLSearchParams(window.location.search);
-                        const pathSegments = window.location.pathname.split('/').filter(Boolean);
-                        if (params.has('product_id') || pathSegments.length > 2) {
-                            router.back();
-                        } else {
-                            setProductModalOpen(false);
-                            setSelectedProductPayload(null);
-                            updateUrl(null, true);
-                        }
+                        setProductModalOpen(false);
+                        setSelectedProductPayload(null);
+                        updateUrl(null, true);
                     }}
                     onProductClick={handleProductClick}
                 />
@@ -626,10 +681,21 @@ export default function VendorShopPage() {
             <button
                 id="cart-icon-ref"
                 onClick={() => router.push('/cart')}
-                className="fixed bottom-20 right-6 z-[998] bg-red-600 text-white p-2.5 rounded-full shadow-2xl hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center border-4 border-white"
+                className="fixed bottom-20 right-6 z-[998] bg-rose-600 text-white p-2.5 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-95 flex items-center justify-center border-4 border-white"
             >
                 <ShoppingCartIcon className="w-5 h-5" />
             </button>
+
+            {shareModalOpen && (
+                <PostShareModal
+                    isOpen={shareModalOpen}
+                    onClose={() => setShareModalOpen(false)}
+                    shareUrl={shareUrl}
+                    title={`Check out ${profileApi?.business?.business_name || 'this shop'} on Stoqle!`}
+                    isLoading={isSharing}
+                    onGenerate={async () => shareUrl}
+                />
+            )}
         </div>
     );
 }

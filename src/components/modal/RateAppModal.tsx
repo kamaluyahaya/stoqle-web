@@ -125,13 +125,13 @@ function RateContent({
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Tell us what you think (optional)"
-          className="w-full h-24 p-3 border border-slate-200 rounded-xl resize-none outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400 text-sm transition-all"
+          className="w-full h-24 p-3 border border-slate-200 rounded-xl resize-none outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400 text-sm transition-all"
         />
 
         <button
           onClick={onSubmit}
           disabled={loading}
-          className="w-full py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-full disabled:opacity-70 transition-colors"
+          className="w-full py-3.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-full disabled:opacity-70 transition-colors"
         >
           {loading ? "Submitting..." : "Submit Rating"}
         </button>

@@ -67,6 +67,7 @@ interface Shipment {
 interface MasterOrder {
     sale_id: number | null;
     master_order_id?: number | string | null;
+    stoqle_order_id?: string | number | null;
     order_ref?: string;
     reference_no?: string;
     customer_name?: string;
@@ -722,7 +723,7 @@ export default function VendorOrdersPage() {
                                             // Always clear the URL if returning to the list
                                             router.replace('/profile/business/customer-order');
                                         }}
-                                        className="md:hidden flex items-center bg-red-500 rounded-lg p-2 text-slate-200 mb-2 hover:text-white transition shadow-lg active:scale-95"
+                                        className="md:hidden flex items-center bg-rose-500 rounded-lg p-2 text-slate-200 mb-2 hover:text-white transition shadow-lg active:scale-95"
                                     >
                                         <ChevronLeft size={20} />
                                     </button>
@@ -734,7 +735,7 @@ export default function VendorOrdersPage() {
                                         >
                                             <Download size={18} />
                                         </button>
-                                        <span className={`text-[10px] px-4 font-bold py-1 rounded-full bg-red-500   ${getStatusDisplay(selectedOrder.status).color.replace('bg-', ' text-').replace('text-', 'bg-')}`}>
+                                        <span className={`text-[10px] px-4 font-bold py-1 rounded-full bg-rose-500   ${getStatusDisplay(selectedOrder.status).color.replace('bg-', ' text-').replace('text-', 'bg-')}`}>
                                             {getStatusDisplay(selectedOrder.status).label}
                                         </span>
                                     </div>

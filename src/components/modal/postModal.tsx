@@ -1,6 +1,7 @@
 // PostModal.tsx (fix: target left media only + consistent image resizing)
-
 "use client";
+
+import Image from "next/image";
 
 import { API_BASE_URL } from "@/src/lib/config";
 import '@flaticon/flaticon-uicons/css/all/all.css';
@@ -18,11 +19,14 @@ import {
   EyeIcon
 } from "@heroicons/react/24/outline";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import VerifiedBadge from "@/src/components/common/VerifiedBadge";
 import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
+import { EMOJI_SHORTCUTS } from "@/src/lib/constants/emojis";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/src/context/authContext";
 import MobileVideoPlayer from "@/src/components/posts/mobileVideoPlayer";
 import LargeScreenVideoPlayer from "@/src/components/posts/largeScreenVideoPlayer";
+import { formatUrl } from "@/src/lib/utils/media";
 import ImageViewer from "./imageViewer";
 
 import { toast } from "sonner";
@@ -31,6 +35,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCachedLocationName, getCurrentLocationName } from "@/src/lib/location";
 import { FaHeart, FaRegHeart, FaPaperPlane } from "react-icons/fa";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 import {
   MoreVertical,
   MoreHorizontal,
@@ -54,6 +59,8 @@ import { copyToClipboard } from "@/src/lib/utils/utils";
 import { CommentOverlay } from "./CommentOverlay";
 
 import type { Post, User, APIComment } from "@/src/lib/types";
+import { useSocialShare } from "@/src/hooks/useSocialShare";
+import PostShareModal from "./PostShareModal";
 
 type Props = {
   post: Post;
@@ -160,7 +167,7 @@ const VolumeHUD = React.memo(() => {
               setVolume(parseFloat(e.target.value));
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-white hover:accent-red-500 transition-colors"
+            className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer accent-white hover:accent-rose-500 transition-colors"
           />
         </div>
       </motion.div>
@@ -187,6 +194,14 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const router = useRouter();
 
   const [isClosing, setIsClosing] = useState(false);
+  const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+  useEffect(() => {
+    if (open) {
+      setModalZIndex(getNextZIndex());
+    } else {
+      lastFetchedPostIdRef.current = null;
+    }
+  }, [open]);
 
   const onClose = useCallback(() => {
     if (isClosing) return;
@@ -210,7 +225,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     if (isVisible) activeVideoRef.current = el;
   }, []);
 
-  const prefetchTriggeredRef = useRef<Record<string, boolean>>({});
+  const prefetchTriggeroseRef = useRef<Record<string, boolean>>({});
 
   const handleTimeUpdate = useCallback((postId: string | number, currentTime: number, duration: number) => {
     const data = interactionTrackerRef.current[String(postId)];
@@ -221,8 +236,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
         if (pct > 95) data.completed = true;
 
         // Proactive Infinite Scroll Trigger: Fetch more when user is 70% through current video
-        if (pct > 70 && !prefetchTriggeredRef.current[String(postId)]) {
-          prefetchTriggeredRef.current[String(postId)] = true;
+        if (pct > 70 && !prefetchTriggeroseRef.current[String(postId)]) {
+          prefetchTriggeroseRef.current[String(postId)] = true;
           // Trigger the reservoir maintenance loop early
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("trigger-reel-prefetch"));
@@ -372,26 +387,42 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [selectedProductData, setSelectedProductData] = useState<PreviewPayload | null>(null);
   const [productPreviewOpen, setProductPreviewOpen] = useState(false);
   const [fetchingProductId, setFetchingProductId] = useState<number | null>(null);
+  const [hydratedLinkedProducts, setHydratedLinkedProducts] = useState<Record<string, any>>({});
 
   const getPolicyText = useCallback((lp: any) => {
     if (!lp) return "Verified Vendor";
 
-    // 1. Promotions / Discounts
-    if (lp.sale_discount_data) {
-      const sd = typeof lp.sale_discount_data === 'string' ? JSON.parse(lp.sale_discount_data) : lp.sale_discount_data;
-      if (sd?.discount || sd?.discount_percent) return `${sd.discount || sd.discount_percent}% Promo Discount`;
+    // 1. Check for nested policy_settings (common in hydrated products)
+    const settings = lp.policy_settings || {};
+    const returnPol = settings.return_policy || {};
+
+    // 2. Promotions / Discounts
+    const promoData = settings.promotions_data || lp.promotions_data || lp.promo_title;
+    if (promoData) {
+      if (typeof promoData === 'string' && promoData.length > 0) {
+        try {
+          const pd = JSON.parse(promoData);
+          if (Array.isArray(pd) && pd.length > 0) return pd[0].title || "Special Offer";
+        } catch {
+          return promoData; // Return the raw text if it's just a title
+        }
+      }
     }
 
-    if (lp.promotions_data) {
-      const pd = typeof lp.promotions_data === 'string' ? JSON.parse(lp.promotions_data) : lp.promotions_data;
-      if (Array.isArray(pd) && pd.length > 0) return pd[0].title || "Special Offer";
+    const saleData = settings.sale_discount_data || lp.sale_discount_data;
+    if (saleData) {
+      const sd = typeof saleData === 'string' ? JSON.parse(saleData) : saleData;
+      if (sd?.discount || sd?.discount_percent) {
+        const name = sd.title || sd.name || sd.sale_name || sd.discount_type || sd.type || sd.discount_name || "Discount";
+        return `${sd.discount || sd.discount_percent}% ${name}`;
+      }
     }
 
-    // 2. Shipping Subsidy
-    if (lp.return_shipping_subsidy) return "Return Shipping Subsidy";
+    // 3. Shipping Subsidy
+    if (settings.return_shipping_subsidy || returnPol.returnShippingSubsidy || lp.return_shipping_subsidy === 1) return "Return Shipping Subsidy";
 
-    // 3. Return Policy
-    if (lp.seven_day_no_reason_return) return "7-Days No-Reason Return";
+    // 4. Return Policy
+    if (settings.seven_day_no_reason_return || returnPol.sevenDayNoReasonReturn || lp.seven_day_no_reason_return === 1) return "7-Days No-Reason Return";
 
     return null;
   }, []);
@@ -399,19 +430,48 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const getDiscountInfo = useCallback((lp: any) => {
     if (!lp) return null;
     try {
-      const ps = typeof lp.promotions_data === 'string' ? JSON.parse(lp.promotions_data) : lp.promotions_data;
+      const settings = lp.policy_settings || {};
+
+      // 1. Check Promotions
+      const ps = typeof (settings.promotions_data || lp.promotions_data) === 'string'
+        ? JSON.parse(settings.promotions_data || lp.promotions_data)
+        : (settings.promotions_data || lp.promotions_data);
       if (Array.isArray(ps) && ps.length > 0) {
         const promo = ps[0];
-        const discount = promo.discount || promo.discount_percent;
-        if (discount) return { discount, name: promo.title || promo.occasion || "Promotion" };
+        const discount = promo.discount || promo.discount_percent || promo.discount_percentage;
+        const name = promo.title || promo.name || promo.occasion || promo.promo_name || promo.type || "Promotion";
+        if (discount) return { discount: Number(discount), name };
       }
-      const sd = typeof lp.sale_discount_data === 'string' ? JSON.parse(lp.sale_discount_data) : lp.sale_discount_data;
-      if (sd?.discount || sd?.discount_percent) {
-        return { discount: sd.discount || sd.discount_percent, name: sd.title || sd.name || "Sales" };
+
+      // 2. Check Sales Discount
+      const sd = typeof (settings.sale_discount_data || lp.sale_discount_data) === 'string'
+        ? JSON.parse(settings.sale_discount_data || lp.sale_discount_data)
+        : (settings.sale_discount_data || lp.sale_discount_data);
+      if (sd?.discount || sd?.discount_percent || sd?.discount_percentage) {
+        const discount = sd.discount || sd.discount_percent || sd.discount_percentage;
+        const name = sd.title || sd.name || sd.sale_name || sd.discount_type || sd.type || sd.discount_name || "Sales";
+        return { discount: Number(discount), name };
+      }
+
+      // 3. Check raw feed fields as final fallback
+      if (lp.promo_discount || lp.sale_discount || lp.discount_percentage) {
+        return {
+          discount: Number(lp.promo_discount || lp.sale_discount || lp.discount_percentage),
+          name: lp.promo_title || lp.sale_type || lp.discount_name || lp.discount_type || "Discount"
+        };
       }
     } catch (e) { }
     return null;
   }, []);
+
+  const getDiscountedPrice = useCallback((lp: any) => {
+    const basePrice = Number(lp.price || 0);
+    const info = getDiscountInfo(lp);
+    if (info && info.discount > 0 && info.discount < 100) {
+      return basePrice * (1 - info.discount / 100);
+    }
+    return basePrice;
+  }, [getDiscountInfo]);
 
   const formatProductUrl = useCallback((url: string) => {
     if (!url) return "https://via.placeholder.com/800x600?text=No+Image";
@@ -430,9 +490,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       setFetchingProductId(productId);
       const res = await fetchProductById(productId, auth?.token || undefined);
       if (res?.data?.product) {
-        // AUTO-PAUSE: Video must pause when entering product context
-        if (activeVideoRef.current) activeVideoRef.current.pause();
-        setIsPaused(true);
+        // AUTO-PAUSE: Video must pause when entering product context EXCEPT for mobile reels (bottom sheet mode)
+        if (!isMobileReels) {
+          if (activeVideoRef.current) activeVideoRef.current.pause();
+          setIsPaused(true);
+        }
 
         const dbProduct = res.data.product;
         const mappedPayload = mapProductToPreviewPayload(dbProduct, formatProductUrl);
@@ -445,7 +507,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     } finally {
       setFetchingProductId(null);
     }
-  }, [auth?.token, fetchingProductId, formatProductUrl]);
+  }, [auth?.token, fetchingProductId, formatProductUrl, isMobileReels]);
 
   // 1A. Interaction state (Seed with all possible backend field names from the normalized post)
   const [postLiked, setPostLiked] = useState<boolean>(Boolean(normalizedInitialPost.liked_by_me));
@@ -504,6 +566,20 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
   const [followLoading, setFollowLoading] = useState<boolean>(false);
   const [showBurst, setShowBurst] = useState(false);
+
+  // Social Share Integration
+  const { share: generateShareLink, shareUrl, isSharing: isGeneratingShareLink, reset: resetSocialShare } = useSocialShare(userToken);
+  const [isPostShareModalOpen, setIsPostShareModalOpen] = useState(false);
+
+  const handleShareClick = useCallback(async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setIsPostShareModalOpen(true);
+    const activeItem = isMobileReels ? reelsList[currentReelIndex] : post;
+    const postId = activeItem?.id || activePostId;
+    if (postId) {
+      generateShareLink(postId);
+    }
+  }, [generateShareLink, activePostId, isMobileReels, reelsList, currentReelIndex, post]);
 
   // Sync with prop changes ONLY on mount or when the active reel changes
   useEffect(() => {
@@ -581,11 +657,19 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const lastFetchedPostIdRef = useRef<string | number | null>(null);
   // Ref mirror — always fresh in closures (no stale-state race on mobile touch events)
   const commentTextRef = useRef("");
   const sheetTextareaRef = useRef<HTMLTextAreaElement>(null);
   const desktopTextareaRef = useRef<HTMLTextAreaElement>(null);
   const reelTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [commentSheetEntryType, setCommentSheetEntryType] = useState<"icon" | "caption" | null>(null);
+  const [commentsOffset, setCommentsOffset] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const commentsScrollRef = useRef<HTMLDivElement>(null);
+  const COMMENTS_LIMIT = 10;
   const [commentPosting, setCommentPosting] = useState(false);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<APIComment | null>(null);
@@ -901,7 +985,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   // Aspect ratio lock for non-video posts (Images)
   useEffect(() => {
     if (mediaList && mediaList.length > 0 && !post.isVideo) {
-      const img = new Image();
+      const img = new window.Image();
       img.src = mediaList[0];
       img.onload = () => {
         if (img.width > 0 && img.height > 0) {
@@ -976,7 +1060,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   // Aspect ratio lock for non-video posts (Images)
   useEffect(() => {
     if (mediaList && mediaList.length > 0 && !post.isVideo) {
-      const img = new Image();
+      const img = new window.Image();
       img.src = mediaList[0];
       img.onload = () => {
         if (img.width > 0 && img.height > 0) {
@@ -1001,39 +1085,72 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   }, [isPreview, post.isVideo, mediaList.length, isPaused]);
 
   // ON-DEMAND COMMENT ENGINE: Only fetch when user explicitly engages the sheet
-  const fetchComments = useCallback(async (targetId?: string | number) => {
+  // ON-DEMAND COMMENT ENGINE with Pagination
+  const fetchComments = useCallback(async (targetId?: string | number, isLoadMore = false) => {
     if (isPreview) return;
     const activeId = targetId || (isMobileReels ? reelsList[currentReelIndex]?.id : post.id);
     if (!activeId) return;
 
-    setLoadingComments(true);
+    if (isLoadMore) {
+      if (!hasMoreComments || isFetchingMore) return;
+      setIsFetchingMore(true);
+    } else {
+      setLoadingComments(true);
+      setComments([]); // Clear previous for instant feel
+      setCommentsOffset(0);
+      setHasMoreComments(true);
+    }
+
     setCommentsError(null);
     const token = getToken();
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/social/${activeId}/comments`, {
+      const offset = isLoadMore ? commentsOffset + COMMENTS_LIMIT : 0;
+      const res = await fetch(`${API_BASE_URL}/api/social/${activeId}/comments?limit=${COMMENTS_LIMIT}&offset=${offset}`, {
         method: "GET",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
       if (!res.ok) throw new Error("Failed to fetch comments");
       const json = await res.json();
       const fetched: APIComment[] = json?.data?.comments || [];
-      const currentAuthorTrusted = Boolean(currentItem.user?.is_trusted);
 
-      setComments(fetched.map(c => ({
+      if (fetched.length < COMMENTS_LIMIT) {
+        setHasMoreComments(false);
+      }
+
+      const currentAuthorTrusted = Boolean(currentItem.user?.is_trusted);
+      const mapped = fetched.map(c => ({
         ...c,
         liked_by_user: Boolean((c as any).liked_by_user || false),
         author_liked: Boolean((c as any).author_liked || false),
         likes_count: Number(c.likes_count ?? 0),
         author_is_trusted: Boolean((c as any).author_is_trusted || (c.is_author === 1 && currentAuthorTrusted)),
-      })));
+      }));
+
+      if (isLoadMore) {
+        setComments(prev => [...prev, ...mapped]);
+        setCommentsOffset(offset);
+      } else {
+        setComments(mapped);
+      }
     } catch (err: any) {
       console.error("fetchComments error", err);
-      setCommentsError(err.message || "Unable to load comments");
+      if (!isLoadMore) setCommentsError(err.message || "Unable to load comments");
     } finally {
       setLoadingComments(false);
+      setIsFetchingMore(false);
     }
-  }, [isPreview, isMobileReels, post.id, reelsList[currentReelIndex]?.id, currentItem.user?.is_trusted, currentReelIndex]);
+  }, [isPreview, isMobileReels, post.id, reelsList, currentReelIndex, currentItem.user?.is_trusted, commentsOffset, hasMoreComments, isFetchingMore]);
+
+
+  const handleCommentsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 100) {
+      if (hasMoreComments && !isFetchingMore && !loadingComments) {
+        fetchComments(activePostId, true);
+      }
+    }
+  };
 
 
   useEffect(() => {
@@ -1466,7 +1583,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     const delay = now - lastTapRef.current;
 
     if (delay < 300 && delay > 0) {
-      // 1. Double Tap Triggered: Like the post
+      // 1. Double Tap Triggerose: Like the post
       lastTapRef.current = 0; // kill pending single tap
 
       const clientX = "touches" in (e as any) && (e as any).touches.length > 0 ? (e as any).touches[0].clientX : (e as React.MouseEvent).clientX;
@@ -1546,7 +1663,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
   // Desktop/Standard View Conversation Hydration: Auto-load comments on large screen
   useEffect(() => {
-    if (!isMobileReels && activePostId) {
+    if (!isMobileReels && activePostId && lastFetchedPostIdRef.current !== activePostId) {
+      lastFetchedPostIdRef.current = activePostId;
       // Sync like counts for standard views as well
       const active = (isMobileReels && reelsList[currentReelIndex]) ? reelsList[currentReelIndex] : post;
       setPostLiked(Boolean(active.liked_by_user ?? active.liked_by_me ?? active.liked ?? false));
@@ -1566,11 +1684,76 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   }, [isCommenting, isMobileReels]);
 
   // Mobile Reels View Hydration: Load comments when sheet opens
+
+
   useEffect(() => {
-    if (isMobileReels && showCommentsSheet && activePostId) {
-      fetchComments(activePostId);
+    if (showCommentsSheet && activePostId) {
+      // Auto-trigger input if no comments exist to encourage engagement
+      const count = currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? 0;
+      if (count === 0 && !isCommenting) {
+        setIsCommenting(true);
+      }
+
+      // Only trigger initial fetch if the post ID has changed or if it's a fresh open
+      if (lastFetchedPostIdRef.current !== activePostId) {
+        lastFetchedPostIdRef.current = activePostId;
+        fetchComments(activePostId);
+      }
+    } else if (!showCommentsSheet && isMobileReels) {
+      // Clear tracking and comments when closed (Mobile Specific)
+      lastFetchedPostIdRef.current = null;
+      setComments([]);
+      setCommentsOffset(0);
+      setHasMoreComments(true);
     }
   }, [showCommentsSheet, activePostId, isMobileReels, fetchComments]);
+
+  // Background Linked Product Hydration Strategy:
+  // Decouple product detail fetching from the modal opening sequence.
+  // This ensures the modal pops instantly without waiting for product metadata.
+  useEffect(() => {
+    if (!open || !activePostId || isPreview) return;
+
+    const activeItem = (isMobileReels && reelsList[currentReelIndex]) ? reelsList[currentReelIndex] : post;
+    const productId = activeItem?.linked_product?.product_id ?? (activeItem as any)?.product_id;
+
+    if (!activeItem?.is_product_linked || !productId) return;
+
+    // Cache guard: Don't re-fetch if already hydrated in this session
+    if (hydratedLinkedProducts[String(activePostId)]) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetchProductById(productId, auth?.token || undefined);
+        if (res?.data?.product) {
+          setHydratedLinkedProducts(prev => ({
+            ...prev,
+            [String(activePostId)]: res.data.product
+          }));
+        }
+      } catch (err) {
+        console.warn("[Background Hydration] Linked product fetch failed", err);
+      }
+    }, 150); // 150ms delay: enough to let the opening animation complete
+
+    return () => clearTimeout(timer);
+  }, [activePostId, open, isMobileReels, auth?.token, isPreview]);
+
+  const getStockCount = useCallback((lp: any) => {
+    if (!lp) return 0;
+
+    // 1. Variant detection and stock summation
+    const inventory = Array.isArray(lp.inventory) ? lp.inventory : [];
+    const hasVariants = lp.has_variants === 1 || lp.has_variants === true || inventory.length > 0;
+
+    if (hasVariants && inventory.length > 0) {
+      const total = inventory.roseuce((acc: number, item: any) => acc + (Number(item.quantity ?? item.stock ?? item.initial_quantity ?? 0)), 0);
+      return total;
+    }
+
+    // 2. Basic stock fallbacks
+    return Number(lp.total_quantity ?? lp.quantity ?? lp.stock ?? lp.total_stock ?? 0);
+  }, []);
 
   const getNoteStyles = (config: any) => {
     if (!config) return { background: "#f1f5f9" };
@@ -1609,20 +1792,20 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       ? { width: `${computedWidth}px` }
       : undefined;
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const portalTargetRef = useRef<Element | null>(null);
+  if (typeof document !== "undefined" && !portalTargetRef.current) {
+    portalTargetRef.current = document.body;
+  }
 
-  if (!open || !mounted) return null;
+  if (!open || !portalTargetRef.current) return null;
 
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
-      className={`fixed inset-0 flex items-center justify-center px-0 py-0 ${!zIndex ? 'z-[500001]' : ''}`}
-      style={zIndex ? { zIndex } : {}}
+      className="fixed inset-0 flex items-center justify-center px-0 py-0"
+      style={{ zIndex: zIndex || modalZIndex }}
       onMouseDown={onClose}
     >
       <AnimatePresence>
@@ -1646,12 +1829,15 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
               style={{
                 ...modalInlineStyle,
                 transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center",
-                height: lockHeight
+                height: !isLargeScreen ? lockHeight : undefined
               }}
-              initial={{ opacity: 0, scale: 0.3 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.3 }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              initial={isLargeScreen ? { opacity: 0, scale: 0.3 } : { y: "100%", opacity: 1 }}
+              animate={isLargeScreen ? { opacity: 1, scale: 1 } : { y: 0, opacity: 1 }}
+              exit={isLargeScreen ? { opacity: 0, scale: 0.3 } : { y: "100%", opacity: 1 }}
+              transition={isLargeScreen
+                ? { type: "spring", damping: 30, stiffness: 300 }
+                : { type: "spring", damping: 25, stiffness: 450, mass: 0.5 }
+              }
               className="relative z-10 w-full bg-white flex flex-col overflow-y-auto md:flex md:flex-row md:overflow-hidden md:w-[96vw] md:max-w-[1100px] md:h-[94vh] md:rounded-2xl shadow-2xl"
             >
               {backgroundAudioUrl && (
@@ -1690,22 +1876,21 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         <Link
                           href={currentItem.author_handle ? `/${currentItem.author_handle}` : `/user/profile/${currentItem.user.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-sm text-black font-semibold truncate hover:text-red-500 transition-colors block flex items-center gap-1"
+                          className="text-sm text-black font-semibold truncate hover:text-rose-500 transition-colors block flex items-center gap-1"
                         >
                           {currentItem.user.name}
-                          {currentItem.user.is_trusted && (
+                          {!!currentItem.verified_badge || !!currentItem.user.is_partner || !!currentItem.linked_product?.verified_badge || !!currentItem.linked_product?.trusted_partner ? (
+                            <VerifiedBadge size="xs" label="Trusted Partner" className="shrink-0" />
+                          ) : !!currentItem.user.is_trusted ? (
                             <CheckBadgeIcon className="w-4 h-4 text-blue-500 shrink-0" title="Verified Account" />
-                          )}
-                          {currentItem.user.is_partner && (
-                            <CheckBadgeIcon className="w-4 h-4 text-emerald-500 shrink-0" title="Trusted Partner" />
-                          )}
+                          ) : null}
                         </Link>
                       </div>
                     </div>
                   </div>
 
                   {!isPostOwner && !isFollowing && (
-                    <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-shadow bg-red-500 text-white">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-shadow bg-rose-500 text-white">
                       Follow
                     </button>
                   )}
@@ -1839,7 +2024,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                           pointerEvents: "none",
                                         }}
                                       >
-                                        <FaHeart className="w-20 h-20 text-red-500/90 drop-shadow-2xl" />
+                                        <FaHeart className="w-20 h-20 text-rose-500/90 drop-shadow-2xl" />
                                       </motion.div>
                                     ))}
                                   </AnimatePresence>
@@ -1900,7 +2085,10 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                         >
                                           <Search className="w-5 h-5 drop-shadow-md" />
                                         </button>
-                                        <button className="w-9 h-9 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 text-white active:scale-95 transition-transform text-white/90">
+                                        <button
+                                          onClick={handleShareClick}
+                                          className="w-9 h-9 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 text-white active:scale-95 transition-transform text-white/90"
+                                        >
                                           <Share2 className="w-5 h-5 drop-shadow-md" />
                                         </button>
                                       </div>
@@ -1918,91 +2106,134 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                           <div className="flex flex-col min-w-0">
                                             <div className="flex items-center gap-1 min-w-0">
                                               <span className="text-sm font-black text-white shadow-sm truncate">{rp.user.name}</span>
-                                              {rp.user.is_trusted && (
+                                              {!!rp.verified_badge || !!rp.user.is_partner || !!rp.linked_product?.verified_badge || !!rp.linked_product?.trusted_partner ? (
+                                                <VerifiedBadge size="xs" label="Trusted Partner" className="drop-shadow-sm" />
+                                              ) : !!rp.user.is_trusted ? (
                                                 <CheckBadgeIcon className="w-4 h-4 text-blue-500 shrink-0 drop-shadow-sm" title="Verified Account" />
-                                              )}
-                                              {rp.user.is_partner && (
-                                                <CheckBadgeIcon className="w-4 h-4 text-emerald-500 shrink-0 drop-shadow-sm" title="Trusted Partner" />
-                                              )}
+                                              ) : null}
                                             </div>
                                           </div>
                                           {!isPostOwner && !isFollowing && (
-                                            <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className="px-2.5 py-1 bg-red-500 rounded-full text-[10px] font-black text-white ml-1 active:scale-90 transition-transform">Follow</button>
+                                            <button onClick={(e) => { e.stopPropagation(); toggleFollowAuthor(); }} disabled={followLoading} className="px-2.5 py-1 bg-rose-500 rounded-full text-[10px] font-black text-white ml-1 active:scale-90 transition-transform">Follow</button>
                                           )}
                                         </div>
 
                                         {(rp.caption || rp.note_caption) && (
-                                          <p className="text-white text-sm font-medium line-clamp-2 drop-shadow-lg max-w-[90%] -mt-0.5">
+                                          <p
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setCommentSheetEntryType("caption");
+                                              setShowCommentsSheet(true);
+                                            }}
+                                            className="text-white text-sm font-medium line-clamp-2 drop-shadow-lg max-w-[90%] -mt-0.5 cursor-pointer active:opacity-70 transition-opacity"
+                                          >
                                             {rp.caption || rp.note_caption}
                                           </p>
                                         )}
 
                                         {/* Linked Product Overlay */}
-                                        {rp.is_product_linked && rp.linked_product && (
-                                          <div
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (rp.linked_product?.product_id) {
-                                                handleProductClick(Number(rp.linked_product.product_id), e);
-                                              }
-                                            }}
-                                            className={`${!(rp.caption || rp.note_caption) ? "mt-1" : ""} p-1 px-1.5 bg-white/10  rounded-[0.5rem] flex items-center gap-2.5 active:scale-[0.98] transition-all cursor-pointer group/item w-full`}
-                                          >
-                                            <div className="relative w-10 h-10 rounded-[0.4rem] overflow-hidden shrink-0">
-                                              <img
-                                                src={rp.linked_product.image_url || rp.linked_product.first_image}
-                                                className={`w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-110 ${Number(rp.linked_product.total_quantity || 0) <= 0 ? 'opacity-40 grayscale' : ''}`}
-                                                alt={rp.linked_product.title}
-                                              />
-                                              {Number(rp.linked_product.total_quantity || 0) <= 0 && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                                  <span className="text-[6px] text-white px-1 py-0.5 bg-red-600 rounded-sm  tracking-tighter">Sold Out</span>
-                                                </div>
-                                              )}
-                                            </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                              <h4 className="text-[11px] text-white truncate pr-2 leading-tight">
-                                                {rp.linked_product.title}
-                                              </h4>
-                                              <div className="flex items-center gap-2 mt-0.5 whitespace-nowrap">
-                                                <span className="text-[12px]  text-white shrink-0">
-                                                  ₦{Number(rp.linked_product.price || 0).toLocaleString()}
-                                                </span>
-                                                {getDiscountInfo(rp.linked_product) && (
-                                                  <span className="text-[8px] font-black bg-red-600 text-white px-1 rounded-sm shrink-0">
-                                                    {getDiscountInfo(rp.linked_product)?.discount}% OFF {getDiscountInfo(rp.linked_product)?.name}
+                                        {/* Linked Product Overlay */}
+                                        {(() => {
+                                          const lp = hydratedLinkedProducts[String(rp.id)] || rp.linked_product;
+                                          if (!rp.is_product_linked || !lp) return null;
+                                          return (
+                                            <div
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (lp.product_id) {
+                                                  handleProductClick(Number(lp.product_id), e);
+                                                }
+                                              }}
+                                              className={`${!(rp.caption || rp.note_caption) ? "mt-1" : ""} p-1 px-1.5 bg-white/10  rounded-[0.5rem] flex items-center gap-2.5 active:scale-[0.98] transition-all cursor-pointer group/item w-full`}
+                                            >
+                                              <div className="relative w-10 h-10 rounded-[0.4rem] overflow-hidden shrink-0 bg-slate-800">
+                                                {(() => {
+                                                  const isHydrated = !!hydratedLinkedProducts[String(rp.id)];
+                                                  const currentLp = hydratedLinkedProducts[String(rp.id)] || lp;
+                                                  const stock = getStockCount(currentLp);
+                                                  const shouldShowSoldOut = isHydrated && stock <= 0;
+                                                  const imgSrc = currentLp.image_url || currentLp.first_image || currentLp.first_image_url || currentLp.thumbnail || currentLp.image || (Array.isArray(currentLp.media) ? currentLp.media[0]?.url : undefined);
+
+                                                  if (!imgSrc || imgSrc === "") return null;
+
+                                                  return (
+                                                    <Image
+                                                      src={formatUrl(imgSrc)}
+                                                      fill
+                                                      className={`object-cover transition-transform duration-500 group-hover/item:scale-110 ${shouldShowSoldOut ? 'opacity-40 grayscale' : ''}`}
+                                                      alt={currentLp.title || "Product"}
+                                                      sizes="40px"
+                                                    />
+                                                  );
+                                                })()}
+                                                {(() => {
+                                                  const isHydrated = !!hydratedLinkedProducts[String(rp.id)];
+                                                  const lp = hydratedLinkedProducts[String(rp.id)] || rp.linked_product;
+                                                  const stock = getStockCount(lp);
+                                                  if (isHydrated && stock <= 0) {
+                                                    return (
+                                                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
+                                                        <span className="text-[6px] text-white px-1 py-0.5 bg-rose-600 rounded-sm  tracking-tighter">Sold Out</span>
+                                                      </div>
+                                                    );
+                                                  }
+                                                  return null;
+                                                })()}
+                                              </div>
+                                              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                <h4 className="text-[11px] text-white truncate pr-2 leading-tight">
+                                                  {lp.title}
+                                                </h4>
+                                                <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap overflow-hidden pr-3 w-full">
+                                                  <span className="text-[12px] text-white shrink-0 font-bold">
+                                                    ₦{getDiscountedPrice(lp).toLocaleString()}
                                                   </span>
-                                                )}
-                                                {Number(rp.linked_product.total_sold || 0) > 0 && (
-                                                  <>
-                                                    <span className="w-1 h-1 rounded-full bg-white/20 shrink-0" />
-                                                    <span className="text-[9px] text-white/80 shrink-0">{rp.linked_product.total_sold}+ Sold</span>
-                                                  </>
-                                                )}
-                                                {getPolicyText(rp.linked_product) && (
-                                                  <>
-                                                    <span className="w-1 h-1 rounded-full bg-white/20 shrink-0" />
-                                                    <span className="text-[8px] text-slate-300 truncate max-w-[100px]">{getPolicyText(rp.linked_product)}</span>
-                                                  </>
-                                                )}
+
+                                                  {Number(lp.total_sold || 0) > 0 && (
+                                                    <>
+                                                      <span className="w-0.5 h-0.5 rounded-full bg-white/40 shrink-0" />
+                                                      <span className="text-[9px] text-white/80 shrink-0">{lp.total_sold}+ Sold</span>
+                                                    </>
+                                                  )}
+                                                  {getPolicyText(lp) && (
+                                                    <>
+                                                      <span className="w-0.5 h-0.5 rounded-full bg-white/40 shrink-0" />
+                                                      <span className="text-[9px] text-slate-300 truncate max-w-[100px]">{getPolicyText(lp)}</span>
+                                                    </>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div className="shrink-0">
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const isHydrated = !!hydratedLinkedProducts[String(rp.id)];
+                                                    const lp = hydratedLinkedProducts[String(rp.id)] || rp.linked_product;
+                                                    const stock = getStockCount(lp);
+
+                                                    if (isHydrated && stock <= 0) return;
+                                                    if (lp.product_id) {
+                                                      handleProductClick(Number(lp.product_id), e);
+                                                    }
+                                                  }}
+                                                  className={`px-2.5 py-1 ${(() => {
+                                                    const isHydrated = !!hydratedLinkedProducts[String(rp.id)];
+                                                    const lp = hydratedLinkedProducts[String(rp.id)] || rp.linked_product;
+                                                    const stock = getStockCount(lp);
+                                                    return isHydrated && stock <= 0;
+                                                  })() ? 'bg-slate-600 cursor-not-allowed' : 'bg-rose-500 hover:bg-rose-600 active:scale-95'} text-white text-[9px]  rounded-full transition-all`}
+                                                >
+                                                  {(() => {
+                                                    const isHydrated = !!hydratedLinkedProducts[String(rp.id)];
+                                                    const lp = hydratedLinkedProducts[String(rp.id)] || rp.linked_product;
+                                                    const stock = getStockCount(lp);
+                                                    return isHydrated && stock <= 0 ? 'Sold out' : 'Buy now';
+                                                  })()}
+                                                </button>
                                               </div>
                                             </div>
-                                            <div className="shrink-0">
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  if (Number(rp.linked_product?.total_quantity || 0) <= 0) return;
-                                                  if (rp.linked_product?.product_id) {
-                                                    handleProductClick(Number(rp.linked_product.product_id), e);
-                                                  }
-                                                }}
-                                                className={`px-2.5 py-1 ${Number(rp.linked_product?.total_quantity || 0) <= 0 ? 'bg-slate-600 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600 active:scale-95'} text-white text-[9px]  rounded-full transition-all`}
-                                              >
-                                                {Number(rp.linked_product?.total_quantity || 0) <= 0 ? 'Sold out' : 'Buy now'}
-                                              </button>
-                                            </div>
-                                          </div>
-                                        )}
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                   )}
@@ -2056,7 +2287,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                       className="absolute inset-0 flex items-center justify-center"
                                     >
                                       {postLiked ? (
-                                        <FaHeart className="w-4.5 h-4.5 text-red-500 fill-current drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+                                        <FaHeart className="w-4.5 h-4.5 text-rose-500 fill-current drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
                                       ) : (
                                         <FaRegHeart className="w-4.5 h-4.5 text-white stroke-[2.5]" />
                                       )}
@@ -2071,7 +2302,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
                             <div className="flex items-center gap-1.5 min-w-[32px]">
                               <button
-                                onClick={(e) => { e.stopPropagation(); setShowCommentsSheet(true); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCommentSheetEntryType("icon");
+                                  setShowCommentsSheet(true);
+                                }}
                                 className="w-6 h-6 flex items-center justify-center text-white active:scale-90 transition-transform"
                                 aria-label="Open comments"
                               >
@@ -2097,8 +2332,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="fixed inset-0 z-[10000] flex flex-col justify-end pointer-events-none"
-                      style={{ transform: 'translateZ(0)' }}
+                      className="fixed inset-0 flex flex-col justify-end pointer-events-none"
+                      style={{ transform: 'translateZ(0)', zIndex: (zIndex || modalZIndex) + 50 }}
                     >
                       {/* Backdrop — only closes when tapping OUTSIDE the panel */}
                       <div
@@ -2132,6 +2367,28 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex flex-col gap-4">
+                          {/* Emoji Shortcuts */}
+                          <div
+                            className="flex items-center gap-2 overflow-x-auto pb-1 px-0.5"
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                          >
+                            {EMOJI_SHORTCUTS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newText = commentText + emoji;
+                                  setCommentText(newText);
+                                  commentTextRef.current = newText;
+                                  reelTextareaRef.current?.focus();
+                                }}
+                                className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 active:scale-90 transition-all text-xl"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
                           {replyingTo && (
                             <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 rounded-lg text-[11px] mb-1">
                               <span className="text-white/50">Replying to <span className="font-bold text-white/90">{(replyingTo as any).author_name || (replyingTo as any).user_name}</span></span>
@@ -2204,7 +2461,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 if (!text) return;
                                 handleAddComment(text);
                               }}
-                              className="px-8 py-2.5 rounded-full bg-red-600 text-white text-[13px] font-black shadow-xl shadow-red-600/20 active:scale-95 transition-all disabled:opacity-40"
+                              className="px-8 py-2.5 rounded-full bg-rose-600 text-white text-[13px] font-black shadow-xl shadow-rose-600/20 active:scale-95 transition-all disabled:opacity-40"
                             >
                               {commentPosting ? "Sending..." : "Send"}
                             </button>
@@ -2228,17 +2485,103 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
 
                         {/* Header */}
-                        <div className="px-6 py-2 border-slate-100 flex items-center justify-between shrink-0">
-                          <h3 className="text-sm text-slate-800 ">
-                            {currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? comments.length} Comments
-                          </h3>
-                          <button onClick={() => setShowCommentsSheet(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50">
-                            <XMarkIcon className="w-5 h-5 text-slate-500" />
-                          </button>
+                        <div className="px-4 py-3 border-b border-slate-50 flex flex-col shrink-0">
+                          <div className="flex items-center justify-between gap-4">
+                            {currentItem?.linked_product ? (
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleProductClick(Number(currentItem.linked_product?.product_id), e);
+                                }}
+                                className="flex-1 flex items-center gap-3 min-w-0 cursor-pointer group active:scale-[0.98] transition-all"
+                              >
+                                <div className="h-9 w-9 rounded-full overflow-hidden border border-slate-100 flex-shrink-0">
+                                  <img
+                                    src={formatUrl(currentItem.linked_product.image_url || currentItem.linked_product.first_image)}
+                                    className="w-full h-full object-cover"
+                                    alt="product"
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[13px] font-bold text-slate-800 truncate leading-tight flex items-center gap-1.5">
+                                    {currentItem.linked_product.title}
+                                    <ChevronRightIcon className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <h3 className="text-sm text-slate-800 font-bold">
+                                {(currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? comments.length) > 0 ? (
+                                  `${currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? comments.length} Comment(s)`
+                                ) : (
+                                  "Comments"
+                                )}
+                              </h3>
+                            )}
+
+                            <button onClick={() => { setShowCommentsSheet(false); setIsCommenting(false); }} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 shrink-0 active:scale-90 transition-transform">
+                              <XMarkIcon className="w-5 h-5 text-slate-500" />
+                            </button>
+                          </div>
+
+                          {currentItem?.linked_product && (
+                            <div className="mt-2 text-[11px] text-slate-400 font-bold px-1">
+                              {(currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? comments.length) > 0 ? (
+                                `${currentItem?.comment_count ?? currentItem?.total_comments ?? currentItem?.comments_count ?? comments.length} Comment(s)`
+                              ) : (
+                                "Comments"
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Scrollable Comments */}
-                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 relative pb-32">
+                        <div
+                          ref={commentsScrollRef}
+                          onScroll={handleCommentsScroll}
+                          className="flex-1 overflow-y-auto px-5 py-4 space-y-6 relative pb-32"
+                        >
+                          {/* Post Context Header (Author + Caption + Metadata) - ONLY when navigating through title */}
+                          {commentSheetEntryType === "caption" && (
+                            <div className="flex flex-col gap-3 pb-6 border-b border-slate-50 mb-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-100 flex-shrink-0">
+                                  <img src={currentItem.user.avatar} className="w-full h-full object-cover" alt="author" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-sm font-bold text-slate-900">{currentItem.user.name}</span>
+                                    {!!currentItem.verified_badge || !!currentItem.user.is_partner || !!currentItem.linked_product?.verified_badge || !!currentItem.linked_product?.trusted_partner ? (
+                                      <VerifiedBadge size="xs" label="Trusted Partner" />
+                                    ) : !!currentItem.user.is_trusted ? (
+                                      <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Verified Account" />
+                                    ) : null}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 font-medium">Post Author</span>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2 px-1">
+                                {(currentItem.caption || currentItem.note_caption) && (
+                                  <p className="text-[14px] text-slate-800 leading-relaxed">
+                                    {currentItem.caption || currentItem.note_caption}
+                                  </p>
+                                )}
+
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                                  {currentItem.location && (
+                                    <span className="flex items-center gap-1">
+                                      <i className="fi fi-rr-marker text-[10px]" />
+                                      {currentItem.location}
+                                    </span>
+                                  )}
+                                  {currentItem.location && <span>•</span>}
+                                  <span>{formatDate(currentItem.rawCreatedAt || currentItem.created_at)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {loadingComments && comments.length === 0 ? (
                             <div className="flex flex-col gap-6 ">
                               {[1, 2, 3].map((i) => (
@@ -2288,14 +2631,16 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                          <Link href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`} onClick={(e) => e.stopPropagation()} className="text-sm font-medium text-slate-400 truncate">
+                                          <Link href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`} onClick={(e) => e.stopPropagation()} className="text-sm font-medium text-slate-400 truncate flex items-center gap-1">
                                             {c.author_name}
+                                            {!!c.verified_badge ? (
+                                              <VerifiedBadge size="xs" label="Trusted Partner" className="shrink-0" />
+                                            ) : !!c.author_is_trusted ? (
+                                              <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Verified Account" />
+                                            ) : null}
                                           </Link>
-                                          {c.is_partner && (
-                                            <CheckBadgeIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0" title="Trusted Partner" />
-                                          )}
                                           {c.is_author === 1 && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
                                           )}
                                         </div>
                                         <div className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{c.comment_content}</div>
@@ -2357,7 +2702,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                               <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100 transition-all hover:bg-slate-100">First to Comment</span>
                                             )}
                                             {Boolean(c.author_liked) && (
-                                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100 text-[10px] transition-all hover:bg-red-100 cursor-default">
+                                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100 text-[10px] transition-all hover:bg-rose-100 cursor-default">
                                                 <span>Author liked</span>
                                               </div>
                                             )}
@@ -2380,14 +2725,16 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                             </Link>
                                             <div className="flex-1">
                                               <div className="flex items-center gap-2">
-                                                <Link href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`} onClick={(e) => e.stopPropagation()} className="text-xs font-medium text-slate-400">
+                                                <Link href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`} onClick={(e) => e.stopPropagation()} className="text-xs font-medium text-slate-400 flex items-center gap-1">
                                                   {r.author_name}
+                                                  {!!r.verified_badge ? (
+                                                    <VerifiedBadge size="xs" label="Trusted Partner" className="shrink-0" />
+                                                  ) : !!r.author_is_trusted ? (
+                                                    <CheckBadgeIcon className="w-3 h-3 text-blue-500 shrink-0" title="Verified Account" />
+                                                  ) : null}
                                                 </Link>
-                                                {r.is_partner && (
-                                                  <CheckBadgeIcon className="w-3 h-3 text-emerald-500 shrink-0" title="Trusted Partner" />
-                                                )}
                                                 {r.is_author === 1 && (
-                                                  <span className="text-[9px] px-1 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
+                                                  <span className="text-[9px] px-1 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
                                                 )}
                                               </div>
                                               <div className="mt-0.5 text-xs text-slate-600 whitespace-pre-wrap">{r.comment_content}</div>
@@ -2444,7 +2791,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                               </div>
 
                                               {Boolean(r.author_liked) && (
-                                                <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-red-100 cursor-default">
+                                                <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-rose-100 cursor-default">
                                                   <FaHeart className="w-2 h-2" />
                                                   <span>Author liked</span>
                                                 </div>
@@ -2461,7 +2808,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                 isExpanded ? prev.filter(id => id !== c.comment_id) : [...prev, c.comment_id]
                                               );
                                             }}
-                                            className="text-[10px] font-bold text-slate-400 hover:text-red-500 pl-1"
+                                            className="text-[10px] font-bold text-slate-400 hover:text-rose-500 pl-1"
                                           >
                                             {isExpanded ? "Hide replies" : `View ${parentReplies.length - 2} more replies`}
                                           </button>
@@ -2473,7 +2820,12 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                               });
                             })()
                           )}
-                          {comments.length > 0 && <div className="text-center text-slate-300 font-Medium mt- mb-10">-THE END-</div>}
+                          {comments.length > 0 && !hasMoreComments && <div className="text-center text-slate-300 text-sm font-Medium">-THE END-</div>}
+                          {isFetchingMore && (
+                            <div className="flex justify-center py-4">
+                              <div className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
                         </div>
 
                         {/* Input Pad (Sticky) - Expandable to match desktop */}
@@ -2491,11 +2843,33 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                           )}
 
                           {isCommenting ? (
-                            <div className="space-y-3">
+                            <div className="space-y-1">
+                              {/* Emoji Shortcuts */}
+                              <div
+                                className="flex items-center gap-2 overflow-x-auto pb-1 px-0.5"
+                                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                              >
+                                {EMOJI_SHORTCUTS.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newText = commentText + emoji;
+                                      setCommentText(newText);
+                                      commentTextRef.current = newText;
+                                      sheetTextareaRef.current?.focus();
+                                    }}
+                                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center active:scale-90 transition-all text-md"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
                               <textarea
-                                id="sheet-comment-input-active"
+                                id="desktop-comment-input-active"
                                 autoFocus
-                                ref={sheetTextareaRef}
+                                ref={desktopTextareaRef}
                                 rows={1}
                                 value={commentText}
                                 onChange={(e) => {
@@ -2551,7 +2925,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                     handleAddComment(text);
                                   }}
                                   disabled={commentPosting || !commentText.trim()}
-                                  className="px-6 py-2 rounded-full bg-red-500 text-white text-xs font-black shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:grayscale transition-all"
+                                  className="px-6 py-2 rounded-full bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-500/20 active:scale-95 transition-all disabled:opacity-40 disabled:grayscale transition-all"
                                 >
                                   {commentPosting ? "Sending..." : "Post"}
                                 </button>
@@ -2641,7 +3015,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                     pointerEvents: "none",
                                   }}
                                 >
-                                  <FaHeart className="w-20 h-20 text-red-500/90 drop-shadow-2xl" />
+                                  <FaHeart className="w-20 h-20 text-rose-500/90 drop-shadow-2xl" />
                                 </motion.div>
                               ))}
                             </AnimatePresence>
@@ -2722,7 +3096,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                             <div
                               key={i}
                               className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === currentMediaIndex
-                                ? "bg-red-500 shadow-sm shadow-red-200"
+                                ? "bg-rose-500 shadow-sm shadow-rose-200"
                                 : "bg-slate-300"
                                 }`}
                             />
@@ -2746,12 +3120,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <div className="text-base font-semibold text-slate-900 truncate">{currentItem.user.name}</div>
-                            {currentItem.user.is_trusted && (
+                            {!!currentItem.verified_badge || !!currentItem.user.is_partner || !!currentItem.linked_product?.verified_badge || !!currentItem.linked_product?.trusted_partner ? (
+                              <VerifiedBadge size="sm" label="Trusted Partner" />
+                            ) : !!currentItem.user.is_trusted ? (
                               <CheckBadgeIcon className="w-5 h-5 text-blue-500 shrink-0" title="Verified Account" />
-                            )}
-                            {currentItem.user.is_partner && (
-                              <CheckBadgeIcon className="w-4 h-4 text-emerald-500 shrink-0 drop-shadow-sm" title="Trusted Partner" />
-                            )}                          </div>
+                            ) : null}                          </div>
                         </div>
                       </div>
 
@@ -2762,14 +3135,14 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                             toggleFollowAuthor();
                           }}
                           disabled={followLoading}
-                          className="inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-sm"
+                          className="inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold transition-all bg-rose-500 text-white hover:bg-rose-600 shadow-sm"
                         >
                           Follow
                         </button>
                       )}
                     </div>
 
-                    <div className=" lg:overflow-auto">
+                    <div className="flex-1 min-h-0 lg:overflow-auto">
                       <div className="p-5 lg:p-6">
                         {currentItem.coverType === "note" && !currentItem.src ? (
                           <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed font-semibold mb-2">{currentItem.note_caption}</p>
@@ -2793,56 +3166,83 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         </div>
 
                         {/* Linked Product Section - Under the duration/location */}
-                        {currentItem.is_product_linked && currentItem.linked_product && (
-                          <div className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (currentItem.linked_product?.product_id) {
-                                  handleProductClick(Number(currentItem.linked_product.product_id), e);
-                                }
-                              }}
-                              className="p-2 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all cursor-pointer group/linked hover:bg-slate-100"
-                            >
-                              <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-white border border-slate-200">
-                                <img
-                                  src={currentItem.linked_product.image_url || currentItem.linked_product.first_image}
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover/linked:scale-110"
-                                  alt={currentItem.linked_product.title}
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover/linked:bg-black/5 flex items-center justify-center transition-all">
-                                  <EyeIcon className="w-4 h-4 text-white opacity-0 group-hover/linked:opacity-100" />
+                        {(() => {
+                          const lp = hydratedLinkedProducts[String(activePostId)] || currentItem.linked_product;
+                          if (!currentItem.is_product_linked || !lp) return null;
+                          return (
+                            <div className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (lp.product_id) {
+                                    handleProductClick(Number(lp.product_id), e);
+                                  }
+                                }}
+                                className="p-1 bg-slate-50 rounded-[0.5rem]  border-slate-100 flex items-center gap-3 active:scale-[0.98] transition-all cursor-pointer group/linked hover:bg-slate-100"
+                              >
+                                <div className="relative w-12 h-12 rounded-[0.5rem] overflow-hidden shrink-0 bg-white  border-slate-200">
+                                  {(() => {
+                                    const imgSrc = lp.image_url || lp.first_image || lp.first_image_url || lp.thumbnail || lp.image || (Array.isArray(lp.media) ? lp.media[0]?.url : undefined);
+                                    if (!imgSrc || imgSrc === "") return null;
+                                    return (
+                                      <Image
+                                        src={formatUrl(imgSrc)}
+                                        fill
+                                        className="object-cover transition-transform duration-500 group-hover/linked:scale-110"
+                                        alt={lp.title || "Product"}
+                                        sizes="48px"
+                                      />
+                                    );
+                                  })()}
+                                  <div className="absolute inset-0 bg-black/0 group-hover/linked:bg-black/5 flex items-center justify-center transition-all z-10">
+                                    <EyeIcon className="w-4 h-4 text-white opacity-0 group-hover/linked:opacity-100" />
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">
-                                  {currentItem.linked_product.title}
-                                </h4>
-                                <div className="flex items-center gap-2 mt-1 whitespace-nowrap">
-                                  <span className="text-[13px] font-black text-red-500 shrink-0">
-                                    ₦{Number(currentItem.linked_product.price || 0).toLocaleString()}
-                                  </span>
-                                  {getDiscountInfo(currentItem.linked_product) && (
-                                    <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded shrink-0">
-                                      {getDiscountInfo(currentItem.linked_product)?.discount}% OFF {getDiscountInfo(currentItem.linked_product)?.name}
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">
+                                    {lp.title}
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 mt-1 whitespace-nowrap overflow-hidden pr-2">
+                                    <span className="text-[13px] font-black text-rose-500 shrink-0">
+                                      ₦{getDiscountedPrice(lp).toLocaleString()}
                                     </span>
-                                  )}
-                                  {Number(currentItem.linked_product.total_sold || 0) > 0 && (
-                                    <>
-                                      <span className="w-1 h-1 rounded-full bg-slate-300 shrink-0" />
-                                      <span className="text-[10px] text-slate-500 shrink-0">{currentItem.linked_product.total_sold}+ Sold</span>
-                                    </>
-                                  )}
+                                    {getDiscountInfo(lp) && (
+                                      <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded shrink-0 ">
+                                        {getDiscountInfo(lp)?.name} ({getDiscountInfo(lp)?.discount}% Off)
+                                      </span>
+                                    )}
+                                    {Number(lp.total_sold || 0) > 0 && (
+                                      <>
+                                        <span className="w-1 h-1 rounded-full bg-slate-300 shrink-0" />
+                                        <span className="text-[10px] text-slate-500 shrink-0">{lp.total_sold}+ Sold</span>
+                                      </>
+                                    )}
+                                    {getPolicyText(lp) && (
+                                      <>
+                                        <span className="w-1 h-1 rounded-full bg-slate-300 shrink-0" />
+                                        <span className="text-[10px] text-slate-500 truncate max-w-[120px]">{getPolicyText(lp)}</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="shrink-0 pr-1">
-                                <button className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[10px]  rounded-full transition-all active:scale-90 shadow-sm">
-                                  Buy now
-                                </button>
+                                <div className="shrink-0 pr-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (getStockCount(lp) <= 0) return;
+                                      if (lp.product_id) {
+                                        handleProductClick(Number(lp.product_id), e);
+                                      }
+                                    }}
+                                    className={`px-4 py-1.5 ${getStockCount(lp) <= 0 ? 'bg-slate-500 cursor-not-allowed' : 'bg-rose-500 hover:bg-rose-600 active:scale-95'} text-white text-[10px]  rounded-full transition-all shadow-sm`}
+                                  >
+                                    {getStockCount(lp) <= 0 ? 'Sold out' : 'Buy now'}
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       <div className="border-b border-slate-200" />
@@ -2862,7 +3262,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                             <span className="text-xs font-medium text-slate-700">Loading...</span>
                           </div>
                         ) : commentsError ? (
-                          <div className="text-xs text-red-500">{commentsError}</div>
+                          <div className="text-xs text-rose-500">{commentsError}</div>
                         ) : comments.length === 0 ? (
                           <div className="flex flex-col items-center justify-center py-8 gap-2">
                             <img src="/assets/images/message-icons.png" alt="No comments" className="w-30 opacity-50" />
@@ -2905,16 +3305,18 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                           <Link
                                             href={c.author_handle ? `/${c.author_handle}` : `/user/profile/${c.user_id}`}
                                             onClick={(e) => e.stopPropagation()}
-                                            className="text-sm font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
+                                            className="text-sm font-medium text-slate-400 truncate hover:text-rose-500 transition-colors"
                                           >
                                             {c.author_name}
                                           </Link>
-                                          {c.author_is_trusted && (
-                                            <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                          )}
+                                          {!!c.verified_badge ? (
+                                            <VerifiedBadge size="xs" label="Trusted Partner" />
+                                          ) : !!c.author_is_trusted ? (
+                                            <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" title="Verified Account" />
+                                          ) : null}
                                         </div>
                                         {c.is_author === 1 && (
-                                          <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
+                                          <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
                                         )}
                                       </div>
 
@@ -2980,7 +3382,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                             <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100  transition-all hover:bg-slate-100">First to Comment</span>
                                           )}
                                           {Boolean(c.author_liked) && (
-                                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[10px] transition-all hover:bg-red-100 cursor-default">
+                                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[10px] transition-all hover:bg-rose-100 cursor-default">
                                               <FaHeart className="w-2 h-2" />
                                               <span>Author liked</span>
                                             </div>
@@ -3022,12 +3424,17 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                   <Link
                                                     href={r.author_handle ? `/${r.author_handle}` : `/user/profile/${r.user_id}`}
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="text-xs font-medium text-slate-400 truncate hover:text-red-500 transition-colors"
+                                                    className="text-xs font-medium text-slate-400 truncate hover:text-rose-500 transition-colors"
                                                   >
                                                     {r.author_name}
                                                   </Link>
+                                                  {!!r.verified_badge ? (
+                                                    <VerifiedBadge size="xs" label="Trusted Partner" />
+                                                  ) : !!r.author_is_trusted ? (
+                                                    <CheckBadgeIcon className="w-3 h-3 text-blue-500 shrink-0" title="Verified Account" />
+                                                  ) : null}
                                                   {r.is_author === 1 && (
-                                                    <span className="text-[9px] inline-flex items-center px-1 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 font-bold">Author</span>
+                                                    <span className="text-[9px] inline-flex items-center px-1 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
                                                   )}
                                                 </div>
 
@@ -3090,7 +3497,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                 </div>
 
                                                 {Boolean(r.author_liked) && (
-                                                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-red-100 cursor-default">
+                                                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-rose-100 cursor-default">
                                                     <FaHeart className="w-2 h-2" />
                                                     <span>Author liked</span>
                                                   </div>
@@ -3117,7 +3524,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                   e.stopPropagation();
                                                   setExpandedParents(prev => [...prev, c.comment_id]);
                                                 }}
-                                                className="text-[10px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
+                                                className="text-[10px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
                                               >
                                                 View {parentReplies.length - 2} more replies
                                                 <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-current transform rotate-0 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
@@ -3128,7 +3535,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                   e.stopPropagation();
                                                   setExpandedParents(prev => prev.filter(id => id !== c.comment_id));
                                                 }}
-                                                className="text-[10px] font-bold text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
+                                                className="text-[10px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1.5 transition-colors py-1 pl-1"
                                               >
                                                 Hide replies
                                                 <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-current transform rotate-180 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
@@ -3158,7 +3565,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                             </span>
                             <button
                               onClick={() => { setReplyingTo(null); if (!commentText) setIsCommenting(false); }}
-                              className="text-slate-400 hover:text-red-500"
+                              className="text-slate-400 hover:text-rose-500"
                             >
                               <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M6 18L18 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                             </button>
@@ -3187,7 +3594,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 }
                               }}
                               placeholder="Say something..."
-                              className="w-full rounded-2xl bg-gray-100 px-4 py-2 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-red-500 outline-none transition focus:ring-1 focus:ring-gray-300 resize-none overflow-hidden leading-tight"
+                              className="w-full rounded-2xl bg-gray-100 px-4 py-2 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-rose-500 outline-none transition focus:ring-1 focus:ring-gray-300 resize-none overflow-hidden leading-tight"
                               onMouseDown={(e) => e.stopPropagation()}
                             />
 
@@ -3213,7 +3620,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                   handleAddComment(text);
                                 }}
                                 disabled={commentPosting || !commentText.trim()}
-                                className="h-7 flex px-4 items-center justify-center rounded-full bg-red-600 text-white shadow-lg shadow-red-500/20 hover:brightness-105 active:scale-95 text-sm disabled:opacity-50 disabled:grayscale transition-all"
+                                className="h-7 flex px-4 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-500/20 hover:brightness-105 active:scale-95 text-sm disabled:opacity-50 disabled:grayscale transition-all"
                                 title="Send comment"
                               >
                                 {commentPosting ? (
@@ -3236,7 +3643,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                               }}
                               className="flex-1 inline-flex items-center border border-slate-300 gap-3 px-5 py-2 bg-slate-50 hover:bg-slate-100 rounded-full text-sm text-slate-500 transition-all border border-slate-200/50 group"
                             >
-                              <MessageCircleMore className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+                              <MessageCircleMore className="w-4 h-4 text-slate-400 group-hover:text-rose-500 transition-colors" />
                               <span className="text-[13px] font-medium">Add a comment...</span>
                             </button>
 
@@ -3277,15 +3684,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                               </button>
 
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toast.info("Opening share options...");
-                                }}
+                                onClick={handleShareClick}
                                 className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-slate-600 hover:bg-slate-50 transition-colors group"
                                 title="Share post"
                               >
-
-                                <ArrowUpRightFromSquareIcon className="w-5 h-5 text-slate-800 group-hover:text-red-500 transition-colors" />
+                                <ArrowUpRightFromSquareIcon className="w-5 h-5 text-slate-800 group-hover:text-rose-500 transition-colors" />
                               </button>
                             </div>
                           </div>
@@ -3320,6 +3723,15 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                 payload={selectedProductData}
                 onProductClick={(id) => handleProductClick(Number(id))}
                 ignoreRouterBack={true}
+                isFromReel={isMobileReels}
+                onExpand={() => {
+                  if (activeVideoRef.current) activeVideoRef.current.pause();
+                  setIsPaused(true);
+                }}
+                onCollapse={() => {
+                  if (activeVideoRef.current) activeVideoRef.current.play();
+                  setIsPaused(false);
+                }}
               />
             )}
 
@@ -3394,16 +3806,16 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                       <button
                         onClick={() => {
                           setShowLongTapMenu(false);
-                          toast.info("Opening share options...");
+                          handleShareClick();
                         }}
                         className={`w-full flex items-center gap-3 active:scale-[0.98] transition-all group ${menuPosition ? 'p-2.5 rounded-lg hover:bg-slate-50' : 'p-4 rounded-2xl bg-slate-50 hover:bg-slate-100'}`}
                       >
-                        <div className={`${menuPosition ? 'w-8 h-8' : 'w-11 h-11'} rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-500/20`}>
+                        <div className={`${menuPosition ? 'w-8 h-8' : 'w-11 h-11'} rounded-full bg-rose-500 flex items-center justify-center text-white shadow-lg shadow-rose-500/20`}>
                           <UserGroupIcon className={`${menuPosition ? 'w-4 h-4' : 'w-5 h-5'}`} />
                         </div>
                         <div className="flex flex-col items-start text-left">
-                          <span className={`${menuPosition ? 'text-xs' : 'text-sm'} font-bold text-slate-800`}>Share to Friends</span>
-                          {!menuPosition && <span className="text-[10px] text-slate-500 font-medium">Direct message to connections</span>}
+                          <span className={`${menuPosition ? 'text-xs' : 'text-sm'} font-bold text-slate-800`}>Share to Socials</span>
+                          {!menuPosition && <span className="text-[10px] text-slate-500 font-medium">Post to WhatsApp, Twitter, etc.</span>}
                         </div>
                       </button>
 
@@ -3416,6 +3828,20 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
           </>
         )}
       </AnimatePresence>
+      {isPostShareModalOpen && (
+        <PostShareModal
+          isOpen={isPostShareModalOpen}
+          onClose={() => setIsPostShareModalOpen(false)}
+          shareUrl={shareUrl}
+          title={(isMobileReels ? reelsList[currentReelIndex]?.caption : post.caption) || "Check out this reel on Stoqle!"}
+          isLoading={isGeneratingShareLink}
+          onGenerate={async () => {
+            const activeItem = isMobileReels ? reelsList[currentReelIndex] : post;
+            return generateShareLink(activeItem?.id || activePostId);
+          }}
+          zIndex={getNextZIndex()}
+        />
+      )}
     </div>,
     document.body
   );

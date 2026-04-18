@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import {
   ShoppingBag,
   ShieldCheck,
@@ -31,6 +31,11 @@ import { useAuth } from "@/src/context/authContext";
 import { fetchBusinessMe } from "@/src/lib/api/productApi";
 import { toast } from "sonner";
 
+// Policy Modals
+import SevenDayReturnModal from "@/src/components/business/policyModal/sevenDayReturnModal";
+import ReturnShippingSubsidyModal from "@/src/components/business/policyModal/returnShippingSubsidyModal";
+import LateShipmentCompensationModal from "@/src/components/business/policyModal/lateShipmentCompensationModal";
+
 export default function VendorOnboardingPage() {
   const router = useRouter();
   const auth = useAuth();
@@ -39,13 +44,35 @@ export default function VendorOnboardingPage() {
   const [activeSection, setActiveSection] = useState("welcome");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Modal States
+  const [modalOpen, setModalOpen] = useState({
+    sevenDay: false,
+    subsidy: false,
+    lateShipment: false
+  });
+
   useEffect(() => {
     const loadData = async () => {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       if (!token) return;
       try {
         const biz = await fetchBusinessMe(token);
-        setBusinessData(biz?.data?.business ?? biz?.business ?? biz);
+
+        // Fetch full profile manually to get accurate stats not isolated within business
+        const profileRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/auth/profile/me`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        }).catch(() => null);
+        const profileJson = profileRes ? await profileRes.json().catch(() => null) : null;
+
+        const businessParams = biz?.data?.business ?? biz?.business ?? biz;
+        const bizStatsParams = biz?.data?.stats ?? biz?.stats ?? {};
+        const profileStatsParams = profileJson?.data?.stats ?? profileJson?.stats ?? {};
+
+        // Merge stats
+        setBusinessData({
+          ...businessParams,
+          stats: { ...bizStatsParams, ...profileStatsParams }
+        });
       } catch (e) {
         console.error("Failed to load business data", e);
       } finally {
@@ -74,7 +101,7 @@ export default function VendorOnboardingPage() {
   return (
     <div className=" bg-slate-50 font-sans text-slate-900 overflow-x-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-4 flex lg:hidden items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.back()}
@@ -107,44 +134,36 @@ export default function VendorOnboardingPage() {
         </button>
       </header>
 
-      <div className=" mx-auto px-6 py-8 pb-32">
+      <div className=" mx-auto py-8 pb-32">
         {/* Progress Nav */}
 
 
         {/* Hero Section */}
-        <section id="welcome" className="mb-20">
+        <section id="welcome" className="mb-20 px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="text-center"
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-rose-50 text-rose-600 rounded-[0.5rem] text-[10px] font-black tracking-widest mb-4">
-              <Zap className="w-3 h-3" /> Step into the Future of Commerce
-            </div>
+
             <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">
               Build your <span className="text-rose-600">Digital Empire</span> on Stoqle.
             </h2>
-            <p className="text-slate-500 max-w-2xl mx-auto text-sm md:text-md leading-relaxed mb-10">
-              Welcome to the elite circle of merchants. We've built the most powerful tools to help you list, sell, and grow while ensuring your customers trust every transaction.
-            </p>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
               <StatCard label="Smooth Listing" value="Instant" icon={ShoppingBag} color="rose" />
               <StatCard label="Trust Badges" value="Included" icon={ShieldCheck} color="blue" />
-              <StatCard label="Smart Growth" value="AI Powered" icon={Zap} color="amber" />
+              <StatCard label="Smart Growth" value="Standard Policy" icon={Zap} color="amber" />
             </div>
           </motion.div>
         </section>
 
-        {/* Adding Products Section */}
-        <section id="products" className="mb-24 scroll-mt-24">
-          <SectionHeader
-            title="Mastering Product Listing"
-            subtitle="Follow this professional workflow to ensure your products stand out and sell faster."
-            icon={ShoppingBag}
-            color="rose"
-          />
+        {/* Organize Your Customers Animated Section */}
+        <OrganizeCustomersSection />
 
+        {/* Adding Products Section */}
+        <section id="products" className="mb-24 scroll-mt-24 px-4 bg-slate-200 p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div className="space-y-8">
               <TutorialStep
@@ -161,12 +180,18 @@ export default function VendorOnboardingPage() {
               />
               <TutorialStep
                 num="03"
-                title="Smarter Variants & SKUs"
-                desc="If your product has multiple attributes like Size and Color, use our 'Combination' logic. It generates unique SKUs for every pair (e.g. Red-XL), allowing you to set specific stock and pricing for each."
-                icon={Tag}
+                title="Structured Data: Parameters"
+                desc="Add specific attributes like Brand, Material, or Technical specs. These parameters help buyers filter your products precisely in the Market."
+                icon={Info}
               />
               <TutorialStep
                 num="04"
+                title="Smarter Variants & SKUs"
+                desc="If your product has multiple attributes like Size and Color, use our 'Combination' logic. It generates unique SKUs for every pair (e.g. rose-XL), allowing you to set specific stock and pricing for each."
+                icon={Tag}
+              />
+              <TutorialStep
+                num="05"
                 title="Policy Overrides"
                 desc="Specific products may need longer shipping Prep time or different return rules. You can override your global store settings for any individual product listing."
                 icon={ShieldCheck}
@@ -192,7 +217,7 @@ export default function VendorOnboardingPage() {
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-black text-slate-900">₦250,000</span>
                     <div className="flex -space-x-2">
-                      <div className="w-6 h-6 rounded-full bg-red-500 border-2 border-white"></div>
+                      <div className="w-6 h-6 rounded-full bg-rose-500 border-2 border-white"></div>
                       <div className="w-6 h-6 rounded-full bg-blue-500 border-2 border-white"></div>
                       <div className="w-6 h-6 rounded-full bg-slate-300 border-2 border-white flex items-center justify-center text-[8px] font-bold">+2</div>
                     </div>
@@ -204,7 +229,7 @@ export default function VendorOnboardingPage() {
         </section>
 
         {/* Policies Section */}
-        <section id="policies" className="mb-24 scroll-mt-24">
+        <section id="policies" className="mb-24 scroll-mt-24 px-4">
           <SectionHeader
             title="Building Bulletproof Trust"
             subtitle="Policies aren't just rules; they are your path to 5-star ratings."
@@ -219,6 +244,7 @@ export default function VendorOnboardingPage() {
               icon={RotateCcw}
               color="emerald"
               modal="sevenDay"
+              onClick={() => setModalOpen(prev => ({ ...prev, sevenDay: true }))}
             />
             <PolicyCard
               title="Return Shipping Subsidy"
@@ -226,6 +252,7 @@ export default function VendorOnboardingPage() {
               icon={Truck}
               color="blue"
               modal="subsidy"
+              onClick={() => setModalOpen(prev => ({ ...prev, subsidy: true }))}
             />
             <PolicyCard
               title="Rapid Refund System"
@@ -239,6 +266,7 @@ export default function VendorOnboardingPage() {
               icon={Clock}
               color="violet"
               modal="lateShipment"
+              onClick={() => setModalOpen(prev => ({ ...prev, lateShipment: true }))}
             />
             <PolicyCard
               title="Fake One, Pay Four"
@@ -281,7 +309,7 @@ export default function VendorOnboardingPage() {
         </section>
 
         {/* Promotions Section */}
-        <section id="promotions" className="mb-24 scroll-mt-24">
+        <section id="promotions" className="mb-24 scroll-mt-24 px-4">
           <SectionHeader
             title="Accelerate Your Sales"
             subtitle="Strategic discounts and seasonal campaigns to move inventory fast."
@@ -351,7 +379,7 @@ export default function VendorOnboardingPage() {
         </section>
 
         {/* Flyer Section */}
-        <section id="flyer" className="mb-24 scroll-mt-24">
+        <section id="flyer" className="mb-24 scroll-mt-24 px-4">
           <SectionHeader
             title="Your Brand, Everywhere"
             subtitle="Generate a stunning flyer for your business to share on WhatsApp and Instagram."
@@ -418,7 +446,7 @@ export default function VendorOnboardingPage() {
         </section>
 
         {/* Final CTA */}
-        <section className="text-center bg-white rounded-[0.5rem] p-12 py-20 border border-slate-100 shadow-2xl shadow-rose-100/50">
+        <section className="text-center bg-white rounded-[0.5rem] p-12 py-20 border border-slate-100 shadow-2xl shadow-rose-100/50 px-4">
           <div className="w-16 h-16 bg-rose-100 rounded-[0.5rem] flex items-center justify-center text-rose-600 mx-auto mb-8">
             <Store className="w-8 h-8" />
           </div>
@@ -436,6 +464,20 @@ export default function VendorOnboardingPage() {
           </div>
         </section>
       </div>
+
+      {/* Policy Modals */}
+      <SevenDayReturnModal
+        open={modalOpen.sevenDay}
+        onClose={() => setModalOpen(prev => ({ ...prev, sevenDay: false }))}
+      />
+      <ReturnShippingSubsidyModal
+        open={modalOpen.subsidy}
+        onClose={() => setModalOpen(prev => ({ ...prev, subsidy: false }))}
+      />
+      <LateShipmentCompensationModal
+        open={modalOpen.lateShipment}
+        onClose={() => setModalOpen(prev => ({ ...prev, lateShipment: false }))}
+      />
     </div>
   );
 }
@@ -453,7 +495,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string, value: s
       <div className={`w-10 h-10 rounded-[0.5rem] flex items-center justify-center mb-3 ${colors[color]}`}>
         <Icon className="w-5 h-5" />
       </div>
-      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{label}</p>
+      <p className="text-[10px] font-bold text-slate-400  mb-1">{label}</p>
       <p className="text-lg font-black text-slate-900">{value}</p>
     </div>
   );
@@ -468,9 +510,7 @@ function SectionHeader({ title, subtitle, icon: Icon, color }: { title: string, 
   };
   return (
     <div className="mb-10">
-      <div className={`w-12 h-12 rounded-[0.5rem] flex items-center justify-center mb-6 shadow-sm ${colors[color]}`}>
-        <Icon className="w-6 h-6" />
-      </div>
+
       <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-2">{title}</h3>
       <p className="text-slate-500 text-sm md:text-md max-w-xl">{subtitle}</p>
     </div>
@@ -482,24 +522,25 @@ function TutorialStep({ num, title, desc, icon: Icon }: { num: string, title: st
     <div className="group flex gap-5">
       <div className="flex-shrink-0">
         <div className="text-[10px] font-black text-slate-300 mb-2 tracking-widest">{num}</div>
-        <div className="w-10 h-10 bg-white border border-slate-100 rounded-[0.5rem] flex items-center justify-center text-slate-400 group-hover:border-rose-400 group-hover:text-rose-500 group-hover:bg-rose-50 transition-all shadow-sm">
+        <div className="w-10 h-10 bg-white border border-slate-100 rounded-[0.5rem] flex items-center justify-center text-slate-400 group-hover:border-rose-400 group-hover:text-rose-500 group-hover:bg-rose-50 transition-all ">
           <Icon className="w-5 h-5" />
         </div>
       </div>
       <div className="pt-2">
-        <h4 className="font-bold text-slate-800 mb-1.5 group-hover:text-rose-600 transition-colors uppercase tracking-tight">{title}</h4>
+        <h4 className="font-bold text-slate-800 mb-1.5 group-hover:text-rose-600 transition-colors  tracking-tight">{title}</h4>
         <p className="text-xs text-slate-500 leading-relaxed font-medium">{desc}</p>
       </div>
     </div>
   );
 }
 
-function PolicyCard({ title, desc, icon: Icon, color, modal }: { title: string, desc: string, icon: any, color: string, modal?: string }) {
+function PolicyCard({ title, desc, icon: Icon, color, modal, onClick }: { title: string, desc: string, icon: any, color: string, modal?: string, onClick?: () => void }) {
   const colors: Record<string, string> = {
     emerald: "bg-emerald-50 text-emerald-600",
     blue: "bg-blue-50 text-blue-600",
     rose: "bg-rose-50 text-rose-600",
-    amber: "bg-amber-50 text-amber-600"
+    amber: "bg-amber-50 text-amber-600",
+    violet: "bg-violet-50 text-violet-600"
   };
   return (
     <div className="group bg-white p-6 rounded-[0.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
@@ -509,7 +550,10 @@ function PolicyCard({ title, desc, icon: Icon, color, modal }: { title: string, 
       <h4 className="font-black text-slate-800 mb-2">{title}</h4>
       <p className="text-xs text-slate-500 leading-relaxed mb-4">{desc}</p>
       {modal && (
-        <button className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 group-hover:text-slate-900 transition-colors">
+        <button
+          onClick={onClick}
+          className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 group-hover:text-slate-900 transition-colors"
+        >
           Learn More <ChevronRight className="w-3 h-3" />
         </button>
       )}
@@ -540,18 +584,25 @@ function FlyerPreview({ data, user, formatUrl }: { data: any, user: any, formatU
   const bgImage = formatUrl(data?.bg_photo_url || user?.bg_photo_url) || "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop";
   const logo = formatUrl(data?.business_logo || data?.logo || user?.profile_pic || user?.profile_photo_url || user?.avatar_url);
   const businessName = data?.business_name || user?.business_name || user?.username || "BUSINESS NAME";
-  const stoqleId = data?.business_id || user?.id || "000001";
+  const stoqleId = data?.stoqle_id || user?.stoqle_id || data?.business_id || user?.id || "00000000001";
+
+  // Safely attempt to extract followers count from various possible backend formats
+  const followersCount =
+    data?.followersCount ?? data?.follower_count ?? data?.followers ??
+    user?.followersCount ?? user?.follower_count ?? user?.followers ??
+    data?.stats?.followers ?? data?.stats?.follower_count ??
+    user?.stats?.followers ?? user?.stats?.follower_count ?? 0;
 
   return (
     <div className="relative w-full max-w-sm aspect-[4/6] bg-slate-900 rounded-[0.5rem] shadow-2xl overflow-hidden transform hover:rotate-1 transition-transform duration-500 border-[6px] border-white">
-      {/* Background Photo - Full Height to show through corners */}
-      <div className="absolute inset-0 z-0">
+      {/* Background Photo - Top portion only */}
+      <div className="absolute top-0 left-0 right-0 h-[40%] z-0">
         <img src={bgImage} className="w-full h-full object-cover" alt="Background" />
         <div className="absolute inset-0 bg-black/40"></div>
       </div>
 
       {/* Bottom 75% - Solid Red Block with All Content */}
-      <div className="absolute bottom-0 left-0 right-0 h-[70%] bg-red-600 rounded-t-[2rem] z-10 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
+      <div className="absolute bottom-0 left-0 right-0 h-[70%] bg-gradient-to-br from-rose-900 via-rose-700 to-rose-500 rounded-t-[2rem] z-10 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
         <div className="relative h-full flex flex-col p-8 justify-between text-white">
           {/* Main Content (Logo, Name, ID) */}
           <div className="flex flex-col items-start mt-2">
@@ -566,7 +617,8 @@ function FlyerPreview({ data, user, formatUrl }: { data: any, user: any, formatU
             </div>
             <h2 className="text-xl font-medium leading-tight tracking-tighter mb-1 drop-shadow-lg">{businessName}</h2>
             <div className=" rounded-[0.5rem]">
-              <p className="text-[10px] text-white ">Stoqle ID: {stoqleId.toString().padStart(6, '0')}</p>
+              <p className="text-[10px] text-white ">Stoqle ID: {stoqleId}</p>
+              <p className="text-[10px] text-white/80 mt-0.5">{Number(followersCount).toLocaleString()} Followers</p>
             </div>
           </div>
 
@@ -620,5 +672,53 @@ function DirectDiscountIcon(props: any) {
     >
       <path d="M11 2L5.5 13h13L13 22" />
     </svg>
+  );
+}
+
+function OrganizeCustomersSection() {
+  const customerSectionRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: customerSectionRef,
+    offset: ["start end", "end start"]
+  });
+
+  const bgScaleFactor = useTransform(scrollYProgress, [0, 0.4, 0.6, 1], [0.8, 1, 1, 0.8]);
+  const bgBorderRadius = useTransform(scrollYProgress, [0, 0.4, 0.6, 1], ["40px", "0px", "0px", "40px"]);
+  const opacityFactor = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0, 1, 1, 0]);
+  const yOffset = useTransform(scrollYProgress, [0, 0.4, 0.6, 1], [100, 0, 0, -100]);
+
+  return (
+    <section ref={customerSectionRef} className="relative w-full h-[80vh] flex items-center justify-center mb-20 outline-none">
+      <motion.div
+        style={{
+          scaleX: bgScaleFactor,
+          borderRadius: bgBorderRadius,
+        }}
+        className="absolute inset-0 bg-slate-900 overflow-hidden shadow-2xl flex items-center justify-center"
+      >
+        <div className="absolute top-0 right-0 w-96 h-96 bg-rose-600/20 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-600/20 blur-[120px] rounded-full pointer-events-none" />
+      </motion.div>
+
+      <motion.div
+        style={{
+          opacity: opacityFactor,
+          y: yOffset
+        }}
+        className="relative z-10 max-w-4xl mx-auto px-8 text-center text-white"
+      >
+
+        <h2 className="lg:text-4xl text-[30px] font-black mb-8 leading-[1.1] tracking-tight">
+          Organize your customers.<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-amber-300">
+            Stay engaged & alert.
+          </span>
+        </h2>
+
+        <p className="lg:text-md text-[12px] text-slate-300 max-w-2xl mx-auto leading-relaxed font-medium">
+          We've embedded powerful CRM tools directly into your dashboard. Group customers by buying habits, send targeted broadcast offers, and never miss an opportunity to turn a one-time buyer into a lifelong fan.
+        </p>
+      </motion.div>
+    </section>
   );
 }

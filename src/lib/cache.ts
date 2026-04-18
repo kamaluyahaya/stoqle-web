@@ -41,3 +41,11 @@ export const MESSAGES_CACHE = {
   lastFetchedAt: 0,
   roomsFetchedAt: {} as Record<string, number>,
 };
+
+export const SHOP_CACHE: Record<string, {
+  profileApi: any,
+  products: any[],
+  lastFetchedAt: number,
+  activeNav: string,
+  categories: string[],
+}> = {};

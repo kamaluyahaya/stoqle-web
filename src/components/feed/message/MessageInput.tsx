@@ -3,6 +3,7 @@
 import { Send, Mic, Square, Play, Pause, Trash2, Volume2 } from "lucide-react";
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useAudio } from "@/src/context/audioContext";
+import { EMOJI_SHORTCUTS } from "@/src/lib/constants/emojis";
 
 type MessageInputProps = {
     value: string;
@@ -42,6 +43,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const animationFrameRef = useRef<number | null>(null);
+    const [isFocused, setIsFocused] = useState(false);
     const { playingAudioId, registerPlayback } = useAudio();
 
     // ⚡ CONCURRENCY CONTROL: Stop playing if another audio starts
@@ -227,12 +229,35 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     };
 
     return (
-        <div className="flex flex-col w-full gap-1">
+        <div className="flex flex-col w-full gap-1 overflow-hidden">
+            {/* Emoji Shortcuts */}
+            {isFocused && (
+                <div
+                    className="w-full flex items-center gap-2 overflow-x-auto pb-1 px-4 no-scrollbar animate-in fade-in slide-in-from-bottom-1"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                >
+                    {EMOJI_SHORTCUTS.map((emoji) => (
+                        <button
+                            key={emoji}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()} // ⚡ CRITICAL: Prevents blur from firing on textarea
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange(value + emoji);
+                                textareaRef.current?.focus();
+                            }}
+                            className="flex-shrink-0 w-8 h-8 flex items-center justify-center active:scale-90 transition-all text-sm"
+                        >
+                            {emoji}
+                        </button>
+                    ))}
+                </div>
+            )}
 
-            <div className="p-1 border-gray-100 flex items-end gap-3">
+            <div className="w-full p-1 border-gray-100 flex items-end gap-3">
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2.5  rounded-full bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors shadow-sm"
+                    className="p-2.5  rounded-full bg-gray-50 text-gray-500 hover:bg-rose-50 hover:text-rose-500 transition-colors shadow-sm"
                     title="Attach file"
                 >
                     <svg
@@ -264,7 +289,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                         <div className="flex items-center gap-3 bg-gray-50 rounded-3xl px-4 py-2 border border-slate-200 animate-in fade-in slide-in-from-bottom-2">
                             <button
                                 onClick={togglePlayback}
-                                className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                                className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 active:scale-95 transition-transform"
                             >
                                 {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
                             </button>
@@ -273,7 +298,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                                 {signalLevels.map((h, i) => (
                                     <div
                                         key={i}
-                                        className={`w-1 rounded-full transition-all duration-75 ${isPlaying ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`}
+                                        className={`w-1 rounded-full transition-all duration-75 ${isPlaying ? 'bg-rose-500 animate-pulse' : 'bg-gray-300'}`}
                                         style={{ height: `${isPlaying ? Math.max(4, Math.random() * 20) : 4}px` }}
                                     />
                                 ))}
@@ -281,7 +306,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
                             <button
                                 onClick={deleteRecording}
-                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                className="p-2 text-gray-400 hover:text-rose-500 transition-colors"
                             >
                                 <Trash2 size={16} />
                             </button>
@@ -294,23 +319,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                             />
                         </div>
                     ) : isRecording ? (
-                        <div className="flex items-center gap-3 bg-red-50 rounded-3xl px-4 py-2 border border-red-100 animate-in slide-in-from-left-2">
+                        <div className="flex items-center gap-3 bg-rose-50 rounded-3xl px-4 py-2 border border-rose-100 animate-in slide-in-from-left-2">
                             <div className="flex items-center gap-1 min-w-[60px] justify-center">
                                 {signalLevels.map((h, i) => (
-                                    <div key={i} className="w-1 bg-red-500 rounded-full transition-all duration-75" style={{ height: `${h}px` }} />
+                                    <div key={i} className="w-1 bg-rose-500 rounded-full transition-all duration-75" style={{ height: `${h}px` }} />
                                 ))}
                             </div>
-                            <span className="flex-1 text-xs font-bold text-red-600">Recording...</span>
-                            <span className="text-[10px] font-bold text-red-500 tabular-nums">{formatTime(recordingTime)}</span>
-                            <button onClick={cancelRecording} className="text-[10px]  tracking-widest font-black text-red-400">Cancel</button>
+                            <span className="flex-1 text-xs font-bold text-rose-600">Recording...</span>
+                            <span className="text-[10px] font-bold text-rose-500 tabular-nums">{formatTime(recordingTime)}</span>
+                            <button onClick={cancelRecording} className="text-[10px]  tracking-widest font-black text-rose-400">Cancel</button>
                         </div>
                     ) : (
                         <textarea
                             ref={textareaRef}
                             onFocus={(e) => {
+                                setIsFocused(true);
                                 // Move cursor to end on focus
                                 const val = e.target.value;
                                 e.target.setSelectionRange(val.length, val.length);
+                            }}
+                            onBlur={() => {
+                                // Slight delay to allow emoji click to fire before hiding
+                                setTimeout(() => setIsFocused(false), 200);
                             }}
                             value={value}
                             onChange={(e) => {
@@ -337,7 +367,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         py-2
         pr-11
         text-sm
-        caret-red-500
+        caret-rose-500
         text-gray-500
         transition
         focus:outline-none focus:ring-0
@@ -379,7 +409,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                         }}
                         disabled={isSending}
                         className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-semibold shadow-md active:scale-95 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed group
-                            ${isRecording ? 'bg-red-600 scale-125 shadow-red-200' : (value.trim() || selectedFile || audioUrl || alwaysAllowSend) ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
+                            ${isRecording ? 'bg-rose-600 scale-125 shadow-rose-200' : (value.trim() || selectedFile || audioUrl || alwaysAllowSend) ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
                         `}
                     >
                         {isSending ? (
@@ -394,7 +424,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     </button>
 
                     {isRecording && (
-                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg whitespace-nowrap animate-bounce">
+                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-rose-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg whitespace-nowrap animate-bounce">
                             Release to finish recording
                         </div>
                     )}

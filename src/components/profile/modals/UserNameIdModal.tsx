@@ -13,7 +13,7 @@ type Props = {
 
 export default function UserNameIdModal({ open, initialValue, onClose, onSave }: Props) {
   const [fullName, setFullName] = useState("");
-  const [userId, setUserId] = useState("");
+  const [stoqleId, setStoqleId] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -21,10 +21,10 @@ export default function UserNameIdModal({ open, initialValue, onClose, onSave }:
       try {
         const p = JSON.parse(initialValue);
         setFullName(p.full_name || "");
-        setUserId(p.user_id || "");
+        setStoqleId(p.stoqle_id || "");
       } catch (e) {
         setFullName("");
-        setUserId("");
+        setStoqleId("");
       }
     }
   }, [open, initialValue]);
@@ -39,7 +39,7 @@ export default function UserNameIdModal({ open, initialValue, onClose, onSave }:
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -67,9 +67,9 @@ export default function UserNameIdModal({ open, initialValue, onClose, onSave }:
                 onChange={setFullName}
               />
               <div className="space-y-1.5 px-1">
-                <label className="text-xs font-bold text-slate-500">Stoqle ID</label>
-                <div className="px-5 py-4 rounded-2xl bg-slate-100 text-slate-500 text-sm font-medium">
-                  @{userId || "---"}
+                <label className="text-xs text-slate-500">Stoqle ID</label>
+                <div className="px-5 py-2 rounded-2xl bg-slate-100 text-slate-500 text-sm font-medium">
+                  @{stoqleId || "---"}
                 </div>
                 <p className="text-[10px] text-slate-400">Stoqle ID cannot be changed currently.</p>
               </div>
@@ -77,14 +77,14 @@ export default function UserNameIdModal({ open, initialValue, onClose, onSave }:
             <div className="mt-8 flex gap-3 justify-end">
               <button
                 onClick={onClose}
-                className="px-5 py-3 rounded-full font-bold text-sm text-slate-500 hover:bg-slate-50 transition"
+                className="px-5 py-2 rounded-full font-bold text-sm text-slate-500 hover:bg-slate-50 transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-6 py-3 rounded-full font-bold text-sm bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50"
+                className="px-6 py-2 rounded-full font-bold text-sm bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save"}
               </button>

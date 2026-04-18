@@ -98,8 +98,8 @@ export default function AccountSecurityPage() {
                 <ProfileGroup>
                     <SettingsRow
                         label="Delete account"
-                        icon={<TrashIcon className="w-5 h-5 text-red-400" />}
-                        labelClassName="text-red-500"
+                        icon={<TrashIcon className="w-5 h-5 text-rose-400" />}
+                        labelClassName="text-rose-500"
                         onClick={() => setShowDeleteAccount(true)}
                     />
                 </ProfileGroup>
@@ -172,30 +172,30 @@ function AccountRecoveryModal({ onClose, onLinked }: any) {
                     <div className="p-6 space-y-4">
                         <button
                             onClick={onLinked}
-                            className="w-full flex items-center gap-4 p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:border-red-500 hover:bg-white transition-all group"
+                            className="w-full flex items-center gap-4 p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:border-rose-500 hover:bg-white transition-all group"
                         >
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-red-500 group-hover:bg-red-50 transition-colors">
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-rose-500 group-hover:bg-rose-50 transition-colors">
                                 <EnvelopeIcon className="w-5 h-5" />
                             </div>
                             <div className="flex-1 text-left">
                                 <p className="text-sm font-bold text-slate-800">Link Method</p>
                                 <p className="text-[11px] text-slate-500 font-medium">Continue with linked phone number/email</p>
                             </div>
-                            <FaChevronRight size={10} className="text-slate-300 group-hover:text-red-400" />
+                            <FaChevronRight size={10} className="text-slate-300 group-hover:text-rose-400" />
                         </button>
 
                         <button
                             onClick={() => setShowSearch(true)}
-                            className="w-full flex items-center gap-4 p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:border-red-500 hover:bg-white transition-all group"
+                            className="w-full flex items-center gap-4 p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:border-rose-500 hover:bg-white transition-all group"
                         >
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-red-500 group-hover:bg-red-50 transition-colors">
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-rose-500 group-hover:bg-rose-50 transition-colors">
                                 <MagnifyingGlassIcon className="w-5 h-5" />
                             </div>
                             <div className="flex-1 text-left">
                                 <p className="text-sm font-bold text-slate-800">Stoqle ID</p>
                                 <p className="text-[11px] text-slate-500 font-medium">Recover by searching for your unique ID</p>
                             </div>
-                            <FaChevronRight size={10} className="text-slate-300 group-hover:text-red-400" />
+                            <FaChevronRight size={10} className="text-slate-300 group-hover:text-rose-400" />
                         </button>
                     </div>
                 ) : (
@@ -211,7 +211,7 @@ function AccountRecoveryModal({ onClose, onLinked }: any) {
                                 value={searchId}
                                 onChange={e => setSearchId(e.target.value)}
                                 placeholder="Enter Stoqle ID..."
-                                className="w-full p-4 pl-12 rounded-xl bg-slate-50 border border-slate-100 text-sm font-medium focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
+                                className="w-full p-4 pl-12 rounded-xl bg-slate-50 border border-slate-100 text-sm font-medium focus:ring-2 focus:ring-rose-500/20 outline-none transition-all"
                             />
                             <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         </div>
@@ -222,7 +222,7 @@ function AccountRecoveryModal({ onClose, onLinked }: any) {
                                 toast.success("Searching for " + searchId);
                                 onClose();
                             }}
-                            className="w-full bg-red-500 text-white py-3 rounded-full font-bold text-sm disabled:opacity-30 disabled:grayscale transition-all active:scale-[0.98] shadow-lg shadow-red-500/20"
+                            className="w-full bg-rose-500 text-white py-3 rounded-full font-bold text-sm disabled:opacity-30 disabled:grayscale transition-all active:scale-[0.98] shadow-lg shadow-rose-500/20"
                         >
                             Search Account
                         </button>
@@ -283,7 +283,7 @@ function DeviceManagementModal({ open, onClose, logs, loading }: any) {
                     )}
                 </div>
                 <div className="p-4 border-slate-100">
-                    <button onClick={onClose} className="w-full bg-red-500 text-white py-2.5 rounded-full font-bold text-sm hover:bg-red-600 transition-all active:scale-[0.98]">Confirm</button>
+                    <button onClick={onClose} className="w-full bg-rose-500 text-white py-2.5 rounded-full font-bold text-sm hover:bg-rose-600 transition-all active:scale-[0.98]">Confirm</button>
                 </div>
             </motion.div>
         </div>
@@ -348,7 +348,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
 
                         <div className="flex-1 p-6 space-y-6 overflow-y-auto overscroll-contain">
                             <div className="flex flex-col items-center text-center gap-3">
-                                <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-200">
+                                <div className="w-10 h-10 bg-rose-500 rounded-full flex items-center justify-center shadow-lg shadow-rose-200">
                                     <ExclamationCircleIcon className="w-10 h-10 text-white" />
                                 </div>
                                 <h3 className="font-black text-slate-800 text-xl tracking-tight">Important notice</h3>
@@ -369,7 +369,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                                         "In accordance with regulations, if a violating account is deleted, the associated registration information cannot be used to register or link a new account during the enforcement period."
                                     ].map((text, i) => (
                                         <div key={i} className="flex gap-4 group">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 shrink-0 group-hover:bg-red-500 transition-colors" />
+                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-2 shrink-0 group-hover:bg-rose-500 transition-colors" />
                                             <p className="text-[13px] text-slate-600 font-bold leading-relaxed">{text}</p>
                                         </div>
                                     ))}
@@ -384,7 +384,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                                         e.preventDefault();
                                         setAccepted(!accepted);
                                     }}
-                                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5 ${accepted ? "bg-red-500 border-red-500 shadow-lg shadow-red-200" : "bg-white border-slate-200"}`}
+                                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5 ${accepted ? "bg-rose-500 border-rose-500 shadow-lg shadow-rose-200" : "bg-white border-slate-200"}`}
                                 >
                                     {accepted && (
                                         <CheckIcon className="w-3 h-3 text-white stroke-[3] animate-in zoom-in duration-200" />
@@ -397,7 +397,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                             <button
                                 disabled={!accepted}
                                 onClick={() => setStep(2)}
-                                className="w-full bg-red-500 text-white py-2 rounded-full font-bold text-sm disabled:opacity-30 disabled:grayscale transition-all active:scale-[0.98] "
+                                className="w-full bg-rose-500 text-white py-2 rounded-full font-bold text-sm disabled:opacity-30 disabled:grayscale transition-all active:scale-[0.98] "
                             >
                                 Continue
                             </button>
@@ -423,10 +423,10 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                                     <div
                                         key={r}
                                         onClick={() => setReason(r)}
-                                        className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group ${reason === r ? 'bg-white border-red-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}
+                                        className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer group ${reason === r ? 'bg-white border-rose-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}
                                     >
                                         <span className={`text-[13px] font-bold ${reason === r ? 'text-slate-900' : 'text-slate-500'}`}>{r}</span>
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${reason === r ? "bg-red-500 border-red-500 shadow-lg shadow-red-200" : "bg-white border-slate-200"}`}>
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${reason === r ? "bg-rose-500 border-rose-500 shadow-lg shadow-rose-200" : "bg-white border-slate-200"}`}>
                                             {reason === r && <CheckIcon className="w-3 h-3 text-white stroke-[3] animate-in zoom-in duration-200" />}
                                         </div>
                                     </div>
@@ -450,7 +450,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                                     {photos.length < 3 && (
                                         <button
                                             onClick={() => document.getElementById('delete-photos')?.click()}
-                                            className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 hover:bg-white transition-all group"
+                                            className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-400 hover:text-rose-500 hover:border-rose-500 hover:bg-white transition-all group"
                                         >
                                             <span className="text-2xl group-hover:scale-110 transition-transform">+</span>
                                             <span className="text-[9px] font-black ">Upload</span>
@@ -474,7 +474,7 @@ function DeleteAccountModal({ open, onClose, onDeleted }: any) {
                             <button
                                 onClick={handleFinalDelete}
                                 disabled={!reason || isDeleting}
-                                className="w-full bg-red-500 text-white py-3 rounded-full font-bold text-sm disabled:opacity-30 disabled:grayscale transition-all active:scale-[0.98] shadow-lg shadow-red-500/20 flex items-center justify-center gap-3"
+                                className="w-full bg-rose-500 text-white py-3 rounded-full font-bold text-sm disabled:opacity-30 disabled:grayscale transition-all active:scale-[0.98] shadow-lg shadow-rose-500/20 flex items-center justify-center gap-3"
                             >
                                 {isDeleting ? (
                                     <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />

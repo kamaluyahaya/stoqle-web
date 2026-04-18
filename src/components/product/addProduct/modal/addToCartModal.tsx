@@ -7,6 +7,7 @@ import { PreviewPayload } from "@/src/types/product";
 import { MinusIcon, PlusIcon, XMarkIcon, MapPinIcon, CreditCardIcon, Squares2X2Icon, ListBulletIcon } from "@heroicons/react/24/outline";
 import { computeDiscountedPrice, parseNumberLike, parsePercent } from "@/src/lib/utils/product/price";
 import { API_BASE_URL } from "@/src/lib/config";
+import { getNextZIndex } from "@/src/lib/utils/z-index";
 import DeliveryAddressModal from "./deliveryAddressModal";
 import DefaultInput from "../../../input/default-input";
 import { useAuth } from "@/src/context/authContext";
@@ -97,6 +98,12 @@ export default function AddToCartModal({
     const [internalStoredAddress, setInternalStoredAddress] = useState<any>(null);
     const [fullImage, setFullImage] = useState<string | null>(null);
     const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+    const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+    useEffect(() => {
+        if (open) {
+            setModalZIndex(getNextZIndex());
+        }
+    }, [open]);
     const [variantViewModes, setVariantViewModes] = useState<Record<string, 'gallery' | 'list'>>({});
 
     const [isMobile, setIsMobile] = useState(() => {
@@ -596,10 +603,12 @@ export default function AddToCartModal({
     const returns = effectiveReturnPolicy;
 
     const imageRef = React.useRef<HTMLDivElement>(null);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     const animateToCart = () => {
         if (!imageRef.current) return;
-        const cartIcon = document.getElementById("cart-icon-ref");
+        // Search within this modal first to avoid background conflicts (e.g. Shop page)
+        const cartIcon = containerRef.current?.querySelector("#preview-cart-icon-ref") || document.getElementById("preview-cart-icon-ref");
         if (!cartIcon) return;
 
         const imgRect = imageRef.current.getBoundingClientRect();
@@ -614,7 +623,7 @@ export default function AddToCartModal({
         flyer.style.backgroundImage = `url("${productImg}")`;
         flyer.style.backgroundSize = "cover";
         flyer.style.borderRadius = "16px";
-        flyer.style.zIndex = "99999";
+        flyer.style.zIndex = "9999999";
         flyer.style.pointerEvents = "none";
         flyer.style.transition = "all 0.8s cubic-bezier(0.42, 0, 0.58, 1)";
         document.body.appendChild(flyer);
@@ -663,6 +672,7 @@ export default function AddToCartModal({
                 amount: amount,
                 pin,
                 metadata,
+
                 email: user?.email ?? undefined
             });
 
@@ -683,6 +693,7 @@ export default function AddToCartModal({
                     confirmButtonColor: "#f43f5e", // rose-500
                     cancelButtonColor: "#94a3b8", // slate-400
                     customClass: {
+                        container: "!z-[9999999]",
                         popup: "rounded-[0.5rem]",
                         confirmButton: "rounded-xl font-bold px-6 py-3",
                         cancelButton: "rounded-xl font-bold px-6 py-3"
@@ -703,6 +714,7 @@ export default function AddToCartModal({
                     text: error.message.replace("SECURITY_BLOCK:", ""),
                     icon: "error",
                     confirmButtonColor: "#f43f5e",
+                    customClass: { container: "!z-[9999999]" }
                 });
             } else {
                 setPinError(error?.body?.message || error?.message || "Payment failed");
@@ -728,6 +740,7 @@ export default function AddToCartModal({
                 confirmButtonText: "OK",
                 confirmButtonColor: "#f43f5e", // rose-500
                 customClass: {
+                    container: "!z-[9999999]",
                     popup: "rounded-[0.5rem]",
                     confirmButton: "rounded-xl font-bold px-6 py-3",
                 }
@@ -744,6 +757,7 @@ export default function AddToCartModal({
                 confirmButtonText: "I understand",
                 confirmButtonColor: "#f43f5e",
                 customClass: {
+                    container: "!z-[9999999]",
                     popup: "rounded-[0.5rem]",
                     confirmButton: "rounded-xl font-bold px-6 py-3",
                 }
@@ -835,6 +849,7 @@ export default function AddToCartModal({
                                             confirmButtonColor: "#f43f5e", // rose-500
                                             cancelButtonColor: "#94a3b8", // slate-400
                                             customClass: {
+                                                container: "!z-[9999999]",
                                                 popup: "rounded-[0.5rem]",
                                                 confirmButton: "rounded-xl font-bold px-6 py-3",
                                                 cancelButton: "rounded-xl font-bold px-6 py-3"
@@ -869,6 +884,7 @@ export default function AddToCartModal({
                             text: err.message.replace("SECURITY_BLOCK:", ""),
                             icon: "error",
                             confirmButtonColor: "#f43f5e",
+                            customClass: { container: "!z-[9999999]" }
                         });
                     } else {
                         toast.error("Payment processing failed");
@@ -957,9 +973,11 @@ export default function AddToCartModal({
             {open && payload && (
                 <div
                     key="add-to-cart-container"
-                    className="fixed inset-0 z-[600000] flex items-end sm:items-center justify-center p-0 outline-none"
+                    className="fixed inset-0 flex items-end sm:items-center justify-center p-0 outline-none"
+                    style={{ zIndex: modalZIndex }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                     role="dialog"
                     aria-modal="true"
                 >
@@ -991,6 +1009,7 @@ export default function AddToCartModal({
                     />
 
                     <motion.div
+                        ref={containerRef}
                         initial={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
                         animate={isMobile ? { y: 0, opacity: 1 } : { opacity: 1, scale: 1 }}
                         exit={isMobile ? { y: "100%", opacity: 0 } : { opacity: 0, scale: 0.3 }}
@@ -1060,14 +1079,14 @@ export default function AddToCartModal({
                                         )}
                                     </div>
                                     {estimation && !estimation.is_available && (
-                                        <div className="text-[10px] text-red-600 font-bold px-5 py-1 bg-red-50 border-t border-red-100 flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+                                        <div className="text-[10px] text-rose-600 font-bold px-5 py-1 bg-rose-50 border-t border-rose-100 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
                                             {estimation.message}
                                         </div>
                                     )}
                                     <button
                                         onClick={() => setAddressModalOpen(true)}
-                                        className="text-[11px] font-black text-red-500 hover:text-red-600 shrink-0 ml-4 underline underline-offset-2"
+                                        className="text-[11px] font-black text-rose-500 hover:text-rose-600 shrink-0 ml-4 underline underline-offset-2"
                                     >
                                         {activeAddress ? "Change" : "Add Address"}
                                     </button>
@@ -1099,7 +1118,7 @@ export default function AddToCartModal({
                             </div>
                             <div className="flex-1 min-w-0 pr-6">
                                 <div className="flex flex-col">
-                                    <div className="lg:text-2xl sm:text-xl font-bold text-red-600">
+                                    <div className="lg:text-2xl sm:text-xl font-bold text-rose-600">
                                         ₦{(price * quantity).toLocaleString()}
                                     </div>
                                     {quantity > 1 && (
@@ -1155,7 +1174,7 @@ export default function AddToCartModal({
                                             {groupHasImages && (
                                                 <button
                                                     onClick={() => setVariantViewModes(prev => ({ ...prev, [g.id]: viewMode === 'gallery' ? 'list' : 'gallery' }))}
-                                                    className="text-[13px]  tracking-tight text-slate-500 hover:text-red-600 bg-white px-2.5 py-1 rounded-full  transition-all flex items-center gap-1 active:scale-95"
+                                                    className="text-[13px]  tracking-tight text-slate-500 hover:text-rose-600 bg-white px-2.5 py-1 rounded-full  transition-all flex items-center gap-1 active:scale-95"
                                                 >
                                                     {viewMode === 'gallery' ? (
                                                         <>
@@ -1232,7 +1251,7 @@ export default function AddToCartModal({
                                                                     });
                                                                 }}
                                                                 className={`group relative flex items-center gap-2 px-1 py-1 rounded-lg border-[0.5px] transition-all text-left min-h-[36px] ${isSelected
-                                                                    ? "border-red-500 bg-red-50 shadow-sm"
+                                                                    ? "border-rose-500 bg-rose-50 shadow-sm"
                                                                     : "border-white bg-slate-100 hover:border-slate-200"
                                                                     } ${isOutOfStock ? "opacity-30 grayscale cursor-allowed" : "cursor-pointer"}`}
                                                             >
@@ -1249,12 +1268,12 @@ export default function AddToCartModal({
                                                                 </div>
 
                                                                 <div className="flex-1 flex items-center justify-between min-w-0 pr-1.5">
-                                                                    <div className="text-[10px] text-red-500 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{e.name}</div>
+                                                                    <div className="text-[10px] text-rose-500 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{e.name}</div>
                                                                 </div>
 
                                                                 {/* STOCK FLAG FOR LIST MODE */}
                                                                 {!isOutOfStock && stock <= 3 && (
-                                                                    <div className="absolute -top-1.5 -right-1 z-30 bg-white text-[6px] text-red-500 px-1 font-semibold rounded-[0.5rem] border-[0.5px] shadow-sm ring-1 ring-white">
+                                                                    <div className="absolute -top-1.5 -right-1 z-30 bg-white text-[6px] text-rose-500 px-1 font-semibold rounded-[0.5rem] border-[0.5px] shadow-sm ring-1 ring-white">
                                                                         {stock} left
                                                                     </div>
                                                                 )}
@@ -1283,15 +1302,15 @@ export default function AddToCartModal({
                                                                     return { ...prev, [g.id]: e.id };
                                                                 });
                                                             }}
-                                                            className={`relative flex flex-col p-1.5 rounded-xl bg-red-100/50 border transition-all text-left group/btn ${isSelected
-                                                                ? "border-red-500 bg-red-50/30 text-red-500"
+                                                            className={`relative flex flex-col p-1.5 rounded-xl bg-rose-100/50 border transition-all text-left group/btn ${isSelected
+                                                                ? "border-rose-500 bg-rose-50/30 text-rose-500"
                                                                 : "border-white bg-slate-100 hover:border-slate-200"
                                                                 } ${isOutOfStock ? "opacity-40 grayscale cursor-pointer" : "cursor-pointer"
                                                                 }`}
                                                         >
                                                             {/* STOCK FLAG */}
                                                             {!isOutOfStock && stock <= 3 && (
-                                                                <div className="absolute -top-1.5 -right-1 z-30 bg-white text-[8px] text-red-500 border-[0.5px] px-1.5 py-0.5 rounded-sm font-black  ring-1 ring-white">
+                                                                <div className="absolute -top-1.5 -right-1 z-30 bg-white text-[8px] text-rose-500 border-[0.5px] px-1.5 py-0.5 rounded-sm font-black  ring-1 ring-white">
                                                                     {stock} left
                                                                 </div>
                                                             )}
@@ -1328,7 +1347,7 @@ export default function AddToCartModal({
                                                                     </svg>
                                                                 </div>
                                                             )}
-                                                            <div className="text-[10px] font-bold text-red-500 line-clamp-1 px-0.5 text-center w-full">
+                                                            <div className="text-[10px] font-bold text-rose-500 line-clamp-1 px-0.5 text-center w-full">
                                                                 {e.name}
                                                             </div>
                                                         </button>
@@ -1348,7 +1367,7 @@ export default function AddToCartModal({
                                                                 });
                                                             }}
                                                             className={`relative px-4 py-2 rounded-lg border-[0.5px] text-[11px]  transition-all  flex items-center gap-2 ${isSelected
-                                                                ? "border-red-500 bg-red-50 text-red-600 shadow-red-100"
+                                                                ? "border-rose-500 bg-rose-50 text-rose-600 shadow-rose-100"
                                                                 : "border-white bg-slate-100 text-slate-700 hover:border-slate-200"
                                                                 } ${isOutOfStock ? "opacity-40 cursor-pointer" : "cursor-pointer"
                                                                 }`}
@@ -1361,7 +1380,7 @@ export default function AddToCartModal({
                                                             )}
                                                             {/* STOCK FLAG FOR TEXT BUTTONS */}
                                                             {!isOutOfStock && stock <= 3 && (
-                                                                <div className="absolute -top-2 -right-1 z-30 text-[7px] text-red-500 px-2 rounded-sm  bg-white border-[0.5px] ring-1 ring-white">
+                                                                <div className="absolute -top-2 -right-1 z-30 text-[7px] text-rose-500 px-2 rounded-sm  bg-white border-[0.5px] ring-1 ring-white">
                                                                     {stock} left
                                                                 </div>
                                                             )}
@@ -1401,7 +1420,7 @@ export default function AddToCartModal({
                                         {activeDiscountPercent > 0 && (
                                             <div className="flex justify-between items-center text-xs">
                                                 <span className="text-slate-600 font-medium">{activeDiscountName}</span>
-                                                <span className="text-red-500 font-bold">-₦{((originalPrice - price) * quantity).toLocaleString()}</span>
+                                                <span className="text-rose-500 font-bold">-₦{((originalPrice - price) * quantity).toLocaleString()}</span>
                                             </div>
                                         )}
 
@@ -1424,7 +1443,7 @@ export default function AddToCartModal({
                                     {/* Payment Method */}
                                     <div className="space-y-3">
                                         <div className="text-xs font-black  tracking-widest text-slate-800 flex items-center gap-2">
-                                            <div className="w-1 h-3 bg-red-500 rounded-full" />
+                                            <div className="w-1 h-3 bg-rose-500 rounded-full" />
                                             Payment Method
                                         </div>
                                         <div className="space-y-3">
@@ -1442,7 +1461,7 @@ export default function AddToCartModal({
                                                     key={pm.id}
                                                     onClick={() => setPaymentMethod(pm.id)}
                                                     className={`w-full flex items-center justify-between p-4 rounded-2xl  transition-all text-left ${paymentMethod === pm.id
-                                                        ? "border-red-500 bg-red-50/30"
+                                                        ? "border-rose-500 bg-rose-50/30"
                                                         : "border-slate-100 bg-white hover:border-slate-200"
                                                         }`}
                                                 >
@@ -1450,20 +1469,20 @@ export default function AddToCartModal({
                                                         <div className="relative w-10 h-10 rounded-xl bg-white p-2 flex items-center justify-center shrink-0 ">
                                                             <img src={pm.icon} alt={pm.label} className="w-full h-full object-contain" />
                                                             {pm.id === 'stoqle_pay' && pm.insufficient && (
-                                                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">!</div>
+                                                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">!</div>
                                                             )}
                                                         </div>
                                                         <div>
                                                             <div className="text-sm text-slate-800 flex items-center gap-2">
                                                                 {pm.label}
                                                                 {pm.id === 'stoqle_pay' && pm.insufficient && (
-                                                                    <span className="text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">Insufficient</span>
+                                                                    <span className="text-[10px] text-rose-500 font-bold bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100">Insufficient</span>
                                                                 )}
                                                             </div>
-                                                            <div className={`text-[10px] ${pm.id === 'stoqle_pay' && pm.insufficient ? 'text-red-400 font-bold' : 'text-slate-500'}`}>{pm.sub}</div>
+                                                            <div className={`text-[10px] ${pm.id === 'stoqle_pay' && pm.insufficient ? 'text-rose-400 font-bold' : 'text-slate-500'}`}>{pm.sub}</div>
                                                         </div>
                                                     </div>
-                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === pm.id ? "border-red-500 bg-red-500" : "border-slate-200"}`}>
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === pm.id ? "border-rose-500 bg-rose-500" : "border-slate-200"}`}>
                                                         {paymentMethod === pm.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                                                     </div>
                                                 </button>
@@ -1495,13 +1514,13 @@ export default function AddToCartModal({
                                     <>
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-black  tracking-widest text-slate-400 leading-none mb-1">Total</span>
-                                            <span className="text-lg font-black text-red-600 leading-none">₦{(price * quantity).toLocaleString()}</span>
+                                            <span className="text-lg font-black text-rose-600 leading-none">₦{(price * quantity).toLocaleString()}</span>
                                         </div>
 
                                         <button
                                             onClick={handleConfirmClick}
                                             disabled={isPaying || isOwner || (estimation !== null && !estimation.is_available) || (paymentMethod === 'stoqle_pay' && wallet !== null && (wallet.available_balance ?? 0) < (price * quantity))}
-                                            className="flex-1 max-w-[220px] py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white font-black rounded-full shadow-xl shadow-red-100 hover:shadow-red-200 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-xs tracking-widest"
+                                            className="flex-1 max-w-[220px] py-3 bg-gradient-to-r from-rose-600 to-rose-600 text-white font-black rounded-full shadow-xl shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-xs tracking-widest"
                                         >
                                             {isPaying ? "Processing..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : (estimation && !estimation.is_available ? "Out of Delivery Range" : "Pay Now")))}
                                         </button>
@@ -1516,9 +1535,9 @@ export default function AddToCartModal({
                                         ) : (
                                             <>
                                                 <button onClick={handleConfirmClick} disabled={isPaying || isOwner || (estimation !== null && !estimation.is_available) || (paymentMethod === 'stoqle_pay' && wallet !== null && (wallet.available_balance ?? 0) < (price * quantity))}
-                                                    className={`flex-1 py-1.5 text-[11px] font-bold  bg-red-50 hover:bg-red-100 transition ${isAllSelected && availableStock <= 0 ? "text-slate-500" : "text-red-500"}`}>{isPaying ? "Adding..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : `Add to cart`))}</button>
+                                                    className={`flex-1 py-1.5 text-[11px] font-bold  bg-rose-50 hover:bg-rose-100 transition ${isAllSelected && availableStock <= 0 ? "text-slate-500" : "text-rose-500"}`}>{isPaying ? "Adding..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : `Add to cart`))}</button>
                                                 <button onClick={switchToBuyMode} disabled={isPaying || isOwner}
-                                                    className="flex-1 py-1.5 text-[11px] font-bold text-white bg-red-600 hover:bg-red-500 transition">Buy now</button>
+                                                    className="flex-1 py-1.5 text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-500 transition">Buy now</button>
                                             </>
                                         )}
                                     </div>
@@ -1544,7 +1563,8 @@ export default function AddToCartModal({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[22000] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm"
+                        className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm"
+                        style={{ zIndex: 9999999 }}
                         onClick={() => setFullImage(null)}
                     >
                         <button

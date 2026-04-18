@@ -17,6 +17,7 @@ import { toggleSocialPostLike, mapApiPost } from "@/src/lib/api/social";
 import { toast } from "sonner";
 import { ArrowUp, RotateCcw } from "lucide-react";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
 const NO_IMAGE_PLACEHOLDER = "assets/images/post-icons.png"; // fallback post image
 const DEFAULT_AVATAR = "/assets/images/post-icons.png";
 
@@ -181,9 +182,11 @@ const PostCard = React.memo(({
               >
                 {post.user.name}
               </span>
-              {post.user.is_trusted && (
+              {!!post.user.verified_badge || !!post.user.is_partner ? (
+                <VerifiedBadge size="xs" label="Trusted Partner" />
+              ) : !!post.user.is_trusted ? (
                 <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-500 fill-blue-500 shrink-0" />
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -207,7 +210,7 @@ const PostCard = React.memo(({
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-red-500' : 'text-slate-400'}`}
+                  className={`absolute inset-0 flex items-center justify-center ${post.liked ? 'text-rose-500' : 'text-slate-400'}`}
                 >
                   {post.liked ? <FaHeart className="text-sm" /> : <FaRegHeart className="text-sm" />}
                 </motion.div>
@@ -217,7 +220,7 @@ const PostCard = React.memo(({
                   initial={{ scale: 1, opacity: 1 }}
                   animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
                   transition={{ duration: 0.6 }}
-                  className="absolute text-red-500 pointer-events-none"
+                  className="absolute text-rose-500 pointer-events-none"
                 >
                   <FaHeart size={14} />
                 </motion.div>

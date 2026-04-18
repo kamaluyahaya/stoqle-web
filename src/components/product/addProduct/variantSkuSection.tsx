@@ -120,7 +120,7 @@ export default function VariantSkuSection({
                                             onChange={(e) => updateSku(sku.id, { enabled: e.target.checked })}
                                             className="sr-only peer"
                                         />
-                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
                                     </label>
                                 </div>                                {/* Inline Inputs Row */}
                                 <div className="flex items-center gap-2 pt-2">
@@ -133,7 +133,7 @@ export default function VariantSkuSection({
                                                 value={sku.price}
                                                 onChange={(e) => updateSku(sku.id, { price: e.target.value === "" ? "" : Number(e.target.value) })}
                                                 placeholder="Price"
-                                                className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none transition-all placeholder:text-slate-300 placeholder:font-normal"
+                                                className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-rose-400 outline-none transition-all placeholder:text-slate-300 placeholder:font-normal"
                                             />
                                             <div className="absolute top-0 right-0 -translate-y-full pb-1">
                                                 <span className="text-[9px] font-bold text-slate-400  tracking-tighter px-1">Price</span>
@@ -152,11 +152,11 @@ export default function VariantSkuSection({
                                                 value={sku.quantity}
                                                 onChange={(e) => updateSku(sku.id, { quantity: e.target.value === "" ? "" : Number(e.target.value) })}
                                                 placeholder="0"
-                                                className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-red-400 outline-none text-center transition-all"
+                                                className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-rose-400 outline-none text-center transition-all"
                                             />
                                         )}
                                         <div className="absolute top-0 right-0 -translate-y-full pb-1 pr-1 truncate">
-                                            <span className={`text-[9px] font-bold ${readOnlyStock ? 'text-red-400' : 'text-slate-400'}  tracking-tighter`}>
+                                            <span className={`text-[9px] font-bold ${readOnlyStock ? 'text-rose-400' : 'text-slate-400'}  tracking-tighter`}>
                                                 {readOnlyStock ? 'Inv' : 'Qty'}
                                             </span>
                                         </div>
@@ -181,7 +181,7 @@ export default function VariantSkuSection({
                                 <div className="flex flex-col gap-0.5">
                                     <span>Quantity</span>
                                     {readOnlyStock && (
-                                        <span className="text-[8px] text-red-500 font-bold  tracking-tighter leading-none whitespace-nowrap animate-pulse">
+                                        <span className="text-[8px] text-rose-500 font-bold  tracking-tighter leading-none whitespace-nowrap animate-pulse">
                                             Stock Managed In inventory
                                         </span>
                                     )}
@@ -249,7 +249,7 @@ export default function VariantSkuSection({
                                             onChange={(e) => updateSku(sku.id, { enabled: e.target.checked })}
                                             className="sr-only peer"
                                         />
-                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
                                     </label>
                                 </td>
                             </tr>

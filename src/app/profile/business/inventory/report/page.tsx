@@ -225,7 +225,7 @@ export default function InventoryReportPage() {
                                 </div>
                                 <div className="p-4 bg-slate-50/30">
                                     <p className="text-[9px] font-black text-slate-400  tracking-widest mb-1.5 leading-none">Out Of Stock</p>
-                                    <p className={`text-lg font-black tracking-tight ${stats.outOfStock > 0 ? 'text-red-600' : 'text-slate-900'}`}>{stats.outOfStock}</p>
+                                    <p className={`text-lg font-black tracking-tight ${stats.outOfStock > 0 ? 'text-rose-600' : 'text-slate-900'}`}>{stats.outOfStock}</p>
                                 </div>
                             </div>
                         </div>
@@ -275,13 +275,13 @@ export default function InventoryReportPage() {
                                                         {p.reserved > 0 ? `+${p.reserved}` : "0"}
                                                     </td>
                                                     <td className="px-2 py-4 text-left">
-                                                        <span className={`text-xs font-black ${p.available <= 0 ? 'text-red-600' : 'text-slate-900 underline decoration-indigo-200 underline-offset-4'}`}>
+                                                        <span className={`text-xs font-black ${p.available <= 0 ? 'text-rose-600' : 'text-slate-900 underline decoration-indigo-200 underline-offset-4'}`}>
                                                             {p.available}
                                                         </span>
                                                     </td>
                                                     <td className="px-2 py-4 text-left">
                                                         {p.available <= 0 ? (
-                                                            <span className="text-[9px] font-black text-white bg-red-600 px-2 py-0.5 rounded-full  tracking-widest">Critical</span>
+                                                            <span className="text-[9px] font-black text-white bg-rose-600 px-2 py-0.5 rounded-full  tracking-widest">Critical</span>
                                                         ) : p.available <= (p.low_stock_alert || 5) ? (
                                                             <span className="text-[9px] font-black text-slate-900 bg-amber-400 px-2 py-0.5 rounded-full  tracking-widest">Low</span>
                                                         ) : (
@@ -321,7 +321,7 @@ export default function InventoryReportPage() {
                                                         </td>
                                                         <td className="px-2 py-3 text-left text-[11px] font-black text-slate-600">{v.available}</td>
                                                         <td className="px-2 py-3 text-left">
-                                                            <div className={`w-1.5 h-1.5 rounded-full inline-block ${v.available <= 0 ? 'bg-red-500' :
+                                                            <div className={`w-1.5 h-1.5 rounded-full inline-block ${v.available <= 0 ? 'bg-rose-500' :
                                                                 v.available <= (v.low_stock_alert || 5) ? 'bg-amber-400' :
                                                                     'bg-emerald-300'
                                                                 }`} />

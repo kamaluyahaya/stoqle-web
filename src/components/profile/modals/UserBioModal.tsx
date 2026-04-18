@@ -2,6 +2,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import DescriptionTextarea from "../../input/defaultDescTextarea";
 
 type Props = {
   open: boolean;
@@ -28,12 +29,12 @@ export default function UserBioModal({ open, initialValue, onClose, onSave }: Pr
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[1001] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
             onClick={onClose}
           />
           <motion.div
@@ -49,11 +50,12 @@ export default function UserBioModal({ open, initialValue, onClose, onSave }: Pr
               </button>
             </div>
             <div className="space-y-4">
-              <textarea
-                className="w-full px-5 py-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-rose-500/20 transition h-32 text-slate-900 placeholder:text-slate-400 resize-none text-sm"
-                placeholder="Tell others about yourself..."
+              <DescriptionTextarea
                 value={bio}
-                onChange={(e) => setBio(e.target.value)}
+                onChange={setBio}
+                placeholder="Tell others about yourself..."
+                maxLength={200}
+                maxLines={6}
               />
             </div>
             <div className="mt-8 flex gap-3 justify-end">
