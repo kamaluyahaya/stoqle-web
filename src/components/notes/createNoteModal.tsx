@@ -514,7 +514,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
       active:scale-95
       disabled:opacity-40
       disabled:cursor-not-allowed
-      hover:bg-rose-600
+      hover:bg-rose-500
     "
                 >
                   Next
@@ -613,7 +613,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                   </button>
 
                   <div className="flex gap-3">
-                    <button onClick={goNext} className="px-4 py-2 rounded-md bg-rose-500 hover:bg-rose-600 max-w-4xl text-white active:scale-95 transition">
+                    <button onClick={goNext} className="px-4 py-2 rounded-md bg-rose-500 hover:bg-rose-500 max-w-4xl text-white active:scale-95 transition">
                       Next
                     </button>
                   </div>
@@ -643,7 +643,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                       {visibility === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
                       {visibility === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
                       {visibility === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
-                      <span className="text-[10px] font-black  text-slate-500 group-hover:text-rose-600">
+                      <span className="text-[10px] font-black  text-slate-500 group-hover:text-rose-500">
                         {visibility === "public" ? "Public" : visibility === "private" ? "Private" : "Friends Only"}
                       </span>
                     </button>
@@ -691,7 +691,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
                                 setIsPrivacyModalOpen(false);
                               }}
                               className={`w-full flex items-center justify-between p-3 rounded-[0.5rem] transition-all border-2 ${visibility === opt.id
-                                ? "bg-rose-50 border-rose-100 text-rose-600 shadow-sm"
+                                ? "bg-rose-50 border-rose-100 text-rose-500 shadow-sm"
                                 : "bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100"
                                 }`}
                             >
@@ -733,7 +733,7 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
           rounded-full
           w-full
           bg-rose-500
-          hover:bg-rose-600
+          hover:bg-rose-500
           text-white
           active:scale-95
           transition

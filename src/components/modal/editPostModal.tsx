@@ -394,7 +394,7 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
                   {privacy === "public" && <LockOpenIcon className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />}
                   {privacy === "private" && <LockClosedIcon className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />}
                   {privacy === "friends" && <UsersIcon className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />}
-                  <span className="text-[10px] font-black   text-slate-500 group-hover:text-rose-600 ">
+                  <span className="text-[10px] font-black   text-slate-500 group-hover:text-rose-500 ">
                     {privacy === "public" ? "Public" : privacy === "private" ? "Private" : "Friends Only"}
                   </span>
                 </button>
@@ -447,8 +447,8 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
                   <button
                     onClick={() => setIsProductModalOpen(true)}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 text-xs font-bold ${selectedProduct
-                        ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
-                        : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
+                      ? "bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100"
+                      : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
                       }`}
                   >
                     <PlusIcon className={`w-3.5 h-3.5 ${selectedProduct ? "text-rose-500" : "text-slate-400"}`} />
@@ -486,7 +486,7 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
           <button
             onClick={handleUpdate}
             disabled={loading}
-            className="flex-1 py-3.5 rounded-full bg-rose-500 text-white font-black text-sm hover:bg-rose-600 shadow-xl shadow-rose-100 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+            className="flex-1 py-3.5 rounded-full bg-rose-500 text-white font-black text-sm hover:bg-rose-500 shadow-xl shadow-rose-100 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
           >
             {loading ? "Updating..." : "Save Changes"}
           </button>
@@ -527,7 +527,7 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
                       setPrivacy(opt.id as any);
                       setIsPrivacyModalOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${privacy === opt.id ? "bg-rose-50 text-rose-600" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${privacy === opt.id ? "bg-rose-50 text-rose-500" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                       }`}
                   >
                     <div className="flex items-center gap-3">

@@ -90,7 +90,7 @@ export default function HelpCenterModal({ isOpen, onClose }: HelpCenterModalProp
         text: "Thank you for your feedback! We will get back to you soon.",
         icon: "success",
         confirmButtonText: "Okay",
-        confirmButtonColor: "#dc2626", // rose-600
+        confirmButtonColor: "#dc2626", // rose-500
         background: "#ffffff",
         customClass: {
           title: "text-lg font-bold text-slate-900",
@@ -212,7 +212,7 @@ export default function HelpCenterModal({ isOpen, onClose }: HelpCenterModalProp
             <button
               onClick={handleSubmit}
               disabled={description.length < 30 || phoneNumber.length < 11 || isSubmitting}
-              className="w-full py-2 bg-rose-600 disabled:bg-rose-200 disabled:text-slate-100 disabled:shadow-none text-white rounded-full  flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-rose-600/20"
+              className="w-full py-2 bg-rose-500 disabled:bg-rose-200 disabled:text-slate-100 disabled:shadow-none text-white rounded-full  flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-rose-500/20"
             >
               {isSubmitting ? (
                 <>

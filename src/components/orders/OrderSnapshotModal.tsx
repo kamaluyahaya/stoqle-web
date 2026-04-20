@@ -162,7 +162,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                             {/* Promotions & Discounts */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+                                    <div className="p-1.5 bg-rose-50 text-rose-500 rounded-lg">
                                         <Zap size={16} />
                                     </div>
                                     <h4 className="text-[11px] font-black text-slate-900  tracking-widest">Active Discounts</h4>
@@ -174,7 +174,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                             <div key={`promo-${i}`} className="p-4 bg-rose-50/30 border border-rose-100 rounded-2xl">
                                                 <div className="flex justify-between items-center mb-1">
                                                     <span className="text-[12px] font-bold text-slate-900">{p.occasion || p.title || p.name || 'Promotion'}</span>
-                                                    <span className="text-[10px] font-black text-rose-600">{(p.discount || p.discount_percent || 0)}% OFF</span>
+                                                    <span className="text-[10px] font-black text-rose-500">{(p.discount || p.discount_percent || 0)}% OFF</span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-500">Store-wide or item-specific campaign active during checkout.</p>
                                                 {p.time_remaining_at_purchase && (
@@ -189,7 +189,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                                             <div key={`disc-${i}`} className="p-4 bg-rose-50/30 border border-rose-100 rounded-2xl">
                                                 <div className="flex justify-between items-center mb-1">
                                                     <span className="text-[12px] font-bold text-slate-900">{d.type || d.name || d.title || 'Sale Discount'}</span>
-                                                    <span className="text-[10px] font-black text-rose-600">{(d.discount || d.discount_percent || 0)}% OFF</span>
+                                                    <span className="text-[10px] font-black text-rose-500">{(d.discount || d.discount_percent || 0)}% OFF</span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-500">Categorical or conditional sale discount active during checkout.</p>
                                             </div>

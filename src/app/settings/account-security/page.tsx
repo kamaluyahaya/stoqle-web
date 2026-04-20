@@ -283,7 +283,7 @@ function DeviceManagementModal({ open, onClose, logs, loading }: any) {
                     )}
                 </div>
                 <div className="p-4 border-slate-100">
-                    <button onClick={onClose} className="w-full bg-rose-500 text-white py-2.5 rounded-full font-bold text-sm hover:bg-rose-600 transition-all active:scale-[0.98]">Confirm</button>
+                    <button onClick={onClose} className="w-full bg-rose-500 text-white py-2.5 rounded-full font-bold text-sm hover:bg-rose-500 transition-all active:scale-[0.98]">Confirm</button>
                 </div>
             </motion.div>
         </div>

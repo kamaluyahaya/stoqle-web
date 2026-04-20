@@ -131,7 +131,7 @@ function RateContent({
         <button
           onClick={onSubmit}
           disabled={loading}
-          className="w-full py-3.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-full disabled:opacity-70 transition-colors"
+          className="w-full py-3.5 bg-rose-500 hover:bg-rose-500 text-white font-bold rounded-full disabled:opacity-70 transition-colors"
         >
           {loading ? "Submitting..." : "Submit Rating"}
         </button>

@@ -512,7 +512,7 @@ export default function ProductPreviewModal({
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((s) => (
           s <= rating ? (
-            <StarIconSolid key={s} className={`${size} text-rose-600`} />
+            <StarIconSolid key={s} className={`${size} text-rose-500`} />
           ) : (
             <StarIcon key={s} className={`${size} text-slate-200`} />
           )
@@ -1454,7 +1454,7 @@ export default function ProductPreviewModal({
 
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold text-rose-600">
+                      <span className="text-xl font-bold text-rose-500">
                         <span className="text-base mr-0.5">₦</span>
                         {basePrice !== null ? basePrice.toLocaleString() : "—"}
                       </span>
@@ -1476,7 +1476,7 @@ export default function ProductPreviewModal({
                   </div>
                   {isPromotionActive ? (
                     <div className="flex flex-col gap-1 mb-3">
-                      <div className="flex items-center justify-between rounded-sm bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600 w-full">
+                      <div className="flex items-center justify-between rounded-sm bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-500 w-full">
                         <span>{promotion?.title ?? promotion?.occasion ?? "Promotion"} · {promotionDiscount}% Off</span>
                         {promoRemaining && <div className="text-[10px] border-[0.5px] border-rose-500 px-1.5 py-0.5 text-rose-500 rounded-sm">Ends in {promoRemaining}</div>}
                       </div>
@@ -1702,7 +1702,7 @@ export default function ProductPreviewModal({
                           router.push(`/shop/${slug}`);
                         }
                       }}
-                      className="flex-shrink-0 whitespace-nowrap bg-rose-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-rose-600 transition"
+                      className="flex-shrink-0 whitespace-nowrap bg-rose-500 px-4 py-1.5 rounded-full text-xs text-white hover:bg-rose-500 transition"
                     >
                       Visit shop
                     </button>
@@ -1768,7 +1768,7 @@ export default function ProductPreviewModal({
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-rose-600 transition-colors">{p.title}</div>
+                              <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-rose-500 transition-colors">{p.title}</div>
 
                               {isPromoActive ? (
                                 <div className="text-[8px] font-bold text-rose-500 border-rose-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">
@@ -1889,7 +1889,7 @@ export default function ProductPreviewModal({
                               </div>
                             )}
 
-                            <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-rose-600 transition-colors">{p.title}</div>
+                            <div className="text-[10px] font-semibold text-slate-700 line-clamp-1 mb-1 leading-tight group-hover:text-rose-500 transition-colors">{p.title}</div>
 
                             {isPromoActive ? (
                               <div className="text-[8px] font-bold text-rose-500 border-rose-500 border-[0.5px] px-1 w-fit mb-1  tracking-tighter leading-tight">

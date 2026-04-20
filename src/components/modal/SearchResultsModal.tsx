@@ -1014,7 +1014,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         <h4 className="text-[14px] font-bold text-slate-900 truncate">{p.name}</h4>
         <p className="text-[12px] text-slate-500 line-clamp-1 mt-0.5">{p.description}</p>
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[14px] font-black text-rose-600">₦{p.price?.toLocaleString()}</span>
+          <span className="text-[14px] font-black text-rose-500">₦{p.price?.toLocaleString()}</span>
           {p.sold_count > 0 && (
             <span className="text-[10px] font-bold text-slate-400">{p.sold_count} sold</span>
           )}
@@ -1135,7 +1135,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="w-8 h-8 border-4 border-rose-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-400 font-medium">Fetching best results...</p>
         </div>
       );
@@ -1158,7 +1158,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               <section className="bg-white">
                 <div className="px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                   <h6 className="text-[10px] font-black  tracking-widest text-slate-600">Products</h6>
-                  <button onClick={() => setActiveTab('products')} className="text-[10px] font-bold text-rose-600">See All</button>
+                  <button onClick={() => setActiveTab('products')} className="text-[10px] font-bold text-rose-500">See All</button>
                 </div>
                 <div className="p-3">
                   <ProductMasonryGrid
@@ -1183,7 +1183,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                   <button onClick={() => {
                     setActiveTab('products');
                     setProductSubTab('shop');
-                  }} className="text-[10px] font-bold text-rose-600">See All</button>
+                  }} className="text-[10px] font-bold text-rose-500">See All</button>
                 </div>
                 {results.shops.slice(0, 3).map(renderShopItem)}
               </section>
@@ -1192,7 +1192,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               <section className="bg-white border-t-8 border-slate-50">
                 <div className="px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                   <h6 className="text-[10px] font-black  tracking-widest text-slate-600">People</h6>
-                  <button onClick={() => setActiveTab('users')} className="text-[10px] font-bold text-rose-600">See All</button>
+                  <button onClick={() => setActiveTab('users')} className="text-[10px] font-bold text-rose-500">See All</button>
                 </div>
                 <div className="divide-y divide-slate-50">
                   {results.users.slice(0, 3).map((u: any) => (
@@ -1222,7 +1222,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               <section className="bg-white border-t-8 border-slate-50">
                 <div className="px-5 py-3 bg-slate-50/50 flex items-center justify-between">
                   <h6 className="text-[10px] font-black  tracking-widest text-slate-600">Social Feed</h6>
-                  <button onClick={() => setActiveTab('posts')} className="text-[10px] font-bold text-rose-600">See All</button>
+                  <button onClick={() => setActiveTab('posts')} className="text-[10px] font-bold text-rose-500">See All</button>
                 </div>
                 <div className="p-3 bg-slate-50/20">
                   <MasonryGrid
@@ -1335,12 +1335,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                 <button
                   key={tab.id}
                   onClick={() => setProductSubTab(tab.id as ProductSubTab)}
-                  className={`text-[12px] font-bold whitespace-nowrap transition-colors relative h-full ${productSubTab === tab.id ? "text-rose-600" : "text-slate-400"
+                  className={`text-[12px] font-bold whitespace-nowrap transition-colors relative h-full ${productSubTab === tab.id ? "text-rose-500" : "text-slate-400"
                     }`}
                 >
                   {tab.label}
                   {productSubTab === tab.id && (
-                    <motion.div layoutId="prodSubUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-600" />
+                    <motion.div layoutId="prodSubUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500" />
                   )}
                 </button>
               ))}
@@ -1498,12 +1498,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
             // onClose(); // optionally close search modal before navigating
             router.push("/cart");
           }}
-          className="fixed bottom-24 right-6 bg-rose-600 text-white p-3 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-90 flex items-center justify-center border-4 border-white group"
+          className="fixed bottom-24 right-6 bg-rose-500 text-white p-3 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-90 flex items-center justify-center border-4 border-white group"
           style={{ zIndex: modalZIndex + 1 }}
         >
           <ShoppingCartIcon className="w-6 h-6" />
           {cartCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-white text-rose-600 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md border-[1.5px] border-rose-600 group-hover:scale-110 transition-transform">
+            <span className="absolute -top-1 -right-1 bg-white text-rose-500 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md border-[1.5px] border-rose-500 group-hover:scale-110 transition-transform">
               {cartCount > 99 ? "99+" : cartCount}
             </span>
           )}

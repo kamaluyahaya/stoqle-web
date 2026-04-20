@@ -195,6 +195,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
   const [isClosing, setIsClosing] = useState(false);
   const [modalZIndex, setModalZIndex] = useState(() => getNextZIndex());
+
   useEffect(() => {
     if (open) {
       setModalZIndex(getNextZIndex());
@@ -225,7 +226,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     if (isVisible) activeVideoRef.current = el;
   }, []);
 
-  const prefetchTriggeroseRef = useRef<Record<string, boolean>>({});
+  const prefetchTriggerRef = useRef<Record<string, boolean>>({});
 
   const handleTimeUpdate = useCallback((postId: string | number, currentTime: number, duration: number) => {
     const data = interactionTrackerRef.current[String(postId)];
@@ -236,8 +237,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
         if (pct > 95) data.completed = true;
 
         // Proactive Infinite Scroll Trigger: Fetch more when user is 70% through current video
-        if (pct > 70 && !prefetchTriggeroseRef.current[String(postId)]) {
-          prefetchTriggeroseRef.current[String(postId)] = true;
+        if (pct > 70 && !prefetchTriggerRef.current[String(postId)]) {
+          prefetchTriggerRef.current[String(postId)] = true;
           // Trigger the reservoir maintenance loop early
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("trigger-reel-prefetch"));
@@ -285,6 +286,29 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [showCommentsSheet, setShowCommentsSheet] = useState(false);
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
   const [firstImageAspectRatio, setFirstImageAspectRatio] = useState<number | null>(null);
+
+  const [showSwipeGuide, setShowSwipeGuide] = useState(false);
+
+  useEffect(() => {
+    if (open && isMobileReels && currentReelIndex === 0) {
+      const seen = localStorage.getItem("stoqle_post_swipe_guide_v1");
+      if (!seen) {
+        const timer = setTimeout(() => setShowSwipeGuide(true), 2000); // Wait for video to start
+        return () => clearTimeout(timer);
+      }
+    } else if (currentReelIndex > 0 && showSwipeGuide) {
+      setShowSwipeGuide(false);
+      localStorage.setItem("stoqle_post_swipe_guide_v1", "true");
+    }
+  }, [open, isMobileReels, currentReelIndex]);
+
+  const dismissSwipeGuide = useCallback(() => {
+    if (showSwipeGuide) {
+      setShowSwipeGuide(false);
+      localStorage.setItem("stoqle_post_swipe_guide_v1", "true");
+    }
+  }, [showSwipeGuide]);
+
 
   // CRITICAL SYNC: Ensure real-time updates (like processing -> ready) are reflected in the current reel
   useEffect(() => {
@@ -1583,7 +1607,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     const delay = now - lastTapRef.current;
 
     if (delay < 300 && delay > 0) {
-      // 1. Double Tap Triggerose: Like the post
+      // 1. Double Tap Trigger: Like the post
       lastTapRef.current = 0; // kill pending single tap
 
       const clientX = "touches" in (e as any) && (e as any).touches.length > 0 ? (e as any).touches[0].clientX : (e as React.MouseEvent).clientX;
@@ -1747,7 +1771,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     const hasVariants = lp.has_variants === 1 || lp.has_variants === true || inventory.length > 0;
 
     if (hasVariants && inventory.length > 0) {
-      const total = inventory.roseuce((acc: number, item: any) => acc + (Number(item.quantity ?? item.stock ?? item.initial_quantity ?? 0)), 0);
+      const total = inventory.reduce((acc: number, item: any) => acc + (Number(item.quantity ?? item.stock ?? item.initial_quantity ?? 0)), 0);
       return total;
     }
 
@@ -1925,6 +1949,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                       onPanStart={() => {
                         if (showCommentsSheet) return;
                         fastScrollVelocityRef.current = true;
+                        dismissSwipeGuide();
                       }}
                       onPanEnd={(e, info) => {
                         if (showCommentsSheet) return;
@@ -2173,7 +2198,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                   if (isHydrated && stock <= 0) {
                                                     return (
                                                       <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10">
-                                                        <span className="text-[6px] text-white px-1 py-0.5 bg-rose-600 rounded-sm  tracking-tighter">Sold Out</span>
+                                                        <span className="text-[6px] text-white px-1 py-0.5 bg-rose-500 rounded-sm  tracking-tighter">Sold Out</span>
                                                       </div>
                                                     );
                                                   }
@@ -2221,7 +2246,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                     const lp = hydratedLinkedProducts[String(rp.id)] || rp.linked_product;
                                                     const stock = getStockCount(lp);
                                                     return isHydrated && stock <= 0;
-                                                  })() ? 'bg-slate-600 cursor-not-allowed' : 'bg-rose-500 hover:bg-rose-600 active:scale-95'} text-white text-[9px]  rounded-full transition-all`}
+                                                  })() ? 'bg-slate-600 cursor-not-allowed' : 'bg-rose-500 hover:bg-rose-500 active:scale-95'} text-white text-[9px]  rounded-full transition-all`}
                                                 >
                                                   {(() => {
                                                     const isHydrated = !!hydratedLinkedProducts[String(rp.id)];
@@ -2244,6 +2269,48 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         );
                       })}
                     </motion.div>
+
+                    {/* SWIPE GUIDE OVERLAY (Mobile Specific) */}
+                    <AnimatePresence>
+                      {showSwipeGuide && (
+                        <>
+                          {/* Dimmed Background Overlay */}
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/60 z-[69] pointer-events-none"
+                          />
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[70] flex items-center justify-center pointer-events-none"
+                          >
+                            <motion.div
+                              animate={{ y: [40, -40, 40] }}
+                              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                              className="flex flex-col items-center gap-4"
+                            >
+                              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl flex items-center justify-center border border-white/20 shadow-2xl">
+                                <motion.div
+                                  animate={{ opacity: [0.3, 1, 0.3] }}
+                                  transition={{ repeat: Infinity, duration: 2 }}
+                                >
+                                  <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </motion.div>
+                              </div>
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-white text-sm font-black drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)] uppercase tracking-[0.2em]">Swipe Up</span>
+                                <span className="text-white/70 text-[10px] font-bold drop-shadow-md uppercase tracking-wider">To watch more</span>
+                              </div>
+                            </motion.div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
 
                   <AnimatePresence>
@@ -2417,7 +2484,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                               }
                             }}
                             placeholder={replyingTo ? "Write a reply..." : "Say something..."}
-                            className="w-full min-h-[52px] bg-white/5 rounded-2xl px-5 py-4 text-[14px] text-white outline-none border border-white/10 resize-none overflow-hidden leading-snug"
+                            className="w-full bg-white/5 rounded-xl px-5 py-2 text-[14px] text-white outline-none border border-white/10 resize-none overflow-hidden leading-snug"
                           />
                           <div className="flex items-center justify-end gap-3">
                             <button
@@ -2461,7 +2528,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 if (!text) return;
                                 handleAddComment(text);
                               }}
-                              className="px-8 py-2.5 rounded-full bg-rose-600 text-white text-[13px] font-black shadow-xl shadow-rose-600/20 active:scale-95 transition-all disabled:opacity-40"
+                              className="px-8 py-2.5 rounded-full bg-rose-500 text-white text-[13px] font-black shadow-xl shadow-rose-500/20 active:scale-95 transition-all disabled:opacity-40"
                             >
                               {commentPosting ? "Sending..." : "Send"}
                             </button>
@@ -2640,7 +2707,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                             ) : null}
                                           </Link>
                                           {c.is_author === 1 && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 font-bold">Author</span>
                                           )}
                                         </div>
                                         <div className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{c.comment_content}</div>
@@ -2734,7 +2801,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                   ) : null}
                                                 </Link>
                                                 {r.is_author === 1 && (
-                                                  <span className="text-[9px] px-1 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
+                                                  <span className="text-[9px] px-1 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 font-bold">Author</span>
                                                 )}
                                               </div>
                                               <div className="mt-0.5 text-xs text-slate-600 whitespace-pre-wrap">{r.comment_content}</div>
@@ -2791,7 +2858,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                               </div>
 
                                               {Boolean(r.author_liked) && (
-                                                <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-rose-100 cursor-default">
+                                                <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-rose-100 cursor-default">
                                                   <FaHeart className="w-2 h-2" />
                                                   <span>Author liked</span>
                                                 </div>
@@ -2881,7 +2948,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                   el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden';
                                 }}
                                 placeholder={replyingTo ? "Add a reply..." : "Add a comment..."}
-                                className="w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:ring-1 focus:ring-slate-200 resize-none overflow-hidden leading-tight"
+                                className="w-full rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 outline-none transition focus:ring-1 focus:ring-slate-200 resize-none overflow-hidden leading-tight"
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
@@ -3135,7 +3202,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                             toggleFollowAuthor();
                           }}
                           disabled={followLoading}
-                          className="inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold transition-all bg-rose-500 text-white hover:bg-rose-600 shadow-sm"
+                          className="inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold transition-all bg-rose-500 text-white hover:bg-rose-500 shadow-sm"
                         >
                           Follow
                         </button>
@@ -3207,7 +3274,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                       ₦{getDiscountedPrice(lp).toLocaleString()}
                                     </span>
                                     {getDiscountInfo(lp) && (
-                                      <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded shrink-0 ">
+                                      <span className="text-[10px] bg-rose-100 text-rose-500 px-1.5 py-0.5 rounded shrink-0 ">
                                         {getDiscountInfo(lp)?.name} ({getDiscountInfo(lp)?.discount}% Off)
                                       </span>
                                     )}
@@ -3234,7 +3301,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                         handleProductClick(Number(lp.product_id), e);
                                       }
                                     }}
-                                    className={`px-4 py-1.5 ${getStockCount(lp) <= 0 ? 'bg-slate-500 cursor-not-allowed' : 'bg-rose-500 hover:bg-rose-600 active:scale-95'} text-white text-[10px]  rounded-full transition-all shadow-sm`}
+                                    className={`px-4 py-1.5 ${getStockCount(lp) <= 0 ? 'bg-slate-500 cursor-not-allowed' : 'bg-rose-500 hover:bg-rose-500 active:scale-95'} text-white text-[10px]  rounded-full transition-all shadow-sm`}
                                   >
                                     {getStockCount(lp) <= 0 ? 'Sold out' : 'Buy now'}
                                   </button>
@@ -3316,7 +3383,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                           ) : null}
                                         </div>
                                         {c.is_author === 1 && (
-                                          <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
+                                          <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 font-bold">Author</span>
                                         )}
                                       </div>
 
@@ -3382,7 +3449,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                             <span className="text-[10px] inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-100  transition-all hover:bg-slate-100">First to Comment</span>
                                           )}
                                           {Boolean(c.author_liked) && (
-                                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[10px] transition-all hover:bg-rose-100 cursor-default">
+                                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 text-[10px] transition-all hover:bg-rose-100 cursor-default">
                                               <FaHeart className="w-2 h-2" />
                                               <span>Author liked</span>
                                             </div>
@@ -3434,7 +3501,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                     <CheckBadgeIcon className="w-3 h-3 text-blue-500 shrink-0" title="Verified Account" />
                                                   ) : null}
                                                   {r.is_author === 1 && (
-                                                    <span className="text-[9px] inline-flex items-center px-1 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 font-bold">Author</span>
+                                                    <span className="text-[9px] inline-flex items-center px-1 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 font-bold">Author</span>
                                                   )}
                                                 </div>
 
@@ -3497,7 +3564,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                                 </div>
 
                                                 {Boolean(r.author_liked) && (
-                                                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-rose-100 cursor-default">
+                                                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 text-[9px] font-bold w-fit z-10 transition-all hover:bg-rose-100 cursor-default">
                                                     <FaHeart className="w-2 h-2" />
                                                     <span>Author liked</span>
                                                   </div>
@@ -3594,7 +3661,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                 }
                               }}
                               placeholder="Say something..."
-                              className="w-full rounded-2xl bg-gray-100 px-4 py-2 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-rose-500 outline-none transition focus:ring-1 focus:ring-gray-300 resize-none overflow-hidden leading-tight"
+                              className="w-full rounded-full bg-gray-100 px-4 py-2 lg:text-[12px] text-[10px] sm:text-[8px] text-black caret-rose-500 outline-none transition focus:ring-1 focus:ring-gray-300 resize-none overflow-hidden leading-tight"
                               onMouseDown={(e) => e.stopPropagation()}
                             />
 
@@ -3620,7 +3687,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                                   handleAddComment(text);
                                 }}
                                 disabled={commentPosting || !commentText.trim()}
-                                className="h-7 flex px-4 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-500/20 hover:brightness-105 active:scale-95 text-sm disabled:opacity-50 disabled:grayscale transition-all"
+                                className="h-7 flex px-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:brightness-105 active:scale-95 text-sm disabled:opacity-50 disabled:grayscale transition-all"
                                 title="Send comment"
                               >
                                 {commentPosting ? (

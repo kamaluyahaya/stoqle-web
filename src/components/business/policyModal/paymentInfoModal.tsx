@@ -427,7 +427,7 @@ export default function PaymentInfoModal({ open, prefKey, initialValue, onClose,
 
               <div className="p-4 bg-slate-50 flex items-center gap-4 sticky bottom-0 z-30">
                 <button onClick={() => !saving && onClose()} className="flex-1 h-10 bg-white border border-slate-200 rounded-full text-[10px] font-black  tracking-widest text-slate-400 hover:bg-slate-100 transition disabled:opacity-50">Cancel</button>
-                <button onClick={handleSave} disabled={saving} className="flex-[2] h-10 bg-rose-500 rounded-full text-[10px] font-black  tracking-widest text-white shadow-lg shadow-rose-100 hover:bg-rose-600 transition disabled:opacity-50">
+                <button onClick={handleSave} disabled={saving} className="flex-[2] h-10 bg-rose-500 rounded-full text-[10px] font-black  tracking-widest text-white shadow-lg shadow-rose-100 hover:bg-rose-500 transition disabled:opacity-50">
                   {saving ? "Verifying..." : "Verify & Save Details"}
                 </button>
               </div>

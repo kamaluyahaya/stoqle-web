@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from "r
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./authContext";
 import { API_BASE_URL } from "@/src/lib/config";
+import { isOffline, safeFetch } from "@/src/lib/api/handler";
 
 type ChatContextType = {
     unreadCount: number;
@@ -23,11 +24,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             setUnreadCount(0);
             return;
         }
+        // Skip fetch when offline — keep existing count
+        if (isOffline()) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/chat/room`, {
+            const data = await safeFetch("/api/chat/room", {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            const data = await res.json();
             const rooms = data?.rooms || data?.chatRooms || data?.data || data || [];
 
             if (Array.isArray(rooms)) {
@@ -45,7 +47,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 setUnreadCount(total);
             }
         } catch (err) {
-            console.warn("fetchUnreadCount failed", err);
+            // Silent — keep existing unread count
         }
     };
 
@@ -55,8 +57,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
             const userId = user.user_id || user.id;
             if (userId) {
-                const socket = io(API_BASE_URL, { query: { userId } });
+                const socket = io(API_BASE_URL, {
+                    query: { userId },
+                    // Resilient reconnection config
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 2000,
+                    reconnectionDelayMax: 30000,
+                    timeout: 10000,
+                });
                 socketRef.current = socket;
+
+                socket.on("connect", () => {
+                    // Refresh unread on reconnect to catch missed messages
+                    fetchUnreadCount();
+                });
+
+                socket.on("connect_error", () => {
+                    // Silent — socket.io auto-reconnects
+                });
 
                 const handleNewMessage = (msg: any) => {
                     // Only increment if we are not the sender

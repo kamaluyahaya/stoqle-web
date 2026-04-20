@@ -105,8 +105,13 @@ function HoverMenu({ label, description, items = [], className = "", avatar }: M
 
 export default function RightMenus() {
   const router = useRouter();
-  const { user, isLoggedIn } = useAuth() as any;
+  const { user, isLoggedIn, isHydrated } = useAuth() as any;
   const { cartCount } = useCart();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const firstName = user?.author_name?.split(" ")[0] || user?.full_name?.split(" ")[0] || "Profile";
   const displayName = user?.business_name || firstName;
@@ -118,6 +123,10 @@ export default function RightMenus() {
     return url.startsWith("/public") ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
   };
   const profileImage = formatUrl(rawProfileImage);
+
+  if (!mounted) {
+    return <div className="flex min-w-[200px] items-center justify-end gap-6 h-6"></div>;
+  }
 
   return (
     <div className="flex min-w-[200px] items-center justify-end gap-6">

@@ -58,8 +58,8 @@ export default function UserGenderModal({ open, initialValue, onClose, onSave }:
                   key={opt.value}
                   onClick={() => setGender(opt.value)}
                   className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-sm font-semibold transition border-2 ${gender === opt.value
-                      ? "bg-rose-50 border-rose-500 text-rose-600"
-                      : "bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100"
+                    ? "bg-rose-50 border-rose-500 text-rose-500"
+                    : "bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100"
                     }`}
                 >
                   <span className={gender === opt.value ? "text-rose-500" : "text-slate-400"}>{opt.icon}</span>
@@ -78,7 +78,7 @@ export default function UserGenderModal({ open, initialValue, onClose, onSave }:
               <button
                 onClick={handleSave}
                 disabled={saving || !gender}
-                className="px-6 py-3 rounded-full font-bold text-sm bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50"
+                className="px-6 py-3 rounded-full font-bold text-sm bg-rose-500 text-white hover:bg-rose-500 transition disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save"}
               </button>

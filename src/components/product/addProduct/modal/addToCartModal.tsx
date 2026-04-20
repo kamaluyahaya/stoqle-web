@@ -1079,14 +1079,14 @@ export default function AddToCartModal({
                                         )}
                                     </div>
                                     {estimation && !estimation.is_available && (
-                                        <div className="text-[10px] text-rose-600 font-bold px-5 py-1 bg-rose-50 border-t border-rose-100 flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                                        <div className="text-[10px] text-rose-500 font-bold px-5 py-1 bg-rose-50 border-t border-rose-100 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                                             {estimation.message}
                                         </div>
                                     )}
                                     <button
                                         onClick={() => setAddressModalOpen(true)}
-                                        className="text-[11px] font-black text-rose-500 hover:text-rose-600 shrink-0 ml-4 underline underline-offset-2"
+                                        className="text-[11px] font-black text-rose-500 hover:text-rose-500 shrink-0 ml-4 underline underline-offset-2"
                                     >
                                         {activeAddress ? "Change" : "Add Address"}
                                     </button>
@@ -1118,7 +1118,7 @@ export default function AddToCartModal({
                             </div>
                             <div className="flex-1 min-w-0 pr-6">
                                 <div className="flex flex-col">
-                                    <div className="lg:text-2xl sm:text-xl font-bold text-rose-600">
+                                    <div className="lg:text-2xl sm:text-xl font-bold text-rose-500">
                                         ₦{(price * quantity).toLocaleString()}
                                     </div>
                                     {quantity > 1 && (
@@ -1174,7 +1174,7 @@ export default function AddToCartModal({
                                             {groupHasImages && (
                                                 <button
                                                     onClick={() => setVariantViewModes(prev => ({ ...prev, [g.id]: viewMode === 'gallery' ? 'list' : 'gallery' }))}
-                                                    className="text-[13px]  tracking-tight text-slate-500 hover:text-rose-600 bg-white px-2.5 py-1 rounded-full  transition-all flex items-center gap-1 active:scale-95"
+                                                    className="text-[13px]  tracking-tight text-slate-500 hover:text-rose-500 bg-white px-2.5 py-1 rounded-full  transition-all flex items-center gap-1 active:scale-95"
                                                 >
                                                     {viewMode === 'gallery' ? (
                                                         <>
@@ -1367,7 +1367,7 @@ export default function AddToCartModal({
                                                                 });
                                                             }}
                                                             className={`relative px-4 py-2 rounded-lg border-[0.5px] text-[11px]  transition-all  flex items-center gap-2 ${isSelected
-                                                                ? "border-rose-500 bg-rose-50 text-rose-600 shadow-rose-100"
+                                                                ? "border-rose-500 bg-rose-50 text-rose-500 shadow-rose-100"
                                                                 : "border-white bg-slate-100 text-slate-700 hover:border-slate-200"
                                                                 } ${isOutOfStock ? "opacity-40 cursor-pointer" : "cursor-pointer"
                                                                 }`}
@@ -1431,7 +1431,7 @@ export default function AddToCartModal({
 
                                         {/* Total Savings */}
                                         {activeDiscountPercent > 0 && (
-                                            <div className="flex justify-between items-center text-xs text-rose-600 font-black pt-1 border-t border-rose-100/50">
+                                            <div className="flex justify-between items-center text-xs text-rose-500 font-black pt-1 border-t border-rose-100/50">
                                                 <span>Total Savings</span>
                                                 <span>-₦{((originalPrice - price) * quantity).toLocaleString()}</span>
                                             </div>
@@ -1514,13 +1514,13 @@ export default function AddToCartModal({
                                     <>
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-black  tracking-widest text-slate-400 leading-none mb-1">Total</span>
-                                            <span className="text-lg font-black text-rose-600 leading-none">₦{(price * quantity).toLocaleString()}</span>
+                                            <span className="text-lg font-black text-rose-500 leading-none">₦{(price * quantity).toLocaleString()}</span>
                                         </div>
 
                                         <button
                                             onClick={handleConfirmClick}
                                             disabled={isPaying || isOwner || (estimation !== null && !estimation.is_available) || (paymentMethod === 'stoqle_pay' && wallet !== null && (wallet.available_balance ?? 0) < (price * quantity))}
-                                            className="flex-1 max-w-[220px] py-3 bg-gradient-to-r from-rose-600 to-rose-600 text-white font-black rounded-full shadow-xl shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-xs tracking-widest"
+                                            className="flex-1 max-w-[220px] py-3 bg-gradient-to-r from-rose-500 to-rose-500 text-white font-black rounded-full shadow-xl shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98] disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed text-xs tracking-widest"
                                         >
                                             {isPaying ? "Processing..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : (estimation && !estimation.is_available ? "Out of Delivery Range" : "Pay Now")))}
                                         </button>
@@ -1537,7 +1537,7 @@ export default function AddToCartModal({
                                                 <button onClick={handleConfirmClick} disabled={isPaying || isOwner || (estimation !== null && !estimation.is_available) || (paymentMethod === 'stoqle_pay' && wallet !== null && (wallet.available_balance ?? 0) < (price * quantity))}
                                                     className={`flex-1 py-1.5 text-[11px] font-bold  bg-rose-50 hover:bg-rose-100 transition ${isAllSelected && availableStock <= 0 ? "text-slate-500" : "text-rose-500"}`}>{isPaying ? "Adding..." : (isOwner ? "Owning this product" : (isAllSelected && availableStock <= 0 ? "Out of Stock" : `Add to cart`))}</button>
                                                 <button onClick={switchToBuyMode} disabled={isPaying || isOwner}
-                                                    className="flex-1 py-1.5 text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-500 transition">Buy now</button>
+                                                    className="flex-1 py-1.5 text-[11px] font-bold text-white bg-rose-500 hover:bg-rose-500 transition">Buy now</button>
                                             </>
                                         )}
                                     </div>

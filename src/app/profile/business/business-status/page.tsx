@@ -13,6 +13,8 @@ import { Business, BusinessPolicy } from "@/src/types/business";
 import { ChevronLeftIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
+import BusinessWalkthrough from "@/src/components/business/businessWalkthrough";
+import { QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 
 
 export default function BusinessStatusPage() {
@@ -27,6 +29,7 @@ export default function BusinessStatusPage() {
   const [wallet, setWallet] = useState<any | null>(null);
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number>(0);
   const [customerDeliveredCount, setCustomerDeliveredCount] = useState<number>(0);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
 
 
@@ -162,7 +165,7 @@ export default function BusinessStatusPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="rounded-2xl bg-white px-6 py-8 shadow-lg w-full max-w-md text-center">
-          <h3 className="text-lg font-semibold text-rose-600">Something went wrong</h3>
+          <h3 className="text-lg font-semibold text-rose-500">Something went wrong</h3>
           <p className="mt-2 text-sm text-slate-600">{error}</p>
           <div className="mt-6 flex gap-3 justify-center">
             <button onClick={() => window.location.reload()} className="rounded-lg px-4 py-2 bg-rose-500 text-white font-medium">Retry</button>
@@ -206,7 +209,14 @@ export default function BusinessStatusPage() {
         >
           <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
         </button>
-        <h1 className="flex-1 text-center mr-8 font-bold text-slate-900">Business Status</h1>
+        <h1 className="flex-1 text-center font-bold text-slate-900">Business Status</h1>
+        <button
+          onClick={() => setShowWalkthrough(true)}
+          className="p-2 -mr-2 text-slate-400 hover:text-rose-500 transition-colors"
+          title="Show Guide"
+        >
+          <QuestionMarkCircleIcon className="w-6 h-6 stroke-[2.2]" />
+        </button>
       </div>
 
       <div className="">
@@ -281,14 +291,14 @@ export default function BusinessStatusPage() {
                 alt="Account Suspended"
                 className="h-full object-contain"
               />
-              <div className="absolute top-4 right-4 bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider ">
+              <div className="absolute top-4 right-4 bg-rose-500 text-white px-3 py-1 rounded-full text-xs font-bold tracking-wider ">
                 Action Required
               </div>
             </div>
 
             <div className="p-8">
               <div className="text-center mb-8">
-                <h1 className="text-2xl font-bold text-slate-900 mb-3 text-rose-600">Account Suspended</h1>
+                <h1 className="text-2xl font-bold text-slate-900 mb-3 text-rose-500">Account Suspended</h1>
                 <p className="text-slate-500 leading-relaxed max-w-md mx-auto">
                   Your business access has been restricted due to a violation of our community guidelines or terms of service.
                 </p>
@@ -309,7 +319,7 @@ export default function BusinessStatusPage() {
               <div className="space-y-4">
                 <button
                   onClick={() => router.push("/support")}
-                  className="w-full py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all active:scale-[0.98]"
+                  className="w-full py-4 bg-rose-500 text-white rounded-2xl font-bold hover:bg-rose-700 transition-all active:scale-[0.98]"
                 >
                   Contact Support / Appeal
                 </button>
@@ -339,6 +349,7 @@ export default function BusinessStatusPage() {
                 const event = new CustomEvent('refresh-business-data');
                 window.dispatchEvent(event);
               }}
+              onReplayGuide={() => setShowWalkthrough(true)}
             />
           </div>
         )}
@@ -362,6 +373,13 @@ export default function BusinessStatusPage() {
           </div>
         )}
       </div>
+
+      {status === "active" && (
+        <BusinessWalkthrough
+          forceShow={showWalkthrough}
+          onComplete={() => setShowWalkthrough(false)}
+        />
+      )}
     </div>
   );
 }

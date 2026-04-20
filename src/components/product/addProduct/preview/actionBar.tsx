@@ -117,7 +117,7 @@ export default function ActionBar({
             <ShoppingCartIcon className="w-5 h-5 text-slate-600" />
           </button>
           {localCount > 0 && (
-            <div className="absolute -top-1 right-3 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center shadow-sm border border-white">
+            <div className="absolute -top-1 right-3 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-sm border border-white">
               {localCount}
             </div>
           )}
@@ -143,7 +143,7 @@ export default function ActionBar({
           ) : (
             <>
               <button onMouseDown={stop} onClick={(e) => onAddToCart(e)} className="flex-1 py-2.5 text-[11px] font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 transition-all active:scale-95">Add to cart</button>
-              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-2.5 text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-500 transition-all active:scale-95 shadow-lg shadow-rose-200">Buy now</button>
+              <button onMouseDown={stop} onClick={(e) => onBuyNow(e)} className="flex-1 py-2.5 text-[11px] font-bold text-white bg-rose-500 hover:bg-rose-500 transition-all active:scale-95 shadow-lg shadow-rose-200">Buy now</button>
             </>
           )}
         </div>

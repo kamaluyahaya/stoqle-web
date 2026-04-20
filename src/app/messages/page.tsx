@@ -2057,7 +2057,7 @@ function MessagesPageContent({
                         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                           <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-slate-300  tracking-widest mb-1">Total Price</span>
-                            <span className="text-xl font-black text-rose-600 tracking-tighter">
+                            <span className="text-xl font-black text-rose-500 tracking-tighter">
                               ₦{Number(taggedProduct.price || 0).toLocaleString()}
                             </span>
                           </div>
@@ -2146,7 +2146,7 @@ function MessagesPageContent({
                             <div>
                               <p className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Status</p>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-black  tracking-wider ${taggedOrderData.status?.toLowerCase().includes('delivered') ? 'bg-emerald-100 text-emerald-600' :
-                                taggedOrderData.status?.toLowerCase().includes('cancel') ? 'bg-rose-100 text-rose-600' :
+                                taggedOrderData.status?.toLowerCase().includes('cancel') ? 'bg-rose-100 text-rose-500' :
                                   'bg-amber-100 text-amber-600'
                                 }`}>
                                 {taggedOrderData.status?.replace(/_/g, ' ')}
@@ -2164,7 +2164,7 @@ function MessagesPageContent({
                             <span className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Context</span>
                             <span className="text-xs font-bold text-slate-500">Order Inquiry</span>
                           </div>
-                          <div className="px-4 py-2 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black  tracking-widest shadow-sm shadow-rose-100">
+                          <div className="px-4 py-2 bg-rose-50 text-rose-500 rounded-2xl text-[10px] font-black  tracking-widest shadow-sm shadow-rose-100">
                             Selected
                           </div>
                         </div>
@@ -2287,7 +2287,7 @@ function MessagesPageContent({
                         <Package size={14} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] sm:text-xs font-black text-rose-600 tracking-tight leading-none ">Referencing Order</span>
+                        <span className="text-[10px] sm:text-xs font-black text-rose-500 tracking-tight leading-none ">Referencing Order</span>
                         <span className="text-[11px] sm:text-sm font-bold text-rose-900 mt-1">{taggedOrderRef}</span>
                       </div>
                     </div>
@@ -2296,7 +2296,7 @@ function MessagesPageContent({
                         setTaggedOrderRef(null);
                         setTaggedOrderId(null);
                       }}
-                      className="p-1.5 rounded-full hover:bg-white text-rose-400 hover:text-rose-600 transition-colors shadow-sm active:scale-95"
+                      className="p-1.5 rounded-full hover:bg-white text-rose-400 hover:text-rose-500 transition-colors shadow-sm active:scale-95"
                     >
                       <X size={16} />
                     </button>
@@ -2417,7 +2417,7 @@ function MessagesPageContent({
 
                     <button
                       onClick={handleDeleteMessage}
-                      className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl transition-all text-rose-600 font-bold text-sm active:scale-[0.98]"
+                      className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl transition-all text-rose-500 font-bold text-sm active:scale-[0.98]"
                     >
                       <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
                         <X size={16} />
@@ -2428,7 +2428,7 @@ function MessagesPageContent({
                 ) : (
                   <button
                     onClick={handleReportMessage}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl transition-all text-rose-600 font-bold text-sm active:scale-[0.98]"
+                    className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl transition-all text-rose-500 font-bold text-sm active:scale-[0.98]"
                   >
                     <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500">
                       <AlertCircle size={16} />
@@ -2526,7 +2526,7 @@ function MessagesPageContent({
                   <div className="flex items-center gap-4">
                     <button
                       onClick={handleUpdateMessage}
-                      className="flex items-center gap-2 bg-rose-500 text-white px-6 py-2.5 rounded-full font-black text-[11px] shadow-xl shadow-rose-100 hover:bg-rose-600 transition-all active:scale-95"
+                      className="flex items-center gap-2 bg-rose-500 text-white px-6 py-2.5 rounded-full font-black text-[11px] shadow-xl shadow-rose-100 hover:bg-rose-500 transition-all active:scale-95"
                     >
                       Save Changes
                       <CheckCircle size={14} strokeWidth={3} />

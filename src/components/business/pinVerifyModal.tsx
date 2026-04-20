@@ -118,7 +118,7 @@ export default function PinVerifyModal({
                                     className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex items-start gap-3"
                                 >
                                     <div className="text-rose-500 mt-0.5 shrink-0 text-xs font-bold font-serif italic border border-rose-500 rounded-full w-4 h-4 flex items-center justify-center">!</div>
-                                    <p className="text-[11px] font-bold text-rose-600 leading-relaxed">{errorMessage}</p>
+                                    <p className="text-[11px] font-bold text-rose-500 leading-relaxed">{errorMessage}</p>
                                 </motion.div>
                             )}
 

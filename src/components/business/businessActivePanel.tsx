@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { FaCat, FaChevronRight, FaStore, FaBox, FaShoppingCart, FaWallet, FaArrowDown } from "react-icons/fa";
 import { KEYS } from "@/src/lib/utils/business/profilePrefs";
 import RefundsModal from "./policyModal/refundsModal";
@@ -21,6 +22,7 @@ import ShopProfileModal from "./policyModal/shopProfileModal";
 import { API_BASE_URL } from "@/src/lib/config";
 import { useWallet } from "@/src/context/walletContext";
 import { toast } from "sonner";
+import { InformationCircleIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 
 export default function EditBusinessProfile({
   apiBase = "",
@@ -30,6 +32,7 @@ export default function EditBusinessProfile({
   pendingOrdersCount = 0,
   customerDeliveredCount = 0,
   onRefresh,
+  onReplayGuide,
 }: {
   apiBase?: string;
   business?: any | null;
@@ -38,6 +41,7 @@ export default function EditBusinessProfile({
   pendingOrdersCount?: number;
   customerDeliveredCount?: number;
   onRefresh?: () => void;
+  onReplayGuide?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -272,9 +276,46 @@ export default function EditBusinessProfile({
     }
   };
 
+  const setupCompletionRate = Object.keys(policyValueMap).filter(isPolicySet).length / Object.keys(policyValueMap).length;
+  const isSetupIncomplete = !isPolicySet(KEYS.shipping) || !isPolicySet(KEYS.refunds) || !isPolicySet(KEYS.payment);
+
   return (
     <div className="pb-1 bg-slate-100 p-4">
       <div className="max-w-7xl mx-auto px-1 pt-2 space-y-4">
+        {/* Help / Guide Access (Desktop Subtle) */}
+        <div className="hidden lg:flex justify-end pr-2">
+          <button
+            onClick={onReplayGuide}
+            className="flex items-center gap-2 text-[10px] text-slate-400 hover:text-rose-500 transition-colors"
+          >
+            <QuestionMarkCircleIcon className="w-4 h-4" /> Replay Onboarding Guide
+          </button>
+        </div>
+
+        {/* Suggestion Banner */}
+        {isSetupIncomplete && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white border-2 border-rose-100 rounded-[0.5rem] p-2 shadow-xl shadow-rose-100/20 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 bg-rose-500/5 blur-3xl rounded-full" />
+            <div className="relative flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1">
+                {/* <h4 className="text-sm font-black text-slate-900 mb-1">Finish your business setup</h4> */}
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                  Your profile is missing key trust factors. Shops with complete delivery and refund policies earn up to <span className="text-rose-500 font-bold">4.5x more revenue</span>.
+                </p>
+              </div>
+              <button
+                onClick={onReplayGuide}
+                className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 text-white rounded-full text-[11px] font-black shadow-lg shadow-slate-100 hover:bg-rose-600 transition-all active:scale-95"
+              >
+                Guide Me
+              </button>
+            </div>
+          </motion.div>
+        )}
         {/* Header */}
         <div className="flex flex-col items-center">
           <div
@@ -373,7 +414,7 @@ export default function EditBusinessProfile({
         )}
 
         {/* Action grid */}
-        <div className="mt-2 w-full">
+        <div id="guide-wallet-actions" className="mt-2 w-full">
           <div className="grid grid-cols-4 gap-2 lg:gap-5">
             <Link href="/profile/business/customer-order" className="block">
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
@@ -384,14 +425,24 @@ export default function EditBusinessProfile({
               </div>
             </Link>
 
-            <Link href="/profile/business/inventory" className="block">
+            <div
+              onClick={() => {
+                if (!isPolicySet(KEYS.shipping)) {
+                  toast.error("Please update your Shipping Info before accessing Inventory.");
+                  openEditor("Shipping Info", KEYS.shipping, normalizeShippingForModal(shipping));
+                  return;
+                }
+                router.push("/profile/business/inventory");
+              }}
+              className="block cursor-pointer"
+            >
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                   <FaBox className="text-slate-700" size={18} />
                 </div>
                 <span className="text-xs font-medium text-slate-700">Inventory</span>
               </div>
-            </Link>
+            </div>
 
             <div
               className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition cursor-pointer"
@@ -439,7 +490,7 @@ export default function EditBusinessProfile({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl ">
+          <div id="guide-shipping" className="bg-white rounded-xl ">
             <div onClick={() => openEditor("Shipping Info", KEYS.shipping, normalizeShippingForModal(shipping))} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Shipping info</div>
@@ -448,7 +499,7 @@ export default function EditBusinessProfile({
               <FaChevronRight className="text-slate-300" />
             </div>
             <div className="h-px bg-slate-100" />
-            <div onClick={() => openEditor("Return & Refunds", KEYS.refunds, refunds)} className="px-4 py-3 cursor-pointer flex items-center">
+            <div id="guide-refunds" onClick={() => openEditor("Return & Refunds", KEYS.refunds, refunds)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Return & Refunds</div>
                 <div className="text-sm mt-1">{renderStatus(KEYS.refunds)}</div>
@@ -458,7 +509,7 @@ export default function EditBusinessProfile({
           </div>
 
           <div className="bg-white rounded-xl ">
-            <div onClick={() => openEditor("Payment Info", KEYS.payment, payment)} className="px-4 py-3 cursor-pointer flex items-center">
+            <div id="guide-payment" onClick={() => openEditor("Payment Info", KEYS.payment, payment)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Payment Info</div>
                 <div className="text-sm mt-1">{renderStatus(KEYS.payment,)}</div>
@@ -466,7 +517,7 @@ export default function EditBusinessProfile({
               <FaChevronRight className="text-slate-300" />
             </div>
             <div className="h-px bg-slate-100" />
-            <div onClick={() => openEditor("Customer Service", KEYS.customerService, customerService)} className="px-4 py-3 cursor-pointer flex items-center">
+            <div id="guide-customer-service" onClick={() => openEditor("Customer Service", KEYS.customerService, customerService)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Customer Service</div>
                 <div className="text-sm mt-1">{renderStatus(KEYS.customerService)}</div>
@@ -483,7 +534,7 @@ export default function EditBusinessProfile({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl ">
+          <div id="guide-market" className="bg-white rounded-xl ">
             <div onClick={() => openEditor("Market Affiliation", KEYS.market, market)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Market Affiliation</div>
@@ -494,7 +545,7 @@ export default function EditBusinessProfile({
           </div>
 
           <div className="bg-white rounded-xl shadow-sm">
-            <div onClick={() => openEditor("Promotional Sale", KEYS.promo, promo)} className="px-4 py-3 cursor-pointer flex items-center">
+            <div id="guide-promo" onClick={() => openEditor("Promotional Sale", KEYS.promo, promo)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Promotional Sale</div>
                 <div className="text-sm mt-1">{renderStatus(KEYS.promo)}</div>
@@ -502,7 +553,7 @@ export default function EditBusinessProfile({
               <FaChevronRight className="text-slate-300" />
             </div>
             <div className="h-px bg-slate-100" />
-            <div onClick={() => openEditor("Sales Discount", KEYS.discount, discount)} className="px-4 py-3 cursor-pointer flex items-center">
+            <div id="guide-discount" onClick={() => openEditor("Sales Discount", KEYS.discount, discount)} className="px-4 py-3 cursor-pointer flex items-center">
               <div className="flex-1">
                 <div className="text-sm text-slate-800 font-medium">Sales Discount</div>
                 <div className="text-sm mt-1">{renderStatus(KEYS.discount)}</div>

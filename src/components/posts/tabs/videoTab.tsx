@@ -206,7 +206,7 @@ export default function VideoTab({
                       rawCreatedAt: new Date().toISOString()
                     });
                   }}
-                  className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-lg border border-slate-100 text-slate-500 hover:text-rose-600 hover:scale-110 transition-all active:scale-95"
+                  className="h-10 w-10 flex items-center justify-center rounded-full bg-white shadow-lg border border-slate-100 text-slate-500 hover:text-rose-500 hover:scale-110 transition-all active:scale-95"
                   title="Preview"
                 >
                   <EyeIcon className="w-5 h-5" />
@@ -241,7 +241,7 @@ export default function VideoTab({
           className={`w-full py-2 rounded-full text-sm transition-all duration-300 flex items-center justify-center gap-3
             ${!video
               ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-              : "bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200 hover:scale-[1.02] active:scale-95"
+              : "bg-rose-500 text-white hover:bg-rose-500 shadow-rose-200 hover:scale-[1.02] active:scale-95"
             }
           `}
         >

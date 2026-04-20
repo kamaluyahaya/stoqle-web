@@ -30,11 +30,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import { fetchBusinessMe } from "@/src/lib/api/productApi";
 import { toast } from "sonner";
+import * as htmlToImage from 'html-to-image';
 
 // Policy Modals
 import SevenDayReturnModal from "@/src/components/business/policyModal/sevenDayReturnModal";
 import ReturnShippingSubsidyModal from "@/src/components/business/policyModal/returnShippingSubsidyModal";
 import LateShipmentCompensationModal from "@/src/components/business/policyModal/lateShipmentCompensationModal";
+import PostShareModal from "@/src/components/modal/PostShareModal";
 
 export default function VendorOnboardingPage() {
   const router = useRouter();
@@ -43,6 +45,57 @@ export default function VendorOnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState("welcome");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const flyerRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadImage = async () => {
+    if (!flyerRef.current) return;
+    try {
+      setDownloading(true);
+      toast.info("Generating flyer...");
+      const dataUrl = await htmlToImage.toPng(flyerRef.current, { quality: 1, pixelRatio: 3, cacheBust: true });
+      const link = document.createElement('a');
+      link.download = `stoqle-flyer-${businessData?.business_name?.toLowerCase() || 'shop'}.png`;
+      link.href = dataUrl;
+      link.click();
+      toast.success("Flyer downloaded successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate flyer.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleGenerateShareLink = async () => {
+    if (!businessData?.business_id) return null;
+    setIsSharing(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/shop/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ business_id: businessData.business_id })
+      });
+      const json = await res.json();
+      if (json.ok && json.data?.shareUrl) {
+        setShareUrl(json.data.shareUrl);
+        return json.data.shareUrl;
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSharing(false);
+    }
+    return null;
+  };
 
   // Modal States
   const [modalOpen, setModalOpen] = useState({
@@ -66,12 +119,13 @@ export default function VendorOnboardingPage() {
 
         const businessParams = biz?.data?.business ?? biz?.business ?? biz;
         const bizStatsParams = biz?.data?.stats ?? biz?.stats ?? {};
+        const profileBusinessStats = profileJson?.data?.business?.stats ?? {};
         const profileStatsParams = profileJson?.data?.stats ?? profileJson?.stats ?? {};
 
         // Merge stats
         setBusinessData({
           ...businessParams,
-          stats: { ...bizStatsParams, ...profileStatsParams }
+          stats: { ...bizStatsParams, ...profileStatsParams, ...profileBusinessStats }
         });
       } catch (e) {
         console.error("Failed to load business data", e);
@@ -148,7 +202,7 @@ export default function VendorOnboardingPage() {
           >
 
             <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">
-              Build your <span className="text-rose-600">Digital Empire</span> on Stoqle.
+              Build your <span className="text-rose-500">Digital Empire</span> on Stoqle.
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
@@ -212,7 +266,7 @@ export default function VendorOnboardingPage() {
                   </div>
                 </div>
                 <div className="absolute bottom-6 left-6 right-6 p-4 bg-white/95 backdrop-blur-md rounded-[0.5rem] shadow-xl border border-slate-50">
-                  <p className="text-[10px] font-black text-rose-600  mb-1">Live Preview</p>
+                  <p className="text-[10px] font-black text-rose-500  mb-1">Live Preview</p>
                   <h4 className="font-bold text-slate-800 truncate">Professional Studio Camera</h4>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-black text-slate-900">₦250,000</span>
@@ -277,7 +331,7 @@ export default function VendorOnboardingPage() {
           </div>
 
           <div className="mt-10 p-6 bg-slate-900 rounded-[0.5rem] text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-rose-600/20 blur-[100px] rounded-full"></div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/20 blur-[100px] rounded-full"></div>
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
               <div className="flex-1">
                 <h3 className="text-xl font-bold mb-3">Why utilize these policies?</h3>
@@ -299,7 +353,7 @@ export default function VendorOnboardingPage() {
                 </div>
               </div>
               <button
-                onClick={() => scrollTo("products")}
+                onClick={() => router.push("/profile/business/business-status")}
                 className="px-8 py-4 bg-white text-slate-900 rounded-[0.5rem] font-black text-sm hover:bg-slate-100 transition-all shadow-xl shadow-black/10"
               >
                 Setup Policies Now
@@ -337,7 +391,7 @@ export default function VendorOnboardingPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-rose-50 rounded-[0.5rem] flex items-center justify-center text-rose-600">
+                    <div className="w-10 h-10 bg-rose-50 rounded-[0.5rem] flex items-center justify-center text-rose-500">
                       <Tag className="w-5 h-5" />
                     </div>
                     <div>
@@ -389,8 +443,9 @@ export default function VendorOnboardingPage() {
 
           <div className="flex flex-col lg:flex-row gap-12 items-start">
             {/* Live Preview */}
-            <div className="flex-1 w-full flex justify-center sticky top-24">
+            <div className="flex-1 w-full flex justify-start sticky top-24">
               <FlyerPreview
+                divRef={flyerRef}
                 data={businessData}
                 user={auth?.user}
                 formatUrl={(url: string) => {
@@ -403,7 +458,7 @@ export default function VendorOnboardingPage() {
             </div>
 
             {/* Controls */}
-            <div className="w-full lg:w-80 space-y-6">
+            <div className="w-full lg:w-90 space-y-2">
               <div className="bg-white p-6 rounded-[0.5rem] border border-slate-100 shadow-xl">
                 <h4 className="font-bold text-slate-800 mb-4">Flyer Customization</h4>
                 <div className="space-y-4">
@@ -412,23 +467,29 @@ export default function VendorOnboardingPage() {
                     <p className="text-xs font-medium text-slate-700 italic">"Explore our premium collections on Stoqle!"</p>
                   </div>
                   <div className="p-4 bg-slate-50 rounded-[0.5rem]">
-                    <p className="text-[10px] font-bold text-slate-400 mb-2">QR Link</p>
-                    <p className="text-xs font-medium text-slate-700 truncate">stoqle.com/shop/{businessData?.business_name?.toLowerCase().replace(/\s/g, '-')}</p>
+                    <p className="text-[10px] font-bold text-slate-400 mb-2">Share Link</p>
+                    <p className="text-xs font-medium text-slate-700 truncate">
+                      {shareUrl || `stoqle.com/shop/${businessData?.business_slug || businessData?.business_id || '...'}`}
+                    </p>
                   </div>
                 </div>
 
                 <div className="mt-8 space-y-3">
                   <button
-                    onClick={() => toast.success("Flyer download started!")}
-                    className="w-full py-4 bg-rose-600 text-white rounded-[0.5rem] font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-rose-100 hover:scale-[1.02] transition-all"
+                    onClick={handleDownloadImage}
+                    disabled={downloading}
+                    className="w-full py-4 bg-rose-600 text-white rounded-full text-sm flex items-center justify-center gap-3 shadow-xl shadow-rose-100 hover:scale-[1.02] transition-all disabled:opacity-50"
                   >
                     <Download className="w-5 h-5" /> Download Image
                   </button>
                   <button
-                    onClick={() => toast("Link copied to clipboard!")}
-                    className="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-[0.5rem] font-black text-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-all"
+                    onClick={() => {
+                      setShareModalOpen(true);
+                      if (!shareUrl) handleGenerateShareLink();
+                    }}
+                    className="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-full font-black text-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-all font-bold"
                   >
-                    <Share2 className="w-5 h-5" /> Share Store Link
+                    <Share2 className="w-5 h-5" /> Share Shop
                   </button>
                 </div>
               </div>
@@ -443,13 +504,19 @@ export default function VendorOnboardingPage() {
               </div>
             </div>
           </div>
+
+          <PostShareModal
+            isOpen={shareModalOpen}
+            onClose={() => setShareModalOpen(false)}
+            shareUrl={shareUrl}
+            title={businessData?.business_name || "My Shop"}
+            isLoading={isSharing}
+            onGenerate={handleGenerateShareLink}
+          />
         </section>
 
         {/* Final CTA */}
         <section className="text-center bg-white rounded-[0.5rem] p-12 py-20 border border-slate-100 shadow-2xl shadow-rose-100/50 px-4">
-          <div className="w-16 h-16 bg-rose-100 rounded-[0.5rem] flex items-center justify-center text-rose-600 mx-auto mb-8">
-            <Store className="w-8 h-8" />
-          </div>
           <h2 className="text-3xl font-black text-slate-900 mb-4">Ready to Launch?</h2>
           <p className="text-slate-500 mb-10 max-w-lg mx-auto leading-relaxed">
             Your journey as a top-tier vendor starts today. List your first product and let the Stoqle ecosystem do the rest.
@@ -457,7 +524,7 @@ export default function VendorOnboardingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={() => router.push("/profile/business/inventory/add-product")}
-              className="px-10 py-2 bg-rose-600 text-white rounded-full  shadow-xl shadow-rose-200 hover:scale-105 transition-transform flex items-center gap-3"
+              className="px-10 py-2 bg-rose-500 text-white rounded-full  shadow-xl shadow-rose-200 hover:scale-105 transition-transform flex items-center gap-3"
             >
               Start Listing Products <ChevronRight className="w-5 h-5" />
             </button>
@@ -486,7 +553,7 @@ export default function VendorOnboardingPage() {
 
 function StatCard({ label, value, icon: Icon, color }: { label: string, value: string, icon: any, color: string }) {
   const colors: Record<string, string> = {
-    rose: "text-rose-600 bg-rose-50",
+    rose: "text-rose-500 bg-rose-50",
     blue: "text-blue-600 bg-blue-50",
     amber: "text-amber-600 bg-amber-50"
   };
@@ -503,7 +570,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string, value: s
 
 function SectionHeader({ title, subtitle, icon: Icon, color }: { title: string, subtitle: string, icon: any, color: string }) {
   const colors: Record<string, string> = {
-    rose: "bg-rose-100 text-rose-600",
+    rose: "bg-rose-100 text-rose-500",
     emerald: "bg-emerald-100 text-emerald-600",
     amber: "bg-amber-100 text-amber-600",
     indigo: "bg-indigo-100 text-indigo-600"
@@ -527,7 +594,7 @@ function TutorialStep({ num, title, desc, icon: Icon }: { num: string, title: st
         </div>
       </div>
       <div className="pt-2">
-        <h4 className="font-bold text-slate-800 mb-1.5 group-hover:text-rose-600 transition-colors  tracking-tight">{title}</h4>
+        <h4 className="font-bold text-slate-800 mb-1.5 group-hover:text-rose-500 transition-colors  tracking-tight">{title}</h4>
         <p className="text-xs text-slate-500 leading-relaxed font-medium">{desc}</p>
       </div>
     </div>
@@ -538,7 +605,7 @@ function PolicyCard({ title, desc, icon: Icon, color, modal, onClick }: { title:
   const colors: Record<string, string> = {
     emerald: "bg-emerald-50 text-emerald-600",
     blue: "bg-blue-50 text-blue-600",
-    rose: "bg-rose-50 text-rose-600",
+    rose: "bg-rose-50 text-rose-500",
     amber: "bg-amber-50 text-amber-600",
     violet: "bg-violet-50 text-violet-600"
   };
@@ -566,7 +633,7 @@ function PromoBar({ label, percent }: { label: string, percent: number }) {
     <div>
       <div className="flex justify-between items-center mb-1.5">
         <span className="text-[10px] font-bold text-slate-600">{label}</span>
-        <span className="text-[10px] font-black text-rose-600">{percent}%</span>
+        <span className="text-[10px] font-black text-rose-500">{percent}%</span>
       </div>
       <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
         <motion.div
@@ -580,7 +647,7 @@ function PromoBar({ label, percent }: { label: string, percent: number }) {
   );
 }
 
-function FlyerPreview({ data, user, formatUrl }: { data: any, user: any, formatUrl: (url: string) => string | null }) {
+function FlyerPreview({ data, user, formatUrl, divRef }: { data: any, user: any, formatUrl: (url: string) => string | null, divRef?: any }) {
   const bgImage = formatUrl(data?.bg_photo_url || user?.bg_photo_url) || "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop";
   const logo = formatUrl(data?.business_logo || data?.logo || user?.profile_pic || user?.profile_photo_url || user?.avatar_url);
   const businessName = data?.business_name || user?.business_name || user?.username || "BUSINESS NAME";
@@ -593,20 +660,24 @@ function FlyerPreview({ data, user, formatUrl }: { data: any, user: any, formatU
     data?.stats?.followers ?? data?.stats?.follower_count ??
     user?.stats?.followers ?? user?.stats?.follower_count ?? 0;
 
+  const totalSold =
+    data?.stats?.total_sold ?? data?.stats?.units_sold ?? data?.stats?.items_sold ??
+    user?.stats?.total_sold ?? user?.stats?.units_sold ?? user?.stats?.items_sold ?? 0;
+
   return (
-    <div className="relative w-full max-w-sm aspect-[4/6] bg-slate-900 rounded-[0.5rem] shadow-2xl overflow-hidden transform hover:rotate-1 transition-transform duration-500 border-[6px] border-white">
+    <div ref={divRef} className="relative w-full max-w-sm aspect-[4/6] bg-slate-900 rounded-[0.5rem] shadow-2xl overflow-hidden border-[6px] border-white">
       {/* Background Photo - Top portion only */}
-      <div className="absolute top-0 left-0 right-0 h-[40%] z-0">
+      <div className="absolute top-0 left-0 right-0 h-[35%] z-0">
         <img src={bgImage} className="w-full h-full object-cover" alt="Background" />
         <div className="absolute inset-0 bg-black/40"></div>
       </div>
 
       {/* Bottom 75% - Solid Red Block with All Content */}
-      <div className="absolute bottom-0 left-0 right-0 h-[70%] bg-gradient-to-br from-rose-900 via-rose-700 to-rose-500 rounded-t-[2rem] z-10 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
+      <div className="absolute bottom-0 left-0 right-0 h-[70%] bg-gradient-to-br from-rose-500 to-rose-500 rounded-t-[2rem] z-10 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
         <div className="relative h-full flex flex-col p-8 justify-between text-white">
           {/* Main Content (Logo, Name, ID) */}
           <div className="flex flex-col items-start mt-2">
-            <div className="w-16 h-16 rounded-full border border-white/80 mb-4 overflow-hidden ">
+            <div className="w-20 h-20 rounded-full border border-white/80 mb-4 overflow-hidden ">
               {logo ? (
                 <img src={logo} className="w-full h-full object-cover rounded-full" alt="Logo" />
               ) : (
@@ -618,7 +689,17 @@ function FlyerPreview({ data, user, formatUrl }: { data: any, user: any, formatU
             <h2 className="text-xl font-medium leading-tight tracking-tighter mb-1 drop-shadow-lg">{businessName}</h2>
             <div className=" rounded-[0.5rem]">
               <p className="text-[10px] text-white ">Stoqle ID: {stoqleId}</p>
-              <p className="text-[10px] text-white/80 mt-0.5">{Number(followersCount).toLocaleString()} Followers</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-baseline gap-1">
+                  <p className="text-[15px] text-white/90 font-bold">{Number(followersCount).toLocaleString()}</p>
+                  <p className="text-[10px] text-white/80">Followers</p>
+                </div>
+                <span className="text-white/40 text-[10px]">|</span>
+                <div className="flex items-baseline gap-1">
+                  <p className="text-[15px] text-white/90 font-bold">{Number(totalSold).toLocaleString()}</p>
+                  <p className="text-[10px] text-white/80">Items sold</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -632,7 +713,7 @@ function FlyerPreview({ data, user, formatUrl }: { data: any, user: any, formatU
 
             <div className="flex flex-col items-start gap-4">
               <div className="bg-white px-3 py-1 rounded-full shadow-lg">
-                <span className="text-rose-600 font-black text-md tracking-tighter">stoqle</span>
+                <span className="text-rose-500 font-black text-md tracking-tighter">stoqle</span>
               </div>
               <div className="space-y-0.5">
                 <p className="text-[14px] text-white/70 leading-tight tracking-tight drop-shadow-md">Scan QR code</p>
@@ -696,7 +777,7 @@ function OrganizeCustomersSection() {
         }}
         className="absolute inset-0 bg-slate-900 overflow-hidden shadow-2xl flex items-center justify-center"
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-rose-600/20 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-rose-500/20 blur-[120px] rounded-full pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-600/20 blur-[120px] rounded-full pointer-events-none" />
       </motion.div>
 

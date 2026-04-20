@@ -102,7 +102,7 @@ const guidelines = [
   },
   {
     id: "reporting",
-    icon: <Flag className="w-6 h-6 text-rose-600" />,
+    icon: <Flag className="w-6 h-6 text-rose-500" />,
     title: "Reporting",
     short: "How to flag suspicious or harmful activity.",
     content: "Community policing is vital. Use the 'Report' button on any post, profile, or listing to alert our safety team. All reports are reviewed by humans within 24–48 hours."
@@ -167,7 +167,7 @@ const GuidelineCard = ({ item }: { item: typeof guidelines[0] }) => {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setReaction("down"); }}
-                      className={`p-2 rounded-full transition-colors ${reaction === "down" ? "bg-rose-100 text-rose-600" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"}`}
+                      className={`p-2 rounded-full transition-colors ${reaction === "down" ? "bg-rose-100 text-rose-500" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"}`}
                     >
                       <ThumbsDown className="w-4 h-4" />
                     </button>
@@ -230,7 +230,7 @@ export default function CommunityGuidelinesPage() {
       </div>
       {/* Scroll Progress Indicator */}
       <motion.div
-        className="fixed top-0 left-0 right-0 h-1 bg-rose-600 z-[101] origin-left"
+        className="fixed top-0 left-0 right-0 h-1 bg-rose-500 z-[101] origin-left"
         style={{ scaleX }}
       />
 
@@ -241,7 +241,7 @@ export default function CommunityGuidelinesPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-bold mb-6"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 dark:text-rose-400 text-xs font-bold mb-6"
           >
             <Shield className="w-3.5 h-3.5" />
             Last updated: April 10, 2026
@@ -276,11 +276,11 @@ export default function CommunityGuidelinesPage() {
                   key={item.id}
                   href={`#${item.id}`}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${activeSection === item.id
-                      ? "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400"
-                      : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+                    ? "bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400"
+                    : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                     }`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full transition-all ${activeSection === item.id ? "bg-rose-600 scale-100" : "bg-transparent scale-0"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full transition-all ${activeSection === item.id ? "bg-rose-500 scale-100" : "bg-transparent scale-0"}`} />
                   {item.title}
                 </a>
               ))}
@@ -309,7 +309,7 @@ export default function CommunityGuidelinesPage() {
           ))}
 
           {/* Trust Elements Section */}
-          <section className="mt-12 p-8 lg:p-12 bg-rose-600 rounded-3xl text-white relative overflow-hidden">
+          <section className="mt-12 p-8 lg:p-12 bg-rose-500 rounded-3xl text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
               <Shield className="w-64 h-64" />
             </div>
@@ -320,7 +320,7 @@ export default function CommunityGuidelinesPage() {
               </p>
 
               <div className="flex flex-wrap gap-4">
-                <button className="px-8 py-3 bg-white text-rose-600 rounded-full font-bold shadow-xl hover:bg-rose-50 transition-colors flex items-center gap-2">
+                <button className="px-8 py-3 bg-white text-rose-500 rounded-full font-bold shadow-xl hover:bg-rose-50 transition-colors flex items-center gap-2">
                   Agree & Continue <ArrowRight className="w-4 h-4" />
                 </button>
                 <button className="px-8 py-3 bg-rose-700/50 backdrop-blur-sm border border-rose-500/30 text-white rounded-full font-bold hover:bg-rose-700 transition-colors flex items-center gap-2">

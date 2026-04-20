@@ -63,7 +63,15 @@ export function upsertSavedAccount(user: any, token: string) {
     stoqle_id: user.stoqle_id,
     token,
   };
-  const updated = existing.some((a) => a.user_id === id)
+
+  const isExisting = existing.some((a) => a.user_id === id);
+  
+  // If it's a new account and we already have 5, don't add it
+  if (!isExisting && existing.length >= 5) {
+    return;
+  }
+
+  const updated = isExisting
     ? existing.map((a) => (a.user_id === id ? entry : a))
     : [...existing, entry];
   persistAccounts(updated);
@@ -229,13 +237,14 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
   };
 
   const handleAddAccount = () => {
+    if (accounts.length >= 5) {
+      toast.error("Maximum 5 accounts allowed. Please remove one first.");
+      return;
+    }
     onClose();
     if (onAddAccount) {
-      // Let parent handle: it waits for exit animation to clear the high-z backdrop
-      // before opening the login modal (which lives at a lower z-index in Shell)
       onAddAccount();
     } else {
-      // Fallback: small delay so the backdrop exit animation clears first
       setTimeout(() => openLogin(), 400);
     }
   };
@@ -400,7 +409,7 @@ function ModalContent({
 
                 {/* Name & ID */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${active ? "text-rose-600" : "text-slate-800"}`}>
+                  <p className={`text-sm ${active ? "text-rose-500" : "text-slate-800"}`}>
                     {getDisplayName(acc)}
                   </p>
                   <p className="text-xs text-slate-400 truncate">stoqle ID: {acc.stoqle_id || acc.user_id}</p>
@@ -431,16 +440,25 @@ function ModalContent({
         <div className="px-4 pt-3 pb-6">
           <button
             onClick={handleAddAccount}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 transition-all group active:scale-[0.98]"
+            disabled={accounts.length >= 5}
+            className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed transition-all group active:scale-[0.98]
+              ${accounts.length >= 5 
+                ? "border-slate-100 bg-slate-50 cursor-not-allowed" 
+                : "border-slate-200 hover:border-rose-300 hover:bg-rose-50/40"
+              }`}
           >
-            <div className="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-rose-100 flex items-center justify-center transition-colors shrink-0">
-              <PlusCircleIcon className="w-6 h-6 text-slate-400 group-hover:text-rose-500 transition-colors" />
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors shrink-0
+              ${accounts.length >= 5 ? "bg-slate-200" : "bg-slate-100 group-hover:bg-rose-100"}`}
+            >
+              <PlusCircleIcon className={`w-6 h-6 transition-colors ${accounts.length >= 5 ? "text-slate-300" : "text-slate-400 group-hover:text-rose-500"}`} />
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm text-slate-500 group-hover:text-rose-500 transition-colors">
-                Add another account
+              <p className={`text-sm transition-colors ${accounts.length >= 5 ? "text-slate-300" : "text-slate-500 group-hover:text-rose-500"}`}>
+                {accounts.length >= 5 ? "Account limit reached" : "Add another account"}
               </p>
-              <p className="text-xs text-slate-400">Log in with a different account</p>
+              <p className="text-xs text-slate-400">
+                {accounts.length >= 5 ? "Remove an account to add a new one" : "Log in with a different account"}
+              </p>
             </div>
           </button>
         </div>

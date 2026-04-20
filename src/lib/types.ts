@@ -8,6 +8,8 @@ export type User = {
   is_trusted?: boolean;
   is_partner?: boolean;
   verified_badge?: boolean;
+  business_slug?: string;
+  business_name?: string;
 };
 
 export type APIComment = {
@@ -77,6 +79,9 @@ export type Post = {
   linked_product?: {
     product_id: number | string;
     title: string;
+    slug?: string;
+    product_slug?: string;
+    business_slug?: string;
     price: number | string;
     image_url?: string;
     first_image?: string;
@@ -88,7 +93,12 @@ export type Post = {
     sale_discount_data?: any;
     verified_badge?: boolean;
     trusted_partner?: boolean;
+    business_name?: string;
+    total_likes?: number;
+    followers_count?: number;
   } | null;
+  business_slug?: string;
+  business_name?: string;
   verified_badge?: boolean;
   author_is_partner?: boolean;
 };

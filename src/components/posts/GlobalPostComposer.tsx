@@ -719,7 +719,7 @@ function VideoPreviewModal({
               {privacy === "public" && <LockOpenIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
               {privacy === "private" && <LockClosedIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
               {privacy === "friends" && <UsersIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />}
-              <span className="text-[10px] font-bold   text-slate-500 group-hover:text-rose-600">
+              <span className="text-[10px] font-bold   text-slate-500 group-hover:text-rose-500">
                 {privacy === "public" ? "Public" : privacy === "private" ? "Private" : "Friends Only"}
               </span>
             </button>
@@ -761,7 +761,7 @@ function VideoPreviewModal({
                       setPrivacy(opt.id as any);
                       setIsPrivacyModalOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${privacy === opt.id ? "bg-rose-50 text-rose-600" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${privacy === opt.id ? "bg-rose-50 text-rose-500" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                       }`}
                   >
                     <div className="flex items-center gap-3">
@@ -901,7 +901,7 @@ function VideoPreviewModal({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-black text-rose-400  tracking-widest">Added Audio</p>
-                <p className="text-xs font-bold text-rose-600 truncate">{audioFile.name}</p>
+                <p className="text-xs font-bold text-rose-500 truncate">{audioFile.name}</p>
               </div>
               <button onClick={() => setAudioFile(null)} className="p-2 hover:bg-rose-100 rounded-full transition-colors">
                 <XMarkIcon className="w-4 h-4 text-rose-400" />
@@ -915,7 +915,7 @@ function VideoPreviewModal({
           <div className="flex items-center justify-center mb-1">
             <button
               onClick={() => setShowAudioMenu(true)}
-              className="text-[11px] font-black  tracking-widest text-rose-500 hover:text-rose-600 flex items-center gap-1.5 py-1"
+              className="text-[11px] font-black  tracking-widest text-rose-500 hover:text-rose-500 flex items-center gap-1.5 py-1"
             >
               <PlusIcon className="w-3.5 h-3.5" />
               {audioFile ? "Change Music" : "Add Music / Voice"}
@@ -968,7 +968,7 @@ function VideoPreviewModal({
                 <button
                   onClick={() => setIsProductModalOpen(true)}
                   className={`flex-shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full border transition-all active:scale-95 group ${selectedProduct
-                    ? "bg-rose-50 border-rose-200 text-rose-600"
+                    ? "bg-rose-50 border-rose-200 text-rose-500"
                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
                     }`}
                 >
@@ -982,7 +982,7 @@ function VideoPreviewModal({
             <button
               onClick={submit}
               disabled={isLoading}
-              className="flex-1 py-3 rounded-full bg-rose-500 text-white text-xs sm:text-sm font-bold hover:bg-rose-600 active:scale-95 transition-all shadow-xl shadow-rose-100 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-full bg-rose-500 text-white text-xs sm:text-sm font-bold hover:bg-rose-500 active:scale-95 transition-all shadow-xl shadow-rose-100 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? "Publishing..." : "Publish Post"}
             </button>
@@ -1321,7 +1321,7 @@ function ImagePreviewModal({
                       <h3 className="text-[10px] font-black text-slate-400  tracking-widest">Add Music / Voice</h3>
                       <button
                         onClick={() => setShowAudioList(true)}
-                        className="text-[10px] font-black text-rose-500 hover:text-rose-600 transition-colors"
+                        className="text-[10px] font-black text-rose-500 hover:text-rose-500 transition-colors"
                       >
                         {(audioFile || selectedPopularSound) ? "Change Sound" : "Music Library"}
                       </button>
@@ -1333,7 +1333,7 @@ function ImagePreviewModal({
                           <PlusIcon className="w-5 h-5 rotate-45" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-rose-600 truncate">{selectedPopularSound?.title || audioFile?.name}</p>
+                          <p className="text-xs font-bold text-rose-500 truncate">{selectedPopularSound?.title || audioFile?.name}</p>
                           <p className="text-[9px] font-medium text-rose-400 truncate">{selectedPopularSound?.creator_name || selectedPopularSound?.artist_name || "Custom Sound"}</p>
                         </div>
                         <button
@@ -1397,7 +1397,7 @@ function ImagePreviewModal({
                   <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/80 backdrop-blur-md border-t border-slate-50 z-20 max-w-lg mx-auto w-full">
                     <button
                       onClick={() => setStep(1)}
-                      className="w-full py-4 rounded-full bg-rose-500 text-white text-sm font-bold hover:bg-rose-600 shadow-xl shadow-rose-200 active:scale-95 transition-all"
+                      className="w-full py-4 rounded-full bg-rose-500 text-white text-sm font-bold hover:bg-rose-500 shadow-xl shadow-rose-200 active:scale-95 transition-all"
                     >
                       Continue
                     </button>
@@ -1510,7 +1510,7 @@ function ImagePreviewModal({
                         <button
                           onClick={() => setIsProductModalOpen(true)}
                           className={`flex-shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-full border transition-all active:scale-95 group ${selectedProduct
-                            ? "bg-rose-50 border-rose-200 text-rose-600"
+                            ? "bg-rose-50 border-rose-200 text-rose-500"
                             : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100"
                             }`}
                         >
@@ -1522,7 +1522,7 @@ function ImagePreviewModal({
                     <button
                       onClick={submit}
                       disabled={isLoading}
-                      className="flex-1 py-3.5 rounded-full bg-rose-500 text-white font-bold text-sm shadow-xl shadow-rose-200 hover:bg-rose-600 disabled:opacity-50 transition-all active:scale-95"
+                      className="flex-1 py-3.5 rounded-full bg-rose-500 text-white font-bold text-sm shadow-xl shadow-rose-200 hover:bg-rose-500 disabled:opacity-50 transition-all active:scale-95"
                     >
                       {isLoading ? "Publishing..." : "Publish Post"}
                     </button>
@@ -1622,7 +1622,7 @@ function ImagePreviewModal({
                         </div>
                         <div className="flex-1 text-left min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className={`text-sm font-bold truncate ${selectedPopularSound?.id === sound.id ? "text-rose-600" : "text-slate-900"}`}>{sound.title}</p>
+                            <p className={`text-sm font-bold truncate ${selectedPopularSound?.id === sound.id ? "text-rose-500" : "text-slate-900"}`}>{sound.title}</p>
                             {sound.isCommunity && (
                               <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded  tracking-tighter shrink-0 border border-blue-100">Library</span>
                             )}

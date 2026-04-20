@@ -33,7 +33,7 @@ const CATEGORIES_FULL = [
         id: 'product_issues',
         label: 'Product Issues',
         icon: '🔴',
-        color: 'text-rose-600',
+        color: 'text-rose-500',
         bgColor: 'bg-rose-50',
         borderColor: 'border-rose-100',
         reasons: [
@@ -96,7 +96,7 @@ const CATEGORIES_RESTRICTED = [
         id: 'product_issues',
         label: 'Product Issues',
         icon: '🔴',
-        color: 'text-rose-600',
+        color: 'text-rose-500',
         bgColor: 'bg-rose-50',
         borderColor: 'border-rose-100',
         reasons: [

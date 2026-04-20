@@ -402,7 +402,7 @@ export default function AccountVerificationModal({ open, onClose, onSuccess }: A
                       <button
                         type="submit"
                         disabled={loading || checkingAvailability || isAvailable === false || (verifyType === "phone" ? !phone : !email)}
-                        className="w-full bg-rose-500 text-white py-3 rounded-full font-bold transition-all hover:bg-rose-600 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-rose-500/20"
+                        className="w-full bg-rose-500 text-white py-3 rounded-full font-bold transition-all hover:bg-rose-500 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-3 text-sm tracking-widest shadow-lg shadow-rose-500/20"
                       >
                         {loading ? (
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

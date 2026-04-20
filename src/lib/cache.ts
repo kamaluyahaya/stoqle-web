@@ -29,9 +29,17 @@ export const PROFILE_CACHE = {
   vendorProducts: [] as any[],
   likedItems: [] as any[],
   activeTabIndex: 0,
+  activeVisibility: 'public' as 'public' | 'private' | 'friends',
+  visibilityMap: {} as Record<string, { media: any[], notes: any[] }>,
+  visibilityCounts: {
+    public: { posts: 0, notes: 0 },
+    private: { posts: 0, notes: 0 },
+    friends: { posts: 0, notes: 0 }
+  },
   productLikeData: {} as Record<number, { liked: boolean, count: number }>,
   scrollPos: 0,
   lastFetchedAt: 0,
+  lastVisibilityFetchAt: {} as Record<string, number>,
   lastLikedFetchedAt: 0,
 };
 

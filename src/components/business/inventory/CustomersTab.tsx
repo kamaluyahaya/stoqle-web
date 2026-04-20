@@ -277,14 +277,14 @@ export default function CustomersTab() {
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     <button
                         onClick={toggleAll}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 border rounded-full transition-all text-xs font-bold ${selectedCustomers.size === filteredCustomers.length && filteredCustomers.length > 0 ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 border rounded-full transition-all text-xs font-bold ${selectedCustomers.size === filteredCustomers.length && filteredCustomers.length > 0 ? 'bg-rose-50 border-rose-200 text-rose-500' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}
                     >
                         {selectedCustomers.size === filteredCustomers.length && filteredCustomers.length > 0 ? 'Deselect All' : 'Select All'}
                     </button>
                     <button
                         onClick={() => setShowEmailModal(true)}
                         disabled={selectedCustomers.size === 0}
-                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all text-xs font-bold ${selectedCustomers.size > 0 ? 'bg-rose-500 text-white hover:bg-rose-600 shadow-md shadow-rose-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all text-xs font-bold ${selectedCustomers.size > 0 ? 'bg-rose-500 text-white hover:bg-rose-500 shadow-md shadow-rose-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                     >
                         <Mail className="w-4 h-4" />
                         Email ({selectedCustomers.size})
@@ -300,135 +300,270 @@ export default function CustomersTab() {
                     No customers found.
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredCustomers.map(customer => {
-                        const cid = customer.user_id || customer.id;
-                        let locationStr = 'No address saved';
-                        let recipientStr = '';
-                        let fullAddressStr = '';
+                <>
+                    {/* MOBILE & TABLET CARDS */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:hidden gap-4">
+                        {filteredCustomers.map(customer => {
+                            const cid = customer.user_id || customer.id;
+                            let locationStr = 'No address saved';
+                            let recipientStr = '';
+                            let fullAddressStr = '';
 
-                        if (customer.delivery_address) {
-                            try {
-                                const addrObj = typeof customer.delivery_address === 'string' ? JSON.parse(customer.delivery_address) : customer.delivery_address;
+                            if (customer.delivery_address) {
+                                try {
+                                    const addrObj = typeof customer.delivery_address === 'string' ? JSON.parse(customer.delivery_address) : customer.delivery_address;
 
-                                if (addrObj.recipientName || addrObj.contactNo) {
-                                    recipientStr = `${addrObj.recipientName || ''} ${addrObj.contactNo ? `(${addrObj.contactNo})` : ''}`.trim();
+                                    if (addrObj.recipientName || addrObj.contactNo) {
+                                        recipientStr = `${addrObj.recipientName || ''} ${addrObj.contactNo ? `(${addrObj.contactNo})` : ''}`.trim();
+                                    }
+
+                                    if (addrObj.address) {
+                                        fullAddressStr = addrObj.address;
+                                    }
+
+                                    if (addrObj.region) {
+                                        locationStr = addrObj.region;
+                                    } else if (addrObj.address) {
+                                        locationStr = addrObj.address;
+                                    } else if (addrObj.city) {
+                                        locationStr = `${addrObj.city}, ${addrObj.state || addrObj.country || ''}`;
+                                    } else {
+                                        locationStr = 'Address provided';
+                                    }
+                                } catch {
+                                    locationStr = String(customer.delivery_address);
                                 }
-
-                                if (addrObj.address) {
-                                    fullAddressStr = addrObj.address;
-                                }
-
-                                if (addrObj.region) {
-                                    locationStr = addrObj.region;
-                                } else if (addrObj.address) {
-                                    locationStr = addrObj.address;
-                                } else if (addrObj.city) {
-                                    locationStr = `${addrObj.city}, ${addrObj.state || addrObj.country || ''}`;
-                                } else {
-                                    locationStr = 'Address provided';
-                                }
-                            } catch {
-                                locationStr = String(customer.delivery_address);
                             }
-                        }
 
-                        return (
-                            <div
-                                key={cid}
-                                className={`relative bg-white rounded-[0.5rem] border p-5 transition-all duration-300 cursor-pointer ${selectedCustomers.has(cid) ? 'border-rose-500 ring-2 ring-rose-50 shadow-md' : 'border-slate-200 hover:border-rose-200 hover:shadow-sm'}`}
-                                onClick={() => toggleSelect(cid)}
-                            >
-                                {/* Loyalty Badges */}
-                                <div className="absolute -top-2 -left-2 flex flex-col gap-1 z-[5]">
-                                    {Number(customer.purchases_count) >= 4 ? (
-                                        <div className="bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-blue-400 ">
-                                            <Repeat className="w-2.5 h-2.5" />
-                                            Regular
-                                        </div>
-                                    ) : Number(customer.total_spent) > 50000 ? (
-                                        <div className="bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-amber-400 ">
-                                            <Crown className="w-2.5 h-2.5" />
-                                            Top
-                                        </div>
-                                    ) : null}
-                                </div>
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-3 flex-1 min-w-0 pr-3">
-                                        <div className="w-12 h-12 rounded-full bg-slate-100 border-2 border-white shadow-sm flex shrink-0 items-center justify-center text-slate-400 font-bold text-md overflow-hidden">
-                                            {customer.profile_pic ? (
-                                                <img src={customer.profile_pic} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                (customer.customer_name || recipientStr || "U").charAt(0)
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0 pr-2">
-                                            <h4 className="font-bold text-slate-900 text-sm truncate">{customer.customer_name || recipientStr.split(' ')[0] || 'Guest User'}</h4>
-                                            <p className="text-xs text-slate-500 truncate">{customer.email || customer.phone || 'No contact info'}</p>
-
-                                            {(recipientStr || fullAddressStr) ? (
-                                                <div className="mt-2 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-[0.5rem] border border-slate-100 w-full">
-                                                    {recipientStr && <div className="font-bold text-slate-700 truncate">{recipientStr}</div>}
-                                                    {(fullAddressStr || locationStr) && <div className="line-clamp-2 mt-0.5">{fullAddressStr || locationStr}</div>}
-                                                </div>
-                                            ) : (
-                                                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{locationStr}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                router.push(`/messages?user=${cid}`);
-                                            }}
-                                            className=" hover:bg-rose-50 text-slate-400 hover:text-rose-500 rounded-full transition-colors border border-slate-100 hover:border-rose-100 "
-                                            title="Message Customer"
-                                        >
-                                            <MessageCircle className="w-4 h-4" />
-                                        </button>
-                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${selectedCustomers.has(cid) ? 'bg-rose-500 border-rose-500 text-white' : 'border-slate-300'}`}>
-                                            {selectedCustomers.has(cid) && <CheckCircle2 className="w-3.5 h-3.5" />}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                    <div className="bg-slate-50 p-2.5 rounded-[0.5rem] border border-slate-100">
-                                        <p className="text-[10px] text-slate-400 mb-1">Total Spent</p>
-                                        <p className="font-black text-slate-900">₦{Number(customer.total_spent || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    </div>
-                                    <div className="bg-slate-50 p-2.5 rounded-[0.5rem] border border-slate-100">
-                                        <p className="text-[10px] font-bold text-slate-400 tracking-wider mb-1">Purchases</p>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5">
-                                                <Package className="w-3.5 h-3.5 text-rose-500" />
-                                                <p className="font-black text-slate-900">{customer.purchases_count || 0}</p>
+                            return (
+                                <div
+                                    key={cid}
+                                    className={`relative bg-white rounded-[0.5rem] border p-5 transition-all duration-300 cursor-pointer ${selectedCustomers.has(cid) ? 'border-rose-500 ring-2 ring-rose-50 shadow-md' : 'border-slate-200 hover:border-rose-200 hover:shadow-sm'}`}
+                                    onClick={() => toggleSelect(cid)}
+                                >
+                                    {/* Loyalty Badges */}
+                                    <div className="absolute -top-2 -left-2 flex flex-col gap-1 z-[5]">
+                                        {Number(customer.purchases_count) >= 4 ? (
+                                            <div className="bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-blue-400 ">
+                                                <Repeat className="w-2.5 h-2.5" />
+                                                Regular
                                             </div>
-                                            {(customer.processing_count > 0 || customer.cancelled_count > 0) && (
-                                                <div className="flex gap-1 items-center">
-                                                    {customer.processing_count > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-sm  tracking-wide">{customer.processing_count} Proc</span>}
-                                                    {customer.cancelled_count > 0 && <span className="text-[9px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-sm  tracking-wide">{customer.cancelled_count} Canc</span>}
-                                                </div>
-                                            )}
+                                        ) : Number(customer.total_spent) > 50000 ? (
+                                            <div className="bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-amber-400 ">
+                                                <Crown className="w-2.5 h-2.5" />
+                                                Top
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center gap-3 flex-1 min-w-0 pr-3">
+                                            <div className="w-12 h-12 rounded-full bg-slate-100 border-2 border-white shadow-sm flex shrink-0 items-center justify-center text-slate-400 font-bold text-md overflow-hidden">
+                                                {customer.profile_pic ? (
+                                                    <img src={customer.profile_pic} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    (customer.customer_name || recipientStr || "U").charAt(0)
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <h4 className="font-bold text-slate-900 text-sm truncate">{customer.customer_name || recipientStr.split(' ')[0] || 'Guest User'}</h4>
+                                                <p className="text-xs text-slate-500 truncate">{customer.email || customer.phone || 'No contact info'}</p>
+
+                                                {(recipientStr || fullAddressStr) ? (
+                                                    <div className="mt-2 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-[0.5rem] border border-slate-100 w-full">
+                                                        {recipientStr && <div className="font-bold text-slate-700 truncate">{recipientStr}</div>}
+                                                        {(fullAddressStr || locationStr) && <div className="line-clamp-2 mt-0.5">{fullAddressStr || locationStr}</div>}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{locationStr}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.push(`/messages?user=${cid}`);
+                                                }}
+                                                className=" hover:bg-rose-50 text-slate-400 hover:text-rose-500 rounded-full transition-colors border border-slate-100 hover:border-rose-100 "
+                                                title="Message Customer"
+                                            >
+                                                <MessageCircle className="w-4 h-4" />
+                                            </button>
+                                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${selectedCustomers.has(cid) ? 'bg-rose-500 border-rose-500 text-white' : 'border-slate-300'}`}>
+                                                {selectedCustomers.has(cid) && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="flex items-center justify-between ">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); openCustomerReviews(customer); }}
-                                        className="flex items-center gap-2 px-2 py-1.5 -ml-2 rounded-lg hover:bg-slate-50 transition-colors"
-                                    >
-                                        <Star className={`w-4 h-4 ${(customer.reviews_count || 0) > 0 ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} />
-                                        <span className="text-xs font-semibold text-slate-600">{customer.reviews_count || 0} Reviews</span>
-                                    </button>
-                                    <span className="text-[10px] font-medium text-slate-400">Added: {new Date(customer.date_added).toLocaleDateString()}</span>
+                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                        <div className="bg-slate-50 p-2.5 rounded-[0.5rem] border border-slate-100">
+                                            <p className="text-[10px] text-slate-400 mb-1">Total Spent</p>
+                                            <p className="font-black text-slate-900">₦{Number(customer.total_spent || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-2.5 rounded-[0.5rem] border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 tracking-wider mb-1">Purchases</p>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Package className="w-3.5 h-3.5 text-rose-500" />
+                                                    <p className="font-black text-slate-900">{customer.purchases_count || 0}</p>
+                                                </div>
+                                                {(customer.processing_count > 0 || customer.cancelled_count > 0) && (
+                                                    <div className="flex gap-1 items-center">
+                                                        {customer.processing_count > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-sm  tracking-wide">{customer.processing_count} Proc</span>}
+                                                        {customer.cancelled_count > 0 && <span className="text-[9px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-sm  tracking-wide">{customer.cancelled_count} Canc</span>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between ">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); openCustomerReviews(customer); }}
+                                            className="flex items-center gap-2 px-2 py-1.5 -ml-2 rounded-lg hover:bg-slate-50 transition-colors"
+                                        >
+                                            <Star className={`w-4 h-4 ${(customer.reviews_count || 0) > 0 ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} />
+                                            <span className="text-xs font-semibold text-slate-600">{customer.reviews_count || 0} Reviews</span>
+                                        </button>
+                                        <span className="text-[10px] font-medium text-slate-400">Added: {new Date(customer.date_added).toLocaleDateString()}</span>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* DESKTOP TABLE */}
+                    <div className="hidden lg:block bg-white border border-slate-200 rounded-[0.5rem] overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
+                                    <tr>
+                                        <th className="px-5 py-3.5 w-10 text-center">
+                                            <div className="flex items-center justify-center">
+                                                <button 
+                                                    onClick={toggleAll} 
+                                                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selectedCustomers.size === filteredCustomers.length && filteredCustomers.length > 0 ? 'bg-rose-500 border-rose-500 text-white' : 'border-slate-300'}`}
+                                                >
+                                                    {selectedCustomers.size === filteredCustomers.length && filteredCustomers.length > 0 && <CheckCircle2 className="w-3 h-3" />}
+                                                </button>
+                                            </div>
+                                        </th>
+                                        <th className="px-5 py-3.5">Customer</th>
+                                        <th className="px-5 py-3.5">Contact & Location</th>
+                                        <th className="px-5 py-3.5 text-right">Loyalty Tier</th>
+                                        <th className="px-5 py-3.5 text-right">Spent</th>
+                                        <th className="px-5 py-3.5 text-center">Orders</th>
+                                        <th className="px-5 py-3.5 text-center">Reviews</th>
+                                        <th className="px-5 py-3.5 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredCustomers.map(customer => {
+                                        const cid = customer.user_id || customer.id;
+                                        let locationStr = 'No address saved';
+                                        let recipientStr = '';
+
+                                        if (customer.delivery_address) {
+                                            try {
+                                                const addrObj = typeof customer.delivery_address === 'string' ? JSON.parse(customer.delivery_address) : customer.delivery_address;
+                                                if (addrObj.region) locationStr = addrObj.region;
+                                                else if (addrObj.city) locationStr = `${addrObj.city}, ${addrObj.state || addrObj.country || ''}`;
+                                                else if (addrObj.address) locationStr = addrObj.address;
+                                            } catch {
+                                                locationStr = String(customer.delivery_address).substring(0, 30);
+                                            }
+                                        }
+
+                                        const isSelected = selectedCustomers.has(cid);
+
+                                        return (
+                                            <tr 
+                                                key={cid} 
+                                                onClick={() => toggleSelect(cid)}
+                                                className={`transition-colors cursor-pointer group ${isSelected ? 'bg-rose-50/50' : 'hover:bg-slate-50'}`}
+                                            >
+                                                <td className="px-5 py-3 text-center">
+                                                    <div className="flex items-center justify-center">
+                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-rose-500 border-rose-500 text-white' : 'border-slate-300 group-hover:border-slate-400'}`}>
+                                                            {isSelected && <CheckCircle2 className="w-3 h-3" />}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex shrink-0 items-center justify-center text-slate-400 font-bold text-xs">
+                                                            {customer.profile_pic ? (
+                                                                <img src={customer.profile_pic} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                (customer.customer_name || "U").charAt(0)
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-900 text-sm">{customer.customer_name || 'Guest User'}</p>
+                                                            <p className="text-[10px] text-slate-400">Added: {new Date(customer.date_added).toLocaleDateString()}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    <p className="text-xs text-slate-700 font-medium">{customer.email || customer.phone || 'No contact info'}</p>
+                                                    <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[200px]" title={locationStr}>{locationStr}</p>
+                                                </td>
+                                                <td className="px-5 py-3 text-right">
+                                                    {Number(customer.total_spent) > 50000 ? (
+                                                        <span className="inline-flex bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full font-bold items-center gap-1 border border-amber-200">
+                                                            <Crown className="w-2.5 h-2.5" /> Top
+                                                        </span>
+                                                    ) : Number(customer.purchases_count) >= 4 ? (
+                                                        <span className="inline-flex bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full font-bold items-center gap-1 border border-blue-200">
+                                                            <Repeat className="w-2.5 h-2.5" /> Regular
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-400 font-medium">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-3 text-right font-black text-slate-900">
+                                                    ₦{Number(customer.total_spent || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        <span className="font-bold text-slate-900">{customer.purchases_count || 0}</span>
+                                                        {(customer.processing_count > 0 || customer.cancelled_count > 0) && (
+                                                            <div className="flex gap-1 items-center mt-1">
+                                                                {customer.processing_count > 0 && <span className="text-[9px] font-bold text-amber-500" title="Processing">{customer.processing_count}P</span>}
+                                                                {customer.cancelled_count > 0 && <span className="text-[9px] font-bold text-red-400" title="Cancelled">{customer.cancelled_count}C</span>}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-3 text-center">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); openCustomerReviews(customer); }}
+                                                        className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100 transition-colors"
+                                                    >
+                                                        <Star className={`w-3.5 h-3.5 ${(customer.reviews_count || 0) > 0 ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
+                                                        <span className="text-xs font-bold text-slate-600">{customer.reviews_count || 0}</span>
+                                                    </button>
+                                                </td>
+                                                <td className="px-5 py-3 text-right">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            router.push(`/messages?user=${cid}`);
+                                                        }}
+                                                        className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:bg-rose-500 hover:border-rose-500 hover:text-white rounded transition-colors inline-block"
+                                                        title="Message Customer"
+                                                    >
+                                                        <MessageCircle className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
             )}
 
             {/* Email Modal */}
@@ -509,7 +644,7 @@ export default function CustomersTab() {
                                 <button
                                     onClick={handleSendEmail}
                                     disabled={sendingEmail}
-                                    className={`px-6 py-2.5 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 shadow-md shadow-rose-200 rounded-full transition-all flex items-center gap-2 ${sendingEmail ? 'opacity-70 cursor-wait' : ''}`}
+                                    className={`px-6 py-2.5 text-sm font-bold text-white bg-rose-500 hover:bg-rose-500 shadow-md shadow-rose-200 rounded-full transition-all flex items-center gap-2 ${sendingEmail ? 'opacity-70 cursor-wait' : ''}`}
                                 >
                                     {sendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                                     {sendingEmail ? 'Sending...' : 'Send'}

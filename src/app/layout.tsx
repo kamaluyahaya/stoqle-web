@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import Shell from "../components/layout/shell";
 import { AuthProvider } from "@/src/context/authContext";
 import { CacheProvider } from "@/src/context/cacheContext";
+import StabilityProvider from "../components/layout/StabilityProvider";
 import type { Metadata, Viewport } from "next";
 
 // ─── SEO / PWA Metadata ───────────────────────────────────────────────────────
@@ -49,7 +50,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       >
         <AuthProvider>
           <CacheProvider>
-            <Shell>{children}</Shell>
+            <StabilityProvider>
+              <Shell>{children}</Shell>
+            </StabilityProvider>
           </CacheProvider>
         </AuthProvider>
       </body>

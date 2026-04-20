@@ -508,7 +508,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                           setActiveTab("recommend");
                           setSearchQuery("");
                         }}
-                        className="text-xs font-bold text-rose-500 hover:text-rose-600 px-2"
+                        className="text-xs font-bold text-rose-500 hover:text-rose-500 px-2"
                       >
                         See all
                       </button>
@@ -634,7 +634,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                     handleFollowToggle(unfollowConfirm.user_id, true);
                     setUnfollowConfirm(null);
                   }}
-                  className="w-full py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors shadow-lg shadow-rose-100"
+                  className="w-full py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-500 transition-colors shadow-lg shadow-rose-100"
                 >
                   Unfollow
                 </button>

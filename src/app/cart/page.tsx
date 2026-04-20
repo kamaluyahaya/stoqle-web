@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { fetchUserAddresses, UserAddress } from "@/src/lib/api/addressApi";
 import dynamic from "next/dynamic";
 import { estimateDelivery, EstimationResult } from "@/src/lib/deliveryEstimation";
+import CartWalkthrough from "@/src/components/cart/cartWalkthrough";
 
 const MarketClient = dynamic(() => import("../market/[[...shop]]/MarketClient"), { ssr: false, loading: () => <ShimmerGrid count={10} /> });
 
@@ -542,7 +543,7 @@ export default function CartPage() {
 
     if (items.length === 0) {
         return (
-            <div className=" bg-slate-50 flex flex-col items-center">
+            <div className=" bg-slate-50 flex flex-col">
                 <div className="w-full flex flex-col items-center p-6 py-20">
                     <div className="w-32 h-32 rounded-full flex items-center justify-center">
                         <img src="/assets/images/cart.png" alt="" />
@@ -619,7 +620,7 @@ export default function CartPage() {
                                             unoptimized
                                         />
                                         <span className="text-[12px] font-bold text-slate-800">{group.business_name}</span>
-                                        {vendorBadges[group.business_id]?.verified_badge && (
+                                        {!!vendorBadges[group.business_id]?.verified_badge && (
                                             <VerifiedBadge label={vendorBadges[group.business_id].badge_label} size="xs" />
                                         )}
                                         <ChevronRightIcon className="w-3 h-3 text-slate-400" />
@@ -629,7 +630,7 @@ export default function CartPage() {
 
                             {group.estimation && !group.estimation.is_available && (
                                 <div className="mx-6 my-2 p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                                    <p className="text-[11px] text-rose-600 font-bold leading-relaxed whitespace-pre-wrap">
+                                    <p className="text-[11px] text-rose-500 font-bold leading-relaxed whitespace-pre-wrap">
                                         ⚠️ {group.estimation.message}
                                     </p>
                                     <p className="text-[10px] text-rose-500 mt-1 italic">
@@ -641,6 +642,7 @@ export default function CartPage() {
                                 {group.items.map((item, idx) => (
                                     <div key={`${item.cart_id}-${idx}`} className="px-5 py-3 flex items-center gap-3 relative">
                                         <button
+                                            id={idx === 0 && group.business_id === groupedItems[0]?.business_id ? "guide-cart-item" : undefined}
                                             onClick={() => toggleItemSelection(item.cart_id)}
                                             className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${selectedCartIds.includes(item.cart_id) ? "bg-rose-500 border-rose-500 shadow-md shadow-rose-200" : "bg-white border-slate-200"}`}
                                         >
@@ -664,7 +666,7 @@ export default function CartPage() {
                                         <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                                             <div>
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-sm text-slate-900 line-clamp-2 leading-snug flex-1 cursor-pointer hover:text-rose-600 transition-colors">
+                                                    <h3 onClick={(e) => handleProductClick(item.product_id, item.business_name, e, item.business_slug)} className="text-sm text-slate-900 line-clamp-2 leading-snug flex-1 cursor-pointer hover:text-rose-500 transition-colors">
                                                         {item.product_title}
                                                     </h3>
                                                     <div className="flex-shrink-0">
@@ -694,7 +696,7 @@ export default function CartPage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-baseline gap-2">
-                                                    <span className="text-base font-bold text-rose-600">₦{((item.price ?? 0) * (item.quantity || 1)).toLocaleString()}</span>
+                                                    <span className="text-base font-bold text-rose-500">₦{((item.price ?? 0) * (item.quantity || 1)).toLocaleString()}</span>
                                                     {(item.base_price ?? 0) > (item.price ?? 0) && <span className="text-xs text-slate-400 line-through">₦{(item.base_price ?? 0).toLocaleString()}</span>}
                                                 </div>
                                                 <button onClick={() => handleRemoveItem(item.cart_id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
@@ -805,7 +807,7 @@ export default function CartPage() {
             >
                 <div className="max-w-7xl mx-auto grid grid-cols-3 items-center px-4">
                     {/* Left: Select All */}
-                    <div className="flex items-center gap-2">
+                    <div id="guide-cart-select-all" className="flex items-center gap-2">
                         <button
                             onClick={handleToggleSelectAll}
                             className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${isAllSelected
@@ -829,6 +831,7 @@ export default function CartPage() {
                     {/* Right: Checkout */}
                     <div className="flex justify-end">
                         <button
+                            id="guide-cart-checkout"
                             onClick={() => {
                                 if (selectedCartIds.length === 0) {
                                     toast.error("Please select items to checkout");
@@ -854,7 +857,7 @@ export default function CartPage() {
                                 sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
                                 router.push(`/checkout`);
                             }}
-                            className="w-fit px-6 bg-gradient-to-r from-rose-600 to-rose-600 text-white font-bold py-2 rounded-full shadow-lg shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98]  items-center justify-center gap-2 text-xs"
+                            className="w-fit px-6 bg-gradient-to-r from-rose-500 to-rose-500 text-white font-bold py-2 rounded-full shadow-lg shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98]  items-center justify-center gap-2 text-xs"
                         >
                             Checkout({selectedCartIds.length})
                         </button>
@@ -873,6 +876,7 @@ export default function CartPage() {
                     }
                 }}
             />
+            {items.length > 0 && <CartWalkthrough />}
         </div>
     );
 }

@@ -11,7 +11,7 @@ import BottomNav from "./bottomNav";
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 import { useAuth } from "@/src/context/authContext";
-import { usePathname, useParams } from "next/navigation";
+import { usePathname, useParams, useRouter, useSearchParams } from "next/navigation";
 import { useWallet } from "@/src/context/walletContext";
 
 // ── Providers (moved from root layout) ───────────────────────────────────────
@@ -85,6 +85,8 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const { closeWallet, isWalletOpen } = useWallet(); // ← hoisted correctly
   const pathname = usePathname();
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   // ── Route-based layout flags ───────────────────────────────────────────────
   const isUsernamePage      = !!params.username;
@@ -103,6 +105,50 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const isCommunityGuidelines = pathname === "/community-guidelines";
   const isVendorOnboarding  = pathname === "/profile/business/onboarding";
   const isCartPage           = pathname === "/cart";
+  const isOrdersPage         = pathname === "/order" || pathname?.startsWith("/order/");
+
+  const isProtectedRoute =
+    isMyProfile || isMessages || isSettings || isBusinessStatus ||
+    isInventory || isCustomerOrder || isOrders || isEditProfile ||
+    isAccountSecurity || isPrivacy || isVendorOnboarding || isCartPage || isOrdersPage;
+
+  const isBusinessRoute = isInventory || isCustomerOrder;
+
+  // 🛡️ Global Auth Guard & URL Trigger
+  React.useEffect(() => {
+    if (!auth.isHydrated) return;
+
+    const authRequired = searchParams?.get("auth") === "required";
+    
+    // Debugging logs to pinpoint why the modal might not be triggering
+    if (authRequired) {
+      console.log("[AuthGuard] URL check: auth=required found. isLoggedIn:", !!auth.user);
+    }
+
+    const authUser = auth.user && Object.keys(auth.user).length > 0 ? auth.user : null;
+    const isBusiness = Boolean(authUser?.is_business_owner || authUser?.business_name || authUser?.business_id || authUser?.isBusiness || (auth as any).isBusiness);
+    
+    // If user is logged in but tries to access a business route without being a business owner
+    const requiresBusinessAuth = isBusinessRoute && authUser && !isBusiness;
+
+    if ((authRequired || isProtectedRoute) && (!authUser || requiresBusinessAuth)) {
+      console.log("[AuthGuard] Conditions met. Opening Login Modal. Path:", pathname);
+      auth.openLogin();
+      
+      if (authRequired) {
+        // Clean up the URL using Next.js router to stay in state
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("auth");
+        const cleanPath = pathname + (params.toString() ? "?" + params.toString() : "");
+        router.replace(cleanPath, { scroll: false });
+      }
+
+      if ((isProtectedRoute || isBusinessRoute) && pathname !== "/") {
+        router.push("/");
+      }
+    }
+  }, [auth.isHydrated, auth.user, auth, isProtectedRoute, isBusinessRoute, searchParams, pathname, router]);
+
 
   const shouldHideTopNav =
     isMyProfile || isOtherUserProfile || isShopPage || isEditProfile ||
@@ -268,16 +314,18 @@ function WalletWrapper({
 //
 export default function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <AudioProvider>
-      <WalletProvider>
+    <WalletProvider>
+      <AudioProvider>
         <NotificationProvider>
           <ChatProvider>
             <CartProvider>
-              <ShellInner>{children}</ShellInner>
+              <React.Suspense fallback={null}>
+                <ShellInner>{children}</ShellInner>
+              </React.Suspense>
             </CartProvider>
           </ChatProvider>
         </NotificationProvider>
-      </WalletProvider>
-    </AudioProvider>
+      </AudioProvider>
+    </WalletProvider>
   );
 }

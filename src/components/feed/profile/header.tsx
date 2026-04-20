@@ -1,6 +1,12 @@
 // components/profile/Header.tsx
 "use client";
 
+// Tracking closed state across navigation for the current session ONLY.
+// Resets on full page reload.
+let isSuggestionsClosedGlobal = false;
+let suggestionPoolGlobal: any[] = [];
+let hasShownSuggestionsGlobal = false;
+
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext"; // adjust path
@@ -25,6 +31,7 @@ import { toPng } from "html-to-image";
 
 
 import ImageViewer from "../../../components/modal/imageViewer";
+import MediaViewer from "../../product/addProduct/preview/modal/mediaViewer";
 import { CameraIcon } from "@heroicons/react/24/solid";
 import ProfileCropperModal from "../../../components/modal/profileCropperModal";
 import ShareToFriendsModal from "../../../components/modal/shareToFriendsModal";
@@ -103,6 +110,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   const [paymentAccountJson, setPaymentAccountJson] = useState<string>("");
 
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [showBgMediaViewer, setShowBgMediaViewer] = useState(false);
   const [showMiniHeader, setShowMiniHeader] = useState(false);
   const [showMiniLogo, setShowMiniLogo] = useState(false);
   const [dominantColor, setDominantColor] = useState("rgba(255, 255, 255, 1)");
@@ -114,6 +122,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   const [cropperImage, setCropperImage] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [croppingType, setCroppingType] = useState<"profile" | "background">("profile");
   const [unfollowConfirmOpen, setUnfollowConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [showFlyer, setShowFlyer] = useState(false);
@@ -223,6 +232,154 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     };
   }, [profileUserId, token, API_BASE_URL]); // eslint-disable-line
 
+
+  // --- Suggested Users (Mobile Only, Owner Only) ---
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const [suggestionPool, setSuggestionPool] = useState<any[]>([]);
+  const [showSuggestionsUI, setShowSuggestionsUI] = useState(false);
+  // Persistent during session navigation, resets on refresh
+  const [suggestionsClosed, setSuggestionsClosed] = useState(isSuggestionsClosedGlobal);
+  const [showSuggestionInfo, setShowSuggestionInfo] = useState(false);
+
+  /**
+   * Priority sort:
+   * 1. Frequently viewed  (view_count / profile_views)
+   * 2. Trending           (is_trending flag or trending_score)
+   * 3. Highest followers
+   * 4. Highest posts/notes
+   */
+  const sortSuggestions = (list: any[]): any[] =>
+    [...list].sort((a, b) => {
+      const aViews = Number(a.view_count ?? a.profile_views ?? a.views ?? 0);
+      const bViews = Number(b.view_count ?? b.profile_views ?? b.views ?? 0);
+      if (aViews !== bViews) return bViews - aViews;
+
+      const aTrend = Number(a.trending_score ?? (a.is_trending ? 1 : 0));
+      const bTrend = Number(b.trending_score ?? (b.is_trending ? 1 : 0));
+      if (aTrend !== bTrend) return bTrend - aTrend;
+
+      const aFollowers = Number(a.total_followers ?? a.followers_count ?? a.followers ?? 0);
+      const bFollowers = Number(b.total_followers ?? b.followers_count ?? b.followers ?? 0);
+      if (aFollowers !== bFollowers) return bFollowers - aFollowers;
+
+      const aPosts = Number(a.total_posts ?? a.posts_count ?? a.total_notes ?? a.notes_count ?? 0);
+      const bPosts = Number(b.total_posts ?? b.posts_count ?? b.total_notes ?? b.notes_count ?? 0);
+      return bPosts - aPosts;
+    });
+
+  /**
+   * Return contextual label + stat for the card.
+   * Returns NULL when there is no meaningful signal — those cards are hidden.
+   */
+  const getSuggestionMeta = (u: any): { label: string; value: string } | null => {
+    const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+    const views = Number(u.view_count ?? u.profile_views ?? u.views ?? 0);
+    const isTrend = u.is_trending || Number(u.trending_score ?? 0) > 0;
+    const followers = Number(u.total_followers ?? u.followers_count ?? u.followers ?? 0);
+    const posts = Number(u.total_posts ?? u.posts_count ?? u.total_notes ?? u.notes_count ?? 0);
+
+    if (views > 0) return { label: "Frequently viewed", value: `👁 ${fmt(views)} views` };
+    if (isTrend) return { label: "Trending", value: `🔥 Trending` };
+    if (followers > 0) return { label: "Followers", value: `${fmt(followers)} followers` };
+    if (posts > 0) return { label: "Posts", value: `${fmt(posts)} posts` };
+    return null; // no meaningful signal — card will be hidden
+  };
+
+  useEffect(() => {
+    if (!isOwner || isSuggestionsClosedGlobal) return;
+
+    // Restore from global pool immediately if available for zero-wait UI
+    if (suggestionPoolGlobal.length > 0) {
+      setSuggestionPool(suggestionPoolGlobal);
+      setSuggestedUsers(suggestionPoolGlobal.slice(0, 10));
+    }
+
+    const fetchSuggestions = async () => {
+      try {
+        const t = localStorage.getItem("token");
+        if (!t) return;
+        const res = await fetch(`${API_BASE_URL}/api/users/suggestions`, {
+          headers: { Authorization: `Bearer ${t}` }
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+
+        const unified = Array.isArray(json?.data?.suggestions) ? json.data.suggestions : [];
+        const recUsers = unified.length ? unified : (Array.isArray(json?.data?.users) ? json.data.users : []);
+        const recVendors = unified.length ? [] : (Array.isArray(json?.data?.vendors) ? json.data.vendors : []);
+        const allRecs = [...recUsers, ...recVendors];
+
+        const filtered = allRecs.filter((u: any) => !u.is_following && !u.is_following_viewer);
+        const withSignal = filtered.filter((u: any) => {
+          const views = Number(u.view_count ?? u.profile_views ?? 0);
+          const trend = u.is_trending || Number(u.trending_score ?? 0) > 0;
+          const followers = Number(u.total_followers ?? u.followers_count ?? 0);
+          const posts = Number(u.total_posts ?? u.posts_count ?? 0);
+          return views > 0 || trend || followers > 0 || posts > 0;
+        });
+
+        const sorted = sortSuggestions(withSignal);
+        suggestionPoolGlobal = sorted; // Store in global pool for session persistence
+        setSuggestionPool(sorted);
+        setSuggestedUsers(sorted.slice(0, 10));
+      } catch (err) { }
+    };
+    fetchSuggestions(); // runs immediately in background
+
+    // Only wait 4s on the first time it's shown in this session
+    if (hasShownSuggestionsGlobal) {
+      setShowSuggestionsUI(true);
+    } else {
+      const timer = setTimeout(() => {
+        setShowSuggestionsUI(true);
+        hasShownSuggestionsGlobal = true;
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOwner, API_BASE_URL]);
+
+  const closeSuggestions = () => {
+    setSuggestionsClosed(true);
+    isSuggestionsClosedGlobal = true;
+  };
+
+  const handleFollowSuggestion = async (userId: string | number) => {
+    try {
+      const t = localStorage.getItem("token");
+      const resp = await fetch(`${API_BASE_URL}/api/follow/${userId}/follow`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}` }
+      });
+      if (!resp.ok) throw new Error("Failed");
+
+      // Update local state for immediate UI feedback
+      const performRefill = (prev: any[]) => {
+        const filtered = prev.filter(u => String(u.user_id) !== String(userId) && String(u.id) !== String(userId));
+        const currentIds = new Set(filtered.map(u => String(u.user_id || u.id)));
+        const nextCandidate = suggestionPool.find(u =>
+          !currentIds.has(String(u.user_id || u.id)) &&
+          String(u.user_id || u.id) !== String(userId)
+        );
+
+        if (nextCandidate && filtered.length < 10) {
+          return [...filtered, nextCandidate];
+        }
+        return filtered;
+      };
+
+      setSuggestedUsers(prev => performRefill(prev));
+
+      // ── Sync with Global Session Pool ──
+      // Remove followed user from the global pool so they stay gone across navigation
+      suggestionPoolGlobal = suggestionPoolGlobal.filter(u => String(u.user_id || u.id) !== String(userId));
+      setSuggestionPool([...suggestionPoolGlobal]);
+
+      toast.success("Followed successfully");
+    } catch (err) {
+      toast.error("Failed to follow user");
+    }
+  };
+  // ----------------------------------------------------
 
 
   const fetchPaymentAccount = async () => {
@@ -545,6 +702,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setCroppingType("profile");
     const reader = new FileReader();
     reader.onload = () => {
       setCropperImage(reader.result as string);
@@ -560,40 +718,43 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     }
 
     setUploadingProfile(true);
-    toast.info("Updating profile...", { duration: 2000 });
+    const isProfile = croppingType === "profile";
+    const endpoint = isProfile ? "profile-pic" : "bg-photo";
+    const fieldName = isProfile ? "profile_pic" : "bg_photo";
+
+    toast.info(`Updating ${isProfile ? "profile" : "background"}...`, { duration: 2000 });
 
     const formData = new FormData();
-    formData.append("profile_pic", croppedBlob, "profile.jpg");
+    formData.append(fieldName, croppedBlob, `${fieldName}.jpg`);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/profile-pic`, {
+      const response = await fetch(`${API_BASE_URL}/api/profile/${endpoint}`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
       const json = await response.json();
-      if (!response.ok) throw new Error(json.message || "Failed to update profile pic");
+      if (!response.ok) throw new Error(json.message || `Failed to update ${isProfile ? "profile" : "background"}`);
 
-      const newPicUrl = json.data?.user?.profile_pic || json.data?.profile_pic;
+      const newUrl = isProfile
+        ? (json.data?.user?.profile_pic || json.data?.profile_pic)
+        : (json.data?.user?.bg_photo_url || json.data?.bg_photo_url);
 
-      // Update global context
-      if (auth?.onVerificationSuccess) {
-        const updatedUser = { ...currentUser, profile_pic: newPicUrl };
-        auth.onVerificationSuccess(updatedUser);
+      if (newUrl) {
+        if (isProfile) {
+          setLocalProfilePic(newUrl);
+          if (auth?.onVerificationSuccess) auth.onVerificationSuccess({ ...currentUser, profile_pic: newUrl });
+        } else {
+          setLocalBg(newUrl);
+          if (auth?.onVerificationSuccess) auth.onVerificationSuccess({ ...currentUser, bg_photo_url: newUrl });
+        }
       }
-
-      toast.success("Profile updated!");
-      setLocalProfilePic(newPicUrl);
-
-      // Auto-close the full screen as requested
-      setFullImageUrl(null);
+      toast.success(`${isProfile ? "Profile" : "Background"} updated!`);
+      if (isProfile) setFullImageUrl(null);
     } catch (err: any) {
-      console.error("Profile upload error:", err);
-      toast.error(err.message || "Failed to upload image");
-      setLocalProfilePic(null);
+      console.error(`${isProfile ? "Profile" : "Background"} upload error:`, err);
+      toast.error(err.message || "Update failed");
     } finally {
       setUploadingProfile(false);
       setShowCropper(false);
@@ -605,34 +766,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     const file = e.target.files?.[0];
     if (!file || !token) return;
 
-    setUploadingBg(true);
-    toast.info("Updating background...", { duration: 2000 });
-
-    const formData = new FormData();
-    formData.append("bg_photo", file);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/bg-photo`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.message || "Failed to update background");
-
-      const newBgUrl = json.data?.user?.bg_photo_url || json.data?.bg_photo_url;
-
-      toast.success("Background updated!");
-      if (newBgUrl) {
-        setLocalBg(newBgUrl);
-      }
-    } catch (err: any) {
-      console.error("Background upload error:", err);
-      toast.error(err.message || "Failed to upload background");
-    } finally {
-      setUploadingBg(false);
-    }
+    setCroppingType("background");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropperImage(reader.result as string);
+      setShowCropper(true);
+    };
+    reader.readAsDataURL(file);
   };
 
   const [uploadingBg, setUploadingBg] = useState(false);
@@ -978,7 +1118,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         const finalSrc = bannerUrl ? (bannerUrl.startsWith('http') || bannerUrl.startsWith('/') || bannerUrl.startsWith('blob:') ? bannerUrl : `${API_BASE_URL}/public/${bannerUrl}`) : null;
 
         return (
-          <div className={`absolute inset-x-0 top-0 bottom-[-32px] lg:hidden z-0 overflow-hidden ${!finalSrc ? 'bg-slate-100' : ''}`}>
+          <div
+            onClick={() => finalSrc && setShowBgMediaViewer(true)}
+            className={`absolute inset-x-0 top-0 bottom-[-32px] z-0 overflow-hidden cursor-pointer lg:hidden ${!finalSrc ? 'bg-slate-100' : ''}`}
+          >
             {finalSrc && (
               <img
                 src={finalSrc}
@@ -986,10 +1129,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 alt=""
               />
             )}
-            {/* Subtle top gradient for navbar readability */}
-            {finalSrc && <div className="absolute inset-x-0 top-0 h-100 bg-gradient-to-b from-black/20 via-black/30 to-transparent" />}
-            {/* Dark bottom gradient for content legibility */}
-            {finalSrc && <div className="absolute inset-x-0 bottom-0 h-100 bg-gradient-to-t from-black/50 via-transparent to-transparent" />}
+            {/* Overall dark overlay on the whole bg_photo for better contrast */}
+            {finalSrc && <div className="absolute inset-0 bg-black/35" />}
+            {/* Top navbar gradient */}
+            {finalSrc && <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 via-black/20 to-transparent" />}
+            {/* Heavy bottom blur-shadow for content legibility */}
+            {finalSrc && <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />}
             <input
               type="file"
               ref={fileInputBgRef}
@@ -1066,14 +1211,20 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               >
                 {!isFollowing ? (
                   <button
-                    onClick={followUser}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      followUser();
+                    }}
                     className="bg-rose-500 text-white px-5 py-1 rounded-full text-xs active:scale-95 transition-all shadow-md"
                   >
                     Follow
                   </button>
                 ) : (
                   <button
-                    onClick={handleUnfollowClick}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUnfollowClick();
+                    }}
                     className="bg-white/10 backdrop-blur-md text-white px-5 py-1.5 rounded-full text-xs  active:scale-95 transition-all"
                   >
                     Following
@@ -1100,12 +1251,18 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               {isOwner ? (
                 <>
                   <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                     className={`p-2 active:scale-95 transition-transform ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}
                   >
                     <QrCodeIcon className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setShowShareFriendsModal(true)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowShareFriendsModal(true);
+                    }}
                     className={`p-2 active:scale-95 transition-transform ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}
                   >
                     <Share className="w-5 h-5" />
@@ -1120,21 +1277,31 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
       </motion.header>
 
 
-      <div className={`relative z-[60] rounded-2xl overflow-visible mb-6 transition-colors duration-300 ${hasBg ? 'bg-transparent lg:bg-white' : ''}`}>
-        <div className="max-w-4xl mx-auto pt-20 px-4">
+      <div
+        onClick={() => {
+          if (typeof window !== 'undefined' && window.innerWidth < 1024 && hasBg) {
+            setShowBgMediaViewer(true);
+          }
+        }}
+        className={`relative z-[60] overflow-visible mb-6 transition-colors duration-300 cursor-default ${hasBg ? 'bg-transparent lg:bg-white' : 'bg-white'}`}>
+
+        <div className="max-w-4xl mx-auto pt-15 px-3">
           {/* Mobile */}
           <div className="lg:hidden">
             <div className="flex items-center gap-3">
               <div
                 className="group relative flex-none cursor-pointer active:scale-95 transition-transform"
-                onClick={() => setFullImageUrl(
-                  localProfilePic ??
-                  profileApi?.business?.business_logo ??
-                  profileApi?.business?.logo ??
-                  profileApi?.user?.profile_pic ??
-                  profileApi?.user?.avatar ??
-                  DEFAULT_AVATAR
-                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFullImageUrl(
+                    localProfilePic ??
+                    profileApi?.business?.business_logo ??
+                    profileApi?.business?.logo ??
+                    profileApi?.user?.profile_pic ??
+                    profileApi?.user?.avatar ??
+                    DEFAULT_AVATAR
+                  )
+                }}
               >
                 <img
                   src={
@@ -1179,7 +1346,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     >
                       <div className="flex items-center gap-1.5 mt-1">
                         <p
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             const sid = profileApi?.user?.stoqle_id || profileApi?.user?.user_id || profileApi?.user?.id || "";
                             if (sid) {
                               copyToClipboard(sid);
@@ -1251,7 +1419,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       >
                         <div
                           className={`flex flex-col items-center ${(!isOwner && profileApi?.hide_followers) ? 'cursor-default opacity-90' : 'cursor-pointer active:scale-95 transition-transform'}`}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (!isOwner && profileApi?.hide_followers) return;
                             onSocialClick?.("followers");
                           }}
@@ -1262,7 +1431,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
                         <div
                           className={`flex flex-col items-center ${(!isOwner && profileApi?.hide_following) ? 'cursor-default opacity-90' : 'cursor-pointer active:scale-95 transition-transform'}`}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (!isOwner && profileApi?.hide_following) return;
                             onSocialClick?.("following");
                           }}
@@ -1275,7 +1445,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
                         <div
                           className={`flex flex-col items-center ${isOwner ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
-                          onClick={() => isOwner && onSocialClick?.("liked")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            isOwner && onSocialClick?.("liked");
+                          }}
                         >
                           <div className={`text-sm font-bold ${hasBg ? 'text-white lg:text-slate-800' : 'text-slate-800'}`}>{profileApi?.stats?.total_likes ?? 0}</div>
                           <div className={`text-xs ${hasBg ? 'text-white/80 lg:text-slate-500' : 'text-slate-500'}`}>Likes</div>
@@ -1291,7 +1464,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       <div className="flex gap-1">
                         <button
                           className="bg-rose-500 text-white rounded-full px-2 py-1 text-sm whitespace-nowrap active:scale-95 transition-transform"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (!token) {
                               setShowLoginModal(true);
                               return;
@@ -1304,7 +1478,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         </button>
                         <div
                           className={`px-4 text-center flex item-center justify-center  rounded-full transition-all active:scale-95 ${hasBg ? 'border-white/50 text-white  shadow-sm' : 'border-slate-200 text-slate-800 bg-white'}`}
-                          onClick={() => { router.push("/settings"); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push("/settings");
+                          }}
                         >
                           <Settings className="w-5 h-5" />
                         </div>
@@ -1316,12 +1493,15 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                             <>
                               {/* <button
                                 className="rounded-full px-4 py-1.5 text-xs font-bold shadow bg-white border border-slate-200 text-slate-800 transition-all active:scale-95"
-                                onClick={handleUnfollowClick}
+                                onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnfollowClick();
+                          }}
                               >
                                 Following
                               </button> */}
                               <button
-                                className="rounded-full px-3 py-1 text-sm shadow whitespace-nowrap transition-all bg-rose-500 text-white border border-transparent hover:bg-rose-600 active:scale-95"
+                                className="rounded-full px-3 py-1 text-sm shadow whitespace-nowrap transition-all bg-rose-500 text-white border border-transparent hover:bg-rose-500 active:scale-95"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onVisitShop?.();
@@ -1366,8 +1546,9 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           <>
                             {statusFetched && !actionLoading && (
                               <button
-                                className="rounded-full px-5 py-1 text-sm shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
+                                className="rounded-full px-5 py-1 text-sm shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-500"
                                 onClick={(e) => {
+                                  e.stopPropagation();
                                   if (!currentUser) {
                                     setShowLoginModal(true);
                                     return;
@@ -1404,6 +1585,186 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
             </div>
           </div>
 
+
+          {/* ── Suggestion Info Overlay Modal ─────────────────────── */}
+          <AnimatePresence>
+            {showSuggestionInfo && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[9999] flex items-center justify-center"
+                onClick={() => setShowSuggestionInfo(false)}
+              >
+                {/* Backdrop */}
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                {/* Modal */}
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                  className="relative z-10 w-full max-w-[280px] bg-white rounded-[0.5rem] shadow-2xl overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+                    <h2 className="text-sm font-bold text-slate-900">Explanation</h2>
+                    <button onClick={() => setShowSuggestionInfo(false)} className="text-slate-400 hover:text-slate-700 transition">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  {/* Body */}
+                  <div className="px-5 py-4 space-y-3 text-[13px] text-slate-700 leading-relaxed">
+                    <p className="font-semibold text-slate-900">We recommend people you may know based on:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>Your authorized contact list</li>
+                      <li>Your engagement with other users</li>
+                      <li>Your followers and follows</li>
+                    </ol>
+                    <p className="text-slate-500 text-[12px]">
+                      To keep your data safe, we use only the data you've authorized or made public, and solely to recommend friends.
+                    </p>
+                    <p className="text-slate-500 text-[12px]">
+                      If you don't want to be recommended to people you may know, you can go to{" "}
+                      <span className="font-semibold text-slate-700">&ldquo;Me&rdquo;</span>{" "}›{" "}
+                      <span className="font-semibold text-slate-700">&ldquo;Settings&rdquo;</span>{" "}›{" "}
+                      <span className="font-semibold text-slate-700">&ldquo;Privacy&rdquo;</span>{" "}to adjust this setting.
+                    </p>
+                  </div>
+                  {/* Footer */}
+                  <div className="px-5 pb-5">
+                    <button
+                      onClick={() => setShowSuggestionInfo(false)}
+                      className="w-full py-2.5 rounded-full bg-rose-500 text-white text-sm font-bold transition active:scale-95"
+                    >Got it</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── Suggested Users - Mobile Only ────────────────────── */}
+          {isOwner && !suggestionsClosed && suggestedUsers.length > 0 && (
+            <AnimatePresence>
+              {showSuggestionsUI && (
+                <motion.div
+                  key="suggestions-strip"
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="lg:hidden mt-3 rounded py-2 px-1 overflow-hidden"
+                  style={{ backgroundColor: dominantColor.replace('1)', '0.50)') }}
+                >
+                  {/* Strip header */}
+                  <div className="flex items-center justify-between px-3 mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-[10px] font-bold text-white/70">Recommended for you</h3>
+                      <button
+                        onClick={() => setShowSuggestionInfo(true)}
+                        className="text-white/40 hover:text-white/70 transition"
+                        aria-label="How suggestions work"
+                      >
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                          <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      onClick={closeSuggestions}
+                      className="text-white/40 hover:text-white/80 transition p-0.5"
+                      aria-label="Dismiss suggestions"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Horizontal scroll list with vertical dividers */}
+                  <div className="flex overflow-x-auto no-scrollbar pb-1 snap-x px-3">
+                    {(() => {
+                      const visible = suggestedUsers.filter(u => {
+                        const meta = getSuggestionMeta(u);
+                        const name = u.business_name || u.full_name || u.name || "";
+                        return meta && name;
+                      });
+                      return (
+                        <>
+                          {visible.map((u, idx) => {
+                            const meta = getSuggestionMeta(u)!;
+                            const isTrusted = u.is_verified_partner || u.is_trusted_partner || u.trusted_partner;
+                            const avatarSrc = formatUrl(u.business_logo || u.profile_pic || u.avatar);
+                            const name = u.business_name || u.full_name || u.name || "";
+                            // Priority: username then stoqle_id
+                            const handle = u.username || u.stoqle_id;
+
+                            return (
+                              <div key={u.user_id || u.id} className="flex flex-shrink-0 snap-start">
+                                {idx > 0 && <div className="w-px bg-slate-50/5 self-stretch h-20 text-center mt-5" />}
+                                <div className="min-w-[96px] max-w-[96px] p-2 flex flex-col items-center">
+                                  {/* Avatar + name clickable for redirect */}
+                                  <div
+                                    onClick={() => handle && router.push(`/${handle}`)}
+                                    className="flex flex-col items-center cursor-pointer w-full"
+                                  >
+                                    <div className="relative mb-1.5">
+                                      <img src={avatarSrc} alt={name} className="w-10 h-10 rounded-full object-cover" />
+                                      {isTrusted && (
+                                        <div title="Trusted Partner" className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center border-[1.5px] border-white shadow-sm">
+                                          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <path fillRule="evenodd" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+                                          </svg>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] font-medium text-slate-100 line-clamp-1 w-full text-center leading-tight hover:underline">{name}</span>
+                                  </div>
+
+                                  <span className="text-[8px] text-slate-300 line-clamp-1 w-full text-center mt-0.5">{meta.label}</span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleFollowSuggestion(u.user_id || u.id);
+                                    }}
+                                    className="mt-1.5 px-2 py-0.5 bg-rose-500 text-white text-[9px] rounded-full transition active:scale-95"
+                                  >Follow</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {/* 'View more' — vertical rotated link at the very end */}
+                          {visible.length >= 5 && (
+                            <div className="flex flex-shrink-0 snap-start">
+                              <div className="w-px bg-white/15 self-stretch mx-0.5" />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSocialClick?.("recommend");
+                                }}
+                                className="flex items-center justify-center w-10 self-stretch px-1"
+                                aria-label="View more suggestions"
+                              >
+                                <span
+                                  style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                                  className="text-[9px] font-bold text-white/60 hover:text-white transition whitespace-nowrap leading-none"
+                                >View more</span>
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
+
           {/* Business Store Section */}
           {profileApi?.is_business_owner && (() => {
             const stats = profileApi?.business?.stats || profileApi?.stats;
@@ -1417,6 +1778,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   e.stopPropagation();
                   onVisitShop?.();
                 }}
+                style={{ backgroundColor: dominantColor.replace('1)', '0.40)') }}
                 className={`lg:hidden mt-3 p-2 rounded-xl  transition-all active:scale-[0.98] flex items-center justify-between gap-4 cursor-pointer ${hasBg ? 'bg-black/40 border-white/10 shadow-lg' : 'bg-slate-50 border-slate-100 hover:bg-slate-100'}`}
               >
                 <div className="flex items-center gap-3">
@@ -1474,14 +1836,17 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           <div className="hidden lg:flex md:items-start md:gap-6">
             <div
               className="group relative flex-none cursor-pointer active:scale-95 transition-transform"
-              onClick={() => setFullImageUrl(
-                localProfilePic ??
-                profileApi?.business?.business_logo ??
-                profileApi?.business?.logo ??
-                profileApi?.user?.profile_pic ??
-                profileApi?.user?.avatar ??
-                DEFAULT_AVATAR
-              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFullImageUrl(
+                  localProfilePic ??
+                  profileApi?.business?.business_logo ??
+                  profileApi?.business?.logo ??
+                  profileApi?.user?.profile_pic ??
+                  profileApi?.user?.avatar ??
+                  DEFAULT_AVATAR
+                )
+              }}
             >
               <img
                 src={
@@ -1526,7 +1891,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   >
                     <div className="flex items-center gap-1.5 mt-1">
                       <p
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           const sid = profileApi?.user?.stoqle_id || profileApi?.user?.user_id || profileApi?.user?.id || "";
                           if (sid) {
                             copyToClipboard(sid);
@@ -1592,7 +1958,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   >
                     <div
                       className={`flex items-center gap-2 ${(!isOwner && profileApi?.hide_followers) ? 'cursor-default opacity-90' : 'cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors'}`}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (!isOwner && profileApi?.hide_followers) return;
                         onSocialClick?.("followers");
                       }}
@@ -1603,7 +1970,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
                     <div
                       className={`flex items-center gap-2 ${(!isOwner && profileApi?.hide_following) ? 'cursor-default opacity-90' : 'cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors'}`}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (!isOwner && profileApi?.hide_following) return;
                         onSocialClick?.("following");
                       }}
@@ -1616,7 +1984,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
                     <div
                       className={`flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors' : ''}`}
-                      onClick={() => isOwner && onSocialClick?.("liked")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        isOwner && onSocialClick?.("liked");
+                      }}
                     >
                       <div className="text-lg font-bold text-slate-800">{profileApi?.stats?.total_likes ?? 0}</div>
                       <div className="text-sm text-slate-500">Likes</div>
@@ -1633,7 +2004,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 <>
                   <button
                     className="bg-rose-500 text-white rounded-full px-5 py-1 text-sm shadow active:scale-95 transition-transform"
-                    onClick={() => router.push("/profile/edit")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push("/profile/edit");
+                    }}
                   >
                     Edit profile
                   </button>
@@ -1646,12 +2020,15 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       <>
                         <button
                           className="rounded-full px-5 py-1 text-sm font-bold shadow bg-white border border-slate-200 text-slate-800 transition-all active:scale-95"
-                          onClick={handleUnfollowClick}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnfollowClick();
+                          }}
                         >
                           Following
                         </button>
                         <button
-                          className="rounded-full px-5 py-1 text-sm shadow whitespace-nowrap transition-all bg-rose-500 text-white border border-transparent hover:bg-rose-600 active:scale-95"
+                          className="rounded-full px-5 py-1 text-sm shadow whitespace-nowrap transition-all bg-rose-500 text-white border border-transparent hover:bg-rose-500 active:scale-95"
                           onClick={(e) => {
                             e.stopPropagation();
                             onVisitShop?.();
@@ -1681,7 +2058,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       <>
                         <button
                           className="rounded-full px-5 py-1 text-sm font-bold shadow bg-white border border-slate-200 text-slate-800 transition-all active:scale-95"
-                          onClick={handleUnfollowClick}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnfollowClick();
+                          }}
                         >
                           Following
                         </button>
@@ -1708,8 +2088,9 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     <>
                       {statusFetched && !actionLoading && (
                         <button
-                          className="rounded-full px-6 py-1 text-sm  shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-600"
+                          className="rounded-full px-6 py-1 text-sm  shadow bg-rose-500 text-white transition-all active:scale-95 hover:bg-rose-500"
                           onClick={(e) => {
+                            e.stopPropagation();
                             if (!currentUser) {
                               setShowLoginModal(true);
                               return;
@@ -1817,6 +2198,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         image={cropperImage}
         onClose={() => setShowCropper(false)}
         onCropComplete={handleCropComplete}
+        aspect={croppingType === "profile" ? 1 : 50 / 40}
+        cropShape={croppingType === "profile" ? "round" : "rect"}
       />
 
       <ImageViewer
@@ -1825,6 +2208,38 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         profileUserId={profileApi?.user?.user_id ?? profileApi?.business?.user_id}
         onUpdateProfile={() => fileInputRef.current?.click()}
       />
+
+      {showBgMediaViewer && (() => {
+        const userBg = localBg || profileApi?.bg_photo_url || profileApi?.user?.bg_photo_url || profileApi?.business?.bg_photo_url;
+        const bannerUrl = userBg || (profileApi ? DEFAULT_BANNER : null);
+        const finalSrc = bannerUrl ? (bannerUrl.startsWith('http') || bannerUrl.startsWith('/') || bannerUrl.startsWith('blob:') ? bannerUrl : `${API_BASE_URL}/public/${bannerUrl}`) : null;
+
+        return (
+          <div className="fixed inset-0 z-[99999] bg-black/95 flex flex-col animate-in fade-in duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 z-50">
+              <button
+                onClick={() => setShowBgMediaViewer(false)}
+                className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                <ChevronLeftIcon className="w-6 h-6" />
+              </button>
+              <h2 className="text-white font-bold text-sm">Background Photo</h2>
+              <div className="w-10" /> {/* spacer */}
+            </div>
+
+            <div className="flex-1 w-full flex items-center justify-center">
+              <MediaViewer
+                main={{ url: finalSrc || undefined, name: "Background" }}
+                payload={{ title: profileApi?.business?.business_name || profileApi?.user?.full_name || "Profile Background" } as any}
+                images={finalSrc ? [{ url: finalSrc }] : []}
+                selectedIndex={0}
+                onIndexChange={() => { }}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       <BlockConfirmModal
         isOpen={blockConfirmOpen}
@@ -2029,7 +2444,7 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                   </div>
 
                   {/* rose Block - Elevated Content Area */}
-                  <div className="absolute bottom-0 left-0 right-0 h-[72%] bg-rose-600 rounded-t-[2.5rem] z-10 shadow-[0_-15px_50px_rgba(0,0,0,0.3)]">
+                  <div className="absolute bottom-0 left-0 right-0 h-[72%] bg-rose-500 rounded-t-[2.5rem] z-10 shadow-[0_-15px_50px_rgba(0,0,0,0.3)]">
                     <div className="relative h-full flex flex-col p-8 justify-between text-white">
                       {/* Header */}
                       <div className="flex flex-col items-start mt-4">
@@ -2037,7 +2452,7 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                           {logo ? (
                             <img src={logo} crossOrigin="anonymous" className="w-full h-full object-cover" alt="Logo" />
                           ) : (
-                            <div className="w-full h-full bg-white flex items-center justify-center text-rose-600">
+                            <div className="w-full h-full bg-white flex items-center justify-center text-rose-500">
                               <UserGroupIcon className="w-8 h-8" />
                             </div>
                           )}
@@ -2053,7 +2468,7 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                       <div className="flex items-end justify-between w-full">
                         <div className="flex flex-col items-start gap-4">
                           <div className="bg-white px-3 py-1 rounded-full shadow-lg">
-                            <span className="text-rose-600 font-black text-sm tracking-tight">stoqle</span>
+                            <span className="text-rose-500 font-black text-sm tracking-tight">stoqle</span>
                           </div>
                           <div className="space-y-0.5">
                             <p className="text-xs text-white/70 font-medium leading-tight">Scan QR code</p>

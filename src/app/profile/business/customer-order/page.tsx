@@ -129,7 +129,7 @@ export default function VendorOrdersPage() {
         'ready_for_pickup': { label: 'Confirm Order', value: 'confirmed', color: 'bg-emerald-600', icon: CheckCircle2 },
         'processing': { label: 'Ready for Shipping', value: 'ready_for_shipping', color: 'bg-indigo-600', icon: Truck },
         'ready_for_shipping': { label: 'Mark Out for Delivery', value: 'out_for_delivery', color: 'bg-purple-600', icon: Truck },
-        'out_for_delivery': { label: 'Mark as Delivered', value: 'delivered', color: 'bg-rose-600', icon: CheckCircle2 },
+        'out_for_delivery': { label: 'Mark as Delivered', value: 'delivered', color: 'bg-rose-500', icon: CheckCircle2 },
         'pending_admin_review': { label: 'Check Status', value: 'delivered', color: 'bg-emerald-600', icon: ShieldCheck },
     };
 
@@ -151,7 +151,7 @@ export default function VendorOrdersPage() {
                 return { label: "Partially Completed", color: "bg-emerald-50 text-emerald-600 border border-emerald-100", icon: CheckCircle2 };
             case "delivered":
             case "completed":
-                return { label: "Completed", color: "bg-rose-50 text-rose-600 border border-rose-100", icon: CheckCircle2 };
+                return { label: "Completed", color: "bg-rose-50 text-rose-500 border border-rose-100", icon: CheckCircle2 };
             case "pending_admin_review":
                 return { label: "Under Review", color: "bg-blue-50 text-blue-600 border border-blue-100 animate-pulse", icon: Clock };
             case "cancelled":
@@ -674,7 +674,7 @@ export default function VendorOrdersPage() {
                                                             const display = getStatusDisplay(isMixed ? 'pending' : mainStatus);
 
                                                             return (
-                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg truncate ${isMixed ? 'bg-rose-50 text-rose-600 border border-rose-100' : display.color}`}>
+                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg truncate ${isMixed ? 'bg-rose-50 text-rose-500 border border-rose-100' : display.color}`}>
                                                                     {isMixed ? 'Multi-Status' : display.label}
                                                                 </span>
                                                             );
@@ -830,7 +830,7 @@ export default function VendorOrdersPage() {
                                                         }
                                                     </span>
                                                     {(shipStatus === 'cancelled' || shipStatus === 'refunded') && (selectedOrder.dispute_reason || currentShipment.ship_cancel_reason || currentShipment.items[0]?.status === 'cancelled') && (
-                                                        <span className="text-[10px] text-rose-600 font-bold mt-1 bg-rose-50 px-2 py-0.5 rounded-lg w-fit">
+                                                        <span className="text-[10px] text-rose-500 font-bold mt-1 bg-rose-50 px-2 py-0.5 rounded-lg w-fit">
                                                             Reason: {selectedOrder.dispute_reason || currentShipment.ship_cancel_reason || currentShipment.items[0]?.item_cancel_reason || 'Vendor cancelled'}
                                                             {(currentShipment.ship_cancel_explanation || currentShipment.items[0]?.item_cancel_explanation) && (
                                                                 <span className="block mt-0.5 text-[9px] text-rose-400 normal-case italic font-medium">
@@ -916,7 +916,7 @@ export default function VendorOrdersPage() {
                                                                         }
                                                                     }
                                                                 }}
-                                                                className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-white text-[10px]  shadow-lg transition-all ${refundable ? 'bg-rose-600 hover:bg-rose-700' : nextStatusMap[shipStatus]?.color} ${refreshing ? 'opacity-50' : 'active:scale-95'}`}
+                                                                className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-white text-[10px]  shadow-lg transition-all ${refundable ? 'bg-rose-500 hover:bg-rose-700' : nextStatusMap[shipStatus]?.color} ${refreshing ? 'opacity-50' : 'active:scale-95'}`}
                                                             >
                                                                 {refundable ? <ChevronLeft size={12} /> : (!refreshing && nextStatusMap[shipStatus] && React.createElement(nextStatusMap[shipStatus].icon, { size: 12 }))}
                                                                 {refreshing ? "Loading..." : (refundable ? "Refund Customer" : nextStatusMap[shipStatus]?.label)}
@@ -987,7 +987,7 @@ export default function VendorOrdersPage() {
                                                                 updateStatus(orderIdToUpdate, nextStatusMap[shipStatus].value);
                                                             }
                                                         }}
-                                                        className={`flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-white text-[10px] font-bold shadow-lg transition-all ${refundable ? 'bg-rose-600 hover:bg-rose-700' : nextStatusMap[shipStatus]?.color} ${refreshing ? 'opacity-50' : 'hover:scale-[1.02] active:scale-95'}`}
+                                                        className={`flex items-center justify-center gap-2 px-8 py-2.5 rounded-lg text-white text-[10px] font-bold shadow-lg transition-all ${refundable ? 'bg-rose-500 hover:bg-rose-700' : nextStatusMap[shipStatus]?.color} ${refreshing ? 'opacity-50' : 'hover:scale-[1.02] active:scale-95'}`}
                                                     >
                                                         {refundable ? <ChevronLeft size={12} /> : (!refreshing && nextStatusMap[shipStatus] && React.createElement(nextStatusMap[shipStatus].icon, { size: 12 }))}
                                                         {refreshing ? "Loading..." : (refundable ? "Refund Customer" : nextStatusMap[shipStatus]?.label)}
@@ -1061,7 +1061,7 @@ export default function VendorOrdersPage() {
                                                                                     setSnapshotItem(item);
                                                                                     setSnapshotOpen(true);
                                                                                 }}
-                                                                                className="text-[10px] font-black text-rose-500 hover:text-rose-600 flex items-center gap-1 transition-colors"
+                                                                                className="text-[10px] font-black text-rose-500 hover:text-rose-500 flex items-center gap-1 transition-colors"
                                                                             >
                                                                                 <ShieldCheck size={10} />
                                                                                 View Snapshot
@@ -1231,7 +1231,7 @@ export default function VendorOrdersPage() {
                                                     <div className={`w-1.5 h-1.5 rounded-full ${idx === tracking.length - 1 ? 'bg-rose-500 animate-pulse' : 'bg-slate-300'}`}></div>
                                                 </div>
                                                 <div>
-                                                    <p className={`text-[10px] font-bold  tracking-wider mb-0.5 ${idx === tracking.length - 1 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                    <p className={`text-[10px] font-bold  tracking-wider mb-0.5 ${idx === tracking.length - 1 ? 'text-rose-500' : 'text-slate-400'}`}>
                                                         {t.status.replace(/_/g, ' ')}
                                                     </p>
                                                     <p className="text-sm font-bold text-slate-900 mb-1 leading-tight">{t.message}</p>
@@ -1581,7 +1581,7 @@ function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_UR
                                 disabled={isPendingReview}
                                 className={`w-full p-6 text-left rounded-2xl border border-slate-100 bg-white transition-all group flex items-start gap-4 shadow-sm ${isPendingReview ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:border-rose-200 hover:bg-rose-50/50'}`}
                             >
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${isPendingReview ? 'bg-slate-100 text-slate-400' : 'bg-rose-100 text-rose-600'}`}>
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${isPendingReview ? 'bg-slate-100 text-slate-400' : 'bg-rose-100 text-rose-500'}`}>
                                     <FileText size={24} />
                                 </div>
                                 <div className="flex-1">
@@ -1775,7 +1775,7 @@ function ConfirmDeliveryModal({ shipment, onClose, onSuccess, token, API_BASE_UR
                             <button
                                 disabled={isSubmitting || !reason || (reason === "Other (See explanation)" && !explanation) || images.length === 0}
                                 onClick={handleFallbackSubmit}
-                                className="w-full py-2.5 bg-rose-600 text-white rounded-full text-sm shadow-xl shadow-rose-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all flex items-center justify-center gap-2 mt-4"
+                                className="w-full py-2.5 bg-rose-500 text-white rounded-full text-sm shadow-xl shadow-rose-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all flex items-center justify-center gap-2 mt-4"
                             >
                                 {isSubmitting ? (
                                     <div className="flex items-center gap-2">

@@ -5,12 +5,19 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/src/lib/config";
 import { useAuth } from "@/src/context/authContext";
+import { isOffline, safeFetch } from "@/src/lib/api/handler";
 import { getCurrentLocationName } from "@/src/lib/location";
 import { auth as firebaseAuth, googleProvider } from "@/src/lib/firebase";
 import { signInWithPopup } from "firebase/auth";
-import Swal from "sweetalert2";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { EMOJI_SHORTCUTS } from "@/src/lib/constants/emojis";
 import { getNextZIndex } from "@/src/lib/utils/z-index";
+import { CheckIcon } from "@heroicons/react/24/outline";
+import UserAgreementModal from "./UserAgreementModal";
+import PrivacyPolicyModal from "./PrivacyPolicyModal";
+import LoginFAQModal from "./LoginFAQModal";
+import GoogleAuthModal from "./GoogleAuthModal";
 
 type Props = {
   isOpen: boolean;
@@ -38,12 +45,38 @@ export default function LoginModal({ isOpen, onClose }: Props) {
   const [otpArray, setOtpArray] = useState(["", "", "", "", "", ""]);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const identifierRef = useRef<HTMLInputElement>(null);
+  const fullNameRef = useRef<HTMLInputElement>(null);
   const [fullName, setFullName] = useState("");
   const [isVerified, setIsVerified] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
+  const [agreed, setAgreed] = useState(false);
+  const isEmail = (val: string) => val.includes("@");
+
+  const isIdentifierValid = React.useMemo(() => {
+    const val = identifier.trim();
+    if (!val) return false;
+    if (isEmail(val)) {
+      return /\S+@\S+\.\S+/.test(val);
+    }
+    const sanitized = val.replace(/[^\d+]/g, "");
+    // Phone must start with 0 or 234 and be between 11-13 digits
+    const startsWithValidPrefix = sanitized.startsWith("0") || sanitized.startsWith("234");
+    const hasValidLength = sanitized.length >= 11 && sanitized.length <= 13;
+    return startsWithValidPrefix && hasValidLength;
+  }, [identifier]);
 
   // flow state: "initial" -> "otp" -> "profile"
   const [step, setStep] = useState<"initial" | "otp" | "profile">("initial");
+  const [isShaking, setIsShaking] = useState(false);
+  const [showAgreement, setShowAgreement] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showFAQ, setShowFAQ] = useState(false);
+  const [showGoogleAuth, setShowGoogleAuth] = useState(false);
+
+  const isFullNameValid = React.useMemo(() => {
+    const trimmed = fullName.trim();
+    return trimmed.length > 3 && fullName.length <= 20;
+  }, [fullName]);
 
   // server-side user info returned after register-or-login / verify
   const [serverUser, setServerUser] = useState<ApiUser | null>(null);
@@ -73,13 +106,35 @@ export default function LoginModal({ isOpen, onClose }: Props) {
     };
   }, [isOpen]);
 
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  const closeEverything = React.useCallback(() => {
+    setShowCloseConfirm(false);
+    if (auth?.closeLogin) auth.closeLogin();
+    onClose();
+  }, [auth, onClose]);
+
+  const handleCloseRequest = React.useCallback(async () => {
+    if (step === "otp" || step === "profile") {
+      setShowCloseConfirm(true);
+      return;
+    }
+    closeEverything();
+  }, [step, closeEverything]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (showCloseConfirm) {
+          setShowCloseConfirm(false);
+        } else {
+          handleCloseRequest();
+        }
+      }
     };
     if (isOpen) document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleCloseRequest, showCloseConfirm]);
 
   useEffect(() => {
     if (step === "otp") {
@@ -87,6 +142,10 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       setTimeout(() => {
         otpInputsRef.current[0]?.focus();
       }, 100);
+    } else if (step === "profile") {
+      setTimeout(() => {
+        fullNameRef.current?.focus();
+      }, 300);
     }
   }, [step]);
 
@@ -118,21 +177,36 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       setServerUser(null);
       setError(null);
       setLoading(false);
+      setAgreed(false);
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isOpen || !isClient) return null;
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
-  function isEmail(value: string) {
-    return value.includes("@");
-  }
 
   async function sendRegisterOrLogin() {
     setError(null);
 
+    if (!agreed) {
+      toast.error("Accept Terms & Privacy to continue.", {
+        icon: "🛡️",
+        position: "top-center"
+      });
+      return;
+    }
+
     if (!identifier.trim()) {
+      toast.error("Enter phone number or email", {
+        icon: "📱",
+        position: "top-center"
+      });
       setError("Enter phone number or email");
       return;
     }
@@ -159,31 +233,11 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         ? { email: identifier.trim() }
         : { phone_no: identifier.trim() };
 
-      const res = await fetch(`${API_BASE_URL}/api/auth/register-or-login`, {
+      const data = await safeFetch<any>("/api/auth/register-or-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        // backend may return structured error
-        const message = data?.message || "Failed to request OTP";
-        if (res.status === 429 || res.status === 403) {
-          Swal.fire({
-            title: "Security Alert",
-            text: message,
-            icon: "error",
-            confirmButtonColor: "#e11d48",
-          });
-        } else {
-          toast.error(message);
-        }
-        setError(message);
-        setLoading(false);
-        return;
-      }
 
       // success: OTP sent
       toast.success(data?.message || "OTP sent. Please verify.");
@@ -212,15 +266,13 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         ? { email: identifier.trim(), otp: otpString }
         : { phone_no: identifier.trim(), otp: otpString };
 
-      const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+      const data = await safeFetch<any>("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || data?.status === "fail") {
+      if (data?.status === "fail") {
         const message = data?.message || "OTP verification failed";
         toast.error(message);
         setError(message);
@@ -251,8 +303,9 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         }
       }, 1000); // 1s delay for animation
     } catch (e: any) {
-      toast.error("Network error. Try again.");
-      setError("Network error. Try again.");
+      const message = e?.body?.message || e?.message || "Network error. Try again.";
+      toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -272,8 +325,35 @@ export default function LoginModal({ isOpen, onClose }: Props) {
 
   async function submitFullName() {
     setError(null);
-    if (!fullName.trim()) {
-      setError("Enter your full name");
+    const trimmed = fullName.trim();
+
+    if (!trimmed) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      toast.error("Provide your real name to continue", {
+        icon: "👋",
+        position: "top-center"
+      });
+      return;
+    }
+
+    if (trimmed.length <= 3) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      toast.error("Name must be more than 3 characters", {
+        icon: "🧐",
+        position: "top-center"
+      });
+      return;
+    }
+
+    if (fullName.length > 20) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      toast.error("Name cannot exceed 20 characters", {
+        icon: "📏",
+        position: "top-center"
+      });
       return;
     }
     if (!serverUser?.user_id && !serverUser?.id) {
@@ -284,15 +364,13 @@ export default function LoginModal({ isOpen, onClose }: Props) {
     setLoading(true);
     try {
       const userId = serverUser.user_id ?? serverUser.id;
-      const res = await fetch(`${API_BASE_URL}/api/auth/user/${userId}/name`, {
+      const data = await safeFetch<any>(`/api/auth/user/${userId}/name`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ full_name: fullName.trim() }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || data?.status === "fail") {
+      if (data?.status === "fail") {
         const message = data?.message || "Failed to update name";
         toast.error(message,);
         setError(message);
@@ -311,8 +389,9 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       // close modal
       onClose();
     } catch (e: any) {
-      toast.error("Network error. Try again.");
-      setError("Network error. Try again.");
+      const message = e?.body?.message || e?.message || "Network error. Try again.";
+      toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -323,9 +402,19 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       e.preventDefault();
       e.stopPropagation();
     }
+
+    if (!agreed) {
+      toast.error("Accept Terms & Privacy to continue.", {
+        icon: "🛡️",
+        position: "top-center"
+      });
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(firebaseAuth, googleProvider);
       const idToken = await result.user.getIdToken();
       console.log('--- Google ID token retrieved ---');
@@ -336,18 +425,11 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       };
       console.log('--- Sending social login payload to backend ---', payload);
 
-      const res = await fetch(`${API_BASE_URL}/api/auth/register-or-login`, {
+      const data = await safeFetch<any>("/api/auth/register-or-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      console.log('--- Backend auth response status ---', res.status);
-      const data = await res.json();
-      console.log('--- Backend auth response data ---', data);
-      if (!res.ok) {
-        throw new Error(data?.message || "Google login failed");
-      }
 
       toast.success(data?.message || "Logged in with Google");
       const token = data?.data?.token;
@@ -360,11 +442,9 @@ export default function LoginModal({ isOpen, onClose }: Props) {
       }
     } catch (e: any) {
       if (e?.code === "auth/popup-closed-by-user") {
-        Swal.fire({
-          title: "Cancelled",
-          text: "Authentication has been cancelled",
-          icon: "info",
-          confirmButtonColor: "#e11d48",
+        toast.error("Authentication cancelled", {
+          icon: "🚫",
+          position: "top-center"
         });
         return;
       }
@@ -377,14 +457,14 @@ export default function LoginModal({ isOpen, onClose }: Props) {
     }
   }
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
       className="fixed inset-0 flex items-center justify-center lg:px-4 lg:py-6"
       style={{ zIndex: modalZIndex }}
-      onMouseDown={onClose}
+      onMouseDown={handleCloseRequest}
     >
       <div className="absolute inset-0 bg-black/50 " aria-hidden />
 
@@ -393,47 +473,78 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         onMouseDown={stop}
         className="relative z-10 w-full max-w-none h-full lg:max-w-[820px] lg:h-[50vh] bg-white lg:rounded-2xl shadow-2xl overflow-hidden flex flex-col lg:flex-row"
       >
-        {/* Mobile close (top-left) */}
-        <button
-          onClick={() => {
-            auth.closeLogin();
-            onClose();
-          }}
-          aria-label="Close"
-          className="absolute top-4 left-4 lg:hidden p-2 rounded-md bg-white/60 hover:bg-white transition z-20"
-        >
-          <svg className="w-5 h-5 text-slate-700" viewBox="0 0 24 24" fill="none">
-            <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+        {/* Mobile: Close (Left) & Help (Right) */}
+        {step !== 'profile' && (
+          <div className="lg:hidden contents">
+            <button
+              onClick={handleCloseRequest}
+              aria-label="Close"
+              className="absolute top-4 left-4 p-2 rounded-md bg-white/60 hover:bg-white transition z-20"
+            >
+              <svg className="w-5 h-5 text-slate-700" viewBox="0 0 24 24" fill="none">
+                <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setShowFAQ(true)}
+              className="absolute top-6 right-6 z-20 text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors"
+            >
+              Need Help?
+            </button>
+          </div>
+        )}
 
         {/* RIGHT (inputs) — show first on mobile, second on desktop */}
-        <div className="lg:w-1/2 p-6 md:p-8 flex flex-col justify-center relative order-1 lg:order-2">
-          {/* Desktop close button */}
-          <button
-            onClick={() => {
-              auth.closeLogin();
-              onClose();
-            }}
-            aria-label="Close"
-            className="hidden lg:flex absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition"
-          >
-            <svg className="w-4 h-4 text-slate-700" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+        <div className={`${step === 'profile' ? 'w-full lg:w-full' : 'lg:w-1/2'} p-6 md:p-8 flex flex-col justify-center relative order-1 lg:order-2`}>
+          {/* Desktop Actions (Widely Spaced) */}
+          {step !== 'profile' && (
+            <div className="hidden lg:contents">
+              <button
+                onClick={() => setShowFAQ(true)}
+                className="absolute top-6 left-8 text-[10px] font-black text-slate-400 hover:text-rose-500 transition-all z-10"
+              >
+                Need Help?
+              </button>
+              <button
+                onClick={handleCloseRequest}
+                aria-label="Close"
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition z-10"
+              >
+                <svg className="w-4 h-4 text-slate-700" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Logo Badge (specifically for profile step) */}
+          {step === 'profile' && (
+            <div className="absolute top-6 left-6 pointer-events-none z-10">
+              <div className="rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white animate-in fade-in slide-in-from-top-2 duration-500">
+                stoqle
+              </div>
+            </div>
+          )}
 
           {/* MOBILE BRANDING (Top of inputs) */}
-          <div className="lg:hidden flex flex-col items-center gap-3 mb-6">
-            <div className="rounded-full bg-rose-500 px-4 py-1.5 text-xs font-semibold text-white">
-              Stoqle
+          {step !== 'profile' && (
+            <div className="lg:hidden flex flex-col items-center gap-3 mb-6">
+              <div className="rounded-full bg-rose-500 px-4 py-1.5 text-xs font-semibold text-white">
+                Stoqle
+              </div>
+              <div className="bg-blue-50 text-blue-500 px-4 py-2 font-bold text-xs rounded-full text-center">
+                Login to receive personalized content
+              </div>
             </div>
-            <div className="bg-blue-50 text-blue-500 px-4 py-2 font-bold text-xs rounded-full text-center">
-              Login to receive personalized content
-            </div>
-          </div>
+          )}
 
-          <div className="text-slate-800 p-2 mb-4 font-bold text-center">Login with Phone or Email</div>
+          <div className="text-slate-800 p-2 mb-4 mt-15 font-bold text-center">
+            {step === 'profile'
+              ? "Provide your real name"
+              : step === 'otp'
+                ? "OTP Verification"
+                : "Login with Phone or Email"}
+          </div>
 
           <div className="max-w-[420px] w-full mx-auto">
             {/* INITIAL: send OTP */}
@@ -443,7 +554,10 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                   type="text"
                   ref={identifierRef}
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    if (error) setError(null);
+                  }}
                   placeholder="Phone number or Email"
                   className="w-full rounded-full bg-gray-100 px-5 py-3 pr-11 text-sm text-slate-500 font-medium caret-rose-500 outline-none transition"
                   aria-label="Phone number or email"
@@ -452,19 +566,49 @@ export default function LoginModal({ isOpen, onClose }: Props) {
 
                 {error && <div className="text-sm text-rose-500">{error}</div>}
 
-                <div className="pt-6">
+                <div className="flex items-start gap-3 pt-2">
+                  <button
+                    onClick={() => setAgreed(!agreed)}
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 mt-0.5
+                      ${agreed ? "bg-rose-500 border-rose-500 shadow-md shadow-rose-100" : "bg-white border-slate-200"}
+                    `}
+                  >
+                    {agreed && <CheckIcon className="w-3.5 h-3.5 text-white stroke-[4]" />}
+                  </button>
+                  <div className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                    I have read and agree to the{" "}
+                    <button
+                      type="button"
+                      onClick={() => setShowAgreement(true)}
+                      className="text-rose-500 font-bold hover:underline"
+                    >
+                      User Agreement
+                    </button>{" "}
+                    and{" "}
+                    <button
+                      type="button"
+                      onClick={() => setShowPrivacy(true)}
+                      className="text-rose-500 font-bold hover:underline"
+                    >
+                      Privacy Policy
+                    </button>.
+                  </div>
+                </div>
+
+                <div className="pt-4">
                   <button
                     type="button"
                     onClick={sendRegisterOrLogin}
                     disabled={loading}
-                    className="w-full py-4 text-sm font-bold bg-rose-600 text-white hover:brightness-95 transition rounded-full"
+                    className={`w-full py-3 text-sm font-bold transition rounded-full 
+                      ${(agreed && isIdentifierValid)
+                        ? "bg-rose-500 text-white shadow-lg shadow-rose-100 active:scale-95 hover:brightness-95"
+                        : "bg-rose-500/30 text-white/70 cursor-pointer"
+                      }
+                    `}
                   >
                     {loading ? "Requesting..." : "Get verification"}
                   </button>
-                </div>
-
-                <div className="pt-3 text-xs text-slate-400">
-                  I have read and agree to the User Agreement and Privacy Policy.
                 </div>
               </div>
             )}
@@ -472,12 +616,15 @@ export default function LoginModal({ isOpen, onClose }: Props) {
             {/* OTP step */}
             {step === "otp" && (
               <div className="space-y-4">
-                <div className="text-sm text-slate-600 text-center">
-                  We sent a verification code to{" "}
+                <div className="text-sm text-slate-600 text-center leading-relaxed">
+                  {isEmail(identifier)
+                    ? "We sent a verification code to your email "
+                    : "Check your WhatsApp for the verification code sent to "}
                   <span className="font-semibold text-slate-800">
                     {maskIdentifier(identifier)}
                   </span>
-                </div>                <div className="flex justify-between gap-2 py-4">
+                </div>
+                <div className="flex justify-between gap-2 py-4">
                   {otpArray.map((digit, index) => (
                     <motion.input
                       key={index}
@@ -563,7 +710,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                     type="button"
                     onClick={() => verifyOtp()}
                     disabled={loading || isVerified}
-                    className="col-span-2 w-full py-3 text-sm font-bold bg-rose-600 text-white hover:brightness-95 transition rounded-full"
+                    className="col-span-2 w-full py-3 text-sm font-bold bg-rose-500 text-white hover:brightness-95 transition rounded-full"
                   >
                     {loading ? "Verifying..." : "Verify OTP"}
                   </button>
@@ -590,48 +737,94 @@ export default function LoginModal({ isOpen, onClose }: Props) {
 
             {/* PROFILE step: needs full name */}
             {step === "profile" && (
-              <div className="space-y-4">
-                <div className="text-sm text-slate-600 text-center">Complete your profile to activate your account.</div>
+              <div className="space-y-6">
+                <div className="text-sm text-slate-500 font-medium text-center">Complete your profile to activate your account.</div>
 
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Full name"
-                  className="w-full rounded-full bg-gray-100 px-5 py-3 pr-11 text-sm text-slate-500 font-medium caret-rose-500 outline-none transition"
-                />
+                <div className="space-y-4">
+                  {/* Emoji Shortcuts */}
+                  <div className="flex flex-col gap-3">
+                    <div
+                      className="flex items-center gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide"
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
+                      {EMOJI_SHORTCUTS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFullName(prev => prev + emoji);
+                            fullNameRef.current?.focus();
+                          }}
+                          className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-90 transition-all text-xl"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p></p>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      ref={fullNameRef}
+                      value={fullName}
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        if (error) setError(null);
+                      }}
+                      placeholder="Enter your full name"
+                      maxLength={20}
+                      className="w-full rounded-full bg-gray-100 px-5 py-4 text-sm text-slate-800 font-bold caret-rose-500 outline-none transition focus:ring-2 focus:ring-rose-500/20"
+                    />
+                    <div className="flex justify-end px-2">
+                      <span className={`text-[10px] font-bold ${fullName.length > 20 ? 'text-rose-500' : 'text-slate-400'}`}>
+                        {fullName.length}/20
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
                 {error && <div className="text-sm text-rose-500">{error}</div>}
 
                 <div className="pt-6">
-                  <button
+                  <motion.button
+                    animate={isShaking ? { x: [-4, 4, -4, 4, 0] } : {}}
+                    transition={{ duration: 0.4 }}
                     type="button"
                     onClick={submitFullName}
                     disabled={loading}
-                    className="w-full py-4 text-sm font-bold bg-rose-600 text-white hover:brightness-95 transition rounded-full"
+                    className={`w-full py-3 text-sm font-bold transition rounded-full shadow-lg 
+                      ${isFullNameValid
+                        ? "bg-rose-500 text-white shadow-rose-100 active:scale-95"
+                        : "bg-rose-500/30 text-white/70 cursor-pointer"
+                      }
+                    `}
                   >
                     {loading ? "Activating..." : "Activate account"}
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             )}
           </div>
 
           {/* Floating small footer on desktop */}
-          <div className="mt-auto hidden lg:flex items-center justify-center p-4 border-t border-slate-100">
+          <div className="mt-auto flex items-center justify-center p-4 border-t border-slate-100">
             <div className="text-xs text-slate-400">New users can log in directly.</div>
           </div>
         </div>
 
         {/* Mobile horizontal OR divider when stacked (kept between inputs and google when stacked) */}
-        <div className="lg:hidden w-full flex items-center gap-3 px-6 py-3 order-2">
-          <div className="flex-1 h-px bg-slate-200" />
-          <div className="text-xs text-slate-400">OR</div>
-          <div className="flex-1 h-px bg-slate-200" />
-        </div>
+        {step !== 'profile' && (
+          <div className="lg:hidden w-full flex items-center gap-3 px-6 py-3 order-2">
+            <div className="flex-1 h-px bg-slate-200" />
+            <div className="text-xs text-slate-400">OR</div>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+        )}
 
         {/* LEFT (branding + Google) — moved below inputs on mobile via order classes */}
-        <div className="lg:w-1/2 flex flex-col p-8 lg:border-r lg:border-slate-100 order-3 lg:order-1">
+        <div className={`lg:w-1/2 flex flex-col p-8 lg:border-r lg:border-slate-100 order-3 lg:order-1 ${step === 'profile' ? 'hidden lg:hidden' : ''}`}>
           <div className="hidden lg:flex justify-center mb-5">
             <div className="bg-blue-100 text-blue-500 px-4 py-2 font-bold text-sm lg:text-md rounded-full">
               Login to receive personalized content
@@ -650,10 +843,16 @@ export default function LoginModal({ isOpen, onClose }: Props) {
 
             <p className="text-sm text-slate-500">Sign in quickly with Google.</p>
 
-            <div className="w-full pt-4 max-w-[420px]">
+            <div className="w-full pt-4 max-w-[340px]">
               <button
                 type="button"
-                onClick={handleGoogleSignIn}
+                onClick={() => {
+                  if (agreed) {
+                    handleGoogleSignIn(null as any);
+                  } else {
+                    setShowGoogleAuth(true);
+                  }
+                }}
                 disabled={loading}
                 className="w-full inline-flex items-center justify-center gap-3 px-3 py-3 rounded-full border border-slate-100 bg-slate-200 hover:brightness-95 transition"
               >
@@ -673,6 +872,88 @@ export default function LoginModal({ isOpen, onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+
+      <AnimatePresence>
+        {showCloseConfirm && (
+          <div key="closeConfirm" className="fixed inset-0 z-[2000000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[0.5rem] p-8 w-full max-w-sm shadow-2xl overflow-hidden relative"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 blur-3xl rounded-full" />
+
+              <h3 className="text-md font-black text-slate-900 mb-2 text-center tracking-tight">Stop Registration?</h3>
+
+
+              {/* Advert Section */}
+              <div className="bg-rose-50 border border-rose-100 rounded-[0.5rem] p-4 mb-8 text-center space-y-2 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-rose-500/10" />
+                <div className="flex items-center justify-center gap-3">
+                  <div className="flex flex-col items-center">
+                    <span className="text-[12px] text-emerald-500 font-bold uppercase leading-tight">Discover experience</span>
+                    <span className="text-[9px] text-slate-400 font-medium">New things everyday</span>
+                  </div>
+                  <div className="text-rose-200 font-bold self-stretch py-1">|</div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[12px] text-emerald-500 font-bold uppercase leading-tight">FREE SHIPPING</span>
+                    <span className="text-[9px] text-slate-400 font-medium">On all orders</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[13px] text-slate-500 mb-6 text-center ">
+                You're just one step away! Are you sure you want to close? Your progress will be lost.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={closeEverything}
+                  className="flex-1 py-3 rounded-full text-slate-400 font-black text-[9px]  active:scale-[0.98] transition-all hover:bg-slate-50 border border-slate-100"
+                >
+                  Yes, Close
+                </button>
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="flex-[2] py-3 rounded-full bg-rose-500 text-white font-black text-[9px] active:scale-[0.98] transition-all shadow-xl shadow-rose-200"
+                >
+                  No, Continue
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <LoginFAQModal
+        isOpen={showFAQ}
+        onClose={() => setShowFAQ(false)}
+        onCloseAll={() => {
+          setShowFAQ(false);
+          onClose();
+        }}
+      />
+      <GoogleAuthModal
+        isOpen={showGoogleAuth}
+        onClose={() => setShowGoogleAuth(false)}
+        onConfirm={() => {
+          setShowGoogleAuth(false);
+          handleGoogleSignIn(null as any);
+        }}
+        onCloseAll={() => {
+          setShowGoogleAuth(false);
+          onClose();
+        }}
+        agreed={agreed}
+        setAgreed={setAgreed}
+        showAgreement={() => setShowAgreement(true)}
+        showPrivacy={() => setShowPrivacy(true)}
+      />
+
+      <UserAgreementModal open={showAgreement} onClose={() => setShowAgreement(false)} />
+      <PrivacyPolicyModal open={showPrivacy} onClose={() => setShowPrivacy(false)} />
+    </div>,
+    document.body
   );
 }

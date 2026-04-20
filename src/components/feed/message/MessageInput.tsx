@@ -325,7 +325,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                                     <div key={i} className="w-1 bg-rose-500 rounded-full transition-all duration-75" style={{ height: `${h}px` }} />
                                 ))}
                             </div>
-                            <span className="flex-1 text-xs font-bold text-rose-600">Recording...</span>
+                            <span className="flex-1 text-xs font-bold text-rose-500">Recording...</span>
                             <span className="text-[10px] font-bold text-rose-500 tabular-nums">{formatTime(recordingTime)}</span>
                             <button onClick={cancelRecording} className="text-[10px]  tracking-widest font-black text-rose-400">Cancel</button>
                         </div>
@@ -409,7 +409,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                         }}
                         disabled={isSending}
                         className={`flex items-center justify-center w-10 h-10 rounded-full transition-all font-semibold shadow-md active:scale-95 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed group
-                            ${isRecording ? 'bg-rose-600 scale-125 shadow-rose-200' : (value.trim() || selectedFile || audioUrl || alwaysAllowSend) ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
+                            ${isRecording ? 'bg-rose-500 scale-125 shadow-rose-200' : (value.trim() || selectedFile || audioUrl || alwaysAllowSend) ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
                         `}
                     >
                         {isSending ? (
@@ -424,7 +424,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     </button>
 
                     {isRecording && (
-                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-rose-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg whitespace-nowrap animate-bounce">
+                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-rose-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg whitespace-nowrap animate-bounce">
                             Release to finish recording
                         </div>
                     )}

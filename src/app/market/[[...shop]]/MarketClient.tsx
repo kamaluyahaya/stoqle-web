@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
 import ShimmerGrid from "@/src/components/shimmer";
@@ -25,9 +25,11 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { formatUrl } from "@/src/lib/utils/media";
 import { MARKET_CACHE } from "@/src/lib/cache";
 import { fetchActionableSummary } from "@/src/lib/api/orderApi";
-import { ArrowUp, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
+import { ArrowUp, ShoppingCart, WifiOff, RotateCcw } from "lucide-react";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
 import { VerifiedBadge, PartnerPill } from "@/src/components/common/VerifiedBadge";
+import VisitedShopsRail from "@/src/components/recommendations/VisitedShopsRail";
 
 type Props = {
     params: Promise<{ shop?: string[] }>;
@@ -462,7 +464,7 @@ const ProductCard = React.memo(({
                                         {p.sale_type} {p.sale_discount}% Off
                                     </span>
                                 ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-600' : 'text-rose-500'} truncate`}>
+                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-500' : 'text-rose-500'} truncate`}>
                                         {Number(p.total_quantity) <= 0 ? 'Out of stock' : `Only ${Number(p.total_quantity)} left`}
                                     </span>
                                 ) : p.return_shipping_subsidy === 1 ? (
@@ -568,7 +570,7 @@ const ProductCard = React.memo(({
                                         {p.sale_type} {p.sale_discount}% Off
                                     </span>
                                 ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-600' : 'text-rose-500'} truncate`}>
+                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-500' : 'text-rose-500'} truncate`}>
                                         {Number(p.total_quantity) <= 0 ? 'Out of stock' : `Only ${Number(p.total_quantity)} left`}
                                     </span>
                                 ) : p.return_shipping_subsidy === 1 ? (
@@ -700,7 +702,20 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     const [activeCategory, setActiveCategory] = useState<string>(initialCategory || MARKET_CACHE.category);
     const [products, setProducts] = useState<any[]>(initialCategory && initialCategory !== MARKET_CACHE.category ? [] : MARKET_CACHE.products);
     const [loading, setLoading] = useState<boolean>(initialCategory && initialCategory !== MARKET_CACHE.category ? true : MARKET_CACHE.products.length === 0);
-    const [isRestoring, setIsRestoring] = useState<boolean>(MARKET_CACHE.products.length > 0);
+    const [isRestoring, setIsRestoring] = useState(false);
+    const lastOfflineToastRef = useRef<number>(0);
+
+    const showOfflineToast = useCallback(() => {
+        if (typeof window === "undefined" || navigator.onLine) return;
+        const now = Date.now();
+        if (now - lastOfflineToastRef.current > 5000) {
+            toast.error("No internet connection. Using cached products.", {
+                description: "New products will load once you're back online.",
+                id: "offline-toast"
+            });
+            lastOfflineToastRef.current = now;
+        }
+    }, []);
     const [error, setError] = useState<string | null>(null);
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -845,7 +860,11 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                         applyCategories(res.data || res);
                     }
                 })
-                .catch(console.error);
+                .catch(err => {
+                    if (typeof window !== "undefined" && navigator.onLine) {
+                        console.error("fetchCategories error:", err);
+                    }
+                });
         }
 
         function applyCategories(data: any[]) {
@@ -1139,13 +1158,47 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 setHasMore(false);
             }
             setPage(pageNum + 1);
-        } catch (err) {
-            setError("Failed to load products. Please try again later.");
+        } catch (err: any) {
+            if (typeof window !== "undefined" && navigator.onLine) {
+                console.error("Market fetch error:", err);
+            }
+            if (typeof window !== "undefined" && !navigator.onLine) {
+                showOfflineToast();
+                // If it's the first page and we have nothing, try IDB fallback
+                if (pageNum === 0 && products.length === 0) {
+                    idbGet<any[]>("stoqle_market_cache_products").then((data) => {
+                        if (data && data.length > 0) {
+                            setProducts(data);
+                            MARKET_CACHE.products = data;
+                            setError(null); // Clear error if we found cache
+                        } else {
+                            setError("No internet connection and no cached products found.");
+                        }
+                    }).catch(() => {
+                        setError("No internet connection. Please check your network.");
+                    });
+                } else if (products.length > 0) {
+                    // We already have products, just don't clear them
+                    setError(null); 
+                }
+            } else {
+                setError("Failed to load products. Please try again later.");
+            }
         } finally {
             setLoading(false);
             setIsLoadingMore(false);
         }
     };
+
+    // Auto-check online status every 5 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (typeof window !== "undefined" && !navigator.onLine && products.length > 0) {
+                showOfflineToast();
+            }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [products.length, showOfflineToast]);
 
     // Initial load logic with cache check
     useEffect(() => {
@@ -1229,6 +1282,9 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     useEffect(() => {
         const handleScroll = () => {
             MARKET_CACHE.scrollPos = window.scrollY;
+            if (typeof window !== "undefined" && !navigator.onLine) {
+                showOfflineToast();
+            }
         };
         window.addEventListener("scroll", handleScroll, { passive: true });
         return () => window.removeEventListener("scroll", handleScroll);
@@ -1648,13 +1704,33 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 {loading ? (
                     <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
                 ) : error ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-sm text-rose-500">
-                        <div className="w-32 h-32 rounded-full flex items-center justify-center">
-                            <img src="/assets/images/message-icon.png" alt="" />
-                        </div>
-                        <p className="mb-3 font-bold">{error}</p>
-                        <button onClick={() => window.location.reload()} className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition">
-                            Retry
+                    <div className="py-24 flex flex-col items-center justify-center text-center px-4">
+                        <motion.div 
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="w-24 h-24 bg-rose-50 rounded-full flex items-center justify-center mb-6 text-rose-500 shadow-sm border border-rose-100"
+                        >
+                            {typeof window !== "undefined" && !navigator.onLine ? (
+                                <WifiOff size={40} strokeWidth={1.5} />
+                            ) : (
+                                <RotateCcw size={40} strokeWidth={1.5} className="animate-pulse" />
+                            )}
+                        </motion.div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2 truncate max-w-full px-2">
+                            {typeof window !== "undefined" && !navigator.onLine ? "You're Offline" : "Oops! Something went wrong"}
+                        </h3>
+                        <p className="text-slate-500 mb-8 max-w-xs leading-relaxed">
+                            {error}
+                        </p>
+                        <button 
+                            onClick={() => {
+                                setError(null);
+                                fetchPage(0);
+                            }} 
+                            className="flex items-center gap-2 px-8 py-3.5 bg-slate-900 text-white rounded-full font-black hover:bg-slate-800 active:scale-95 transition-all shadow-lg shadow-slate-200"
+                        >
+                            <RotateCcw size={18} />
+                            Try Reconnecting
                         </button>
                     </div>
                 ) : (

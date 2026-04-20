@@ -247,7 +247,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                 {senderAvatar ? (
                     <img src={senderAvatar} className="w-8 h-8 rounded-full border border-gray-100 object-cover shadow-sm bg-gray-50" alt="" />
                 ) : (
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm ${mine ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-500 border border-rose-100"}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm ${mine ? "bg-rose-500 text-white" : "bg-rose-50 text-rose-500 border border-rose-100"}`}>
                         {senderName?.charAt(0).toUpperCase() || 'U'}
                     </div>
                 )}
@@ -447,7 +447,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             {status !== 'sending' && (
                                                 <button
                                                     onClick={() => onPdfClick?.(actualUrl || "")}
-                                                    className={`text-[9px] font-black  tracking-widest underline decoration-1 underline-offset-2 ${mine ? "text-white hover:text-rose-100" : "text-rose-500 hover:text-rose-600"}`}
+                                                    className={`text-[9px] font-black  tracking-widest underline decoration-1 underline-offset-2 ${mine ? "text-white hover:text-rose-100" : "text-rose-500 hover:text-rose-500"}`}
                                                 >
                                                     View
                                                 </button>
@@ -487,7 +487,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                     />
                                 </div>
                             ) : (
-                                <div className={`flex items-center gap-3 rounded-xl ${mine ? "bg-rose-600" : "bg-gray-50 border border-gray-100"}`}>
+                                <div className={`flex items-center gap-3 rounded-xl ${mine ? "bg-rose-500" : "bg-gray-50 border border-gray-100"}`}>
                                     <div className={`p-2 rounded-lg ${mine ? "bg-rose-400" : "bg-rose-100 text-rose-500"}`}>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -501,7 +501,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                             href={actualUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className={`text-[11px] font-bold underline decoration-2 underline-offset-4 mt-1 block ${mine ? "text-rose-100 hover:text-white" : "text-rose-500 hover:text-rose-600"}`}
+                                            className={`text-[11px] font-bold underline decoration-2 underline-offset-4 mt-1 block ${mine ? "text-rose-100 hover:text-white" : "text-rose-500 hover:text-rose-500"}`}
                                         >
                                             View & Download
                                         </a>
@@ -525,7 +525,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2">
                                     <h4 className={`text-[10px] font-bold  tracking-tight leading-tight line-clamp-2 ${mine ? "text-white" : "text-slate-900"}`}>{product_name}</h4>
-                                    <span className={`text-[11px] font-black shrink-0 ml-auto ${mine ? "text-white" : "text-rose-600"}`}>₦{Number(product_price || 0).toLocaleString()}</span>
+                                    <span className={`text-[11px] font-black shrink-0 ml-auto ${mine ? "text-white" : "text-rose-500"}`}>₦{Number(product_price || 0).toLocaleString()}</span>
                                 </div>
                                 {product_variant && (
                                     <p className={`text-[9px] font-bold mt-0.5 whitespace-normal leading-relaxed  tracking-widest ${mine ? "text-white/70" : "text-slate-400"}`}>{product_variant}</p>

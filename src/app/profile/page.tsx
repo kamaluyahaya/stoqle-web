@@ -366,7 +366,7 @@ const PostCard = React.memo(({
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete?.(post); }}
-                      className="w-full px-4 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 border-t border-slate-50"
+                      className="w-full px-4 py-2 text-left text-xs text-rose-500 hover:bg-rose-50 flex items-center gap-2 border-t border-slate-50"
                     >
                       <FaTrash className="text-rose-400" /> Delete
                     </button>
@@ -773,10 +773,10 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [profileLoading, setProfileLoading] = useState(PROFILE_CACHE.profileApi === null);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const [mediaPosts, setMediaPosts] = useState<Post[]>(PROFILE_CACHE.mediaPosts);
-  const [notePosts, setNotePosts] = useState<Post[]>(PROFILE_CACHE.notePosts);
-  const [postsLoading, setPostsLoading] = useState(PROFILE_CACHE.mediaPosts.length === 0 && PROFILE_CACHE.notePosts.length === 0);
-  const [isRestoring, setIsRestoring] = useState<boolean>(PROFILE_CACHE.mediaPosts.length > 0 || PROFILE_CACHE.notePosts.length > 0);
+  const [mediaPosts, setMediaPosts] = useState<Post[]>(PROFILE_CACHE.visibilityMap[PROFILE_CACHE.activeVisibility]?.media || PROFILE_CACHE.mediaPosts);
+  const [notePosts, setNotePosts] = useState<Post[]>(PROFILE_CACHE.visibilityMap[PROFILE_CACHE.activeVisibility]?.notes || PROFILE_CACHE.notePosts);
+  const [postsLoading, setPostsLoading] = useState(!PROFILE_CACHE.visibilityMap[PROFILE_CACHE.activeVisibility]);
+  const [isRestoring, setIsRestoring] = useState<boolean>(!!PROFILE_CACHE.visibilityMap[PROFILE_CACHE.activeVisibility]);
   const [postsError, setPostsError] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [createNoteOpen, setCreateNoteOpen] = useState(false);
@@ -802,6 +802,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const [likedItems, setLikedItems] = useState<any[]>(PROFILE_CACHE.likedItems || []);
   const [likedLoading, setLikedLoading] = useState(PROFILE_CACHE.likedItems?.length === 0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activeVisibility, setActiveVisibility] = useState<"public" | "private" | "friends">(PROFILE_CACHE.activeVisibility);
+  const [visibilityCounts, setVisibilityCounts] = useState(PROFILE_CACHE.visibilityCounts);
 
   // On mount: check sessionStorage for a pending post and inject it optimistically
   useEffect(() => {
@@ -842,12 +844,20 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           return [mapped, ...prev];
         });
         PROFILE_CACHE.notePosts = [mapped, ...PROFILE_CACHE.notePosts].filter((p, i, arr) => arr.findIndex(x => String(x.id) === String(p.id)) === i);
+        setVisibilityCounts(prev => ({
+          ...prev,
+          [activeVisibility]: { ...prev[activeVisibility], notes: prev[activeVisibility].notes + 1 }
+        }));
       } else {
         setMediaPosts(prev => {
           if (prev.some(p => String(p.id) === String(mapped.id))) return prev;
           return [mapped, ...prev];
         });
         PROFILE_CACHE.mediaPosts = [mapped, ...PROFILE_CACHE.mediaPosts].filter((p, i, arr) => arr.findIndex(x => String(x.id) === String(p.id)) === i);
+        setVisibilityCounts(prev => ({
+          ...prev,
+          [activeVisibility]: { ...prev[activeVisibility], posts: prev[activeVisibility].posts + 1 }
+        }));
       }
     };
     window.addEventListener("post-created", handlePostCreated);
@@ -1054,6 +1064,10 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   useEffect(() => {
     PROFILE_CACHE.activeTabIndex = activeTabIndex;
 
+    // Reset visibility to public when switching to non-post/note tabs if needed,
+    // though keeping it persistent across Post/Note tabs might be better.
+    // However, if we are on "Products" or "Liked", visibility sub-tabs shouldn't show.
+
     // Only reset scroll if we are already scrolled past the content area
     const timer = setTimeout(() => {
       if (tabsWrapperRef.current) {
@@ -1070,6 +1084,32 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     }, 0);
     return () => clearTimeout(timer);
   }, [activeTabIndex, navbarHeight]);
+
+  useEffect(() => {
+    // When visibility changes, we check if we have it in cache to avoid shimmer.
+    PROFILE_CACHE.activeVisibility = activeVisibility;
+    const cached = PROFILE_CACHE.visibilityMap[activeVisibility];
+
+    if (cached) {
+      // Synchronously restore from cache for instant UI response
+      setMediaPosts(cached.media);
+      setNotePosts(cached.notes);
+      setPostsLoading(false);
+    } else {
+      // Only clear and show shimmer if we genuinely have no data
+      setMediaPosts([]);
+      setNotePosts([]);
+      setPostsLoading(true);
+    }
+
+    // We only trigger a background refresh if we haven't fetched this tab very recently (e.g. last 30s)
+    // or if we have no cache at all.
+    const now = Date.now();
+    const lastFetched = PROFILE_CACHE.lastVisibilityFetchAt?.[activeVisibility] || 0;
+    if (!cached || (now - lastFetched > 30000)) {
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [activeVisibility]);
 
   const [isFollowing, setIsFollowing] = useState(false);
 
@@ -1268,7 +1308,9 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     let cancelled = false;
     const controller = new AbortController();
     async function loadPosts() {
-      if (PROFILE_CACHE.mediaPosts.length > 0 || PROFILE_CACHE.notePosts.length > 0) {
+      const cached = PROFILE_CACHE.visibilityMap[activeVisibility];
+      if (cached) {
+        // Already restored from cache but ensure loading state is false for background fetch
         setPostsLoading(false);
         setIsRestoring(false);
       } else {
@@ -1281,7 +1323,11 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const resp = await fetch(`${base.replace(/\/$/, "")}/api/social/me`, {
+        const url = new URL(`${base.replace(/\/$/, "")}/api/social/me`);
+        url.searchParams.set("privacy", activeVisibility);
+        url.searchParams.set("limit", String(postCount));
+
+        const resp = await fetch(url.toString(), {
           signal: controller.signal,
           headers,
         });
@@ -1292,6 +1338,12 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
         const json = await resp.json();
         const apiPosts: any[] = json?.data?.posts ?? json?.data ?? json?.posts ?? [];
+        if (json?.data?.visibilityCounts || json?.visibilityCounts) {
+          const counts = json?.data?.visibilityCounts || json?.visibilityCounts;
+          setVisibilityCounts(prev => ({ ...prev, ...counts }));
+          PROFILE_CACHE.visibilityCounts = { ...PROFILE_CACHE.visibilityCounts, ...counts };
+        }
+
         if (cancelled) return;
 
         const mapped = apiPosts.map((p) => mapApiPost(p));
@@ -1310,11 +1362,22 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           notes.push(m);
         }
 
-        setMediaPosts(media.slice(0, postCount));
-        setNotePosts(notes.slice(0, postCount));
-        PROFILE_CACHE.mediaPosts = media.slice(0, postCount);
-        PROFILE_CACHE.notePosts = notes.slice(0, postCount);
-        // lastFetchedAt is set at loadProfile, meaning both will refresh synchronously.
+        const finalMedia = media.slice(0, postCount);
+        const finalNotes = notes.slice(0, postCount);
+
+        setMediaPosts(finalMedia);
+        setNotePosts(finalNotes);
+
+        // Update cache
+        PROFILE_CACHE.visibilityMap[activeVisibility] = { media: finalMedia, notes: finalNotes };
+        if (!PROFILE_CACHE.lastVisibilityFetchAt) PROFILE_CACHE.lastVisibilityFetchAt = {};
+        PROFILE_CACHE.lastVisibilityFetchAt[activeVisibility] = Date.now();
+
+        if (activeVisibility === 'public') {
+          PROFILE_CACHE.mediaPosts = finalMedia;
+          PROFILE_CACHE.notePosts = finalNotes;
+        }
+        PROFILE_CACHE.lastFetchedAt = Date.now();
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to load posts:", err);
@@ -1664,6 +1727,18 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     setNotePosts(prev => prev.filter(p => p.id !== post.id));
     setLikedItems(prev => prev.filter(p => p.id !== post.id));
 
+    // Update counts
+    const type = post.coverType === 'note' ? 'notes' : 'posts';
+    const postPrivacy = (post as any).privacy || 'public';
+    setVisibilityCounts(prev => {
+      const p = (prev as any)[postPrivacy];
+      if (!p) return prev;
+      return {
+        ...prev,
+        [postPrivacy]: { ...p, [type]: Math.max(0, p[type] - 1) }
+      };
+    });
+
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/api/social/${post.id}`, {
@@ -1885,7 +1960,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className={`bg-white rounded px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50`}
+      className={`lg:bg-white bg-slate-100 rounded px-4 flex justify-start sticky z-50 border-b border-slate-200`}
       style={{ top: isMiniHeaderVisible ? "56px" : `${navbarHeight}px` }}
     >
       <div ref={tabsInnerRef} className="flex gap-8 overflow-x-auto no-scrollbar">
@@ -1909,6 +1984,35 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
     </div>
   );
 
+  const SubTabsBar = (
+    <div className="flex gap-6 px-4 border-b border-slate-200 lg:bg-white bg-slate-100 overflow-x-auto no-scrollbar">
+      {[
+        { id: 'public', label: 'Public' },
+        { id: 'private', label: 'Private' },
+        { id: 'friends', label: 'Share to friends' }
+      ].map((tab) => {
+        const currentTabType = tabs[activeTabIndex] === "Notes" ? "notes" : "posts";
+        const count = (visibilityCounts as any)[tab.id]?.[currentTabType] ?? 0;
+
+        return (
+          <button
+            key={tab.id}
+            onClick={() => setActiveVisibility(tab.id as any)}
+            className={`flex-shrink-0 py-1 text-[11px] transition-all ${activeVisibility === tab.id
+              ? "text-slate-800 font-bold scale-105"
+              : "text-slate-400  hover:text-slate-600"
+              }`}
+          >
+            {tab.label}
+            <span className={`ml-1 opacity-60 font-medium`}>
+              ({count})
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   const TabPanes = (
     <div className="relative overflow-hidden w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <div className="flex transition-transform duration-450 ease-in-out items-start" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
@@ -1919,7 +2023,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
             <ShimmerGrid count={10} />
           ) : mediaPosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <img src="/assets/images/post.png" alt="No posts" className="lg:w-30 lg:h-30 w-25 h-25  object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No image or video posts found.</p>
               <button
                 onClick={() => {
@@ -1953,14 +2057,12 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
 
         {/* Notes pane */}
         <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Notes" ? "auto" : "0", overflow: "hidden" }}>
-          <div className="flex justify-end p-4 pr-6">
-
-          </div>
+          {/* Removed gap/padding to reduce space between sub-tabs and notes */}
           {postsLoading ? (
             <ShimmerGrid count={10} />
           ) : notePosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No notes" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <img src="/assets/images/post.png" alt="No notes" className="lg:w-30 lg:h-30 w-25 h-25 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No note found. Create your first one!</p>
               <button
                 onClick={() => setCreateNoteOpen(true)}
@@ -1997,13 +2099,11 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
               <ShimmerGrid count={10} />
             ) : vendorProducts.length === 0 ? (
               <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                <img src="/assets/images/post.png" alt="No products" className="w-40 h-40 object-contain mb-4 opacity-80" />
+                <img src="/assets/images/post.png" alt="No products" className="lg:w-30 lg:h-30 w-25 h-25 object-contain mb-4 opacity-80" />
                 <p className="text-sm font-medium">No Products found, add your first product.</p>
-                <Link href="/profile/business/inventory/add-product">
+                <Link href="/profile/business/business-status">
                   <button
-                    // onClick={() => {
-                    //   window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
-                    // }}
+
                     className="mt-4 px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -2076,7 +2176,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
             <ShimmerGrid count={10} />
           ) : likedItems.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No liked items" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <img src="/assets/images/post.png" alt="No liked items" className="lg:w-30 lg:h-30 w-25 h-25 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">You haven't liked anything yet.</p>
             </div>
           ) : (
@@ -2140,6 +2240,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       />
 
       {TabsBar}
+      {(tabs[activeTabIndex] === "Posts" || tabs[activeTabIndex] === "Notes") && SubTabsBar}
       {TabPanes}
 
       <AnimatePresence>

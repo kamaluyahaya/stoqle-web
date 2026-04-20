@@ -119,7 +119,7 @@ export default function SecurityOtpModal({ isOpen, onClose, onSuccess, errorMess
                                         className="bg-rose-50 border border-rose-100 p-4 rounded-3xl flex items-start gap-3"
                                     >
                                         <FaExclamationTriangle className="text-rose-500 mt-0.5 shrink-0" size={14} />
-                                        <p className="text-[11px] font-bold text-rose-600 leading-relaxed  tracking-tight">{errorMessage}</p>
+                                        <p className="text-[11px] font-bold text-rose-500 leading-relaxed  tracking-tight">{errorMessage}</p>
                                     </motion.div>
                                 )}
 

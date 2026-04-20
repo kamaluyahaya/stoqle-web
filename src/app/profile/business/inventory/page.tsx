@@ -49,6 +49,7 @@ import { fetchProductById as fetchProductByIdApi } from "@/src/lib/api/productAp
 import CustomersTab from "@/src/components/business/inventory/CustomersTab";
 import InsightsTab from "@/src/components/business/inventory/InsightsTab";
 import ProductInsightModal from "@/src/components/business/inventory/ProductInsightModal";
+import InventoryWalkthrough from "@/src/components/business/inventory/InventoryWalkthrough";
 import { API_BASE_URL } from "@/src/lib/config";
 
 // --- Types ---
@@ -108,7 +109,16 @@ export default function SmartInventoryPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [viewMode, setViewMode] = useState<"inventory" | "customers" | "insights">("inventory");
+    const [viewMode, setViewMode] = useState<"inventory" | "customers" | "insights">(() => {
+        if (typeof window !== 'undefined') {
+            return (sessionStorage.getItem('vendor_inventory_tab') as any) || "inventory";
+        }
+        return "inventory";
+    });
+
+    useEffect(() => {
+        sessionStorage.setItem('vendor_inventory_tab', viewMode);
+    }, [viewMode]);
     const [activeTab, setActiveTab] = useState<"all" | "low_stock" | "out_of_stock">("all");
 
     // UI State
@@ -464,19 +474,21 @@ export default function SmartInventoryPage() {
                         <div className="hidden sm:flex items-center gap-2 p-1 bg-slate-100 rounded-xl overflow-x-auto scrollbar-hide">
                             <button
                                 onClick={() => setViewMode('inventory')}
-                                className={`px-4 py-2 rounded-[0.5rem] text-sm transition-all whitespace-nowrap ${viewMode === 'inventory' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-4 py-2 rounded-[0.5rem] text-sm transition-all whitespace-nowrap ${viewMode === 'inventory' ? 'bg-white shadow-sm text-rose-500' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 Inventory
                             </button>
                             <button
+                                id="inventory-guide-customers"
                                 onClick={() => setViewMode('customers')}
-                                className={`px-4 py-2 rounded-[0.5rem] text-sm  transition-all whitespace-nowrap ${viewMode === 'customers' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-4 py-2 rounded-[0.5rem] text-sm  transition-all whitespace-nowrap ${viewMode === 'customers' ? 'bg-white shadow-sm text-rose-500' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 Customers {customerCount > 0 && `(${customerCount})`}
                             </button>
                             <button
+                                id="inventory-guide-insights"
                                 onClick={() => setViewMode('insights')}
-                                className={`px-4 py-2 rounded-[0.5rem] text-sm  transition-all whitespace-nowrap ${viewMode === 'insights' ? 'bg-white text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-4 py-2 rounded-[0.5rem] text-sm  transition-all whitespace-nowrap ${viewMode === 'insights' ? 'bg-white text-rose-500' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 Shop Insights
                             </button>
@@ -496,11 +508,12 @@ export default function SmartInventoryPage() {
                             <RefreshCcw className={`w-4 h-4 text-slate-600 ${refreshing ? 'animate-spin' : ''}`} />
                         </button>
                         <button
+                            id="inventory-guide-add"
                             onClick={async () => {
                                 const ok = await auth.ensureAccountVerified();
                                 if (ok) router.push('/profile/business/inventory/add-product');
                             }}
-                            className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-rose-600 text-white rounded-full shadow-md shadow-rose-200 hover:bg-rose-700 active:scale-[0.98] transition-all text-[10px] sm:text-xs font-bold whitespace-nowrap"
+                            className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-rose-500 text-white rounded-full shadow-md shadow-rose-200 hover:bg-rose-700 active:scale-[0.98] transition-all text-[10px] sm:text-xs font-bold whitespace-nowrap"
                         >
                             Add product
                         </button>
@@ -541,7 +554,7 @@ export default function SmartInventoryPage() {
                             <StatCard
                                 label="Out of Stock"
                                 value={stats.outOfStock}
-                                icon={<MinusCircle className="w-5 h-5 text-rose-600" />}
+                                icon={<MinusCircle className="w-5 h-5 text-rose-500" />}
                                 color="red"
                                 alert={stats.outOfStock > 0}
                             />
@@ -652,7 +665,7 @@ export default function SmartInventoryPage() {
                                                                 <div>
                                                                     <p
                                                                         onClick={() => openProductPreview(product.product_id)}
-                                                                        className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-rose-600 transition-colors line-clamp-1 flex items-center gap-2"
+                                                                        className="text-sm font-semibold text-slate-900 cursor-pointer hover:text-rose-500 transition-colors line-clamp-1 flex items-center gap-2"
                                                                     >
                                                                         {product.name}
                                                                         {loadingPreview === product.product_id && <Loader2 className="w-3 h-3 animate-spin text-rose-500" />}
@@ -708,7 +721,7 @@ export default function SmartInventoryPage() {
                                                                             e.stopPropagation();
                                                                             toggleExpand(product.product_id);
                                                                         }}
-                                                                        className={`p-2 rounded-lg transition-all ${expandedProducts.has(product.product_id) ? 'bg-rose-50 text-rose-600' : 'hover:bg-slate-100 text-slate-400'}`}
+                                                                        className={`p-2 rounded-lg transition-all ${expandedProducts.has(product.product_id) ? 'bg-rose-50 text-rose-500' : 'hover:bg-slate-100 text-slate-400'}`}
                                                                     >
                                                                         {expandedProducts.has(product.product_id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                                     </button>
@@ -730,7 +743,7 @@ export default function SmartInventoryPage() {
                                                                             e.stopPropagation();
                                                                             setActiveMenu(activeMenu === product.product_id ? null : product.product_id);
                                                                         }}
-                                                                        className={`p-2 rounded-lg transition-all ${activeMenu === product.product_id ? 'bg-rose-50 text-rose-600' : 'hover:bg-slate-100 text-slate-400'}`}
+                                                                        className={`p-2 rounded-lg transition-all ${activeMenu === product.product_id ? 'bg-rose-50 text-rose-500' : 'hover:bg-slate-100 text-slate-400'}`}
                                                                         title="Manage Product"
                                                                     >
                                                                         <MoreVertical className="w-4 h-4" />
@@ -777,7 +790,7 @@ export default function SmartInventoryPage() {
                                                                                         <div className="my-1 border-t border-slate-100" />
                                                                                         <button
                                                                                             onClick={() => handleDeleteClick(product)}
-                                                                                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-lg transition-all text-left"
+                                                                                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-rose-500 hover:bg-rose-50 rounded-lg transition-all text-left"
                                                                                         >
                                                                                             <MinusCircle className="w-4 h-4 text-rose-400" />
                                                                                             Delete Product
@@ -853,7 +866,7 @@ export default function SmartInventoryPage() {
                                                                                 <div className="col-span-1 text-right">
                                                                                     <button
                                                                                         onClick={() => openHistory(v)}
-                                                                                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-rose-600 rounded-md transition-all"
+                                                                                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-rose-500 rounded-md transition-all"
                                                                                     >
                                                                                         <History className="w-3.5 h-3.5" />
                                                                                     </button>
@@ -930,7 +943,7 @@ export default function SmartInventoryPage() {
                                     >
                                         <div className="flex items-center justify-between p-6 border-b border-slate-200">
                                             <div className="flex items-center gap-2">
-                                                <History className="w-5 h-5 text-rose-600" />
+                                                <History className="w-5 h-5 text-rose-500" />
                                                 <div>
                                                     <h2 className="text-lg font-bold text-slate-900">Inventory Logs</h2>
                                                     <p className="text-xs text-slate-500">{historyDrawer.item?.name}</p>
@@ -981,7 +994,7 @@ export default function SmartInventoryPage() {
                                                                     <div className="flex items-center gap-2 text-[10px] text-slate-500">
                                                                         <div className="flex flex-col">
                                                                             <span>From: <b className="text-slate-700">{log.previous_quantity}</b></span>
-                                                                            <span>To: <b className="text-rose-600 font-bold">{log.new_quantity}</b></span>
+                                                                            <span>To: <b className="text-rose-500 font-bold">{log.new_quantity}</b></span>
                                                                         </div>
                                                                     </div>
                                                                     <span className="text-[10px] text-slate-500">By: <b className="text-slate-800">{log.adjusted_by_name || 'System'}</b></span>
@@ -1018,7 +1031,7 @@ export default function SmartInventoryPage() {
                                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-3 mb-1 sm:hidden shrink-0" />
                                         <div className="p-6 overflow-y-auto">
                                             <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mb-4">
-                                                <AlertTriangle className="w-6 h-6 text-rose-600 text-center" />
+                                                <AlertTriangle className="w-6 h-6 text-rose-500 text-center" />
                                             </div>
                                             <h3 className="text-xl font-bold text-slate-900 mb-2 text-center">
                                                 {deleteModal.loading && !deleteModal.safety ? "Checking safety..." : "Delete Product?"}
@@ -1038,7 +1051,7 @@ export default function SmartInventoryPage() {
                                                         </p>
                                                     ) : (
                                                         <p className="text-slate-600 mb-6 font-medium">
-                                                            This product has existing orders, history, or activity and <span className="font-bold text-rose-600">cannot be deleted</span>.
+                                                            This product has existing orders, history, or activity and <span className="font-bold text-rose-500">cannot be deleted</span>.
                                                             You can archive it instead to hide it from your shop.
                                                         </p>
                                                     )}
@@ -1048,7 +1061,7 @@ export default function SmartInventoryPage() {
                                                             <button
                                                                 disabled={deleteModal.loading}
                                                                 onClick={() => confirmDeletion(true)}
-                                                                className="w-full py-3 bg-rose-600 text-white rounded-lg font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2"
+                                                                className="w-full py-3 bg-rose-500 text-white rounded-lg font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2"
                                                             >
                                                                 {deleteModal.loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Permanently Delete"}
                                                             </button>
@@ -1104,13 +1117,14 @@ export default function SmartInventoryPage() {
                     </button>
 
                     <button
+                        id="inventory-guide-customers-mobile"
                         onClick={() => setViewMode('customers')}
                         className={`flex flex-col items-center gap-1 transition-all ${viewMode === 'customers' ? 'text-rose-500 scale-110' : 'text-slate-400'}`}
                     >
                         <div className="relative">
                             <Users className={`w-4 h-4 ${viewMode === 'customers' ? 'fill-rose-50' : ''}`} />
                             {customerCount > 0 && (
-                                <span className="absolute -top-1.5 -right-2 bg-rose-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                                     {customerCount > 99 ? '99+' : customerCount}
                                 </span>
                             )}
@@ -1119,6 +1133,7 @@ export default function SmartInventoryPage() {
                     </button>
 
                     <button
+                        id="inventory-guide-insights-mobile"
                         onClick={() => setViewMode('insights')}
                         className={`flex flex-col items-center gap-1 transition-all ${viewMode === 'insights' ? 'text-rose-500 scale-110' : 'text-slate-400'}`}
                     >
@@ -1127,6 +1142,7 @@ export default function SmartInventoryPage() {
                     </button>
                 </div>
             </div>
+            <InventoryWalkthrough />
         </div>
     );
 }
@@ -1170,7 +1186,7 @@ const MobileProductCard = React.memo(({
                             <div className="flex-1">
                                 <h4
                                     onClick={() => onPreview(product.product_id)}
-                                    className="font-black text-slate-900 leading-tight text-xs tracking-wider line-clamp-2 cursor-pointer hover:text-rose-600 transition-colors flex items-center gap-2"
+                                    className="font-black text-slate-900 leading-tight text-xs tracking-wider line-clamp-2 cursor-pointer hover:text-rose-500 transition-colors flex items-center gap-2"
                                 >
                                     {product.name}
                                     {loadingPreview === product.product_id && <Loader2 className="w-3 h-3 animate-spin text-rose-500" />}
@@ -1182,7 +1198,7 @@ const MobileProductCard = React.memo(({
                             <div className="relative">
                                 <button
                                     onClick={() => onMenu(activeMenu === product.product_id ? null : product.product_id)}
-                                    className={`p-2 rounded-lg transition-all ${activeMenu === product.product_id ? 'bg-rose-600 text-white' : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100'}`}
+                                    className={`p-2 rounded-lg transition-all ${activeMenu === product.product_id ? 'bg-rose-500 text-white' : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100'}`}
                                 >
                                     <MoreVertical className="w-4 h-4" />
                                 </button>
@@ -1233,7 +1249,7 @@ const MobileProductCard = React.memo(({
                                                         onMenu(null);
                                                         handleDeleteClick(product);
                                                     }}
-                                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
                                                 >
                                                     <MinusCircle className="w-4 h-4" />
                                                     Delete
@@ -1388,7 +1404,7 @@ const MobileProductCard = React.memo(({
 
 const StatCard = React.memo(({ label, value, icon, color, alert }: { label: string; value: number | string; icon: any; color: string; alert?: boolean }) => {
     const colors: Record<string, string> = {
-        red: "bg-rose-50 text-rose-600",
+        red: "bg-rose-50 text-rose-500",
         amber: "bg-amber-100 text-amber-700",
         emerald: "bg-emerald-50 text-emerald-600",
     };
@@ -1419,7 +1435,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     return (
         <button
             onClick={onClick}
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${active ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${active ? 'bg-white shadow-sm text-rose-500' : 'text-slate-500 hover:text-slate-700'}`}
         >
             {children}
         </button>
@@ -1473,12 +1489,12 @@ function EditableCell({
             onClick={onStartEdit}
             className={`inline-flex items-center justify-center gap-2 px-3 py-1 rounded-lg border-2 border-transparent hover:border-rose-100 hover:bg-rose-50/50 cursor-pointer group transition-all ${compact ? 'py-0.5 px-2' : ''}`}
         >
-            <span className={`text-sm font-bold ${hasVariants ? 'text-rose-600' : 'text-slate-600'} group-hover:text-rose-600`}>{value}</span>
+            <span className={`text-sm font-bold ${hasVariants ? 'text-rose-500' : 'text-slate-600'} group-hover:text-rose-500`}>{value}</span>
             {hasVariants ? (
                 isExpanded ? (
-                    <ChevronUp className="w-3 h-3 text-rose-400 group-hover:text-rose-600 transition-colors" />
+                    <ChevronUp className="w-3 h-3 text-rose-400 group-hover:text-rose-500 transition-colors" />
                 ) : (
-                    <ChevronDown className="w-3 h-3 text-rose-400 group-hover:text-rose-600 transition-colors" />
+                    <ChevronDown className="w-3 h-3 text-rose-400 group-hover:text-rose-500 transition-colors" />
                 )
             ) : (
                 <Edit3 className="w-3 h-3 text-slate-300 group-hover:text-rose-400 transition-colors" />

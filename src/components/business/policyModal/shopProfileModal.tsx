@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { geocodeAddress, arrangeAddressForNigeria } from "../../../lib/geocoding";
 import { FaCamera, FaStore, FaImage, FaMapMarkerAlt, FaExclamationTriangle } from "react-icons/fa";
 import ImageCropperModal from "../../modal/imageCropperModal";
+import DescriptionTextarea from "../../input/defaultDescTextarea";
 
 type Props = {
     open: boolean;
@@ -269,7 +270,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                         <button
                                             type="button"
                                             onClick={() => setIsAddressModalOpen(true)}
-                                            className="w-full flex items-center justify-between px-5 py-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition text-sm text-left"
+                                            className="w-full flex items-center justify-between px-5 py-4 rounded-[0.5rem] bg-slate-50 hover:bg-slate-100 transition text-sm text-left"
                                         >
                                             <span className={businessAddress ? "text-slate-900" : "text-slate-400"}>
                                                 {formatAddress(businessAddress) || "Select business location"}
@@ -278,7 +279,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                         </button>
                                     </div>
 
-                                    <div className="space-y-1.5 px-1">
+                                    {/* <div className="space-y-1.5 px-1">
                                         <DefaultSelect
                                             title="Choose business category"
                                             options={CATEGORIES}
@@ -286,15 +287,24 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                                             onSelected={setBusinessCategory}
                                             hintText="Select category"
                                         />
-                                    </div>
+                                    </div> */}
 
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-slate-500  tracking-widest px-1">Shop Bio</label>
-                                        <textarea
-                                            className="w-full px-5 py-4 rounded-2xl bg-slate-50 border-none focus:ring-2 focus:ring-rose-500/20 transition h-32 text-slate-900 placeholder:text-slate-400 resize-none text-sm"
+                                        {/* <textarea
+                                            className="w-full px-5 py-4 rounded-[0.5rem] bg-slate-50 border-none focus:ring-2 focus:ring-rose-500/20 transition h-32 text-slate-900 placeholder:text-slate-400 resize-none text-sm"
                                             placeholder="Tell customers about your business..."
                                             value={bio}
                                             onChange={(e) => setBio(e.target.value)}
+                                        /> */}
+                                    </div>
+                                    <div className="space-y-4">
+                                        <DescriptionTextarea
+                                            value={bio}
+                                            onChange={setBio}
+                                            placeholder="Tell customers about your business..."
+                                            maxLength={200}
+                                            maxLines={6}
                                         />
                                     </div>
                                 </div>
@@ -312,7 +322,7 @@ export default function ShopProfileModal({ open, initialValue, onClose, onSave }
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="flex-1 px-6 py-3 rounded-full bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200 disabled:opacity-50 transition"
+                                className="flex-1 px-6 py-3 rounded-full bg-rose-500 text-white hover:bg-rose-500 shadow-rose-200 disabled:opacity-50 transition"
                             >
                                 {saving ? "Saving..." : "Save Changes"}
                             </button>

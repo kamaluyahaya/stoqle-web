@@ -239,7 +239,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
                     <h4 className="text-[11px] font-bold text-white truncate drop-shadow-lg tracking-tight leading-tight">{businessName || "Stoqle Vendor"}</h4>
                   </div>
 
-                  <button className="px-2 h-6 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-black text-[8px] tracking-tight rounded-lg flex items-center justify-center shadow-lg shrink-0">
+                  <button className="px-2 h-6 bg-rose-500 hover:bg-rose-500 active:scale-95 transition-all text-white font-black text-[8px] tracking-tight rounded-lg flex items-center justify-center shadow-lg shrink-0">
                     Buy now
                   </button>
                 </div>

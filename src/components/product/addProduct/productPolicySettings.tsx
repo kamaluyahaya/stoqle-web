@@ -163,14 +163,14 @@ export default function ProductPolicySettings({
           <div className="flex bg-slate-100 p-0.5 rounded-full border border-slate-200 self-start sm:self-auto">
             <button
               onClick={() => setUseStoreDefaultReturn(true)}
-              className={`px-4 py-1.5 rounded-full text-xs transition-all ${useStoreDefaultReturn ? "bg-white shadow-sm text-rose-600" : "text-slate-500"
+              className={`px-4 py-1.5 rounded-full text-xs transition-all ${useStoreDefaultReturn ? "bg-white shadow-sm text-rose-500" : "text-slate-500"
                 }`}
             >
               Use Store Default
             </button>
             <button
               onClick={() => setUseStoreDefaultReturn(false)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${!useStoreDefaultReturn ? "bg-white shadow-sm text-rose-600" : "text-slate-500"
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${!useStoreDefaultReturn ? "bg-white shadow-sm text-rose-500" : "text-slate-500"
                 }`}
             >
               Customize
@@ -252,14 +252,14 @@ export default function ProductPolicySettings({
           <div className="flex bg-slate-100 p-0.5 rounded-full border border-slate-200 self-start sm:self-auto">
             <button
               onClick={() => setUseStoreDefaultShipping(true)}
-              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${useStoreDefaultShipping ? "bg-white shadow-sm text-rose-600" : "text-slate-500"
+              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${useStoreDefaultShipping ? "bg-white shadow-sm text-rose-500" : "text-slate-500"
                 }`}
             >
               Use Store Default
             </button>
             <button
               onClick={() => setUseStoreDefaultShipping(false)}
-              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${!useStoreDefaultShipping ? "bg-white shadow-sm text-rose-600" : "text-slate-500"
+              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${!useStoreDefaultShipping ? "bg-white shadow-sm text-rose-500" : "text-slate-500"
                 }`}
             >
               Customize
@@ -336,14 +336,14 @@ export default function ProductPolicySettings({
           <div className="flex bg-slate-100 p-0.5 rounded-full border border-slate-200 self-start sm:self-auto">
             <button
               onClick={() => setUseStoreDefaultPromotions(true)}
-              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${useStoreDefaultPromotions ? "bg-white shadow-sm text-rose-600" : "text-slate-500"
+              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${useStoreDefaultPromotions ? "bg-white shadow-sm text-rose-500" : "text-slate-500"
                 }`}
             >
               Use Store Default
             </button>
             <button
               onClick={() => setUseStoreDefaultPromotions(false)}
-              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${!useStoreDefaultPromotions ? "bg-white shadow-sm text-rose-600" : "text-slate-500"
+              className={`px-4 py-1.5 rounded-full text-xs  transition-all ${!useStoreDefaultPromotions ? "bg-white shadow-sm text-rose-500" : "text-slate-500"
                 }`}
             >
               Customize
@@ -369,7 +369,7 @@ export default function ProductPolicySettings({
                       key={`${camp.name}-${camp.windowStart}`}
                       onClick={() => selectCampaignForReview(camp)}
                       className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all flex items-center gap-2 ${isJoined
-                        ? "bg-rose-500 border-rose-600 text-white shadow-lg shadow-rose-200"
+                        ? "bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200"
                         : isReviewing
                           ? "bg-rose-50 border-rose-300 text-rose-700 shadow-sm"
                           : "bg-white border-slate-200 text-slate-600 hover:border-rose-400"
@@ -397,11 +397,11 @@ export default function ProductPolicySettings({
                           <span className="text-[10px] font-bold text-slate-400 tracking-wider">Campaign Duration</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="px-3 py-1.5 bg-rose-50 rounded-lg text-xs font-black text-rose-600 border border-rose-100 min-w-[100px] text-center">
+                          <div className="px-3 py-1.5 bg-rose-50 rounded-lg text-xs font-black text-rose-500 border border-rose-100 min-w-[100px] text-center">
                             {tempPromo.start}
                           </div>
                           <div className="w-4 h-[1px] bg-slate-200"></div>
-                          <div className="px-3 py-1.5 bg-rose-50 rounded-lg text-xs font-black text-rose-600 border border-rose-100 min-w-[100px] text-center">
+                          <div className="px-3 py-1.5 bg-rose-50 rounded-lg text-xs font-black text-rose-500 border border-rose-100 min-w-[100px] text-center">
                             {tempPromo.end}
                           </div>
                         </div>
@@ -427,7 +427,7 @@ export default function ProductPolicySettings({
                                 }%, #ffe4e6 ${(((tempPromo.discount || 10) - 1) / (90 - 1)) * 100}%)`,
                             }}
                           />
-                          <div className="w-14 h-10 flex items-center justify-center bg-rose-600 rounded-xl text-sm font-black text-white shadow-lg shadow-rose-200">
+                          <div className="w-14 h-10 flex items-center justify-center bg-rose-500 rounded-xl text-sm font-black text-white shadow-lg shadow-rose-200">
                             {tempPromo.discount}%
                           </div>
                         </div>
@@ -490,7 +490,7 @@ export default function ProductPolicySettings({
                           }%, #ffe4e6 ${(((saleDiscount?.discount || 0) - 1) / (90 - 1)) * 100}%)`,
                       }}
                     />
-                    <span className="text-md font-black text-rose-600 w-12 text-right">{saleDiscount?.discount || 0}%</span>
+                    <span className="text-md font-black text-rose-500 w-12 text-right">{saleDiscount?.discount || 0}%</span>
                   </div>
                 )}
               </div>

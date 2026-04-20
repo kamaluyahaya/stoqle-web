@@ -176,7 +176,7 @@ export default function ReviewListModal({
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((s) => (
           s <= rating ? (
-            <StarIconSolid key={s} className={`${size} text-rose-600`} />
+            <StarIconSolid key={s} className={`${size} text-rose-500`} />
           ) : (
             <StarIcon key={s} className={`${size} text-slate-200`} />
           )
@@ -288,7 +288,7 @@ export default function ReviewListModal({
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${stats.percentages[star as keyof typeof stats.percentages]}%` }}
-                          className="h-full bg-rose-600 rounded-full"
+                          className="h-full bg-rose-500 rounded-full"
                           transition={{ duration: 0.8, ease: "easeOut" }}
                         />
                       </div>
@@ -319,7 +319,7 @@ export default function ReviewListModal({
                       </div>
                       <div className="min-w-0">
                         <div
-                          className="text-[13px] font-bold text-slate-500 truncate cursor-pointer hover:text-rose-600 transition-colors"
+                          className="text-[13px] font-bold text-slate-500 truncate cursor-pointer hover:text-rose-500 transition-colors"
                           onClick={() => router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`)}
                         >
                           {review.full_name}
@@ -403,7 +403,7 @@ export default function ReviewListModal({
                                 <button
                                   onClick={() => handleAddReply(review.review_id)}
                                   disabled={!replyText.trim() || isSubmittingReply}
-                                  className="px-4 py-1.5 text-xs font-bold bg-rose-600 text-white rounded-full hover:bg-rose-700 disabled:opacity-50 transition-colors"
+                                  className="px-4 py-1.5 text-xs font-bold bg-rose-500 text-white rounded-full hover:bg-rose-700 disabled:opacity-50 transition-colors"
                                 >
                                   {isSubmittingReply ? "Posting..." : "Post Reply"}
                                 </button>
@@ -428,13 +428,13 @@ export default function ReviewListModal({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
                                 <span
-                                  className="text-xs font-bold text-slate-800 cursor-pointer hover:text-rose-600"
+                                  className="text-xs font-bold text-slate-800 cursor-pointer hover:text-rose-500"
                                   onClick={() => router.push(reply.username ? `/${reply.username}` : `/user/profile/${reply.user_id}`)}
                                 >
                                   {reply.author_name}
                                 </span>
                                 {Number(reply.user_id) === Number(businessData?.business?.user_id) && (
-                                  <span className="text-[8px] font-black bg-rose-50 text-rose-600 px-1 py-0.5 rounded tracking-tighter">Vendor</span>
+                                  <span className="text-[8px] font-black bg-rose-50 text-rose-500 px-1 py-0.5 rounded tracking-tighter">Vendor</span>
                                 )}
                                 <span className="text-[10px] text-slate-400 font-medium ml-auto">
                                   {new Date(reply.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}

@@ -178,7 +178,7 @@ export default function TrackOrderPage() {
 
                                         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 hover:border-slate-200 transition">
                                             <div className="flex items-center justify-between mb-1">
-                                                <p className={`text-[10px] font-bold   ${idx === 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                <p className={`text-[10px] font-bold   ${idx === 0 ? 'text-rose-500' : 'text-slate-400'}`}>
                                                     {h.status.replace(/_/g, ' ')}
                                                 </p>
                                                 <span className="text-[10px] text-slate-400 font-bold">
@@ -224,7 +224,7 @@ export default function TrackOrderPage() {
                                         <p className="text-xs text-slate-500 font-medium mb-2">Processed by partner</p>
                                         <button
                                             onClick={() => order.owner_id && router.push(`/messages?user=${order.owner_id}`)}
-                                            className="flex items-center gap-1.5 text-[10px] font-bold  text-rose-500 hover:text-rose-600 transition"
+                                            className="flex items-center gap-1.5 text-[10px] font-bold  text-rose-500 hover:text-rose-500 transition"
                                         >
                                             <MessageCircle size={12} /> Contact merchant
                                         </button>

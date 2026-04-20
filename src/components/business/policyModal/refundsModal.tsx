@@ -198,7 +198,7 @@ export default function RefundsModal({ open, prefKey, initialValue, onClose, onS
               </button>
               <button
                 onClick={handleSave}
-                className="px-8 py-2 rounded-full bg-rose-500 text-white text-sm font-bold shadow-lg shadow-rose-500/30 hover:bg-rose-600 active:scale-95 transition-all"
+                className="px-8 py-2 rounded-full bg-rose-500 text-white text-sm font-bold shadow-lg shadow-rose-500/30 hover:bg-rose-500 active:scale-95 transition-all"
                 disabled={saving}
               >
                 {saving ? "Saving..." : "Save Changes"}

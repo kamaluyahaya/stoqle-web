@@ -5,6 +5,7 @@
  */
 
 import { API_BASE_URL } from "@/src/lib/config";
+import { safeFetch } from "./handler";
 import type { Post } from "@/src/lib/types";
 
 const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
@@ -15,7 +16,7 @@ const isVideoUrl = (u?: string) => !!u && VIDEO_EXT_RE.test(u);
 const formatLocalUrl = (url: string | undefined): string | undefined => {
   if (!url) return undefined;
   if (url.startsWith("http")) return url;
-  
+
   const base = (API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
   const path = url.startsWith("/") ? url : `/${url}`;
   return `${base}${path}`;
@@ -144,23 +145,18 @@ type FetchPostsOptions = {
  * Fetch list of posts from backend and map them to Post[]
  */
 export async function fetchSocialPosts(opts: FetchPostsOptions = {}) {
-  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
-
-  const url = new URL(`${base.replace(/\/$/, "")}/api/social/`);
+  const url = new URL(`${(opts.baseUrl || API_BASE_URL).replace(/\/$/, "")}/api/social/`);
   if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
   if (opts.offset !== undefined) url.searchParams.set("offset", String(opts.offset));
   if (opts.category !== undefined) url.searchParams.set("category", String(opts.category));
 
-  const headers: any = { Accept: "application/json" };
+  const headers: any = {};
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
 
-  const res = await fetch(url.toString(), {
+  const json = await safeFetch<any>(url.toString(), {
     signal: opts.signal,
     headers
   });
-  if (!res.ok) throw new Error(`API returned ${res.status}`);
-  const json = await res.json();
   const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
   return apiPosts.map(mapApiPost);
 }
@@ -169,23 +165,18 @@ export async function fetchSocialPosts(opts: FetchPostsOptions = {}) {
  * Fetch social posts with linked products
  */
 export async function fetchLinkedProductPosts(opts: FetchPostsOptions = {}) {
-  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
-
-  const url = new URL(`${base.replace(/\/$/, "")}/api/social/`);
+  const url = new URL(`${(opts.baseUrl || API_BASE_URL).replace(/\/$/, "")}/api/social/`);
   url.searchParams.set("is_product_linked", "true");
   if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
   if (opts.offset !== undefined) url.searchParams.set("offset", String(opts.offset));
 
-  const headers: any = { Accept: "application/json" };
+  const headers: any = {};
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
 
-  const res = await fetch(url.toString(), {
+  const json = await safeFetch<any>(url.toString(), {
     signal: opts.signal,
     headers,
   });
-  if (!res.ok) throw new Error(`API returned ${res.status}`);
-  const json = await res.json();
   const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
   return apiPosts.filter(Boolean).map(mapApiPost);
 }
@@ -194,14 +185,9 @@ export async function fetchLinkedProductPosts(opts: FetchPostsOptions = {}) {
  * Fetch a single post by ID
  */
 export async function fetchSocialPostById(postId: number, opts: FetchPostsOptions = {}) {
-  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
-
-  const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`, {
+  const json = await safeFetch<any>(`/api/social/${postId}`, {
     signal: opts.signal,
   });
-  if (!res.ok) throw new Error(`Post not found (${res.status})`);
-  const json = await res.json();
   return mapApiPost(json?.data ?? json);
 }
 
@@ -241,19 +227,16 @@ export async function fetchSecurePostUrl(postId: number | string, source: string
     return cached.urlData;
   }
 
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+  const base = API_BASE_URL;
 
   const url = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}/secure-link`);
   url.searchParams.set("source", source);
 
-  const headers: any = { Accept: "application/json" };
+  const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
 
   try {
-    const res = await fetch(url.toString(), { headers });
-    if (!res.ok) return null;
-    const json = await res.json();
+    const json = await safeFetch<any>(url.toString(), { headers });
     if (json?.data) {
       // Backend tokens live for 10m. Cache locally for 9m to handle silent refresh.
       cache.set(cacheKey, {
@@ -264,7 +247,6 @@ export async function fetchSecurePostUrl(postId: number | string, source: string
     }
     return json?.data || null;
   } catch (err) {
-    console.error("fetchSecurePostUrl failed:", err);
     return null;
   }
 }
@@ -334,14 +316,12 @@ export async function prefetchMediaConservative(urls: Array<string | undefined>,
           });
           if (usedMb > maxMb) break;
         } catch (e) {
-          console.warn("prefetch error", e);
         }
       }
     };
 
     await Promise.all(Array.from({ length: concurrency }).map(() => worker()));
   } catch (err) {
-    console.warn("prefetchMediaConservative failed", err);
   }
 }
 /**
@@ -353,12 +333,9 @@ export async function createSocialPost(
   token: string,
   onUploadProgress?: (progress: number) => void
 ) {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
-
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${base.replace(/\/$/, "")}/api/social/`);
+    xhr.open("POST", `${API_BASE_URL.replace(/\/$/, "")}/api/social/`);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     if (onUploadProgress) {
@@ -398,18 +375,12 @@ export async function createSocialPost(
  * Toggle like for a social post
  */
 export async function toggleSocialPostLike(postId: number | string, token: string) {
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
-  const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}/like`, {
+  return safeFetch(`/api/social/${postId}/like`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
   });
-
-  const json = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(json?.message || "Failed to toggle like");
-  return json;
 }
 
 export type ActivityPayload = {
@@ -428,21 +399,17 @@ export type ActivityPayload = {
 /**
  * Log activity for a social post (view, save, share, etc.)
  */
-export async function logSocialActivity(payload: ActivityPayload, token?: string | null, baseUrl?: string) {
-  const base = baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
-  if (!base) return null;
-
-  const url = `${base.replace(/\/$/, "")}/api/social/activity`;
+export async function logSocialActivity(payload: ActivityPayload, token?: string | null) {
   const headers: any = { "Content-Type": "application/json" };
   if (token || payload.token) headers.Authorization = `Bearer ${token || payload.token}`;
 
   try {
-    const res = await fetch(url, {
+    return await safeFetch("/api/social/activity", {
       method: "POST",
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      keepalive: true
     });
-    return res.ok;
   } catch (e) { return false; }
 }
 
@@ -450,23 +417,18 @@ export async function logSocialActivity(payload: ActivityPayload, token?: string
  * Fetch a personalized discovery feed
  */
 export async function fetchDiscoverFeed(opts: FetchPostsOptions = {}) {
-  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
-
-  const url = new URL(`${base.replace(/\/$/, "")}/api/social/discover`);
+  const url = new URL(`${(opts.baseUrl || API_BASE_URL).replace(/\/$/, "")}/api/social/discover`);
   if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
   if (opts.offset !== undefined) url.searchParams.set("offset", String(opts.offset));
 
-  const headers: any = { Accept: "application/json" };
+  const headers: any = {};
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
 
-  const res = await fetch(url.toString(), {
+  const json = await safeFetch<any>(url.toString(), {
     signal: opts.signal,
     headers
   });
 
-  if (!res.ok) throw new Error(`Discovery API returned ${res.status}`);
-  const json = await res.json();
   const data = json?.data || {};
 
   return {
@@ -478,26 +440,23 @@ export async function fetchDiscoverFeed(opts: FetchPostsOptions = {}) {
 }
 
 export async function fetchSmartReels(opts: FetchPostsOptions = {}): Promise<{ posts: Post[], nextCursor: string | null }> {
-  const base = opts.baseUrl ?? process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
+  const urlObj = new URL(`${(opts.baseUrl || API_BASE_URL).replace(/\/$/, "")}/api/social/reels`);
+  if (opts.limit !== undefined) urlObj.searchParams.set("limit", String(opts.limit));
+  if (opts.cursor) urlObj.searchParams.set("cursor", String(opts.cursor));
+  if (opts.targetUserId) urlObj.searchParams.set("target_user_id", String(opts.targetUserId));
+  if (opts.buffer_ids && opts.buffer_ids.length > 0) urlObj.searchParams.set("buffer_ids", opts.buffer_ids.join(","));
+  if (opts.is_product_linked) urlObj.searchParams.set("is_product_linked", "true");
+  if (opts.softCategory) urlObj.searchParams.set("soft_category", "true");
 
-  const url = new URL(`${base.replace(/\/$/, "")}/api/social/reels`);
-  if (opts.limit !== undefined) url.searchParams.set("limit", String(opts.limit));
-  if (opts.cursor) url.searchParams.set("cursor", String(opts.cursor));
-  if (opts.targetUserId) url.searchParams.set("target_user_id", String(opts.targetUserId));
-  if (opts.buffer_ids && opts.buffer_ids.length > 0) url.searchParams.set("buffer_ids", opts.buffer_ids.join(","));
-  if (opts.is_product_linked) url.searchParams.set("is_product_linked", "true");
-  if (opts.softCategory) url.searchParams.set("soft_category", "true");
-
-  const headers: any = { Accept: "application/json" };
+  const headers: any = {};
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
 
-  const res = await fetch(url.toString(), {
+  const json = await safeFetch<any>(urlObj.toString(), {
+    method: "GET",
+    headers,
     signal: opts.signal,
-    headers
   });
-  if (!res.ok) throw new Error(`API returned ${res.status}`);
-  const json = await res.json();
+
   const apiPosts: any[] = json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
   return {
     posts: apiPosts.filter(Boolean).map(mapApiPost),
@@ -509,16 +468,10 @@ export async function fetchSmartReels(opts: FetchPostsOptions = {}): Promise<{ p
  * Fetch trending background sounds from the global sound library
  */
 export async function fetchTrendingSounds(token?: string | null) {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined");
-
-  const url = `${base.replace(/\/$/, "")}/api/social/sounds/trending`;
-  const headers: any = { Accept: "application/json" };
+  const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error("Failed to fetch trending sounds");
-  const json = await res.json();
+  const json = await safeFetch<any>("/api/social/sounds/trending", { headers });
   return json?.data || [];
 }
 
@@ -526,14 +479,10 @@ export async function fetchTrendingSounds(token?: string | null) {
  * Record usage of a specific sound
  */
 export async function recordSoundUsage(soundId: number | string, token?: string | null) {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) return;
-
-  const url = `${base.replace(/\/$/, "")}/api/social/sounds/${soundId}/use`;
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
   try {
-    await fetch(url, { method: "POST", headers });
+    await safeFetch(`/api/social/sounds/${soundId}/use`, { method: "POST", headers });
   } catch (err) { }
 }

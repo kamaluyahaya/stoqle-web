@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/src/lib/config";
 import DefaultInput from "../input/default-input";
-import NumberInput from "../input/defaultNumberInput";
+import NumberInput from "../input/defaultAmountInput";
 import PinVerifyModal from "./pinVerifyModal";
 
 interface TransferModalProps {
@@ -272,7 +272,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
                                                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
                                                             <FaExclamationTriangle className="text-rose-500" size={14} />
                                                         </div>
-                                                        <p className="text-[11px] font-bold text-rose-600">No account found with this details. Please check and try again.</p>
+                                                        <p className="text-[11px] font-bold text-rose-500">No account found with this details. Please check and try again.</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -457,7 +457,7 @@ export default function TransferModal({ isOpen, onClose, availableBalance: initi
 
                                         <button
                                             onClick={onClose}
-                                            className="w-full py-3 bg-rose-500 text-white rounded-full text-sm font-medium shadow-md hover:bg-rose-600 active:scale-95 transition"
+                                            className="w-full py-3 bg-rose-500 text-white rounded-full text-sm font-medium shadow-md hover:bg-rose-500 active:scale-95 transition"
                                         >
                                             Done
                                         </button>

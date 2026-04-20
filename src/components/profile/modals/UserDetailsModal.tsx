@@ -126,7 +126,7 @@ export default function UserDetailsModal({ open, initialValue, onClose, onSave }
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 py-4 rounded-2xl font-bold bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50"
+                className="flex-1 py-4 rounded-2xl font-bold bg-rose-500 text-white hover:bg-rose-500 transition disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save"}
               </button>

@@ -739,7 +739,7 @@ export default function EditProductPage() {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-sm font-bold shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
+              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-rose-500 hover:bg-rose-700 text-white rounded-full text-sm font-bold shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               Update
             </button>
@@ -1101,7 +1101,7 @@ export default function EditProductPage() {
                 <button
                   onClick={() => handleSubmit()}
                   disabled={submitting}
-                  className="w-full py-3 bg-rose-500 hover:bg-rose-600 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 active:scale-95 disabled:opacity-50"
+                  className="w-full py-3 bg-rose-500 hover:bg-rose-500 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 active:scale-95 disabled:opacity-50"
                 >
                   {submitting ? "Updating..." : "Confirm & Update"}
                 </button>
@@ -1223,7 +1223,7 @@ export default function EditProductPage() {
                         <button
                           onClick={handleConvertToVariant}
                           disabled={submitting || checkingSafety}
-                          className="w-full py-3.5 rounded-2xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all disabled:opacity-50"
+                          className="w-full py-3.5 rounded-2xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-500 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all disabled:opacity-50"
                         >
                           {submitting ? "Converting..." : "Yes, Convert Now"}
                         </button>
@@ -1352,7 +1352,7 @@ export default function EditProductPage() {
                         <button
                           onClick={handleConvertToSimple}
                           disabled={submitting || !selectedPrimaryVariantId}
-                          className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all disabled:opacity-50"
+                          className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-500 shadow-lg shadow-rose-200 active:scale-[0.98] transition-all disabled:opacity-50"
                         >
                           {submitting ? "Converting..." : "Finalize"}
                         </button>
@@ -1460,7 +1460,7 @@ export default function EditProductPage() {
         <button
           onClick={handleSubmit}
           disabled={submitting}
-          className="flex-1 py-3 bg-rose-600 active:bg-rose-700 text-white rounded-full text-[12px] font-bold shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+          className="flex-1 py-3 bg-rose-500 active:bg-rose-700 text-white rounded-full text-[12px] font-bold shadow-lg shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
         >
           {submitting ? (
             <>

@@ -1,5 +1,5 @@
 // src/lib/api/vendorApi.ts
-import { API_BASE_URL } from "@/src/lib/config";
+import { safeFetch } from "./handler";
 
 export interface VendorBadge {
     business_id: number;
@@ -13,15 +13,18 @@ export interface VendorBadge {
  * Use this on dedicated pages (store page, product page, vendor profile).
  */
 export async function fetchVendorBadge(businessId: number): Promise<VendorBadge> {
-    const res = await fetch(`${API_BASE_URL}/api/vendors/${businessId}/verification-badge`, {
-        headers: { Accept: "application/json" },
-        next: { revalidate: 3600 }, // 1-hour ISR for RSC usage
-    } as RequestInit);
-    const json = await res.json().catch(() => null);
-    if (!res.ok || !json?.data) {
+    try {
+        const json = await safeFetch<any>(`/api/vendors/${businessId}/verification-badge`, {
+            next: { revalidate: 3600 }, // 1-hour ISR for RSC usage
+        } as RequestInit);
+        
+        if (!json?.data) {
+            return { business_id: businessId, verified_badge: false, badge_label: null };
+        }
+        return json.data as VendorBadge;
+    } catch {
         return { business_id: businessId, verified_badge: false, badge_label: null };
     }
-    return json.data as VendorBadge;
 }
 
 /**
@@ -37,17 +40,15 @@ export async function fetchVendorBadgesBatch(
     const unique = [...new Set(businessIds)];
 
     try {
-        const res = await fetch(`${API_BASE_URL}/api/vendors/verification-badges`, {
+        const json = await safeFetch<any>("/api/vendors/verification-badges", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Accept: "application/json",
             },
             body: JSON.stringify({ businessIds: unique }),
         });
 
-        const json = await res.json().catch(() => null);
-        if (!res.ok || !json?.data?.badges) return {};
+        if (!json?.data?.badges) return {};
 
         // Normalize to a lookup map keyed by business_id
         return (json.data.badges as VendorBadge[]).reduce(

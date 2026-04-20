@@ -178,7 +178,7 @@ export default function CancelOrderModal({
                                         <button
                                             disabled={loading || !reason || (reason === 'OTHER' && !explanation)}
                                             onClick={handleConfirm}
-                                            className="flex-[2] py-2 bg-rose-500 text-white rounded-full text-[10px]  shadow-lg shadow-rose-200 hover:bg-rose-600 transition-all disabled:opacity-50"
+                                            className="flex-[2] py-2 bg-rose-500 text-white rounded-full text-[10px]  shadow-lg shadow-rose-200 hover:bg-rose-500 transition-all disabled:opacity-50"
                                         >
                                             {loading ? 'Processing...' : 'Confirm Cancellation'}
                                         </button>

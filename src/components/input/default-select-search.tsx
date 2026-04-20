@@ -242,7 +242,7 @@ export default function CategorySelectionModal({
                         onMouseEnter={() => setFocusedIndex(idx)}
                         className={`rounded-full px-4 py-2 text-sm border transition focus:outline-none
                           ${isSelected
-                            ? "border-rose-600 bg-rose-50 text-rose-600"
+                            ? "border-rose-500 bg-rose-50 text-rose-500"
                             : "border-slate-200 text-slate-800 hover:bg-slate-50"}
                         ${isFocused ? "ring-2 ring-rose-200" : ""}
                         `}

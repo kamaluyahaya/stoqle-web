@@ -351,7 +351,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                 <div className="space-y-4">
                                                     <div className="flex justify-between items-end px-1">
                                                         <label className="text-[10px] font-black text-slate-400  tracking-widest">Enter Amount (₦)</label>
-                                                        <button onClick={() => setAmount(availableBalance.toString())} className="text-[9px] font-black text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full hover:bg-rose-100 transition">MAX</button>
+                                                        <button onClick={() => setAmount(availableBalance.toString())} className="text-[9px] font-black text-rose-500 bg-rose-50 px-2.5 py-1 rounded-full hover:bg-rose-100 transition">MAX</button>
                                                     </div>
                                                     <div className=" overflow-hidden border-2 border-transparent focus-within:bg-white transition">
                                                         <NumberInput
@@ -504,7 +504,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                         <div className="flex items-center gap-2">
                                                             <h4 className="font-black text-slate-900">₦{Number(item.amount).toLocaleString()}</h4>
                                                             <span className={`text-[8px] font-black  px-2 py-0.5 rounded-full border ${item.status === 'completed' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                                                                item.status === 'rejected' ? 'text-rose-600 bg-rose-50 border-rose-100' :
+                                                                item.status === 'rejected' ? 'text-rose-500 bg-rose-50 border-rose-100' :
                                                                     'text-amber-600 bg-amber-50 border-amber-100 animate-pulse'
                                                                 }`}>
                                                                 {item.status}
@@ -526,7 +526,7 @@ export default function WithdrawModal({ isOpen, onClose, onEditAccount, availabl
                                                             <button
                                                                 onClick={() => syncStatus(item.withdrawal_id)}
                                                                 disabled={syncingId === item.withdrawal_id}
-                                                                className="mt-2 text-[8px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full hover:bg-rose-100 transition active:scale-95 disabled:opacity-50"
+                                                                className="mt-2 text-[8px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full hover:bg-rose-100 transition active:scale-95 disabled:opacity-50"
                                                             >
                                                                 {syncingId === item.withdrawal_id ? "SYNCING..." : "SYNC STATUS"}
                                                             </button>

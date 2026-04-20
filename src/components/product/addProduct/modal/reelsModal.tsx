@@ -719,7 +719,7 @@ function ReelItem({
                         <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-xl pr-3 relative">
                             {/* Discount Badge */}
                             {(product.promo_discount || product.sale_discount) && (
-                                <div className="absolute -top-6 left-0 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-lg flex items-center gap-1">
+                                <div className="absolute -top-6 left-0 bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-lg flex items-center gap-1">
                                     <span>{product.promo_title || product.sale_type || "SALE"}</span>
                                     <span>{product.promo_discount || product.sale_discount}% OFF</span>
                                 </div>
@@ -762,7 +762,7 @@ function ReelItem({
 
                         <button
                             onClick={(e) => { e.stopPropagation(); onBuyClick(e); }}
-                            className="bg-rose-600 text-white text-[10px] font-black px-5 py-2.5 rounded-full active:scale-95 transition-all shadow-lg hover:bg-rose-700 whitespace-nowrap"
+                            className="bg-rose-500 text-white text-[10px] font-black px-5 py-2.5 rounded-full active:scale-95 transition-all shadow-lg hover:bg-rose-700 whitespace-nowrap"
                         >
                             Buy Now
                         </button>

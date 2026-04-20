@@ -465,7 +465,7 @@ export default function UserActivePanel() {
           image={cropperImage}
           onCropComplete={handleCropComplete}
           onClose={() => setShowCropper(false)}
-          aspect={croppingType === "profile" ? 1 : 16 / 9}
+          aspect={croppingType === "profile" ? 1 : 50 / 40}
           cropShape={croppingType === "profile" ? "round" : "rect"}
         />
       )}

@@ -3,13 +3,13 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter, useParams } from "next/navigation";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/src/context/authContext";
 import {
   HomeIcon,
   ShoppingBagIcon,
   PlusIcon,
-  ChatBubbleLeftRightIcon,
+
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -29,6 +29,7 @@ type NavItem = {
 
 import { useChat } from "@/src/context/chatContext";
 import { API_BASE_URL } from "@/src/lib/config";
+import { Home, MessageCircleMore } from "lucide-react";
 
 export default function BottomNav() {
   const auth = useAuth();
@@ -38,6 +39,9 @@ export default function BottomNav() {
   const router = useRouter(); // add router
   const searchParams = useSearchParams();
   const [showReleaseModal, setShowReleaseModal] = useState(false);
+  // Prevents hydration mismatch — auth state is client-only
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const isLoggedIn =
     !!(auth && (auth.user || (auth as any).token || (auth as any).isAuthenticated || (auth as any).loggedIn));
@@ -72,8 +76,8 @@ export default function BottomNav() {
       id: "discover",
       title: "Discover",
       href: "/discover",
-      iconOutline: <HomeIcon className="w-5 h-5" aria-hidden />,
-      iconSolid: <HomeIconSolid className="w-5 h-5 text-rose-500" aria-hidden />,
+      iconOutline: <Home className="w-5 h-5" aria-hidden />,
+      iconSolid: <Home className="w-5 h-5 text-rose-500" aria-hidden />,
       protected: false,
     },
     {
@@ -97,8 +101,8 @@ export default function BottomNav() {
       id: "message",
       title: "Message",
       href: "/messages",
-      iconOutline: <ChatBubbleLeftRightIcon className="w-5 h-5" aria-hidden />,
-      iconSolid: <ChatBubbleLeftRightIconSolid className="w-5 h-5 text-rose-500" aria-hidden />,
+      iconOutline: <MessageCircleMore className="w-5 h-5" aria-hidden />,
+      iconSolid: <MessageCircleMore className="w-5 h-5 text-rose-500" aria-hidden />,
       badge: unreadCount,
       protected: true,
     },
@@ -106,12 +110,12 @@ export default function BottomNav() {
       id: "profile",
       title: "Profile",
       href: "/profile",
-      iconOutline: isLoggedIn && profileImage ? (
+      iconOutline: mounted && isLoggedIn && profileImage ? (
         <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover" />
       ) : (
         <UserCircleIcon className="h-6 w-6" aria-hidden />
       ),
-      iconSolid: isLoggedIn && profileImage ? (
+      iconSolid: mounted && isLoggedIn && profileImage ? (
         <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border-2 border-rose-500" />
       ) : (
         <UserCircleIconSolid className="h-6 w-6 text-rose-500" aria-hidden />

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../config";
+import { safeFetch } from "./handler";
 
 export interface Review {
   review_id: number;
@@ -28,17 +28,9 @@ export interface ReviewReply {
 }
 
 export const fetchProductReviews = async (productId: number | string): Promise<{ reviews: Review[] }> => {
-  const response = await fetch(`${API_BASE_URL}/api/reviews/product/${productId}`);
-  if (!response.ok) {
-    throw new Error("Failed to fetch reviews");
-  }
-  return response.json();
+  return safeFetch(`/api/reviews/product/${productId}`);
 };
 
 export const fetchBusinessReviews = async (businessId: number | string): Promise<{ reviews: Review[] }> => {
-  const response = await fetch(`${API_BASE_URL}/api/reviews/business/${businessId}`);
-  if (!response.ok) {
-    throw new Error("Failed to fetch reviews");
-  }
-  return response.json();
+  return safeFetch(`/api/reviews/business/${businessId}`);
 };

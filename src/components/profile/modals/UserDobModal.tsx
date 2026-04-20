@@ -69,7 +69,7 @@ export default function UserDobModal({ open, initialValue, onClose, onSave }: Pr
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-6 py-3 rounded-full font-bold text-sm bg-rose-500 text-white hover:bg-rose-600 transition disabled:opacity-50"
+                className="px-6 py-3 rounded-full font-bold text-sm bg-rose-500 text-white hover:bg-rose-500 transition disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save"}
               </button>

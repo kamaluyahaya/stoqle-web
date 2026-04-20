@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useAuth } from "./authContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
+import { isOffline } from "@/src/lib/api/handler";
 
 interface CartContextType {
     cartCount: number;
@@ -17,26 +18,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const refreshCart = useCallback(async () => {
         const token = auth?.token || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
-        if (token) {
-            try {
-                const res = await fetchCartApi(token);
-                if (res.status === "success" && res.data?.items) {
-                    const items = res.data.items || [];
-                    // Deduplicate by cart_id to ensure accurate unique item source
-                    const uniqueItems = items.filter((item: any, index: number, self: any[]) =>
-                        index === self.findIndex((t: any) => t.cart_id === item.cart_id)
-                    );
-                    // Calculate total unique items
-                    setCartCount(uniqueItems.length);
-                } else {
-                    setCartCount(0); // Clear cart if API response is not successful or items are missing
-                }
-            } catch (e) {
-                console.error("Failed to fetch cart count", e);
-                setCartCount(0); // Clear cart on error
+        if (!token) { setCartCount(0); return; }
+        // Skip fetch when offline — keep existing count
+        if (isOffline()) return;
+        try {
+            const res = await fetchCartApi(token);
+            if (res.status === "success" && res.data?.items) {
+                const items = res.data.items || [];
+                // Deduplicate by cart_id to ensure accurate unique item source
+                const uniqueItems = items.filter((item: any, index: number, self: any[]) =>
+                    index === self.findIndex((t: any) => t.cart_id === item.cart_id)
+                );
+                // Calculate total unique items
+                setCartCount(uniqueItems.length);
+            } else {
+                setCartCount(0); // Clear cart if API response is not successful or items are missing
             }
-        } else {
-            setCartCount(0);
+        } catch (e) {
+            // Silently ignore offline errors — keep existing cart count
+            if (!isOffline()) {
+                console.warn("Failed to fetch cart count");
+            }
         }
     }, [auth?.token]);
 

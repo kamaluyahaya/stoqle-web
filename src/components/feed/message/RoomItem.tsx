@@ -46,8 +46,8 @@ export const RoomItem: React.FC<RoomItemProps> = ({
             whileHover={{ scale: 1.01, x: 2 }}
             whileTap={{ scale: 0.98 }}
             className={`flex items-center p-3.5 rounded-[1.25rem] cursor-pointer transition-all duration-300 gap-3 group relative ${active
-                    ? "bg-white shadow-xl shadow-slate-200/50 ring-1 ring-slate-100 z-10"
-                    : "hover:bg-white/50 border border-transparent hover:border-slate-100"
+                ? "bg-white shadow-xl shadow-slate-200/50 ring-1 ring-slate-100 z-10"
+                : "hover:bg-white/50 border border-transparent hover:border-slate-100"
                 }`}
         >
             <div className="relative flex-shrink-0">
@@ -76,7 +76,7 @@ export const RoomItem: React.FC<RoomItemProps> = ({
                     )}
                 </div>
                 {unread > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white ring-2 ring-rose-50">
+                    <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white ring-2 ring-rose-50">
                         {unread}
                     </span>
                 )}

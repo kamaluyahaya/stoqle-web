@@ -210,7 +210,7 @@ export default function EditBusinessProfile({
 
         <div className="pb-10 mb-10">
           <button
-            className={`w-full px-4 py-3 rounded-full font-semibold transition ${!hasAnyFilledField || isSyncing ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-rose-500 text-white hover:bg-rose-600"}`}
+            className={`w-full px-4 py-3 rounded-full font-semibold transition ${!hasAnyFilledField || isSyncing ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-rose-500 text-white hover:bg-rose-500"}`}
             onClick={async () => { await saveProfile(); }}
             disabled={!hasAnyFilledField || isSyncing}
           >

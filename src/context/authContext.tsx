@@ -1,6 +1,9 @@
 // src/context/AuthContext.tsx
 "use client";
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, Suspense } from "react";
+import { useSearchParams, usePathname } from "next/navigation";
+import { API_BASE_URL } from "../lib/config";
+import { isOffline } from "../lib/api/handler";
 
 type User = any; // tighten up later if you want
 
@@ -47,18 +50,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = async () => {
     const t = typeof window !== "undefined" ? localStorage.getItem("token") : token;
     if (!t) return;
+    // Skip refresh if offline — keep existing cached user data
+    if (isOffline()) return;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://10.123.11.181:4000"}/api/auth/profile/me`, {
+      const res = await fetch(`${API_BASE_URL}/api/auth/profile/me`, {
         headers: {
           "Authorization": `Bearer ${t}`,
         },
       });
       if (res.ok) {
         const json = await res.json();
-        const u = json.data?.user || json.data || json;
-        // The /api/auth/profile/me might return { user, business, stats ... }
-        // We want to merge or keep the most relevant user info for auth
-        // Usually, the 'user' object in state is what other components consume
         const updatedUser = {
           ...(json.data?.user || json.data || json),
           isBusiness: Boolean(json.data?.is_business_owner || json.data?.business),
@@ -66,6 +67,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           business_id: json.data?.business?.business_id || json.data?.business?.id,
           business_status: json.data?.business?.business_status || (json.data as any)?.business_status
         };
+
+        // ⚠️ SAFETY CHECK: If token has changed in storage while this fetch was in flight,
+        // do NOT save this user object or we'll overwrite the new account's data with old data.
+        const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (currentToken && currentToken !== t) {
+          console.warn("AuthContext: Token mismatch after refreshUser fetch. Discarding stale profile data.");
+          return;
+        }
+
         setUser(updatedUser);
         if (typeof window !== "undefined") {
           localStorage.setItem("user", JSON.stringify(updatedUser));
@@ -73,7 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return updatedUser;
       }
     } catch (e) {
-      console.error("AuthContext refreshUser error", e);
+      // Silently ignore network errors when offline
+      if (!isOffline()) {
+        console.warn("AuthContext refreshUser error", e);
+      }
     }
   };
 
@@ -141,11 +154,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // open login and return promise that resolves true if user logged in, false otherwise
   const openLogin = (): Promise<boolean> => {
-    // if mounted and token+user exist, short-circuit
-    if (mountedRef.current && token && user) {
-      return Promise.resolve(true);
-    }
-
     setLoginOpen(true);
     return new Promise((resolve) => {
       resolverRef.current = { resolve };
@@ -214,6 +222,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         localStorage.setItem("token", t);
         localStorage.setItem("user", JSON.stringify(u));
+        // Force cookie for middleware (7 days) - Path and SameSite are critical for correctness
+        document.cookie = `token=${t}; path=/; max-age=604800; SameSite=Lax`;
       }
     } catch {
       // ignore localStorage errors
@@ -246,6 +256,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      // Clear cookie for middleware
+      document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     }
 
     // then update state
@@ -277,9 +289,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onVerificationSuccess,
       } as any}
     >
+      <Suspense fallback={null}>
+        <AuthTrigger
+          setLoginOpen={setLoginOpen}
+          isHydrated={isHydrated}
+          token={token}
+        />
+      </Suspense>
       {children}
     </AuthContext.Provider>
   );
+}
+
+function AuthTrigger({ setLoginOpen, isHydrated, token }: {
+  setLoginOpen: (val: boolean) => void,
+  isHydrated: boolean,
+  token: string | null
+}) {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (isHydrated && searchParams.get("auth") === "required" && !token) {
+      setLoginOpen(true);
+    }
+  }, [searchParams, pathname, isHydrated, token]);
+
+  return null;
 }
 
 export function useAuth() {

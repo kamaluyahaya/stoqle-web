@@ -186,7 +186,7 @@ export function SaleDiscountModal({
                     </div>
                     <div className="text-xs text-slate-500 mt-1">1–90%</div>
                   </div>
-                  <div className="text-sm font-semibold text-rose-600">
+                  <div className="text-sm font-semibold text-rose-500">
                     {Math.round(discountPercent)}%
                   </div>
                 </div>

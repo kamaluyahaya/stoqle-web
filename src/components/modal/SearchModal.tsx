@@ -327,7 +327,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
     <div className="flex-1 overflow-auto p-5 space-y-8">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="w-8 h-8 border-4 border-rose-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-400 font-medium">Searching for "{searchQuery}"...</p>
         </div>
       ) : results ? (
@@ -366,7 +366,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
               <div className="grid grid-cols-2 gap-3">
                 {results.shops.map((s: any) => (
                   <div key={s.id} className="flex items-center gap-3 p-2 border border-slate-100 rounded-xl hover:shadow-sm transition-all cursor-pointer bg-white" onClick={() => handleRecentClick(s.name, 'shop')}>
-                    <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 font-bold text-xs overflow-hidden border border-slate-50 flex-shrink-0 ">
+                    <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 font-bold text-xs overflow-hidden border border-slate-50 flex-shrink-0 ">
                       {s.image ? (
                         <img
                           src={s.image.startsWith('http') ? s.image : `https://stoqle.com/${s.image}`}
@@ -434,7 +434,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
               <p className="text-[12px] text-slate-500 mt-1">We couldn't find anything matching "{searchQuery}"</p>
               <button
                 onClick={() => setView("initial")}
-                className="mt-6 text-xs font-bold text-rose-600  tracking-widest"
+                className="mt-6 text-xs font-bold text-rose-500  tracking-widest"
               >
                 Clear Search
               </button>
@@ -503,7 +503,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
               <button
                 onClick={() => handleSearch()}
                 disabled={isLoading}
-                className="bg-rose-600 text-white text-[11px] font-black px-5 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 tracking-tighter disabled:opacity-50"
+                className="bg-rose-500 text-white text-[11px] font-black px-5 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 tracking-tighter disabled:opacity-50"
               >
                 {isLoading ? "..." : "Search"}
               </button>

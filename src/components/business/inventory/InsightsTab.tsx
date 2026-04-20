@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Users, TrendingUp, Eye, ShoppingCart, ArrowUpRight, ArrowDownRight, Package, Loader2, Star } from "lucide-react";
+import { Users, TrendingUp, Eye, ShoppingCart, ArrowUpRight, ArrowDownRight, Package, Loader2, Star, MessageCircle, Clock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE_URL } from "@/src/lib/config";
+import { useRouter } from "next/navigation";
+
 
 export default function InsightsTab({
     products,
@@ -18,18 +20,41 @@ export default function InsightsTab({
 }) {
     const [loading, setLoading] = useState(true);
     const [insights, setInsights] = useState<any>(null);
+    const [shopVisitors, setShopVisitors] = useState<any[]>([]);
+    const router = useRouter();
+
 
     useEffect(() => {
         const fetchInsights = async () => {
             try {
-                const token = localStorage.getItem("token");
-                const res = await fetch(`${API_BASE_URL}/api/insights`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    setInsights(data.data);
+                const cachedHtml = sessionStorage.getItem('vendor_insights_cache');
+                if (cachedHtml) {
+                    const parsed = JSON.parse(cachedHtml);
+                    if (parsed.insights) setInsights(parsed.insights);
+                    if (parsed.shopVisitors) setShopVisitors(parsed.shopVisitors);
+                    setLoading(false);
                 }
+
+                const token = localStorage.getItem("token");
+                const [resInsights, resVisitors] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/insights`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`${API_BASE_URL}/api/insights/shop-visitors`, { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+                
+                const dataInsights = await resInsights.json();
+                const dataVisitors = await resVisitors.json();
+                
+                if (dataInsights.ok) {
+                    setInsights(dataInsights.data);
+                }
+                if (dataVisitors.ok) {
+                    setShopVisitors(dataVisitors.data);
+                }
+
+                sessionStorage.setItem('vendor_insights_cache', JSON.stringify({
+                    insights: dataInsights.ok ? dataInsights.data : null,
+                    shopVisitors: dataVisitors.ok ? dataVisitors.data : []
+                }));
             } catch (err) {
                 console.error("Failed to load insights:", err);
             } finally {
@@ -38,6 +63,43 @@ export default function InsightsTab({
         };
         fetchInsights();
     }, []);
+
+    // Grouping logic for visitors
+    const groupedVisitors = React.useMemo(() => {
+        if (!shopVisitors || shopVisitors.length === 0) return {};
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+
+        const startOfLastWeek = new Date(startOfWeek);
+        startOfLastWeek.setDate(startOfWeek.getDate() - 7);
+
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        const groups: Record<string, any[]> = {
+            "Today": [],
+            "This Week": [],
+            "Last Week": [],
+            "Last Month": [],
+            "Earlier": []
+        };
+
+        shopVisitors.forEach(v => {
+            const vDate = new Date(v.last_visited_at || v.first_visited_at);
+            if (vDate >= today) groups["Today"].push(v);
+            else if (vDate >= startOfWeek) groups["This Week"].push(v);
+            else if (vDate >= startOfLastWeek) groups["Last Week"].push(v);
+            else if (vDate >= startOfLastMonth) groups["Last Month"].push(v);
+            else groups["Earlier"].push(v);
+        });
+
+        // Filter out empty groups
+        return Object.fromEntries(Object.entries(groups).filter(([_, items]) => items.length > 0));
+    }, [shopVisitors]);
+
 
     if (loading) {
         return (
@@ -66,7 +128,79 @@ export default function InsightsTab({
                 <InsightCard title="Top Earner" value={insights.revenueByCategory?.[0]?.category_id || 'N/A'} trend="Category" isUp={true} icon={<TrendingUp />} />
             </div>
 
+            {/* Shop Visitors Section */}
+            <div className="bg-white p-6 rounded-[0.5rem] border border-slate-200 mt-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-md font-bold text-slate-900 flex items-center gap-2">
+                        <Eye className="w-5 h-5 text-indigo-500" />
+                        Recent Shop Visitors
+                    </h3>
+                    <span className="bg-indigo-50 text-indigo-600 text-xs font-bold px-2.5 py-1 rounded-full">
+                        {shopVisitors.length} Total Tracking
+                    </span>
+                </div>
+
+                {shopVisitors.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center text-slate-400 py-12 border-2 border-dashed border-slate-100 rounded-xl">
+                        <Users className="w-12 h-12 mb-3 text-slate-200" />
+                        <p className="font-medium">No visitors recorded yet.</p>
+                        <p className="text-xs mt-1">Share your shop link to start gathering traffic!</p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {Object.entries(groupedVisitors).map(([groupName, visitors]) => (
+                            <div key={groupName} className="space-y-3">
+                                <h4 className="text-xs font-black text-slate-400 tracking-wider uppercase border-b border-slate-100 pb-2">
+                                    {groupName} <span className="text-slate-300 ml-1">({visitors.length})</span>
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {visitors.map((v) => (
+                                        <div 
+                                            key={v.id} 
+                                            onClick={() => v.visitor_user_id && router.push(`/${v.username || v.visitor_user_id}`)}
+                                            className={`flex items-center justify-between p-3 border border-slate-100 rounded-xl hover:border-slate-200 transition-colors bg-slate-50/50 ${v.visitor_user_id ? 'cursor-pointer hover:bg-slate-100 active:scale-[0.98]' : ''}`}
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-10 h-10 rounded-full bg-indigo-100 border border-indigo-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                                    {v.visitor_user_id && v.profile_pic ? (
+                                                        <img src={v.profile_pic} alt={v.full_name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <UserAvatarPlaceholder />
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-bold text-slate-900 truncate">
+                                                        {v.visitor_user_id ? (v.full_name || `@${v.username || 'user'}`) : 'Guest Visitor'}
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                                                        <Clock className="w-3 h-3" />
+                                                        {new Date(v.last_visited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {v.visit_count} visit(s)
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {v.visitor_user_id && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        router.push(`/messages?user=${v.visitor_user_id}`)
+                                                    }}
+                                                    className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-full transition-colors"
+                                                    title="Send Direct Message"
+                                                >
+                                                    <MessageCircle className="w-[18px] h-[18px]" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
                 {/* Main Chart */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-[0.5rem] border border-slate-200 flex flex-col min-h-[420px]">
                     <div className="flex items-center justify-between mb-6">
@@ -163,9 +297,16 @@ export default function InsightsTab({
                     </div>
                 </div>
             </div>
+
+
         </div>
     );
 }
+
+function UserAvatarPlaceholder() {
+    return <Users className="w-5 h-5 text-indigo-400" />;
+}
+
 
 function InsightCard({ title, value, trend, isUp, icon }: any) {
     return (
@@ -174,7 +315,7 @@ function InsightCard({ title, value, trend, isUp, icon }: any) {
                 <div className="p-3 bg-rose-50 text-rose-500 rounded-[0.5rem]">
                     {icon}
                 </div>
-                <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
                     {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                     {trend}
                 </div>

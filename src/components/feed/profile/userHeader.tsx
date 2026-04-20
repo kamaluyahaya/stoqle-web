@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useLayoutEffect, useState, useRef } from "react";
 import PostModal from "../../modal/postModal"; // adjust path if needed
 import { useAuth } from "@/src/context/authContext";
-import { useRouter } from "next/navigation";
+import { useRouter, notFound } from "next/navigation";
 import Header from "./header";
 import ShimmerGrid from "../../shimmer";
 import ImageViewer from "../../modal/imageViewer";
@@ -169,9 +169,7 @@ const PostCard = React.memo(({
       className="group flex flex-col sm:rounded-xl rounded-md bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-200 overflow-hidden post-media">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-        </div>
+
         {post.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
@@ -376,9 +374,7 @@ const ProductCard = React.memo(({
       className="group flex flex-col rounded-lg bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
       <div className="relative w-full bg-slate-50 overflow-hidden post-media">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-        </div>
+
         {p.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
             <span className="text-[10px] font-bold">Pinned</span>
@@ -435,6 +431,7 @@ const ProductCard = React.memo(({
           <div
             className="flex items-center gap-1 cursor-pointer relative"
             onClick={(e) => {
+              e.stopPropagation();
               if (!isLiked) {
                 setShowBurst(true);
                 setTimeout(() => setShowBurst(false), 800);
@@ -569,6 +566,10 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
 };
 
 export default function UserHeader({ postCount = 12, userId }: Props) {
+  const [isNotFound, setIsNotFound] = useState(false);
+  if (isNotFound) {
+    notFound();
+  }
   const [profileApi, setProfileApi] = useState<any | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -627,6 +628,15 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+
+  // 🚀 Lazy-load tracker: records which tabs have already had their data fetched.
+  // Data is fetched exactly once per tab visit. Cleared on explicit refresh.
+  const fetchedTabs = useRef<Set<string>>(new Set());
+
+  // Clear the lazy-load guard when the user explicitly refreshes
+  useEffect(() => {
+    if (refreshKey > 0) fetchedTabs.current.clear();
+  }, [refreshKey]);
 
   const viewUserId = userId ? String(userId) : "me";
   const currentUserId = auth?.user?.user_id ? String(auth.user.user_id) : null;
@@ -887,6 +897,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             : `${base.replace(/\/$/, "")}/api/auth/users/${encodeURIComponent(viewUserId)}`;
 
         const res = await fetch(endpoint, { signal: controller.signal, headers });
+        if (res.status === 404) {
+          setIsNotFound(true);
+          return;
+        }
         if (!res.ok) throw new Error(`Profile API returned ${res.status}`);
         const json = await res.json();
         if (cancelled) return;
@@ -914,6 +928,31 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
         // Cache the normalized profile
         setCachedProfile(String(viewUserId), normalized);
+
+        // Background tracking for business profile visitors
+        if (normalized.is_business_owner && normalized.business && viewUserId !== "me") {
+          setTimeout(() => {
+            try {
+              let sessionId = localStorage.getItem('stoqle_guest_session');
+              if (!sessionId) {
+                sessionId = 'sg_' + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('stoqle_guest_session', sessionId);
+              }
+              const visitorId = currentUserId;
+              
+              // Only call if it's someone else looking at the profile
+              if (visitorId !== String(normalized.user?.user_id)) {
+                fetch(`${base.replace(/\/$/, "")}/api/business/${normalized.business.business_id || normalized.business.id}/visit`, {
+                  method: 'POST',
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ visitor_id: visitorId, session_id: sessionId })
+                }).catch(() => {});
+              }
+            } catch (err) {
+              // ignore tracking storage errors
+            }
+          }, 2000); // 2 second delay to prevent rapid bounce tracking
+        }
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to fetch profile:", err);
@@ -973,13 +1012,18 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     return () => { cancelled = true; };
   }, [activeTabIndex, tabs, isOwner]);
 
-  // fetch vendor products whenever this profile belongs to a business
+  // 🛍️ Lazy-load vendor products — only when the "Products" tab is active
   useEffect(() => {
+    // We fetch products if the user is a business owner, to show them in the store section of the header.
     const businessId = profileApi?.business?.business_id || profileApi?.business?.id;
-    // Load products for ANY business profile — not just the owner's own profile.
-    // isOwner here means the viewer == profile owner, but products should always
-    // be visible on a vendor profile page.
     if (!businessId || !profileApi?.is_business_owner) return;
+
+    const tabKey = `products_${viewUserId}`;
+    // Only fetch once per session (guard by fetchedTabs)
+    if (fetchedTabs.current.has(tabKey)) {
+      setProductsLoading(false);
+      return;
+    }
 
     const loadVendorProducts = async () => {
       setProductsLoading(true);
@@ -1004,8 +1048,11 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           return new Date(b.created_at || a.created_at || 0).getTime() - new Date(a.created_at || b.created_at || 0).getTime();
         });
         setVendorProducts(sortedProducts);
+
+        fetchedTabs.current.add(tabKey);
       } catch (err) {
         console.error("Failed to load products", err);
+        fetchedTabs.current.add(tabKey);
       } finally {
         setProductsLoading(false);
       }
@@ -1036,12 +1083,34 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     }
   };
 
+  // 📬 Lazy-load posts — only when the Notes or Posts tab is currently active.
+  // Data is fetched at most once per session (guarded by fetchedTabs ref).
+  // A manual refresh (refreshKey bump) clears the guard and re-fetches.
   useEffect(() => {
+    const activeTabName = tabs[activeTabIndex];
+    const isPostsTab = activeTabName === "Notes" || activeTabName === "Posts";
+    if (!isPostsTab) return;
+
+    const tabKey = `posts_${viewUserId}`;
+    const cached = getCachedProfile(String(viewUserId));
+    if (cached && (cached.mediaPosts?.length > 0 || cached.notePosts?.length > 0)) {
+      setMediaPosts(cached.mediaPosts);
+      setNotePosts(cached.notePosts);
+      setPostsLoading(false);
+    } else {
+      setPostsLoading(true);
+    }
+
     let cancelled = false;
     const controller = new AbortController();
 
     async function loadPosts() {
-      setPostsLoading(true);
+      const cached = getCachedProfile(String(viewUserId));
+      if (!cached || (!cached.mediaPosts?.length && !cached.notePosts?.length)) {
+        setPostsLoading(true);
+      } else {
+        setPostsLoading(false);
+      }
       setPostsError(null);
       try {
         const base = process.env.NEXT_PUBLIC_API_URL;
@@ -1055,6 +1124,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             : `${base.replace(/\/$/, "")}/api/social/user/${encodeURIComponent(viewUserId)}`;
 
         const resp = await fetch(endpoint, { signal: controller.signal, headers });
+        if (resp.status === 404) {
+          setIsNotFound(true);
+          return;
+        }
         if (!resp.ok) throw new Error(`Posts API returned ${resp.status}`);
         const json = await resp.json();
 
@@ -1067,7 +1140,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         if (cancelled) return;
         const mapped = apiPosts.map((p) => mapApiPost(p));
 
-        // Sort mapped posts by isPinned first
+        // Sort: pinned items first, then by date
         const sorted = mapped.sort((a, b) => {
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
@@ -1094,10 +1167,16 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
 
         // Cache the posts
         setCachedProfilePosts(String(viewUserId), media, notes);
+
+        // Mark as successfully fetched!
+        fetchedTabs.current.add(tabKey);
       } catch (err: any) {
         if (err.name === "AbortError") return;
         console.error("Failed to load posts:", err);
-        if (!cancelled) setPostsError(err.message ?? "Failed to load posts");
+        if (!cancelled) {
+          setPostsError(err.message ?? "Failed to load posts");
+          fetchedTabs.current.add(tabKey); // Mark fetched even on error so we don't infinitely retry
+        }
       } finally {
         if (!cancelled) setPostsLoading(false);
       }
@@ -1108,7 +1187,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
       cancelled = true;
       controller.abort();
     };
-  }, [viewUserId, postCount, refreshKey]);
+    // Re-run when: tab changes, user changes, or explicit refresh
+  }, [activeTabIndex, tabs, viewUserId, postCount, refreshKey]);
 
   useEffect(() => {
     const tryOpenFromUrl = async () => {
@@ -1452,10 +1532,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
   const TabsBar = (
     <div
       ref={tabsWrapperRef}
-      className={`bg-white rounded px-4 py-2 flex justify-start sticky z-50 border-b border-slate-50`}
+      className={`lg:bg-white bg-slate-100 rounded px-4  flex justify-start sticky z-50 border-b border-slate-200`}
       style={{ top: isMiniHeaderVisible ? "56px" : `${navbarHeight}px` }}
     >
-      <div ref={tabsInnerRef} className="flex gap-8 overflow-x-auto scrollbar-hide py-1">
+      <div ref={tabsInnerRef} className="flex gap-8  overflow-hidden scrollbar-hide py-1">
         {profileLoading ? (
           <>
             <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
@@ -1466,8 +1546,11 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         ) : (
           tabs.map((t, i) => (
             <button
-              key={t}
-              onClick={() => setActiveTabIndex(i)}
+              key={i}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTabIndex(i);
+              }}
               className={`relative py-2 text-sm font-bold transition whitespace-nowrap ${i === activeTabIndex ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
             >
               {t}
@@ -1497,7 +1580,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           ) : notePosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
               <img src="/assets/images/post.png" alt="No notes"
-                className="w-40 h-40 object-contain mb-4 opacity-80" />
+                className="lg:w-30 lg:h-40 w-20 h-20 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No note found.</p>
             </div>
           ) : (
@@ -1520,11 +1603,12 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             <ShimmerGrid count={10} />
           ) : mediaPosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No posts" className="w-40 h-40 object-contain mb-4 opacity-80" />
+              <img src="/assets/images/post.png" alt="No posts" className="lg:w-30 lg:h-40 w-20 h-20 object-contain mb-4 opacity-80" />
               <p className="text-sm font-medium">No posts found.</p>
               {isOwner && (
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     window.dispatchEvent(new CustomEvent("showReleaseModal", { detail: { autoClick: 'album' } }));
                   }}
                   className="mt-4 px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
@@ -1558,17 +1642,8 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
               <ShimmerGrid count={10} />
             ) : vendorProducts.length === 0 ? (
               <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                <img src="/assets/images/post.png" alt="No products" className="w-40 h-40 object-contain mb-4 opacity-80" />
-                <p className="text-sm font-medium">Publish your first product now.</p>
-                <button
-                  onClick={() => router.push('/products/new')}
-                  className="px-4 py-2 bg-rose-500 text-white text-sm rounded-full shadow-lg hover:bg-slate-800 transition active:scale-95 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-                  </svg>
-                  Publish product
-                </button>
+                <img src="/assets/images/post.png" alt="No products" className="lg:w-30 lg:h-40 w-20 h-20 object-contain mb-4 opacity-80" />
+                <p className="text-sm font-medium">Vendor has no product yet!.</p>
               </div>
             ) : (
               <div className="p-2 sm:p-4 post-grid-container">
@@ -1726,7 +1801,10 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             {/* Right: Actions */}
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
-                onClick={handleFollow}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleFollow();
+                }}
                 className="bg-rose-500 text-white px-5 py-2 rounded-full text-xs  active:scale-95 transition shadow-sm whitespace-nowrap"
               >
                 Follow

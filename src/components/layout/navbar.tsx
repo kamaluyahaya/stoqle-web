@@ -10,6 +10,7 @@ import { API_BASE_URL } from "@/src/lib/config";
 import SearchModal from "../modal/SearchModal";
 import SearchResultsModal from "../modal/SearchResultsModal";
 import HelpCenterModal from "../modal/HelpCenterModal";
+import SocialModal from "../modal/socialModal";
 import {
   Bars3Icon,
   XMarkIcon,
@@ -52,6 +53,8 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
   const { cartCount } = useCart();
   const { openWallet } = useWallet();
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showSocialModal, setShowSocialModal] = useState(false);
+  const [socialModalTab, setSocialModalTab] = useState<"friends" | "followers" | "following" | "recommend">("recommend");
   const lastPath = useRef(pathname);
 
   useEffect(() => {
@@ -247,8 +250,11 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                   <DrawerItem
                     label="Add friends"
                     icon={UserPlusIcon}
-                    href={user?.username ? `/${user.username}?tab=friends` : `/user/profile/${user?.id || user?.user_id}?tab=friends`}
-                    onClick={() => setShowMobileMenu(false)}
+                    onClick={() => {
+                      setSocialModalTab("recommend");
+                      setShowSocialModal(true);
+                      setShowMobileMenu(false);
+                    }}
                   />
                   <DrawerItem
                     label="Draft"
@@ -581,6 +587,15 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
         isOpen={showHelpModal}
         onClose={() => setShowHelpModal(false)}
       />
+
+      {isLoggedIn && (
+        <SocialModal
+          isOpen={showSocialModal}
+          onClose={() => setShowSocialModal(false)}
+          userId={user?.user_id || user?.id}
+          initialTab={socialModalTab}
+        />
+      )}
     </>
   );
 }

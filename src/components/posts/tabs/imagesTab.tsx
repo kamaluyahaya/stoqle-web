@@ -186,7 +186,7 @@ export default function ImagesTab({
           className={`w-full py-3 rounded-3xl text-sm transition-all duration-300 flex items-center justify-center gap-3
             ${images.length === 0
               ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
-              : "bg-rose-500 text-white hover:bg-rose-600 shadow-rose-200 hover:scale-[1.02] active:scale-95"
+              : "bg-rose-500 text-white hover:bg-rose-500 shadow-rose-200 hover:scale-[1.02] active:scale-95"
             }
           `}
         >

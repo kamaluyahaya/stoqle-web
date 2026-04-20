@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../config";
+import { safeFetch } from "./handler";
 
 export interface UserAddress {
     address_id: number;
@@ -17,15 +17,13 @@ export interface UserAddress {
 }
 
 export async function fetchUserAddresses(token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/addresses`, {
+    return safeFetch("/api/addresses", {
         headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error("Failed to fetch addresses");
-    return res.json();
 }
 
 export async function createUserAddress(data: Partial<UserAddress>, token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/addresses`, {
+    return safeFetch("/api/addresses", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -33,12 +31,10 @@ export async function createUserAddress(data: Partial<UserAddress>, token: strin
         },
         body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error("Failed to create address");
-    return res.json();
 }
 
 export async function updateUserAddress(id: number, data: Partial<UserAddress>, token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/addresses/${id}`, {
+    return safeFetch(`/api/addresses/${id}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
@@ -46,24 +42,18 @@ export async function updateUserAddress(id: number, data: Partial<UserAddress>, 
         },
         body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error("Failed to update address");
-    return res.json();
 }
 
 export async function deleteUserAddress(id: number, token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/addresses/${id}`, {
+    return safeFetch(`/api/addresses/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error("Failed to delete address");
-    return res.json();
 }
 
 export async function setDefaultAddress(id: number, token: string) {
-    const res = await fetch(`${API_BASE_URL}/api/addresses/${id}/default`, {
+    return safeFetch(`/api/addresses/${id}/default`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error("Failed to set default address");
-    return res.json();
 }

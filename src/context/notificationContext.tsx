@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { useAuth } from "./authContext";
 import { API_BASE_URL } from "@/src/lib/config";
+import { isOffline, safeFetch } from "@/src/lib/api/handler";
 import Swal from "sweetalert2";
 import { useRouter } from "next/navigation";
 
@@ -33,30 +34,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const router = useRouter();
 
     const fetchUnread = async () => {
-        if (!token) return;
+        if (!token || isOffline()) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/notifications/unread`, {
+            const data = await safeFetch("/api/notifications/unread", {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            const data = await res.json();
             if (data.success) {
                 setUnreadNotifications(data.data.notifications || []);
             }
         } catch (err) {
-            console.error("fetchUnread failed", err);
+            // Silent — keep existing notifications
         }
     };
 
     const markAsRead = async (id: number) => {
-        if (!token) return;
+        if (!token || isOffline()) return;
         try {
-            await fetch(`${API_BASE_URL}/api/notifications/${id}/read`, {
+            await safeFetch(`/api/notifications/${id}/read`, {
                 method: "PATCH",
                 headers: { Authorization: `Bearer ${token}` },
             });
             setUnreadNotifications(prev => prev.filter(n => n.id !== id));
         } catch (err) {
-            console.error("markAsRead failed", err);
+            // Silent — will retry on next fetch
         }
     };
 
@@ -66,25 +66,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
             const userId = user.user_id || user.id;
             if (userId) {
-                const socket = io(API_BASE_URL, { query: { userId } });
+                const socket = io(API_BASE_URL, {
+                    query: { userId },
+                    // Resilient socket config: auto-reconnect with backoff
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 2000,
+                    reconnectionDelayMax: 30000,
+                    timeout: 10000,
+                });
 
                 socket.on("connect", () => {
                     console.log("Socket connected for user", userId);
+                    // Refresh notifications on reconnect to catch anything missed
+                    fetchUnread();
                 });
 
                 socket.on("connect_error", (err) => {
-                    if (!navigator.onLine) {
-                        Swal.fire({
-                            title: "Connection Lost",
-                            text: "Please check your internet connection.",
-                            icon: "warning",
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 3000,
-                        });
-                    } else {
-                        console.error("Socket connection error:", err.message);
+                    // Completely silent when offline — socket.io will auto-reconnect
+                    if (!isOffline()) {
+                        console.warn("Socket connection error:", err.message);
                     }
                 });
 

@@ -144,7 +144,7 @@ export default function PolicyList({
   }, [payload, selectedOptions]);
 
   if (loading) return <div className="text-xs text-slate-400">loading…</div>;
-  if (error) return <div className="mt-2 text-xs text-rose-600">{error}</div>;
+  if (error) return <div className="mt-2 text-xs text-rose-500">{error}</div>;
   if (!businessData) return <div className="mt-2 text-xs text-slate-400">No business details available</div>;
 
   const shippingArray = effectiveShippingPolicies;

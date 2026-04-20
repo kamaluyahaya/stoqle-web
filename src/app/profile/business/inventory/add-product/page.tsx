@@ -30,6 +30,7 @@ import { ArrowLeft, ChevronLeft, Eye, Save, Globe, Package, Settings, ShieldChec
 import { useAuth } from "@/src/context/authContext";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import AddProductWalkthrough from "@/src/components/business/inventory/AddProductWalkthrough";
 
 
 /* ===========================
@@ -1041,7 +1042,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-full text-sm font-bold shadow-md shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
+              className="hidden sm:flex items-center gap-2 px-6 py-2 bg-rose-500 hover:bg-rose-700 text-white rounded-full text-sm font-bold shadow-md shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50"
             >
               {submitting ? "Publishing..." : "Publish Product"}
             </button>
@@ -1064,7 +1065,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             </div>
             <button
               onClick={() => setDraftsModalOpen(true)}
-              className="px-5 py-2 bg-white border border-rose-200 text-rose-600 text-xs font-bold rounded-full hover:bg-rose-50 shadow-sm transition-all active:scale-95"
+              className="px-5 py-2 bg-white border border-rose-200 text-rose-500 text-xs font-bold rounded-full hover:bg-rose-50 shadow-sm transition-all active:scale-95"
             >
               Restore Draft
             </button>
@@ -1076,7 +1077,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           <div className="lg:col-span-2 lg:row-span-2 order-2 lg:order-1 space-y-6">
 
             {/* 1. Basic Information */}
-            <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
+            <div id="ap-guide-info" className="bg-white border border-slate-200 overflow-hidden shadow-sm">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                 <h2 className="text-sm font-bold text-slate-800">Product Info.</h2>
               </div>
@@ -1123,7 +1124,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             </div>
 
             {/* 1.5 Product Type Selection */}
-            <div className="bg-white overflow-hidden shadow-sm">
+            <div id="ap-guide-type" className="bg-white overflow-hidden shadow-sm">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                 <Tag className="w-4 h-4 text-slate-400" />
                 <h2 className="text-sm font-bold text-slate-800">Product Type</h2>
@@ -1189,6 +1190,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             <AnimatePresence>
               {productType === 'variant' && (
                 <motion.div
+                  id="ap-guide-variants"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -1329,7 +1331,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             </AnimatePresence>
 
             {/* 4. Specifications */}
-            <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
+            <div id="ap-guide-specs" className="bg-white border border-slate-200 overflow-hidden shadow-sm">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-purple-100 rounded-lg text-purple-600">
@@ -1355,7 +1357,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
             </div>
 
             {/* 5. Policies */}
-            <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
+            <div id="ap-guide-policies" className="bg-white border border-slate-200 overflow-hidden shadow-sm">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                 <div className="p-1.5 bg-orange-100 rounded-lg text-orange-600">
                   <ShieldCheck className="w-4 h-4" />
@@ -1386,7 +1388,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           {/* Right Column Slot 1 - Media (Desktop: Right-Top, Mobile: Top) */}
           <div className="lg:col-span-1 order-1 lg:order-2">
             <div className="sticky top-24 space-y-6">
-              <div className="bg-white border border-slate-200 overflow-hidden shadow-sm">
+              <div id="ap-guide-media" className="bg-white border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Globe className="w-4 h-4 text-slate-400" />
@@ -1419,14 +1421,14 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
 
           {/* Right Column Slot 2 - Quick Actions (Desktop: Right-Bottom, Mobile: Bottom) */}
           <div className="lg:col-span-1 order-3 lg:order-3">
-            <div className="lg:sticky lg:top-[500px] p-6 bg-slate-900 rounded-2xl shadow-lg text-white">
+            <div id="ap-guide-publish" className="lg:sticky lg:top-[500px] p-6 bg-slate-900 rounded-2xl shadow-lg text-white">
               <h3 className="text-sm font-bold mb-1">Ready to Publish?</h3>
               <p className="text-[10px] text-slate-400 mb-6">Review your specifications and variants before going live.</p>
               <div className="space-y-3">
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="w-full py-3 bg-rose-500 hover:bg-rose-600 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 active:scale-95 disabled:opacity-50"
+                  className="w-full py-3 bg-rose-500 hover:bg-rose-500 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-900/40 active:scale-95 disabled:opacity-50"
                 >
                   {submitting ? "Publishing..." : "Confirm & Publish"}
                 </button>
@@ -1441,6 +1443,9 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           </div>
         </div>
       </div>
+
+      {/* Add Product Guided Walkthrough */}
+      <AddProductWalkthrough />
 
       {/* Modals */}
       <VariantEntryModal
@@ -1551,7 +1556,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
         <button
           onClick={handleSubmit}
           disabled={submitting}
-          className="flex-1 py-3 bg-rose-600 active:bg-rose-700 text-white rounded-full text-[12px]  shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
+          className="flex-1 py-3 bg-rose-500 active:bg-rose-700 text-white rounded-full text-[12px]  shadow-rose-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
         >
           {submitting ? (
             <>

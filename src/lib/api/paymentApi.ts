@@ -1,42 +1,25 @@
 // src/lib/api/paymentApi.ts
-import { API_BASE_URL } from "@/src/lib/config";
+import { safeFetch } from "./handler";
 
 export async function initializePayment(data: { email: string; amount: number; metadata?: any; reference?: string }, token?: string) {
     const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
     
     const headers: any = {
         "Content-Type": "application/json",
-        "Accept": "application/json",
     };
     if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
 
-    const res = await fetch(`${API_BASE_URL}/api/payment/initialize`, {
+    return safeFetch("/api/payment/initialize", {
         method: "POST",
         headers,
         body: JSON.stringify(data),
     });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-        if (res.status === 403 || res.status === 429) {
-            throw { status: res.status, body: json, message: "SECURITY_BLOCK:" + (json?.message || "Action restricted") };
-        }
-        throw { status: res.status, body: json };
-    }
-    return json;
 }
 
 export async function verifyPayment(reference: string) {
-    const res = await fetch(`${API_BASE_URL}/api/payment/verify/${reference}`, {
+    return safeFetch(`/api/payment/verify/${reference}`, {
         method: "GET",
-        headers: {
-            "Accept": "application/json",
-        },
     });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) throw { status: res.status, body: json };
-    return json;
 }
 
 export async function verifyAndCompleteOrder(reference: string, token?: string) {
@@ -44,40 +27,25 @@ export async function verifyAndCompleteOrder(reference: string, token?: string) 
     
     const headers: any = {
         "Content-Type": "application/json",
-        "Accept": "application/json",
     };
     if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
 
-    const res = await fetch(`${API_BASE_URL}/api/payment/verify-and-complete`, {
+    return safeFetch("/api/payment/verify-and-complete", {
         method: "POST",
         headers,
         body: JSON.stringify({ reference }),
     });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-        if (res.status === 403 || res.status === 429) {
-            throw { status: res.status, body: json, message: "SECURITY_BLOCK:" + (json?.message || "Action restricted") };
-        }
-        throw { status: res.status, body: json };
-    }
-    return json;
 }
 
 export async function recordAbandoned(reference: string, reason: 'cancelled' | 'failed', token?: string, message?: string) {
     const headers: any = {
         "Content-Type": "application/json",
-        "Accept": "application/json",
     };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE_URL}/api/payment/record-abandoned`, {
+    return safeFetch("/api/payment/record-abandoned", {
         method: "POST",
         headers,
         body: JSON.stringify({ reference, reason, message }),
     });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) throw { status: res.status, body: json };
-    return json;
 }

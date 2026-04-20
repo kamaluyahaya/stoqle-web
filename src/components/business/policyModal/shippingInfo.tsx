@@ -329,7 +329,7 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
     const human = `${item.value} ${item.unit}`;
     if (item.type === "avg") return `Ships within ${human} on average`;
     if (item.type === "promise") return `Promise to ship within ${human} — delay compensation applied`;
-    return `Can cover delivery distance up to ${human} from store`;
+    return `Free Shipping up to ${human} from my store`;
   }
 
   return (
@@ -351,7 +351,7 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-2xl bg-white lg:rounded-2xl rounded-t-2xl shadow-xl p-5 z-10 flex flex-col"
+            className="relative w-full max-w-2xl bg-white lg:rounded-[0.5rem] rounded-t-[0.5rem] p-4 z-10 flex flex-col"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Shipping Info</h3>
@@ -373,17 +373,16 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
                 items.map((it, idx) => (
                   <div
                     key={it.type}
-                    className="p-4 bg-white rounded-lg border border-slate-100 shadow-sm"
+                    className="p-4 bg-white rounded-lg border border-slate-100 "
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 text-sm sm:text-base">
+                        <div className=" text-slate-900 text-[12px] sm:text-[14px]">
                           {displayTitleFor(it)}
                         </div>
                         <div className="text-xs text-slate-500 mt-1">
-                          {it.type === "avg" && "Typical average time customers can expect"}
+                          {it.type === "avg" && "Estimated shipping average customer can expect"}
                           {it.type === "promise" && "Guaranteed promise — must be greater than average"}
-                          {it.type === "delivery_radius_km" && "Maximum delivery distance vendor can cover"}
                         </div>
                       </div>
 
@@ -394,7 +393,7 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => decrement(idx)}
-                          className="w-8 h-8 rounded-md border flex items-center justify-center"
+                          className="w-8 h-8 rounded-md border flex items-center justify-center border-slate-100"
                           aria-label="decrement"
                         >
                           −
@@ -413,17 +412,17 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
 
                         <button
                           onClick={() => increment(idx)}
-                          className="w-8 h-8 rounded-md border flex items-center justify-center"
+                          className="w-8 h-8 rounded-md border flex items-center justify-center border-slate-100"
                           aria-label="increment"
                         >
                           +
                         </button>
                       </div>
 
-                      <div className="ml-3 inline-flex items-center gap-2 border rounded-md p-1">
+                      <div className="ml-3 inline-flex items-center gap-2 border rounded-md p-1 border-slate-100">
                         {it.type === "delivery_radius_km" ? (
                           <button
-                            className="px-2 py-1 rounded-sm text-xs sm:text-sm bg-rose-50 font-semibold text-rose-600"
+                            className="px-2 py-1 rounded-sm text-xs sm:text-sm bg-rose-50 font-semibold text-rose-500"
                             disabled
                           >
                             km
@@ -435,7 +434,7 @@ export default function ShippingInfoModal({ open, prefKey, initialValue, onClose
                               <button
                                 key={u}
                                 onClick={() => updateItem(idx, { unit: u })}
-                                className={`px-2 py-1 rounded-sm text-xs sm:text-sm ${selected ? "bg-rose-50 font-semibold text-rose-600" : "text-slate-600"
+                                className={`px-2 py-1 rounded-sm text-xs sm:text-sm ${selected ? "bg-rose-50 font-semibold text-rose-500" : "text-slate-600"
                                   }`}>
                                 {u}
                               </button>

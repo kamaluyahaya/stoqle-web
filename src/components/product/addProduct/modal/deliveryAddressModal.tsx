@@ -639,7 +639,7 @@ export default function DeliveryAddressModal({
                                 >
                                     <div className="p-4 flex items-center justify-between gap-3">
                                         <div className="flex-1">
-                                            <p className="text-[11px] font-bold text-rose-600  tracking-wider mb-1">
+                                            <p className="text-[11px] font-bold text-rose-500  tracking-wider mb-1">
                                                 Paste copied address?
                                             </p>
                                             <p className="text-[12px] text-slate-600 line-clamp-1 italic">
@@ -655,7 +655,7 @@ export default function DeliveryAddressModal({
                                             </button>
                                             <button
                                                 onClick={handleApplyPasted}
-                                                className="px-4 py-1.5 text-[11px] font-bold bg-white text-rose-600 border border-rose-200 rounded-full shadow-sm hover:bg-rose-50"
+                                                className="px-4 py-1.5 text-[11px] font-bold bg-white text-rose-500 border border-rose-200 rounded-full shadow-sm hover:bg-rose-50"
                                             >
                                                 Paste
                                             </button>
@@ -716,7 +716,7 @@ export default function DeliveryAddressModal({
                                         <div className="flex flex-col gap-3">
                                             <button
                                                 onClick={handleApplyPasted}
-                                                className="w-full py-3 rounded-full bg-rose-600 text-white font-black text-sm shadow-lg shadow-rose-100 active:scale-95 transition-all"
+                                                className="w-full py-3 rounded-full bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-100 active:scale-95 transition-all"
                                             >
                                                 Confirm & Fill
                                             </button>
@@ -743,7 +743,7 @@ export default function DeliveryAddressModal({
                                 />
                                 <button
                                     onClick={handlePickContact}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition shadow-sm"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-100 transition shadow-sm"
                                     title="Pick from contacts"
                                 >
                                     <UserCircleIcon className="w-5 h-5" />
@@ -834,7 +834,7 @@ export default function DeliveryAddressModal({
                                                         }}
                                                         className="w-full text-left px-5 py-4 hover:bg-slate-50 border-b border-slate-50 last:border-b-0 transition-colors flex flex-col gap-0.5 group"
                                                     >
-                                                        <div className="text-sm text-slate-900 font-bold group-hover:text-rose-600 transition truncate">
+                                                        <div className="text-sm text-slate-900 font-bold group-hover:text-rose-500 transition truncate">
                                                             {p.structured_formatting?.main_text || p.description}
                                                         </div>
                                                         <div className="text-[11px] text-slate-400 truncate font-semibold">
@@ -884,7 +884,7 @@ export default function DeliveryAddressModal({
                             <button
                                 onClick={handleSave}
                                 disabled={isGeocoding}
-                                className={`w-full py-2 mb-5 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-black text-sm shadow-rose-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""
+                                className={`w-full py-2 mb-5 rounded-full bg-rose-500 hover:bg-rose-700 text-white font-black text-sm shadow-rose-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${isGeocoding ? "opacity-70 cursor-not-allowed" : ""
                                     }`}
                             >
                                 {isGeocoding ? (

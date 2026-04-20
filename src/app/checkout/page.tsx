@@ -178,7 +178,7 @@ function ProductPromoIndicator({ promotion }: { promotion: any }) {
 
     return (
         <div className="mt-1 flex items-center gap-1.5 ">
-            <span className="text-[10px] font-bold text-rose-600  tracking-tighter bg-rose-50 px-1 rounded-sm">
+            <span className="text-[10px] font-bold text-rose-500  tracking-tighter bg-rose-50 px-1 rounded-sm">
                 {discountValue}% OFF · {promoTitle}
             </span>
             {timeLeft && (
@@ -858,7 +858,7 @@ export default function CheckoutPage() {
 
                                 {shipment.estimation && !shipment.estimation.is_available && (
                                     <div className="mx-5 mb-2 p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                                        <p className="text-[11px] text-rose-600 font-bold leading-relaxed whitespace-pre-wrap">
+                                        <p className="text-[11px] text-rose-500 font-bold leading-relaxed whitespace-pre-wrap">
                                             ⚠️ {shipment.estimation.message}
                                         </p>
                                         <p className="text-[10px] text-rose-500 mt-1 italic">
@@ -897,13 +897,13 @@ export default function CheckoutPage() {
                                                         })()}
                                                         <div className="flex flex-wrap gap-1.5 mt-0.5">
                                                             {item.seven_day_no_reason === 1 && (
-                                                                <span className="text-[9px] px-2 py-0.3 text-rose-600 rounded border border-rose-100">7-day no reason return</span>
+                                                                <span className="text-[9px] px-2 py-0.3 text-rose-500 rounded border border-rose-100">7-day no reason return</span>
                                                             )}
                                                             {item.rapid_refund === 1 && (
-                                                                <span className="text-[9px] px-2 py-0.3 text-rose-600 rounded border border-rose-100">Rapid Refund</span>
+                                                                <span className="text-[9px] px-2 py-0.3 text-rose-500 rounded border border-rose-100">Rapid Refund</span>
                                                             )}
                                                             {item.return_shipping_subsidy === 1 && (
-                                                                <span className="text-[9px] px-2 py-0.3 text-rose-600 rounded border border-rose-100">Return Subsidy</span>
+                                                                <span className="text-[9px] px-2 py-0.3 text-rose-500 rounded border border-rose-100">Return Subsidy</span>
                                                             )}
                                                         </div>
                                                     </div>
@@ -964,7 +964,7 @@ export default function CheckoutPage() {
                                         <span className="text-rose-500">-₦{amount.toLocaleString()}</span>
                                     </div>
                                 ))}
-                                <div className="flex justify-between items-center text-sm text-rose-600 font-bold pt-1 border-t border-rose-50/50">
+                                <div className="flex justify-between items-center text-sm text-rose-500 font-bold pt-1 border-t border-rose-50/50">
                                     <span>Total Savings</span>
                                     <span>-₦{globalSummary.totalDiscount.toLocaleString()}</span>
                                 </div>
@@ -1031,13 +1031,13 @@ export default function CheckoutPage() {
                 <div className="max-w-3xl mx-auto flex items-center justify-between gap-6">
                     <div className="flex-1 flex-col">
                         <span className="text-[12px]  text-slate-800 ">Total: </span>
-                        <span className="text-sm  text-rose-600 tracking-tight">₦{grandTotal.toLocaleString()}</span>
+                        <span className="text-sm  text-rose-500 tracking-tight">₦{grandTotal.toLocaleString()}</span>
                     </div>
 
                     <button
                         onClick={handlePlaceOrder}
                         disabled={isProcessing || items.length === 0 || (paymentMethod === 'stoqle_pay' && wallet?.available_balance !== null && (wallet?.available_balance ?? 0) < grandTotal)}
-                        className=" bg-gradient-to-r from-rose-600 to-rose-600 text-white px-4 py-1 rounded-2xl  hover:shadow-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale flex items-center justify-center"
+                        className=" bg-gradient-to-r from-rose-500 to-rose-500 text-white px-4 py-1 rounded-2xl  hover:shadow-rose-300 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale flex items-center justify-center"
                     >
                         {isProcessing ? (
                             <div className="flex items-center gap-2">

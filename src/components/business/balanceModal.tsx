@@ -212,6 +212,13 @@ export default function BalanceModal({
     }
 
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        setTxLoading(false);
+        setIsBatchLoading(false);
+        return;
+      }
+
       const limit = 10;
       const currentOffset = loadMore ? txOffset : 0;
       const res = await fetchMyTransactions(limit, currentOffset);
@@ -229,8 +236,12 @@ export default function BalanceModal({
           setTxHasMore(false);
         }
       }
-    } catch (err) {
-      console.error("Failed to fetch transactions:", err);
+    } catch (err: any) {
+      console.error("Failed to fetch transactions:", {
+        status: err?.status,
+        body: err?.body,
+        message: err?.message || err?.body?.message || "Unknown Error"
+      });
     } finally {
       setTxLoading(false);
       setIsBatchLoading(false);
@@ -247,8 +258,12 @@ export default function BalanceModal({
       if (res?.data?.details) {
         setTxDetails(res.data.details);
       }
-    } catch (err) {
-      console.error("Failed to fetch details:", err);
+    } catch (err: any) {
+      console.error("Failed to fetch transaction details:", {
+        status: err?.status,
+        body: err?.body,
+        message: err?.message || err?.body?.message || "Unknown Error"
+      });
     } finally {
       setDetailsLoading(false);
     }
@@ -363,8 +378,12 @@ export default function BalanceModal({
         onClose();
         router.push(`/messages?user=${targetUserId}`);
       }
-    } catch (err) {
-      console.error("Share receipt err:", err);
+    } catch (err: any) {
+      console.error("Share receipt err:", {
+        status: err?.status,
+        body: err?.body,
+        message: err?.message || err?.body?.message || "Unknown error"
+      });
       toast.error("Error sharing receipt");
     } finally {
       setSendingReminder(false);
@@ -694,7 +713,7 @@ export default function BalanceModal({
                             </button>
                             <button
                               onClick={() => handleActionWithPinCheck("transfer")}
-                              className="flex-1 h-8 rounded-full bg-rose-600 text-white border border-slate-200 text-xs shadow-lg active:scale-95 transition"
+                              className="flex-1 h-8 rounded-full bg-rose-500 text-white border border-slate-200 text-xs shadow-lg active:scale-95 transition"
                             >
                               Transfer
                             </button>
@@ -931,7 +950,7 @@ export default function BalanceModal({
 
                                 <div className="text-right">
                                   <p className={`text-[10px] lg:text-sm font-black whitespace-nowrap ${tx.status === 'failed' || tx.status === 'rejected'
-                                    ? 'text-rose-600'
+                                    ? 'text-rose-500'
                                     : tx.status === 'pending' || tx.status === 'processing'
                                       ? 'text-amber-500'
                                       : Number(tx.amount) > 0
@@ -1049,7 +1068,7 @@ export default function BalanceModal({
                             {role === 'vendor' && (txDetails.order_items?.[0]?.status === 'delivered' || txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed') && (
                               <div className={`${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-50 border-rose-200 animate-pulse' : 'bg-amber-50 border-amber-200'} border-2 rounded-[0.5rem] p-6 space-y-4 shadow-lg shadow-black/5`}>
                                 <div className="flex gap-4">
-                                  <div className={`w-12 h-12 rounded-[0.5rem] flex items-center justify-center shrink-0 ${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                  <div className={`w-12 h-12 rounded-[0.5rem] flex items-center justify-center shrink-0 ${txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? 'bg-rose-100 text-rose-500' : 'bg-amber-100 text-amber-600'}`}>
                                     {txDetails.escrow_status === 'held' || txDetails.escrow_status === 'disputed' ? <XCircleIcon className="w-7 h-7" /> : <InformationCircleIcon className="w-7 h-7" />}
                                   </div>
                                   <div className="space-y-1">
@@ -1466,7 +1485,7 @@ export default function BalanceModal({
 
             <div className="p-8 space-y-6">
               <div className="bg-rose-50 border border-rose-100 p-6 rounded-3xl space-y-3">
-                <div className="flex items-center gap-3 text-rose-600">
+                <div className="flex items-center gap-3 text-rose-500">
                   <ShieldCheckIcon className="w-5 h-5" />
                   <h4 className="font-black text-[10px]  tracking-widest">Escrow Protection</h4>
                 </div>

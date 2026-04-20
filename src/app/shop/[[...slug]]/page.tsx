@@ -68,6 +68,43 @@ export default function VendorShopPage() {
         return Math.max(...products.map(p => p.product_id));
     }, [products]);
 
+    // Shop Visitor Background Tracking
+    const trackedVisitRef = useRef(false);
+    useEffect(() => {
+        if (!bizSlug || !profileApi?.business || trackedVisitRef.current) return;
+        
+        const bizId = profileApi.business.business_id || profileApi.business.id;
+        const ownerId = profileApi.business.user_id;
+        const currentUserId = auth?.user?.user_id ? String(auth.user.user_id) : null;
+        
+        // Prevent owners from inflating their own numbers
+        if (currentUserId === String(ownerId)) {
+            trackedVisitRef.current = true;
+            return;
+        }
+
+        trackedVisitRef.current = true;
+        
+        setTimeout(() => {
+            try {
+              let sessionId = localStorage.getItem('stoqle_guest_session');
+              if (!sessionId) {
+                  sessionId = 'sg_' + Math.random().toString(36).substring(2, 15);
+                  localStorage.setItem('stoqle_guest_session', sessionId);
+              }
+              
+              const headers: any = { "Content-Type": "application/json" };
+              if (auth.token) headers.Authorization = `Bearer ${auth.token}`;
+              
+              fetch(`${API_BASE_URL.replace(/\/$/, "")}/api/business/${bizId}/visit`, {
+                  method: 'POST',
+                  headers,
+                  body: JSON.stringify({ visitor_id: currentUserId, session_id: sessionId })
+              }).catch(() => {});
+            } catch (err) {}
+        }, 1500);
+    }, [bizSlug, profileApi?.business, auth?.user]);
+
     useEffect(() => {
         if (!bizSlug || !newestReleaseId) return;
         const lastSeen = localStorage.getItem(`shop_last_seen_${bizSlug}`);
@@ -553,7 +590,7 @@ export default function VendorShopPage() {
                                     <button
                                         key={cat}
                                         onClick={() => setSelectedCategory(cat)}
-                                        className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-rose-50 text-rose-600" : "text-slate-600 hover:bg-slate-100"}`}
+                                        className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-rose-50 text-rose-500" : "text-slate-600 hover:bg-slate-100"}`}
                                     >
                                         {cat}
                                     </button>
@@ -681,7 +718,7 @@ export default function VendorShopPage() {
             <button
                 id="cart-icon-ref"
                 onClick={() => router.push('/cart')}
-                className="fixed bottom-20 right-6 z-[998] bg-rose-600 text-white p-2.5 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-95 flex items-center justify-center border-4 border-white"
+                className="fixed bottom-20 right-6 z-[998] bg-rose-500 text-white p-2.5 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-95 flex items-center justify-center border-4 border-white"
             >
                 <ShoppingCartIcon className="w-5 h-5" />
             </button>

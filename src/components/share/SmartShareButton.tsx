@@ -282,49 +282,49 @@ function ShareModal({
                 })}
               </div>
 
-                  {/* Divider */}
-                  <div className="h-px bg-slate-100 mb-5" />
+              {/* Divider */}
+              <div className="h-px bg-slate-100 mb-5" />
 
-                  {/* Link copy row */}
-                  <div className="flex items-center gap-3 bg-slate-50 rounded px-4 py-3 border border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
-                      <LinkIcon className="w-4.5 h-4.5 text-slate-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-slate-400 font-medium mb-0.5">Share link</p>
-                      <p className={`text-xs font-semibold text-slate-700 truncate ${isLoading && !shareUrl ? 'animate-pulse text-slate-300' : ''}`}>
-                        {shareUrl || 'Generating link…'}
-                      </p>
-                    </div>
-                    <motion.button
-                      whileTap={{ scale: 0.92 }}
-                      onClick={() => shareUrl && handleCopy(shareUrl, 'clipboard')}
-                      disabled={isLoading && !shareUrl}
-                      className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${copiedId === 'clipboard'
-                        ? 'bg-emerald-500 text-white'
-                        : isLoading && !shareUrl
-                          ? 'bg-slate-200 text-slate-400'
-                          : 'bg-rose-500 text-white hover:bg-rose-600 active:scale-95'
-                        }`}
-                    >
-                      {copiedId === 'clipboard' ? '✓ Copied' : 'Copy'}
-                    </motion.button>
-                  </div>
-
-                  {/* TikTok hint */}
-                  <AnimatePresence>
-                    {copiedId === 'tiktok' && (
-                      <motion.p
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="mt-3 text-center text-[11px] text-slate-500"
-                      >
-                        Link copied — open TikTok and paste it in your bio or DMs 🎵
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
+              {/* Link copy row */}
+              <div className="flex items-center gap-3 bg-slate-50 rounded px-4 py-3 border border-slate-100">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
+                  <LinkIcon className="w-4.5 h-4.5 text-slate-500" />
                 </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] text-slate-400 font-medium mb-0.5">Share link</p>
+                  <p className={`text-xs font-semibold text-slate-700 truncate ${isLoading && !shareUrl ? 'animate-pulse text-slate-300' : ''}`}>
+                    {shareUrl || 'Generating link…'}
+                  </p>
+                </div>
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => shareUrl && handleCopy(shareUrl, 'clipboard')}
+                  disabled={isLoading && !shareUrl}
+                  className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${copiedId === 'clipboard'
+                    ? 'bg-emerald-500 text-white'
+                    : isLoading && !shareUrl
+                      ? 'bg-slate-200 text-slate-400'
+                      : 'bg-rose-500 text-white hover:bg-rose-500 active:scale-95'
+                    }`}
+                >
+                  {copiedId === 'clipboard' ? '✓ Copied' : 'Copy'}
+                </motion.button>
+              </div>
+
+              {/* TikTok hint */}
+              <AnimatePresence>
+                {copiedId === 'tiktok' && (
+                  <motion.p
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="mt-3 text-center text-[11px] text-slate-500"
+                  >
+                    Link copied — open TikTok and paste it in your bio or DMs 🎵
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </>
       )}

@@ -643,7 +643,7 @@ function OptionCard({
         </div>
       </div>
 
-      <button onClick={onSelect} className="ml-4 flex-shrink-0 rounded-full px-3 py-2 text-rose-600 border border-rose-100 whitespace-nowrap">
+      <button onClick={onSelect} className="ml-4 flex-shrink-0 rounded-full px-3 py-2 text-rose-500 border border-rose-100 whitespace-nowrap">
         Open store
       </button>
     </div>

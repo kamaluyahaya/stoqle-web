@@ -149,7 +149,7 @@ export default function UserLocationModal({ open, initialValue, onClose, onSave 
                       <li key={s}>
                         <button
                           onClick={() => handleSelectState(s)}
-                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition ${s === selectedState ? "text-rose-600 font-semibold" : "text-slate-700"
+                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition ${s === selectedState ? "text-rose-500 font-semibold" : "text-slate-700"
                             }`}
                         >
                           <span className="text-sm">{s}</span>
@@ -175,7 +175,7 @@ export default function UserLocationModal({ open, initialValue, onClose, onSave 
                         <button
                           onClick={() => !saving && handleSelectLga(l)}
                           disabled={saving}
-                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition disabled:opacity-50 ${l === selectedLga ? "text-rose-600 font-semibold" : "text-slate-700"
+                          className={`w-full text-left px-3 py-3 flex items-center justify-between rounded-xl hover:bg-slate-50 transition disabled:opacity-50 ${l === selectedLga ? "text-rose-500 font-semibold" : "text-slate-700"
                             }`}
                         >
                           <span className="text-sm">{l}</span>

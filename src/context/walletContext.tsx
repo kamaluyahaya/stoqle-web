@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useAuth } from "./authContext";
 import { fetchMyWallet } from "@/src/lib/api/walletApi";
 import { API_BASE_URL } from "@/src/lib/config";
+import { isOffline } from "@/src/lib/api/handler";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
 import Swal from "sweetalert2";
@@ -38,7 +39,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const [socket, setSocket] = useState<Socket | null>(null);
 
     const refreshWallet = useCallback(async () => {
-        if (!token) return;
+        if (!token || isOffline()) return; // Skip when offline — keep cached wallet
         try {
             setIsLoading(true);
             const res = await fetchMyWallet();
@@ -51,7 +52,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 });
             }
         } catch (err) {
-            console.error("Failed to fetch wallet:", err);
+            // Silent when offline — wallet data is preserved
+            if (!isOffline()) {
+                console.warn("Failed to fetch wallet:", err);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -83,22 +87,30 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const userId = user.user_id || user.id;
         if (!userId) return;
 
-        console.log(`[Connecting Socket] UserID: ${userId}`);
         const newSocket = io(API_BASE_URL, {
-            query: { userId: String(userId) }
+            query: { userId: String(userId) },
+            // Resilient reconnection config
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 30000,
+            timeout: 10000,
         });
 
         newSocket.on("connect", () => {
-            console.log("[Socket Connected]");
             setSocket(newSocket);
+            // Refresh wallet on reconnect to catch missed updates
+            refreshWallet();
         });
 
         newSocket.on("connect_error", (err) => {
-            console.error("[Socket Connect Error]", err);
+            // Silent when offline — socket.io auto-reconnects
+            if (!isOffline()) {
+                console.warn("[Wallet Socket] Connect error:", err.message);
+            }
         });
 
         newSocket.on("STOQLE_PAY_RECEIVED", (payload: any) => {
-            console.log("[STOQLE_PAY_RECEIVED Event]", payload);
             const data = payload.data || payload;
             const message = payload.message || `You received ₦${Number(data.amount).toLocaleString()}! 💰`;
             const title = payload.title || "Funds Released! 🔓";
@@ -110,7 +122,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
                 showCloseButton: true,
                 focusConfirm: false,
                 confirmButtonText: "Great!",
-                confirmButtonColor: "#f43f5e", // rose-500
+                confirmButtonColor: "#f43f5e",
             });
 
             if (data.new_balance !== undefined) {

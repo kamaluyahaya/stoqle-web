@@ -88,130 +88,130 @@ export function parseAnyDateToLocalMidnight(s: string) {
 }
 
 export function generateDefaultOccasions(mounted: boolean): Occasion[] {
-    if (!mounted) return [];
+  if (!mounted) return [];
 
-    const now = new Date();
-    const year = now.getFullYear();
+  const now = new Date();
+  const year = now.getFullYear();
 
-    // Comprehensive fixed-date events (month index 0-based)
-    const events: Array<[string, number, number]> = [
-      ["New Year", 0, 1],
-      ["Epiphany", 0, 6],
-      ["Valentine's Day", 1, 14],
+  // Comprehensive fixed-date events (month index 0-based)
+  const events: Array<[string, number, number]> = [
+    ["New Year", 0, 1],
+    ["Epiphany", 0, 6],
+    ["Valentine's Day", 1, 14],
 
-      // Islamic Events (approximate - changes yearly)
-      ["Ramadan Begins", 1, 18],
-      ["Iftar Mubarak", 1, 18], // start of Ramadan period
-      ["Eid al-Fitr (Sallah)", 2, 20],
-      ["Eid al-Adha (Sallah)", 4, 27],
+    // Islamic Events (approximate - changes yearly)
+    ["Ramadan Begins", 1, 18],
+    ["Iftar Mubarak", 1, 18], // start of Ramadan period
+    ["Eid al-Fitr (Sallah)", 2, 20],
+    ["Eid al-Adha (Sallah)", 4, 27],
 
-      ["St. Patrick's Day", 2, 17],
-      ["Mother's Day", 4, 1],
-      ["Easter Monday", 3, 13],
-      ["International Workers' Day", 4, 1],
-      ["Children's Day", 4, 27],
-      ["Democracy Day", 5, 12],
-      ["Father's Day", 5, 1],
-      ["Independence Day", 9, 1],
-      ["Halloween", 9, 31],
-      ["Black Friday", 10, 27],
-      ["Christmas Eve", 11, 24],
-      ["Christmas Day", 11, 25],
-      ["Boxing Day", 11, 26],
-      ["New Year's Eve", 11, 31],
-    ];
+    ["St. Patrick's Day", 2, 17],
+    ["Mother's Day", 4, 1],
+    ["Easter Monday", 3, 13],
+    ["International Workers' Day", 4, 1],
+    ["Children's Day", 4, 27],
+    ["Democracy Day", 5, 12],
+    ["Father's Day", 5, 1],
+    ["Independence Day", 9, 1],
+    ["Halloween", 9, 31],
+    ["Black Friday", 10, 27],
+    ["Christmas Eve", 11, 24],
+    ["Christmas Day", 11, 25],
+    ["Boxing Day", 11, 26],
+    ["New Year's Eve", 11, 31],
+  ];
 
-    const years = [year - 1, year, year + 1];
-    const built: Occasion[] = [];
+  const years = [year - 1, year, year + 1];
+  const built: Occasion[] = [];
 
-    // demo sale around today for testing
+  // demo sale around today for testing
+  built.push({
+    name: "Promo Sale",
+    windowStart: isoDate(addDays(now, -7)),
+    windowEnd: isoDate(addDays(now, 7)),
+  });
+
+  // Black Friday broad windows per year (approx last-week window)
+  years.forEach((y) =>
     built.push({
-      name: "Promo Sale",
-      windowStart: isoDate(addDays(now, -7)),
-      windowEnd: isoDate(addDays(now, 7)),
+      name: "Black Friday",
+      windowStart: isoDate(new Date(y, 10, 20)),
+      windowEnd: isoDate(new Date(y, 11, 2)),
+    })
+  );
+
+  // push all fixed-date events (these will be refined by computed movable ones afterwards)
+  years.forEach((y) => events.forEach(([name, m, d]) => built.push(make(name, m, d, y))));
+
+  // compute movable holidays (Easter, Good Friday, Mother's Day 2nd Sunday May, Father's Day 3rd Sunday June)
+  function getEasterSunday(y: number): Date {
+    // Anonymous Gregorian algorithm
+    const a = y % 19;
+    const b = Math.floor(y / 100);
+    const c = y % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31) - 1; // 0-based
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, month, day);
+  }
+
+  function nthWeekdayOfMonth(y: number, monthIndex: number, weekday: number, n: number): Date {
+    const first = new Date(y, monthIndex, 1);
+    const firstWeekday = first.getDay();
+    const offset = (weekday - firstWeekday + 7) % 7;
+    const day = 1 + offset + (n - 1) * 7;
+    return new Date(y, monthIndex, day);
+  }
+
+  years.forEach((y) => {
+    built.push({
+      name: "Ramadan Kareem",
+      windowStart: isoDate(new Date(y, 1, 18)), // Feb 18
+      windowEnd: isoDate(new Date(y, 2, 20)),   // Mar 20
     });
 
-    // Black Friday broad windows per year (approx last-week window)
-    years.forEach((y) =>
-      built.push({
-        name: "Black Friday",
-        windowStart: isoDate(new Date(y, 10, 20)),
-        windowEnd: isoDate(new Date(y, 11, 2)),
-      })
-    );
-
-    // push all fixed-date events (these will be refined by computed movable ones afterwards)
-    years.forEach((y) => events.forEach(([name, m, d]) => built.push(make(name, m, d, y))));
-
-    // compute movable holidays (Easter, Good Friday, Mother's Day 2nd Sunday May, Father's Day 3rd Sunday June)
-    function getEasterSunday(y: number): Date {
-      // Anonymous Gregorian algorithm
-      const a = y % 19;
-      const b = Math.floor(y / 100);
-      const c = y % 100;
-      const d = Math.floor(b / 4);
-      const e = b % 4;
-      const f = Math.floor((b + 8) / 25);
-      const g = Math.floor((b - f + 1) / 3);
-      const h = (19 * a + b - d - g + 15) % 30;
-      const i = Math.floor(c / 4);
-      const k = c % 4;
-      const l = (32 + 2 * e + 2 * i - h - k) % 7;
-      const m = Math.floor((a + 11 * h + 22 * l) / 451);
-      const month = Math.floor((h + l - 7 * m + 114) / 31) - 1; // 0-based
-      const day = ((h + l - 7 * m + 114) % 31) + 1;
-      return new Date(y, month, day);
-    }
-
-    function nthWeekdayOfMonth(y: number, monthIndex: number, weekday: number, n: number): Date {
-      const first = new Date(y, monthIndex, 1);
-      const firstWeekday = first.getDay();
-      const offset = (weekday - firstWeekday + 7) % 7;
-      const day = 1 + offset + (n - 1) * 7;
-      return new Date(y, monthIndex, day);
-    }
-
-    years.forEach((y) => {
-      built.push({
-        name: "Ramadan Kareem",
-        windowStart: isoDate(new Date(y, 1, 18)), // Feb 18
-        windowEnd: isoDate(new Date(y, 2, 20)),   // Mar 20
-      });
-
-      built.push({
-        name: "Eid al-Fitr (Sallah)",
-        windowStart: isoDate(new Date(y, 2, 18)),
-        windowEnd: isoDate(new Date(y, 2, 27)),
-      });
-
-      built.push({
-        name: "Iftar Mubarak",
-        windowStart: isoDate(new Date(y, 1, 18)),
-        windowEnd: isoDate(new Date(y, 2, 20)),
-      });
+    built.push({
+      name: "Eid al-Fitr (Sallah)",
+      windowStart: isoDate(new Date(y, 2, 18)),
+      windowEnd: isoDate(new Date(y, 2, 27)),
     });
 
-    years.forEach((y) => {
-      const easter = getEasterSunday(y);
-      const goodFriday = addDays(easter, -2);
-      const easterMonday = addDays(easter, 1);
-      const mothersDay = nthWeekdayOfMonth(y, 4, 0, 2); // 2nd Sunday of May
-      const fathersDay = nthWeekdayOfMonth(y, 5, 0, 3); // 3rd Sunday of June
-
-      built.push(make("Good Friday", goodFriday.getMonth(), goodFriday.getDate(), y));
-      built.push(make("Easter Sunday", easter.getMonth(), easter.getDate(), y));
-      built.push(make("Easter Monday", easterMonday.getMonth(), easterMonday.getDate(), y));
-      built.push(make("Mother's Day", mothersDay.getMonth(), mothersDay.getDate(), y));
-      built.push(make("Father's Day", fathersDay.getMonth(), fathersDay.getDate(), y));
-
-      // Optional Islamic holidays: keep placeholders (these have invalid date strings so they will be ignored by availability checks)
-      built.push({ name: `Eid al-Fitr (set manually for ${y})`, windowStart: "-", windowEnd: "-" });
-      built.push({ name: `Eid al-Adha (set manually for ${y})`, windowStart: "-", windowEnd: "-" });
+    built.push({
+      name: "Iftar Mubarak",
+      windowStart: isoDate(new Date(y, 1, 18)),
+      windowEnd: isoDate(new Date(y, 2, 20)),
     });
+  });
 
-    const map = new Map<string, Occasion>();
-    built.forEach((o) => map.set(`${o.name}::${o.windowStart}`, o));
-    return Array.from(map.values());
+  years.forEach((y) => {
+    const easter = getEasterSunday(y);
+    const goodFriday = addDays(easter, -2);
+    const easterMonday = addDays(easter, 1);
+    const mothersDay = nthWeekdayOfMonth(y, 4, 0, 2); // 2nd Sunday of May
+    const fathersDay = nthWeekdayOfMonth(y, 5, 0, 3); // 3rd Sunday of June
+
+    built.push(make("Good Friday", goodFriday.getMonth(), goodFriday.getDate(), y));
+    built.push(make("Easter Sunday", easter.getMonth(), easter.getDate(), y));
+    built.push(make("Easter Monday", easterMonday.getMonth(), easterMonday.getDate(), y));
+    built.push(make("Mother's Day", mothersDay.getMonth(), mothersDay.getDate(), y));
+    built.push(make("Father's Day", fathersDay.getMonth(), fathersDay.getDate(), y));
+
+    // Optional Islamic holidays: keep placeholders (these have invalid date strings so they will be ignored by availability checks)
+    built.push({ name: `Eid al-Fitr (set manually for ${y})`, windowStart: "-", windowEnd: "-" });
+    built.push({ name: `Eid al-Adha (set manually for ${y})`, windowStart: "-", windowEnd: "-" });
+  });
+
+  const map = new Map<string, Occasion>();
+  built.forEach((o) => map.set(`${o.name}::${o.windowStart}`, o));
+  return Array.from(map.values());
 }
 
 export function getAvailableOccasionsFrom(occasions: Occasion[]) {
@@ -720,7 +720,7 @@ export default function PromotionsModal({
                         <div>
                           <label className="text-xs text-slate-500">Discount for joined products</label>
                         </div>
-                        <div className="ml-auto text-sm text-rose-600 font-semibold">{discount ? `${Math.round(discount)}%` : "—"}</div>
+                        <div className="ml-auto text-sm text-rose-500 font-semibold">{discount ? `${Math.round(discount)}%` : "—"}</div>
                       </div>
 
                       <input type="range" min={0} max={90} step={1} value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="w-full mt-2" />

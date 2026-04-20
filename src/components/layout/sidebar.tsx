@@ -9,7 +9,6 @@ import {
   StarIcon as StarOutline,
   MagnifyingGlassIcon,
   BookmarkIcon as BookmarkOutline,
-  ChatBubbleLeftRightIcon as ChatOutline,
   Bars3Icon,
   ShoppingBagIcon,
   ShoppingCartIcon,
@@ -20,6 +19,7 @@ import { useChat } from "@/src/context/chatContext";
 import { useCart } from "@/src/context/cartContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { API_BASE_URL } from "@/src/lib/config";
+import { Home, MessageCircleMore, } from "lucide-react";
 
 type Props = {
   navHeight: number;
@@ -37,6 +37,9 @@ export default function Sidebar({ navHeight, width }: Props) {
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  // Prevents hydration mismatch: auth state only available on client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Directly check auth.user
   const isLoggedIn = !!auth?.user;
@@ -51,7 +54,7 @@ export default function Sidebar({ navHeight, width }: Props) {
   const profileImage = formatUrl(rawProfileImage);
 
   const ProfileIcon = () =>
-    isLoggedIn && profileImage ? (
+    mounted && isLoggedIn && profileImage ? (
       <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover" />
     ) : (
       <UserCircleIcon className="h-6 w-6 text-gray-500" />
@@ -71,7 +74,7 @@ export default function Sidebar({ navHeight, width }: Props) {
       text: "View saved and liked notes.",
     },
     {
-      icon: ChatOutline,
+      icon: MessageCircleMore,
       text: "To better interact and communicate with others.",
     },
   ];
@@ -210,7 +213,7 @@ export default function Sidebar({ navHeight, width }: Props) {
         {/* Main Menu */}
         <ul className="space-y-2 text-slate-600">
           {/* public */}
-          <MenuItem label="Discover" Outline={HomeOutline} href="/discover" />
+          <MenuItem label="Discover" Outline={Home} href="/discover" />
           <MenuItem label="Market" Outline={ShoppingBagIcon} href="/market" />
 
           {/* gated */}
@@ -227,9 +230,9 @@ export default function Sidebar({ navHeight, width }: Props) {
 
           <MenuItem label="Cart" Outline={ShoppingCartIcon} href="/cart" requireLogin={true} badgeCount={cartCount} />
 
-          <MenuItem label="Messages" Outline={ChatOutline} href="/messages" requireLogin={true} badgeCount={unreadCount} />
+          <MenuItem label="Messages" Outline={MessageCircleMore} href="/messages" requireLogin={true} badgeCount={unreadCount} />
           <MenuItem
-            label={isLoggedIn ? firstName : "Profile"}
+            label={mounted && isLoggedIn ? firstName : "Profile"}
             Outline={ProfileIcon}
             href="/profile"
             requireLogin={true}
@@ -246,7 +249,7 @@ export default function Sidebar({ navHeight, width }: Props) {
               onClick={() => {
                 auth.openLogin();
               }}
-              className="w-full rounded-full bg-rose-500 text-white py-3 text-sm font-medium shadow-sm hover:bg-rose-600 transition"
+              className="w-full rounded-full bg-rose-500 text-white py-3 text-sm font-medium shadow-sm hover:bg-rose-500 transition"
             >
               Log in now
             </button>
@@ -277,7 +280,7 @@ export default function Sidebar({ navHeight, width }: Props) {
         >
           <div className="relative w-5 h-5">
             <div className={`absolute inset-0 transition-all duration-300 transform ${showMenu ? 'rotate-90 opacity-0' : 'rotate-0 opacity-100'}`}>
-              {isLoggedIn && profileImage ? (
+              {mounted && isLoggedIn && profileImage ? (
                 <img src={profileImage} alt="Profile" className="h-5 w-5 rounded-full object-cover" />
               ) : (
                 <Bars3Icon className="h-5 w-5 text-gray-700" />
@@ -328,7 +331,7 @@ export default function Sidebar({ navHeight, width }: Props) {
                         onClick={() => setActiveSubmenu("My Profile")}
                       >
                         <div className="flex items-center gap-2">
-                          {isLoggedIn && profileImage && (
+                          {mounted && isLoggedIn && profileImage && (
                             <img src={profileImage} alt="Profile" className="h-6 w-6 rounded-full object-cover border border-gray-100" />
                           )}
                           <span className="truncate max-w-[140px]">{auth?.user?.business_name || firstName}</span>

@@ -160,7 +160,7 @@ export default function AddressListModal({ open, onClose, onSelect, onUpdate }: 
                                                 e.stopPropagation();
                                                 handleSetDefault(addr.address_id);
                                             }}
-                                            className="text-[10px] font-bold text-rose-600 hover:underline"
+                                            className="text-[10px] font-bold text-rose-500 hover:underline"
                                         >
                                             Set as default
                                         </button>
