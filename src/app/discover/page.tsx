@@ -14,6 +14,7 @@ import { FaHeart, FaRegHeart, FaChevronRight, FaCompass, FaUsers, FaHistory } fr
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toggleSocialPostLike, mapApiPost } from "@/src/lib/api/social";
+import { isOffline, safeFetch, ApiError } from "@/src/lib/api/handler";
 import { toast } from "sonner";
 import { ArrowUp, RotateCcw } from "lucide-react";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
@@ -514,7 +515,12 @@ function DiscoverFeed({ postCount = 100 }: Props) {
   // Real-time synchronization
   useEffect(() => {
     const socket = io(API_BASE_URL, {
-      query: { userId: user?.user_id || user?.id }
+      query: { userId: user?.user_id || user?.id },
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     socket.on("connect", () => {
@@ -635,9 +641,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
         const headers: any = {};
         if (token) headers.Authorization = `Bearer ${token}`;
 
-        const res = await fetch(fetchUrl.toString(), { headers });
-        if (!res.ok) throw new Error("Post not found");
-        const json = await res.json();
+        const json = await safeFetch<any>(fetchUrl.toString(), { headers });
         const single = mapApiPost(json?.data?.post ?? json?.data ?? json);
         setSelectedPost(single);
         pushedRef.current = false;
@@ -686,9 +690,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
               const headers: any = {};
               if (token) headers.Authorization = `Bearer ${token}`;
 
-              const res = await fetch(fetchUrl.toString(), { headers });
-              if (!res.ok) throw new Error("Post not found");
-              const json = await res.json();
+              const json = await safeFetch<any>(fetchUrl.toString(), { headers });
               setSelectedPost(mapApiPost(json?.data?.post ?? json?.data ?? json));
             } catch {
               setSelectedPost({

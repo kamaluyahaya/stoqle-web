@@ -49,3 +49,30 @@ export async function recordAbandoned(reference: string, reason: 'cancelled' | '
         body: JSON.stringify({ reference, reason, message }),
     });
 }
+export async function removePendingCheckout(reference: string, token?: string) {
+    const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+    
+    const headers: any = {
+        "Content-Type": "application/json",
+    };
+    if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
+
+    return safeFetch(`/api/payment/remove/${reference}`, {
+        method: "DELETE",
+        headers,
+    });
+}
+
+export async function getCheckoutSession(reference: string, token?: string) {
+    const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+
+    const headers: any = {
+        "Content-Type": "application/json",
+    };
+    if (activeToken) headers["Authorization"] = `Bearer ${activeToken}`;
+
+    return safeFetch(`/api/payment/session/${reference}`, {
+        method: "GET",
+        headers,
+    });
+}

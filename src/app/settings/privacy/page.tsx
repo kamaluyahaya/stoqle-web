@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toast } from "sonner";
 import { useAuth } from "@/src/context/authContext";
+import { safeFetch } from "../../../lib/api/handler";
 
 // --- Shared UI Components ---
 
@@ -136,13 +137,12 @@ function BlockListModal({ onClose }: { onClose: () => void }) {
     const fetchBlockList = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE_URL}/api/blocks/blocklist`, {
+            const json = await safeFetch<any>(`/api/blocks/blocklist`, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
             });
-            const json = await res.json();
-            if (json.status === 'success') {
+            if (json?.status === 'success') {
                 setBlockedUsers(json.data || []);
             }
         } catch (err) {
@@ -159,13 +159,13 @@ function BlockListModal({ onClose }: { onClose: () => void }) {
 
     const handleUnblock = async (userId: number) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/blocks/${userId}/unblock`, {
+            const json = await safeFetch<any>(`/api/blocks/${userId}/unblock`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
             });
-            if (res.ok) {
+            if (json?.status === 'success' || (json && !json.isOffline)) {
                 toast.success("User unblocked");
                 setBlockedUsers(prev => prev.filter(u => u.user_id !== userId));
             } else {
@@ -257,11 +257,10 @@ export default function PrivacySettingsPage() {
                 return;
             }
             try {
-                const res = await fetch(`${API_BASE_URL}/api/auth/profile/me`, {
+                const json = await safeFetch<any>(`/api/auth/profile/me`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                const json = await res.json();
-                if (json.status === 'success' || (json.user_id && !json.status)) {
+                if (json?.status === 'success' || (json?.user_id && !json.status)) {
                     const data = json.data?.user || json.data || json;
                     setAllowCommentsFollowing(Boolean(data.allow_comments_following ?? true));
                     setDmPreference(data.dm_preference || "Default");
@@ -284,7 +283,7 @@ export default function PrivacySettingsPage() {
     const updatePrivacySetting = async (field: string, value: any) => {
         if (!token) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/profile/update`, {
+            const json = await safeFetch<any>(`/api/profile/update`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -292,8 +291,7 @@ export default function PrivacySettingsPage() {
                 },
                 body: JSON.stringify({ [field]: value })
             });
-            if (!res.ok) {
-                const json = await res.json();
+            if (json && json.isOffline === false && json.status === 'error') {
                 toast.error(json.message || "Failed to update setting");
             }
         } catch (err) {

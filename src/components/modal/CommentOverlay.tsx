@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { API_BASE_URL } from "@/src/lib/config";
+import { safeFetch } from "@/src/lib/api/handler";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,9 +123,8 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/social/${postId}/overlay-comments`);
-        if (!res.ok || cancelled) return;
-        const json = await res.json();
+        const json = await safeFetch<any>(`/api/social/${postId}/overlay-comments`);
+        if (cancelled) return;
         const data: OverlayComment[] = (json?.data?.comments ?? []).map((c: any) => ({
           ...c,
           is_funny:    Boolean(c.is_funny),
@@ -135,7 +134,7 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
           setPool(data);
           queueRef.current = [...data].sort(() => Math.random() - 0.5);
         }
-      } catch { /* non-critical */ }
+      } catch { /* non-critical background fetch */ }
     })();
     return () => { cancelled = true; };
   }, [postId]);
@@ -224,21 +223,11 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
     const newSpeed    = getSpeed(nextComment.text);
 
     // ── Lane classification ────────────────────────────────────────────────
-    //
-    // For each lane we make one of 4 decisions:
-    //
-    //  FREE:       Leader has fully exited the screen (exitAt passed),
-    //              OR lane was never used. Any new speed is welcome.
-    //
-    //  FOLLOWABLE: Entry point is clear (safeEntryAt passed) AND new comment
-    //              is NOT faster than the leader (won't overtake).
-    //              Leader is still on screen but follower will maintain safe gap.
-    //
-    //  WAIT:       Entry not yet clear but would eventually be followable
-    //              (compatible speed). Record soonest readyAt.
-    //
-    //  BLOCKED:    New comment is FASTER than the leader still on screen.
-    //              No matter the gap, fast will overtake slow → skip forever.
+    // 
+    // FREE:       Leader has fully exited the screen
+    // FOLLOWABLE: Entry point is clear and new comment is NOT faster than the leader
+    // WAIT:       Entry not yet clear but would eventually be followable
+    // BLOCKED:    New comment is FASTER than the leader still on screen.
 
     const freeLanes:      number[] = [];
     const followLanes:    number[] = [];
@@ -254,19 +243,11 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
       if (leaderGone) {
         freeLanes.push(i);
       } else if (entryOpen && compatible) {
-        // Leader still on screen but follower won't catch it
         followLanes.push(i);
       } else if (!entryOpen && compatible) {
-        // Entry not yet clear, but compatible when it opens
         waitCandidates.push({ lane: i, readyAt: lane.safeEntryAt });
       }
-      // else: BLOCKED (fast new vs slow leader still on screen) → skip
     }
-
-    // ── Lane selection (random, not fixed order) ──────────────────────────
-    // Prefer FREE lanes; fallback to FOLLOWABLE; lastly WAIT.
-    // Random pick from the eligible set → one lane can naturally get 2-3
-    // comments in a row before others activate.
 
     let chosenLane = -1;
 
@@ -280,8 +261,6 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
       schedulerRef.current = setTimeout(tick, waitMs);
       return;
     } else {
-      // All lanes BLOCKED (all slow leaders, next comment is fast)
-      // Wait until soonest leader exits then retry
       const soonestExit = Math.min(...laneRef.current.map(l => l.exitAt));
       const waitMs = Math.max(soonestExit - now + 30, 400);
       schedulerRef.current = setTimeout(tick, waitMs);
@@ -298,7 +277,6 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
   useEffect(() => {
     if (ready && isPlaying && pool.length > 0) {
       if (!schedulerRef.current) {
-        // Start from a random lane the first time
         schedulerRef.current = setTimeout(tick, 50);
       }
     }

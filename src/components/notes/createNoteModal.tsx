@@ -17,6 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { API_BASE_URL } from "@/src/lib/config";
 import { getCurrentLocationName, getCachedLocationName, getCurrentCoordinates } from "@/src/lib/location";
+import { isOffline } from "@/src/lib/api/handler";
 
 type Visibility = "public" | "private" | "friends";
 
@@ -270,6 +271,11 @@ export default function CreateNoteModal({ open, onClose, onCreated }: Props) {
   };
 
   const handlePost = async () => {
+    if (isOffline()) {
+      toast.error("No internet connection. Please connect to internet to post your note.");
+      return;
+    }
+
     // 1. Ensure verified before any backend interaction
     const isVerified = await ensureAccountVerified();
     if (!isVerified) return; // verification failed or was cancelled

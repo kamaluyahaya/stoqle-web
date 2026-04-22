@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { API_BASE_URL } from '@/src/lib/config';
+import { safeFetch } from '@/src/lib/api/handler';
 
 interface UseShareProductReturn {
   /** Call to generate & cache the share URL. Idempotent per product_id. */
@@ -50,13 +50,12 @@ export function useShareProduct(token?: string | null): UseShareProductReturn {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (tokenRef.current) headers['Authorization'] = `Bearer ${tokenRef.current}`;
 
-      const res = await fetch(`${API_BASE_URL}/api/share`, {
+      const json = await safeFetch<any>("/api/share", {
         method: 'POST',
         headers,
         body: JSON.stringify({ product_id: pid }),
       });
 
-      const json = await res.json();
       if (!json.ok || !json.data?.url) throw new Error(json.message || 'Failed to generate link');
 
       const url: string = json.data.url;
@@ -67,7 +66,6 @@ export function useShareProduct(token?: string | null): UseShareProductReturn {
       setShareUrl(url);
       return url;
     } catch (err: any) {
-      console.error('[useShareProduct]', err);
       return null;
     } finally {
       isLoadingRef.current = false;

@@ -710,7 +710,6 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
         const now = Date.now();
         if (now - lastOfflineToastRef.current > 5000) {
             toast.error("No internet connection. Using cached products.", {
-                description: "New products will load once you're back online.",
                 id: "offline-toast"
             });
             lastOfflineToastRef.current = now;
@@ -1179,7 +1178,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                     });
                 } else if (products.length > 0) {
                     // We already have products, just don't clear them
-                    setError(null); 
+                    setError(null);
                 }
             } else {
                 setError("Failed to load products. Please try again later.");
@@ -1705,7 +1704,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                     <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
                 ) : error ? (
                     <div className="py-24 flex flex-col items-center justify-center text-center px-4">
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             className="w-24 h-24 bg-rose-50 rounded-full flex items-center justify-center mb-6 text-rose-500 shadow-sm border border-rose-100"
@@ -1722,11 +1721,11 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                         <p className="text-slate-500 mb-8 max-w-xs leading-relaxed">
                             {error}
                         </p>
-                        <button 
+                        <button
                             onClick={() => {
                                 setError(null);
                                 fetchPage(0);
-                            }} 
+                            }}
                             className="flex items-center gap-2 px-8 py-3.5 bg-slate-900 text-white rounded-full font-black hover:bg-slate-800 active:scale-95 transition-all shadow-lg shadow-slate-200"
                         >
                             <RotateCcw size={18} />

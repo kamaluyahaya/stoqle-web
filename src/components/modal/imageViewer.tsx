@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { XMarkIcon, HeartIcon, UserGroupIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
 import { useAuth } from "@/src/context/authContext";
-import { API_BASE_URL } from "@/src/lib/config";
+import { isOffline, safeFetch } from "../../lib/api/handler";
 import Link from "next/link";
 
 type Props = {
@@ -36,11 +36,10 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
     const fetchLikeStats = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`${API_BASE_URL}/api/profile/${profileUserId}/like-stats`, {
+            const json = await safeFetch<any>(`/api/profile/${profileUserId}/like-stats`, {
                 headers: token ? { "Authorization": `Bearer ${token}` } : {}
             });
-            const json = await res.json();
-            if (json.status === "success") {
+            if (json?.status === "success") {
                 setLiked(json.data.liked);
                 setLikeCount(json.data.count);
             }
@@ -55,12 +54,11 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
 
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`${API_BASE_URL}/api/profile/${profileUserId}/like`, {
+            const json = await safeFetch<any>(`/api/profile/${profileUserId}/like`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` }
             });
-            const json = await res.json();
-            if (json.status === "success") {
+            if (json?.status === "success") {
                 setLiked(json.data.liked);
                 setLikeCount(json.data.count);
             }
@@ -75,11 +73,10 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
         setLoadingLikers(true);
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`${API_BASE_URL}/api/profile/${profileUserId}/likers`, {
+            const json = await safeFetch<any>(`/api/profile/${profileUserId}/likers`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
-            const json = await res.json();
-            if (json.status === "success") {
+            if (json?.status === "success") {
                 setLikers(json.data.items);
             }
         } catch (err) {

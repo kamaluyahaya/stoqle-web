@@ -243,7 +243,7 @@ export default function Sidebar({ navHeight, width }: Props) {
 
         {/* Login Section */}
         {/* Login Section (hidden when logged in or still hydrating) */}
-        {auth.isHydrated && !isLoggedIn && (
+        {mounted && auth.isHydrated && !isLoggedIn && (
           <div className="w-full">
             <button
               onClick={() => {

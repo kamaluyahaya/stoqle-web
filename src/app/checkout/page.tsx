@@ -9,7 +9,7 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
 import DeliveryAddressModal from "@/src/components/product/addProduct/modal/deliveryAddressModal";
-import { initializePayment, verifyAndCompleteOrder, recordAbandoned } from "@/src/lib/api/paymentApi";
+import { initializePayment, verifyAndCompleteOrder, recordAbandoned, getCheckoutSession } from "@/src/lib/api/paymentApi";
 import DefaultInput from "@/src/components/input/default-input";
 import AddressListModal from "@/src/components/modal/addressListModal";
 import { fetchUserAddresses, UserAddress } from "@/src/lib/api/addressApi";
@@ -229,6 +229,7 @@ export default function CheckoutPage() {
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerSrc, setViewerSrc] = useState<string | null>(null);
     const [vendorBadges, setVendorBadges] = useState<Record<number, VendorBadge>>({});
+    const [isSessionLoading, setIsSessionLoading] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -327,7 +328,46 @@ export default function CheckoutPage() {
         if (!isHydrated) return;
 
         const checkAuth = async () => {
+            const reference = searchParams.get("reference");
+
             if (token) {
+                if (reference) {
+                    // Try to load a specific session (from awaiting payment)
+                    setIsSessionLoading(true);
+                    try {
+                        const res = await getCheckoutSession(reference, token);
+                        if (res.status === 'success' || res.ok) {
+                            const sessionData = res.data;
+                            setItems(sessionData.items || []);
+                            
+                            if (sessionData.metadata?.address) {
+                                setAddress(sessionData.metadata.address);
+                            }
+                            if (sessionData.metadata?.vendor_notes) {
+                                setVendorNotes(sessionData.metadata.vendor_notes);
+                            }
+
+                            // Batch-fetch vendor badges
+                            const uniqueBusinessIds = [...new Set((sessionData.items as any[]).map(i => i.business_id))];
+                            if (uniqueBusinessIds.length > 0) {
+                                fetchVendorBadgesBatch(uniqueBusinessIds)
+                                    .then(badges => setVendorBadges(badges))
+                                    .catch(() => { });
+                            }
+                            setLoading(false);
+                            setIsSessionLoading(false);
+                            return;
+                        } else {
+                            toast.error("Could not load checkout session");
+                        }
+                    } catch (err) {
+                        console.error("Session fetch error", err);
+                        toast.error("Failed to load payment session");
+                    } finally {
+                        setIsSessionLoading(false);
+                    }
+                }
+
                 fetchCart();
                 refreshWallet();
                 fetchDefaultAddress();

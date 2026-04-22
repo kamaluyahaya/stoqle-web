@@ -25,6 +25,7 @@ import { PROFILE_CACHE } from "@/src/lib/cache";
 import { io } from "socket.io-client";
 import { copyToClipboard } from "@/src/lib/utils/utils";
 import Link from "next/link";
+import { isOffline, safeFetch, ApiError } from "@/src/lib/api/handler";
 
 
 type ApiPost = any;
@@ -1159,21 +1160,23 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       }
       setProfileError(null);
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL || "";
+        if (isOffline()) {
+          toast.error("You are offline. Connect to internet to see your profile.");
+        }
+
         const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const res = await fetch(`${base.replace(/\/$/, "")}/api/auth/profile/me`, {
+        const json = await safeFetch<any>("/api/auth/profile/me", {
           signal: controller.signal,
           headers,
         });
 
-        if (!res.ok) {
-          throw new Error(`Profile API returned ${res.status}`);
+        if (json.isOffline) {
+          if (!cancelled) setProfileError("Network connection lost");
+          return;
         }
-
-        const json = await res.json();
         if (cancelled) return;
         const d = json?.data ?? json;
         const normalized = {
@@ -1225,15 +1228,10 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
           "Authorization": `Bearer ${token}`
         };
 
-        const [postsRes, productsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/social/liked/me`, { headers }),
-          fetch(`${API_BASE_URL}/api/products/liked/me`, { headers })
+        const [postsJson, productsJson] = await Promise.all([
+          safeFetch<any>("/api/social/liked/me", { headers }),
+          safeFetch<any>("/api/products/liked/me", { headers })
         ]);
-
-        if (cancelled) return;
-
-        const postsJson = await postsRes.json();
-        const productsJson = await productsRes.json();
 
         const postsList = (postsJson?.data?.posts || postsJson?.posts || []).map((p: any) => ({ ...mapApiPost(p), liked_at: p.liked_at }));
         const productsList = (productsJson?.data?.products || productsJson?.products || []).map((p: any) => ({ ...p, isProduct: true }));
@@ -1327,16 +1325,10 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
         url.searchParams.set("privacy", activeVisibility);
         url.searchParams.set("limit", String(postCount));
 
-        const resp = await fetch(url.toString(), {
+        const json = await safeFetch<any>(url.toString(), {
           signal: controller.signal,
           headers,
         });
-
-        if (!resp.ok) {
-          throw new Error(`Posts API returned ${resp.status}`);
-        }
-
-        const json = await resp.json();
         const apiPosts: any[] = json?.data?.posts ?? json?.data ?? json?.posts ?? [];
         if (json?.data?.visibilityCounts || json?.visibilityCounts) {
           const counts = json?.data?.visibilityCounts || json?.visibilityCounts;
@@ -1416,9 +1408,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
       try {
         const base = process.env.NEXT_PUBLIC_API_URL;
         if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-        const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`);
-        if (!res.ok) throw new Error("Post not found");
-        const json = await res.json();
+        const json = await safeFetch<any>(`/api/social/${postId}`);
         const single = mapApiPost(json?.data ?? json);
         setSelectedPost(single);
         pushedRef.current = false;
@@ -1459,9 +1449,7 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
             try {
               const base = process.env.NEXT_PUBLIC_API_URL;
               if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-              const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`);
-              if (!res.ok) throw new Error("Post not found");
-              const json = await res.json();
+              const json = await safeFetch<any>(`/api/social/${postId}`);
               setSelectedPost(mapApiPost(json?.data ?? json));
             } catch {
               setSelectedPost({

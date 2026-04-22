@@ -12,10 +12,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext"; // adjust path
 import { useCart } from "@/src/context/cartContext";
 import LoginModal from "../../../components/modal/auth/loginModal"; // adjust path if needed
-import { API_BASE_URL } from "@/src/lib/config";
-import { createPortal } from "react-dom";
-import BalanceModal from "../../business/balanceModal";
 import { fetchMyWallet, requestWithdrawal, fetchMyPaymentAccount } from "@/src/lib/api/walletApi";
+import { isOffline, safeFetch, ApiError } from "@/src/lib/api/handler";
 import { toast } from "sonner";
 import PinSetupModal from "../../business/pinSetupModal";
 import TransferModal from "../../business/transferModal";
@@ -35,6 +33,9 @@ import MediaViewer from "../../product/addProduct/preview/modal/mediaViewer";
 import { CameraIcon } from "@heroicons/react/24/solid";
 import ProfileCropperModal from "../../../components/modal/profileCropperModal";
 import ShareToFriendsModal from "../../../components/modal/shareToFriendsModal";
+import { API_BASE_URL } from "@/src/lib/config";
+import { createPortal } from "react-dom";
+import BalanceModal from "../../business/balanceModal";
 
 type HeaderProps = {
   profileApi: any | null;
@@ -166,47 +167,35 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     let mounted = true;
 
     async function loadStatusAndStats() {
+      if (isOffline()) return;
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const statusPromise = fetch(`${API_BASE_URL}/api/follow/${profileUserId}/status`, {
+        const statusPromise = safeFetch<any>(`/api/follow/${profileUserId}/status`, {
           method: "GET",
           headers,
           signal: ac.signal,
-        }).then(async (r) => {
-          if (!r.ok) {
-            const txt = await r.text().catch(() => "");
-            throw new Error(`Status fetch failed: ${r.status} ${txt}`);
-          }
-          return r.json();
         });
 
-        const statsPromise = fetch(`${API_BASE_URL}/api/users/${profileUserId}/follow-stats`, {
+        const statsPromise = safeFetch<any>(`/api/users/${profileUserId}/follow-stats`, {
           method: "GET",
           headers,
           signal: ac.signal,
-        })
-          .then(async (r) => {
-            if (!r.ok) {
-              const txt = await r.text().catch(() => "");
-              throw new Error(`Stats fetch failed: ${r.status} ${txt}`);
-            }
-            return r.json();
-          })
-          .catch((err) => {
-            console.warn("Follow stats fetch error:", err.message || err);
-            return null;
-          });
+        }).catch((err) => {
+          return null;
+        });
 
-        const [statusJson, statsJson] = await Promise.all([statusPromise.catch((e) => { console.warn(e); return null; }), statsPromise]);
+        const [statusJson, statsJson] = await Promise.all([
+          statusPromise.catch(() => null),
+          statsPromise
+        ]);
 
         if (!mounted) return;
 
         if (statusJson && statusJson.data && typeof statusJson.data.isFollowing === "boolean") {
           setIsFollowing(Boolean(statusJson.data.isFollowing));
         } else {
-          // Only fallback if Prop is not provided
           if (typeof isFollowingProp !== 'boolean') {
             setIsFollowing(Boolean(profileApi?.is_followed_by_me ?? profileApi?.is_followed ?? false));
           }
@@ -218,7 +207,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         }
       } catch (err: any) {
         if (ac.signal.aborted) return;
-        console.warn("Failed to fetch follow status/stats:", err?.message ?? err);
+        // Silent
       } finally {
         if (mounted) setStatusFetched(true);
       }
@@ -295,14 +284,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     }
 
     const fetchSuggestions = async () => {
+      if (isOffline()) return;
       try {
         const t = localStorage.getItem("token");
         if (!t) return;
-        const res = await fetch(`${API_BASE_URL}/api/users/suggestions`, {
+        const json = await safeFetch<any>("/api/users/suggestions", {
           headers: { Authorization: `Bearer ${t}` }
         });
-        if (!res.ok) return;
-        const json = await res.json();
 
         const unified = Array.isArray(json?.data?.suggestions) ? json.data.suggestions : [];
         const recUsers = unified.length ? unified : (Array.isArray(json?.data?.users) ? json.data.users : []);
@@ -319,7 +307,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         });
 
         const sorted = sortSuggestions(withSignal);
-        suggestionPoolGlobal = sorted; // Store in global pool for session persistence
+        suggestionPoolGlobal = sorted;
         setSuggestionPool(sorted);
         setSuggestedUsers(sorted.slice(0, 10));
       } catch (err) { }
@@ -346,13 +334,11 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   const handleFollowSuggestion = async (userId: string | number) => {
     try {
       const t = localStorage.getItem("token");
-      const resp = await fetch(`${API_BASE_URL}/api/follow/${userId}/follow`, {
+      await safeFetch(`/api/follow/${userId}/follow`, {
         method: "POST",
         headers: { Authorization: `Bearer ${t}` }
       });
-      if (!resp.ok) throw new Error("Failed");
 
-      // Update local state for immediate UI feedback
       const performRefill = (prev: any[]) => {
         const filtered = prev.filter(u => String(u.user_id) !== String(userId) && String(u.id) !== String(userId));
         const currentIds = new Set(filtered.map(u => String(u.user_id || u.id)));
@@ -369,8 +355,6 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
       setSuggestedUsers(prev => performRefill(prev));
 
-      // ── Sync with Global Session Pool ──
-      // Remove followed user from the global pool so they stay gone across navigation
       suggestionPoolGlobal = suggestionPoolGlobal.filter(u => String(u.user_id || u.id) !== String(userId));
       setSuggestionPool([...suggestionPoolGlobal]);
 
@@ -555,29 +539,22 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     setFollowersCount((s) => s + 1);
 
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/follow/${profileUserId}/follow`, {
+      const json = await safeFetch<any>(`/api/follow/${profileUserId}/follow`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : "",
         },
       });
-      const json = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        setIsFollowing(false);
-        setFollowersCount((s) => Math.max(0, s - 1));
-        console.error("Follow failed", json);
-      } else {
-        if (json?.data?.followersCount || json?.data?.followers_count) {
-          const c = Number(json.data.followersCount ?? json.data.followers_count);
-          if (Number.isFinite(c)) setFollowersCount(c);
-        }
-        onFollowToggle?.(true);
+      if (json?.data?.followersCount || json?.data?.followers_count) {
+        const c = Number(json.data.followersCount ?? json.data.followers_count);
+        if (Number.isFinite(c)) setFollowersCount(c);
       }
+      onFollowToggle?.(true);
     } catch (err) {
       setIsFollowing(false);
       setFollowersCount((s) => Math.max(0, s - 1));
-      console.error("Follow error", err);
+      toast.error("Failed to follow");
     } finally {
       setActionLoading(false);
     }
@@ -600,29 +577,22 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     setFollowersCount((s) => Math.max(0, s - 1));
 
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/follow/${profileUserId}/unfollow`, {
+      const json = await safeFetch<any>(`/api/follow/${profileUserId}/unfollow`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : "",
         },
       });
-      const json = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        setIsFollowing(true);
-        setFollowersCount((s) => s + 1);
-        console.error("Unfollow failed", json);
-      } else {
-        if (json?.data?.followersCount || json?.data?.followers_count) {
-          const c = Number(json.data.followersCount ?? json.data.followers_count);
-          if (Number.isFinite(c)) setFollowersCount(c);
-        }
-        onFollowToggle?.(false);
+      if (json?.data?.followersCount || json?.data?.followers_count) {
+        const c = Number(json.data.followersCount ?? json.data.followers_count);
+        if (Number.isFinite(c)) setFollowersCount(c);
       }
+      onFollowToggle?.(false);
     } catch (err) {
       setIsFollowing(true);
       setFollowersCount((s) => s + 1);
-      console.error("Unfollow error", err);
+      toast.error("Failed to unfollow");
     } finally {
       setActionLoading(false);
     }
@@ -630,7 +600,6 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   // NEW: Initialize chat and navigate to messages
   const handleMessageClick = async () => {
-    // require login
     if (!token) {
       setShowLoginModal(true);
       return;
@@ -648,37 +617,31 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     try {
       let convId: string | number | null = null;
       const tryEndpoints = [
-        { url: `${API_BASE_URL}/api/chat/create`, body: { other_user_id: profileUserId } },
-        { url: `${API_BASE_URL}/api/conversations/init`, body: { user_id: profileUserId } },
+        { url: `/api/chat/create`, body: { other_user_id: profileUserId } },
+        { url: `/api/conversations/init`, body: { user_id: profileUserId } },
       ];
 
       for (const ep of tryEndpoints) {
         try {
-          const resp = await fetch(ep.url, {
+          const json = await safeFetch<any>(ep.url, {
             method: "POST",
             headers,
             body: JSON.stringify(ep.body),
           });
 
-          if (resp.status === 403) {
-            const error = await resp.json().catch(() => ({}));
-            toast.error(error.error || "This user has restricted direct messages");
-            return;
-          }
-
-          if (resp.status === 401) {
-            setShowLoginModal(true);
-            throw new Error("Unauthorized");
-          }
-
-          const json = await resp.json().catch(() => null);
-          if (resp.ok && json) {
-            // Mapping for the new and old API response formats
+          if (json) {
             convId = json?.chat_room_id ?? json?.data?.chat_room_id ?? json?.id ?? json?.data?.id ?? null;
             if (convId) break;
           }
-        } catch (err) {
-          console.warn("conversation init attempt failed:", ep.url, err);
+        } catch (err: any) {
+          if (err?.status === 403) {
+            toast.error(err.body?.error || "This user has restricted direct messages");
+            return;
+          }
+          if (err?.status === 401) {
+            setShowLoginModal(true);
+            return;
+          }
         }
       }
 
@@ -686,12 +649,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         router.push(`/messages?room=${convId}`);
         return;
       }
-
-      // fallback: if no convId, navigate to messages page with user query
       router.push(`/messages?user=${profileUserId}`);
     } catch (err) {
-      console.error("Failed to init conversation:", err);
-      // fallback navigation anyway
       router.push(`/messages?user=${profileUserId}`);
     } finally {
       setMessageLoading(false);

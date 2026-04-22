@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_BASE_URL } from '@/src/lib/config';
+import { safeFetch } from '@/src/lib/api/handler';
 
 export default function ShopShareRedirectClient({ code }: { code: string }) {
     const router = useRouter();
@@ -12,10 +12,9 @@ export default function ShopShareRedirectClient({ code }: { code: string }) {
 
         const resolveLink = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/shop/resolve/${code}`, {
+                const json = await safeFetch<any>(`/api/shop/resolve/${code}`, {
                     cache: 'no-store'
                 });
-                const json = await res.json();
 
                 if (json.ok && json.data?.slug) {
                     // Redirect to the actual shop page
@@ -24,7 +23,7 @@ export default function ShopShareRedirectClient({ code }: { code: string }) {
                     router.replace('/');
                 }
             } catch (err) {
-                console.error('Failed to resolve shop share link:', err);
+                // If resolving fails (e.g. offline), we fall back home to prevent a hang
                 router.replace('/');
             }
         };

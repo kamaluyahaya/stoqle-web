@@ -1,8 +1,9 @@
 "use client";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import PostModal from "../modal/postModal";
-import type { Post, User } from "@/src/lib/types";
+import type { Post } from "@/src/lib/types";
 import { AnimatePresence } from "framer-motion";
+import { safeFetch } from "@/src/lib/api/handler";
 
 type Props = { postCount?: number };
 
@@ -10,7 +11,6 @@ const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
 const isVideoUrl = (u?: string) => !!u && VIDEO_EXT_RE.test(u);
 const NO_IMAGE_PLACEHOLDER = "https://via.placeholder.com/800x600?text=No+Image";
 
-// mapApiPost copied/kept from your original logic
 const mapApiPost = (p: any): Post => {
   const apiId = p.social_post_id ?? Math.floor(Math.random() * 1e6);
   let src: string | undefined = undefined;
@@ -55,7 +55,6 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
-  // track whether we pushed a history entry for the modal (so close can use history.back safely)
   const pushedRef = useRef(false);
 
   useEffect(() => {
@@ -66,13 +65,9 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
-        if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-        const resp = await fetch(`${base.replace(/\/$/, "")}/api/social/`, {
+        const json = await safeFetch<any>("/api/social/", {
           signal: controller.signal,
         });
-        if (!resp.ok) throw new Error(`API returned ${resp.status}`);
-        const json = await resp.json();
 
         const apiPosts: any[] =
           json?.data?.posts && Array.isArray(json.data.posts) ? json.data.posts : [];
@@ -88,7 +83,6 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
         }
       } catch (err: any) {
         if (err.name === "AbortError") return;
-        console.error("Failed to fetch social posts:", err);
         if (!cancelled) setError(err.message ?? "Failed to load posts");
       } finally {
         if (!cancelled) setLoading(false);
@@ -103,7 +97,6 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
     };
   }, [postCount]);
 
-  // When posts change (or on load), check if URL has ?post=<id> -> open modal.
   useEffect(() => {
     const tryOpenFromUrl = async () => {
       const url = new URL(window.location.href);
@@ -112,26 +105,19 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
       const postId = Number(param);
       if (isNaN(postId)) return;
 
-      // If we already have this post in posts, open it
       const found = posts.find((p) => Number(p.id) === postId);
       if (found) {
         setSelectedPost(found);
-        pushedRef.current = false; // user arrived with this URL, not from a push
+        pushedRef.current = false;
         return;
       }
 
-      // otherwise try to fetch single post details from the API (best-effort)
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
-        if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-        const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`);
-        if (!res.ok) throw new Error("Post not found");
-        const json = await res.json();
+        const json = await safeFetch<any>(`/api/social/${postId}`);
         const single = mapApiPost(json?.data ?? json);
         setSelectedPost(single);
         pushedRef.current = false;
       } catch (err) {
-        // If we can't fetch, create a safe placeholder so modal doesn't crash
         setSelectedPost({
           id: postId,
           caption: "Post unavailable",
@@ -146,7 +132,6 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
     tryOpenFromUrl();
   }, [posts]);
 
-  // handle back/forward (popstate): open/close modal based on URL or state
   useEffect(() => {
     const onPop = (ev: PopStateEvent) => {
       const url = new URL(window.location.href);
@@ -157,20 +142,14 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
           setSelectedPost(null);
           return;
         }
-        // try to find locally
         const found = posts.find((p) => Number(p.id) === postId);
         if (found) {
           setSelectedPost(found);
           pushedRef.current = false;
         } else {
-          // try best-effort to fetch single post
           (async () => {
             try {
-              const base = process.env.NEXT_PUBLIC_API_URL;
-              if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-              const res = await fetch(`${base.replace(/\/$/, "")}/api/social/${postId}`);
-              if (!res.ok) throw new Error("Post not found");
-              const json = await res.json();
+              const json = await safeFetch<any>(`/api/social/${postId}`);
               setSelectedPost(mapApiPost(json?.data ?? json));
             } catch {
               setSelectedPost({
@@ -184,7 +163,6 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
           })();
         }
       } else {
-        // no post param -> close modal
         setSelectedPost(null);
       }
     };
@@ -193,23 +171,18 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
     return () => window.removeEventListener("popstate", onPop);
   }, [posts]);
 
-  // Open modal and push URL param
   const openPostWithUrl = (post: Post) => {
     setSelectedPost(post);
     try {
       const url = new URL(window.location.href);
       url.searchParams.set("post", String(post.id));
-      // push state so back button returns to previous URL
       window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
       pushedRef.current = true;
     } catch (err) {
-      // fallback: setSelectedPost without updating URL
-      console.warn("Failed to update URL", err);
       pushedRef.current = false;
     }
   };
 
-  // Close modal and remove param safely
   const closeModal = () => {
     setSelectedPost(null);
 
@@ -218,24 +191,19 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
       const hadParam = url.searchParams.has("post");
       if (!hadParam) return;
 
-      // If we pushed a state when opening, prefer history.back() (restores previous URL)
       if (pushedRef.current && window.history.state && window.history.state.modal) {
-        // go back once — popstate listener will handle UI update
         window.history.back();
         pushedRef.current = false;
         return;
       }
 
-      // Otherwise remove param without navigating away
       url.searchParams.delete("post");
       window.history.replaceState({}, "", url.toString());
       pushedRef.current = false;
     } catch (err) {
-      console.warn("Failed to clean URL after modal close", err);
     }
   };
 
-  // Handle sync back from modal
   const toggleLike = (postId: string | number) => {
     setPosts(prev => prev.map(p => {
       if (String(p.apiId ?? p.id) === String(postId)) {

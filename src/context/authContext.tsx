@@ -1,11 +1,9 @@
-// src/context/AuthContext.tsx
 "use client";
 import React, { createContext, useContext, useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
-import { API_BASE_URL } from "../lib/config";
-import { isOffline } from "../lib/api/handler";
+import { isOffline, safeFetch } from "@/src/lib/api/handler";
 
-type User = any; // tighten up later if you want
+type User = any; 
 
 type LoginResolver = {
   resolve: (val: boolean) => void;
@@ -22,7 +20,6 @@ type AuthContextValue = {
   ensureAccountVerified: () => Promise<boolean>;
   closeLogin: () => void;
   closeVerification: () => void;
-  // internal: called by LoginModal when login succeeds
   logout: () => Promise<void>;
   isHydrated: boolean;
   refreshUser: () => Promise<void>;
@@ -30,11 +27,9 @@ type AuthContextValue = {
   onVerificationSuccess: (user: User) => void;
 };
 
-
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // start as null (safe for SSR)
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -45,52 +40,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verificationResolverRef = useRef<LoginResolver>(null);
   const mountedRef = useRef(false);
 
-
-
   const refreshUser = async () => {
     const t = typeof window !== "undefined" ? localStorage.getItem("token") : token;
     if (!t) return;
-    // Skip refresh if offline — keep existing cached user data
-    if (isOffline()) return;
+    
+    // safeFetch handles offline state pre-emptively
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/profile/me`, {
+      const json = await safeFetch<any>("/api/auth/profile/me", {
         headers: {
           "Authorization": `Bearer ${t}`,
         },
       });
-      if (res.ok) {
-        const json = await res.json();
-        const updatedUser = {
-          ...(json.data?.user || json.data || json),
-          isBusiness: Boolean(json.data?.is_business_owner || json.data?.business),
-          is_business_owner: Boolean(json.data?.is_business_owner),
-          business_id: json.data?.business?.business_id || json.data?.business?.id,
-          business_status: json.data?.business?.business_status || (json.data as any)?.business_status
-        };
 
-        // ⚠️ SAFETY CHECK: If token has changed in storage while this fetch was in flight,
-        // do NOT save this user object or we'll overwrite the new account's data with old data.
-        const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        if (currentToken && currentToken !== t) {
-          console.warn("AuthContext: Token mismatch after refreshUser fetch. Discarding stale profile data.");
-          return;
-        }
+      // If safeFetch returned the silent offline object, json.isOffline will be true
+      if (!json || json.isOffline) return;
 
-        setUser(updatedUser);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        }
-        return updatedUser;
+      const updatedUser = {
+        ...(json.data?.user || json.data || json),
+        isBusiness: Boolean(json.data?.is_business_owner || json.data?.business),
+        is_business_owner: Boolean(json.data?.is_business_owner),
+        business_id: json.data?.business?.business_id || json.data?.business?.id,
+        business_status: json.data?.business?.business_status || (json.data as any)?.business_status
+      };
+
+      const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (currentToken && currentToken !== t) {
+        return;
       }
+
+      setUser(updatedUser);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+      return updatedUser;
     } catch (e) {
-      // Silently ignore network errors when offline
-      if (!isOffline()) {
-        console.warn("AuthContext refreshUser error", e);
-      }
+      // safeFetch only throws for non-GET errors or non-offline errors by default now
+      // but we still catch just in case
     }
   };
 
-  // Read localStorage only on client after mount
   useEffect(() => {
     mountedRef.current = true;
     let t: string | null = null;
@@ -100,12 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(t);
       setUser(uRaw ? JSON.parse(uRaw) : null);
     } catch (e) {
-      // ignore parse errors
       setToken(null);
       setUser(null);
     }
 
-    // optional: listen to storage events so auth syncs across tabs
     const onStorage = (ev: StorageEvent) => {
       if (ev.key === "token" || ev.key === "user") {
         try {
@@ -122,7 +108,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("storage", onStorage);
     setIsHydrated(true);
 
-    // Initial sync with backend to catch any status updates (e.g. business approval)
     if (t) {
       refreshUser();
     }
@@ -133,16 +118,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // background refresh logic
   useEffect(() => {
     if (!token || !user) return;
 
-    // Periodic refresh every 60 seconds to catch status updates in the background
     const interval = setInterval(() => {
       refreshUser();
     }, 60000);
 
-    // Refresh when user returns to the tab
     const handleFocus = () => refreshUser();
     window.addEventListener("focus", handleFocus);
 
@@ -152,7 +134,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [token, !!user]);
 
-  // open login and return promise that resolves true if user logged in, false otherwise
   const openLogin = (): Promise<boolean> => {
     setLoginOpen(true);
     return new Promise((resolve) => {
@@ -160,9 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // open verification and return promise
   const openVerification = (): Promise<boolean> => {
-    // Both phone and email must exist to skip
     if (mountedRef.current && user?.phone_no && user?.email) {
       return Promise.resolve(true);
     }
@@ -183,53 +162,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const closeLogin = () => {
     setLoginOpen(false);
     if (resolverRef.current) {
-      // user closed without logging in -> resolve false
       resolverRef.current.resolve(false);
       resolverRef.current = null;
     }
   };
 
-  // handy wrapper
   const ensureLoggedIn = async (): Promise<User | null> => {
     if (mountedRef.current && token && user) return user;
     return await openLogin();
   };
 
   const ensureAccountVerified = async (): Promise<User | null> => {
-    // first ensure logged in
     const loggedIn = await ensureLoggedIn();
     if (!loggedIn) return null;
 
-    // Refresh user from server to ensure we have the absolute latest status from DB
-    // before deciding to trigger the modal
     const updatedUser = await refreshUser();
     const currentUser = updatedUser || user;
 
-    // then ensure phone and email
     if (currentUser?.phone_no && currentUser?.email) return currentUser;
 
     const result = await openVerification();
-    // If openVerification returns true, we should get the latest user from state
-    // But since setUser is async, we'll return the user passed to onVerificationSuccess if possible.
-    // Actually, openVerification now resolves with the USER object.
     return result as any;
   };
 
-  // called by LoginModal after successful verification & token set in localStorage
   const _onLoginSuccess = (u: User, t: string) => {
-    // persist
     try {
       if (typeof window !== "undefined") {
         localStorage.setItem("token", t);
         localStorage.setItem("user", JSON.stringify(u));
-        // Force cookie for middleware (7 days) - Path and SameSite are critical for correctness
         document.cookie = `token=${t}; path=/; max-age=604800; SameSite=Lax`;
       }
-    } catch {
-      // ignore localStorage errors
-    }
+    } catch {}
 
-    // update state
     setUser(u);
     setToken(t);
     setLoginOpen(false);
@@ -251,21 +215,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verificationResolverRef.current = null;
     }
   };
+
   const logout = async () => {
-    // clear storage FIRST (most important)
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      // Clear cookie for middleware
       document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     }
 
-    // then update state
     setUser(null);
     setToken(null);
     setLoginOpen(false);
   };
-
 
   return (
     <AuthContext.Provider

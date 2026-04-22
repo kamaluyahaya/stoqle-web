@@ -7,6 +7,8 @@ import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
 import { useSearchParams } from "next/navigation";
 import { RoomItem, ChatBubble, MessageInput, MessageWelcome } from "@/src/components/feed/message";
+import { MessagingQuickActions } from "@/src/components/feed/message/MessagingQuickActions";
+import { ProductHandoffModal } from "@/src/components/feed/message/ProductHandoffModal";
 import { motion, AnimatePresence } from "framer-motion";
 import ProductPreviewModal from "@/src/components/product/addProduct/modal/previewModal";
 import { fetchProductById } from "@/src/lib/api/productApi";
@@ -24,6 +26,8 @@ import { MESSAGES_CACHE } from "@/src/lib/cache";
 import { copyToClipboard } from "@/src/lib/utils/utils";
 import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
 import { fetchVendorBadgesBatch, type VendorBadge } from "@/src/lib/api/vendorApi";
+import { isOffline, safeFetch } from "../../lib/api/handler";
+import StoqleBot from "@/src/components/chat/StoqleBot";
 
 const formatUrl = (path?: string | null) => {
   if (!path) return "";
@@ -82,6 +86,7 @@ type Message = {
   order_ref?: string | null;
   updated_at?: string | null;
   video_thumbnail?: string | null;
+  is_ai?: boolean | number;
 };
 
 function MessagesPageContent({
@@ -103,6 +108,8 @@ function MessagesPageContent({
   const [rooms, setRooms] = useState<ChatRoom[]>(MESSAGES_CACHE.chatSessions);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const selectedRoomRef = useRef<ChatRoom | null>(null);
+  const [isBotActive, setIsBotActive] = useState(false);
+  const [typingStatus, setTypingStatus] = useState<Record<string, any>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
@@ -130,6 +137,14 @@ function MessagesPageContent({
   const [isTrimming, setIsTrimming] = useState(false);
   const [trimmingProgress, setTrimmingProgress] = useState(0);
   const ffmpegRef = useRef<any>(null);
+
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [floatingDate, setFloatingDate] = useState<string | null>(null);
+
+  const [isQuickActionModalOpen, setIsQuickActionModalOpen] = useState(false);
+  const [quickActionTab, setQuickActionTab] = useState<string>("products");
 
   const loadFFmpeg = async () => {
     if (ffmpegRef.current) return ffmpegRef.current;
@@ -238,9 +253,8 @@ function MessagesPageContent({
     // The UI is already populated from the cache above, so the network request below 
     // happens silently in the background, updating state on success without spinners.
     try {
-      const res = await fetch(`${API_BASE_URL}/api/chat/room`, { headers });
-      const data = await res.json();
-      const list = data?.rooms || data?.chatRooms || data?.data || data || [];
+      const json = await safeFetch<any>(`/api/chat/room`, { headers });
+      const list = json?.rooms || json?.chatRooms || json?.data || json || [];
       const roomsList = Array.isArray(list) ? list : [];
 
       // ⚡ STEP 2: Background Sync
@@ -279,7 +293,7 @@ function MessagesPageContent({
 
   async function markRoomAsRead(chat_room_id: string | number) {
     try {
-      await fetch(`${API_BASE_URL}/api/chat/mark-room-as-read/${chat_room_id}`, {
+      await safeFetch(`/api/chat/mark-room-as-read/${chat_room_id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...headers },
       });
@@ -314,9 +328,8 @@ function MessagesPageContent({
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/chat/messages/${chat_room_id}`, { headers });
-      const data = await res.json();
-      const list = data?.messages || data?.chatMessages || data?.data || data || [];
+      const json = await safeFetch<any>(`/api/chat/messages/${chat_room_id}`, { headers });
+      const list = json?.messages || json?.chatMessages || json?.data || json || [];
       const freshMessages = Array.isArray(list) ? list : [];
 
       // ⚡ STEP 2: SYNC SILENTLY IN BACKGROUND
@@ -340,10 +353,9 @@ function MessagesPageContent({
   async function fetchRecommendations() {
     setLoadingRecs(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/suggestions`, { headers });
-      const data = await res.json();
-      const usersList = data?.data?.users || [];
-      const vendorsList = data?.data?.vendors || [];
+      const json = await safeFetch<any>(`/api/users/suggestions`, { headers });
+      const usersList = json?.data?.users || [];
+      const vendorsList = json?.data?.vendors || [];
       const combined = [...usersList, ...vendorsList].map((u: any) => ({
         ...u,
         user_id: u.user_id || u.id,
@@ -369,24 +381,22 @@ function MessagesPageContent({
         return;
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/chat/create`, {
+      const json = await safeFetch<any>(`/api/chat/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ other_user_id: otherUserId })
       });
-      const data = await res.json();
 
-      if (res.status === 403) {
-        toast.error(data.error || data.message || "Message restricted by recipient's privacy settings");
+      if (json?.status === 403 || json?.error_code === 403) {
+        toast.error(json.error || json.message || "Message restricted by recipient's privacy settings");
         return;
       }
 
-      if (!res.ok) {
-        toast.error(data.error || data.message || "Failed to start conversation");
+      if (!json || json.isOffline) {
+        toast.error("You are offline. Please connect to internet to start a chat.");
         return;
       }
-
-      const newRoom = data.chatRoom || data.data || data;
+      const newRoom = json.chatRoom || json.data || json;
 
       if (newRoom && newRoom.chat_room_id) {
         // Ensure other_user_id is correctly set for the room object
@@ -415,7 +425,8 @@ function MessagesPageContent({
     }
   }
 
-  const handleProductClick = async (productId: string | number) => {
+  const handleProductClick = async (rawProductId: string | number) => {
+    const productId = typeof rawProductId === 'string' ? rawProductId.trim() : rawProductId;
     if (fetchingProductId === productId) return; // Allow switching but prevent duplicate fetch
     setClickPos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
 
@@ -465,14 +476,15 @@ function MessagesPageContent({
     setIsViewerOpen(true);
   };
 
-  async function handleSend(customContent?: any) {
+  async function handleSend(customContent?: any, productOverride?: any) {
     // ⚡ FIX: Check if customContent is a string (manual send) or a MouseEvent (click)
     let finalContent = (typeof customContent === 'string') ? customContent : (newMessage || "");
+    const activeTaggedProduct = productOverride || taggedProduct;
 
     // ⚡ AUTO-INTRO for tagged items if message is empty
     if (!finalContent.trim() && !selectedFile) {
-      if (taggedProduct) {
-        finalContent = `Hello, I'm interested in "${taggedProduct.name}" ${taggedProduct.variant ? `(${taggedProduct.variant})` : ''} at ₦${Number(taggedProduct.price || 0).toLocaleString()}.`;
+      if (activeTaggedProduct) {
+        finalContent = `Hello, I'm interested in "${activeTaggedProduct.name}" ${activeTaggedProduct.variant ? `(${activeTaggedProduct.variant})` : ''} at ₦${Number(activeTaggedProduct.price || 0).toLocaleString()}.`;
       } else if (taggedOrderRef) {
         finalContent = `Hello, I'm reaching out regarding my order #${taggedOrderRef}.`;
       }
@@ -498,13 +510,13 @@ function MessagesPageContent({
       file_type: selectedFile?.type,
       file_name: selectedFile?.name,
       status: "sending",
-      product_id: taggedProduct?.id,
-      product_name: taggedProduct?.name,
-      product_price: String(taggedProduct?.price || ""),
-      product_variant: taggedProduct?.variant,
+      product_id: activeTaggedProduct?.id,
+      product_name: activeTaggedProduct?.name,
+      product_price: String(activeTaggedProduct?.price || ""),
+      product_variant: activeTaggedProduct?.variant,
       order_id: taggedOrderId ? Number(taggedOrderId) : null,
       order_ref: taggedOrderRef,
-      product_image: taggedProduct?.img || taggedOrderData?.items?.[0]?.product_image
+      product_image: activeTaggedProduct?.img || taggedOrderData?.items?.[0]?.product_image
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
@@ -533,10 +545,62 @@ function MessagesPageContent({
     await performSendMessage(optimisticMsg, savedFile, savedContent, currentRoomId);
   }
 
+  async function handleSendDirectly(content: string, p?: any) {
+    if (!selectedRoom) return;
+
+    let productData = null;
+    if (p) {
+      productData = {
+        id: String(p.product_id),
+        name: p.title || p.product_name || "Product",
+        price: String(p.price || 0),
+        img: p.thumbnail || p.product_image || p.image_url || p.first_image
+      };
+    }
+
+    handleSend(content, productData);
+  }
+
   async function performSendMessage(tempMsg: Message, file: File | null, content: string, roomId: string | number) {
     try {
       let finalMessage: Message;
       let uploadFile = file;
+
+      // ⚡ STOQLE BOT INTEGRATION: Trigger bot if active and either no file OR file + text
+      const shouldTriggerBot = isBotActive && (!uploadFile || content.trim() || tempMsg.product_id || tempMsg.order_ref);
+      
+      if (shouldTriggerBot) {
+        try {
+          const botPayload = {
+            chat_room_id: roomId,
+            message: content,
+            product_id: tempMsg.product_id,
+            product_name: tempMsg.product_name,
+            product_price: tempMsg.product_price,
+            product_image: tempMsg.product_image,
+            product_variant: tempMsg.product_variant,
+            order_id: tempMsg.order_id,
+            order_ref: tempMsg.order_ref,
+            skipUserSave: !!uploadFile, // Don't double save if we're also calling /api/chat/upload
+            history: messages.slice(-8).map(m => ({ role: String(m.sender_id) === String(userId) ? 'user' : 'bot', content: m.message_content }))
+          };
+
+          const botResponse = await safeFetch<any>("/api/chat/bot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: JSON.stringify(botPayload),
+          });
+
+          if (botResponse?.success && !uploadFile) {
+            // If No file, we are done (bot saved user msg + responded)
+            return;
+          }
+          // If file was present, we continue to standard upload logic below
+        } catch (botErr) {
+          console.error("[StoqleBot] API Error:", botErr);
+          // Continue to standard message logic if bot fails
+        }
+      }
 
       if (uploadFile) {
         if (uploadFile.type.startsWith('video/')) {
@@ -604,9 +668,11 @@ function MessagesPageContent({
         formData.append("file", uploadFile);
         if (tempMsg.video_thumbnail?.startsWith('blob:')) {
           try {
-            const thumbRes = await fetch(tempMsg.video_thumbnail);
-            const thumbBlob = await thumbRes.blob();
-            formData.append("video_thumbnail_file", thumbBlob, "thumbnail.jpg");
+            if (!isOffline()) {
+              const thumbRes = await fetch(tempMsg.video_thumbnail);
+              const thumbBlob = await thumbRes.blob();
+              formData.append("video_thumbnail_file", thumbBlob, "thumbnail.jpg");
+            }
           } catch (e) { console.error("Could not fetch thumb blob", e); }
         }
         formData.append("chat_room_id", String(roomId));
@@ -621,23 +687,23 @@ function MessagesPageContent({
         if (tempMsg.order_id) formData.append("order_id", String(tempMsg.order_id));
         if (tempMsg.order_ref) formData.append("order_ref", tempMsg.order_ref);
 
-        const res = await fetch(`${API_BASE_URL}/api/chat/upload`, {
+        const json = await safeFetch<any>(`/api/chat/upload`, {
           method: "POST",
           headers,
           body: formData,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Upload failed");
 
-        const msgObj = data.data || (typeof data.message === 'object' ? data.message : data);
+        if (!json || json.isOffline) throw new Error("Offline state detected");
+
+        const msgObj = json.data || (typeof json.message === 'object' ? json.message : json);
         finalMessage = {
           ...msgObj,
-          message_id: msgObj.message_id || data.message_id || tempMsg.message_id,
+          message_id: msgObj.message_id || json.message_id || tempMsg.message_id,
           sender_id: msgObj.sender_id || Number(userId),
           sent_at: msgObj.sent_at || new Date().toISOString(),
           message_content: msgObj.message_content || content,
-          file_url: msgObj.file_url || msgObj.file?.file_url || data.uploadedFile?.file_url || data.file_url || msgObj.url,
-          file_type: msgObj.file_type || msgObj.file?.file_type || data.uploadedFile?.file_type || data.file_type || msgObj.type,
+          file_url: msgObj.file_url || msgObj.file?.file_url || json.uploadedFile?.file_url || json.file_url || msgObj.url,
+          file_type: msgObj.file_type || msgObj.file?.file_type || json.uploadedFile?.file_type || json.file_type || msgObj.type,
           status: "sent"
         };
       } else {
@@ -653,15 +719,14 @@ function MessagesPageContent({
           order_id: tempMsg.order_id,
           order_ref: tempMsg.order_ref,
         };
-        const res = await fetch(`${API_BASE_URL}/api/chat/message`, {
+        const json = await safeFetch<any>(`/api/chat/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Sending failed");
 
-        const msgObj = data.data || (typeof data.message === 'object' ? data.message : data);
+        if (!json || json.isOffline) throw new Error("Offline state detected");
+        const msgObj = json.data || (typeof json.message === 'object' ? json.message : json);
         finalMessage = {
           ...msgObj,
           sender_id: msgObj.sender_id || Number(userId),
@@ -703,7 +768,7 @@ function MessagesPageContent({
   async function markMessageAsRead(message_id?: string | number) {
     if (!message_id) return;
     try {
-      await fetch(`${API_BASE_URL}/api/chat/mark-as-read/${message_id}`, {
+      await safeFetch(`/api/chat/mark-as-read/${message_id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...headers },
       });
@@ -732,6 +797,12 @@ function MessagesPageContent({
   // Sync selectedRoom to ref to avoid socket re-subscriptions
   useEffect(() => {
     selectedRoomRef.current = selectedRoom;
+    // ⚡ Automatic Bot Activation for Businesses
+    if (selectedRoom) {
+      setIsBotActive(!!selectedRoom.business_id);
+    } else {
+      setIsBotActive(false);
+    }
   }, [selectedRoom]);
 
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
@@ -771,20 +842,18 @@ function MessagesPageContent({
     if (!selectedMessageForAction?.message_id) return;
     const msgId = selectedMessageForAction.message_id;
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/chat/message/${msgId}`, {
+      const json = await safeFetch<any>(`/api/chat/message/${msgId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (res.ok) {
+      if (json && !json.isOffline) {
         // Optimistic update already handled by socket, but ensure local state is clean
         setMessages(prev => prev.filter(m => String(m.message_id) !== String(msgId)));
         chatDb.deleteMessages([msgId]);
         setIsMessageActionOpen(false);
         toast.success("Message deleted");
       } else {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to delete message");
+        throw new Error(json?.message || "Failed to delete message");
       }
     } catch (err) {
       console.error("Delete failed", err);
@@ -815,7 +884,7 @@ function MessagesPageContent({
     const updatedContent = newMessage.trim();
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/chat/message-content/${msgId}`, {
+      const json = await safeFetch<any>(`/api/chat/message-content/${msgId}`, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -823,7 +892,7 @@ function MessagesPageContent({
         },
         body: JSON.stringify({ message_content: updatedContent })
       });
-      if (res.ok) {
+      if (json && !json.isOffline && json.status !== 'error') {
         const now = new Date().toISOString();
         setMessages(prev => prev.map(m => String(m.message_id) === String(msgId) ? { ...m, message_content: updatedContent, updated_at: now } : m));
         chatDb.saveMessages([{ message_id: msgId, message_content: updatedContent, updated_at: now } as any]);
@@ -832,10 +901,9 @@ function MessagesPageContent({
         setSelectedMessageForAction(null);
         toast.success("Message updated");
       } else {
-        const errorData = await res.json();
-        const errTitle = errorData.error || errorData.message || "Update failed";
+        const errTitle = json?.error || json?.message || "Update failed";
         toast.error(`${errTitle}`);
-        throw new Error(errTitle);
+        throw new Error(String(errTitle));
       }
     } catch (err: any) {
       console.error("Update failed", err);
@@ -874,6 +942,13 @@ function MessagesPageContent({
     });
 
     socket.on("chat:message", (msg: Message) => {
+      // Clear typing indicator for this room
+      setTypingStatus(prev => {
+        const next = { ...prev };
+        delete next[msg.chat_room_id];
+        return next;
+      });
+
       // ⚡ Instant Cache Update
       chatDb.saveMessages([msg as any]);
 
@@ -900,26 +975,42 @@ function MessagesPageContent({
       });
 
       if (selectedRoomRef.current && String(msg.chat_room_id) === String(selectedRoomRef.current.chat_room_id)) {
+        // ⚡ VENDOR TAKEOVER ACTIVATION
+        // If message comes from the vendor (other_user_id) AND it is NOT from the AI, deactivate the bot automatically
+        if (String(msg.sender_id) === String(selectedRoomRef.current.other_user_id) && !msg.is_ai) {
+          setIsBotActive(false);
+          console.log("[StoqleBot] Vendor takeover detected. Bot deactivated.");
+        }
+
         setMessages((p) => {
           // 1. Check if we already have this message by ID
           if (p.find(m => String(m.message_id) === String(msg.message_id))) return p;
 
-          // 2. Prevent duplication from optimistic UI (especially from our own sends)
+          // 2. Mark my previous messages as read if this is a reply from someone else
+          let updated = p;
+          if (String(msg.sender_id) !== String(userId)) {
+            updated = p.map(m => (String(m.sender_id) === String(userId) && m.is_read !== 1) ? { ...m, is_read: 1 } : m);
+          }
+
+          // 3. Prevent duplication from optimistic UI
           if (String(msg.sender_id) === String(userId)) {
-            // Find an optimistic message that hasn't been synced yet
-            const tempMatch = p.find(m =>
+            const tempMatch = updated.find(m =>
               String(m.message_id).startsWith('temp-') &&
               m.message_content === msg.message_content
             );
             if (tempMatch) {
-              // Replace the temporary message with the real one
-              const merged = p.map(m => m.message_id === tempMatch.message_id ? msg : m);
-              return merged;
+              return updated.map(m => m.message_id === tempMatch.message_id ? msg : m);
             }
           }
 
-          return [...p, msg];
+          const final = [...updated, msg];
+          // Persist the read status change for my messages
+          if (String(msg.sender_id) !== String(userId)) {
+            chatDb.saveMessages(updated.filter(m => String(m.sender_id) === String(userId)) as any);
+          }
+          return final;
         });
+
         if (String(msg.sender_id) !== String(userId)) {
           markRoomAsRead(msg.chat_room_id);
         }
@@ -956,7 +1047,18 @@ function MessagesPageContent({
       if (selectedRoomRef.current && String(payload.chat_room_id) === String(selectedRoomRef.current.chat_room_id)) {
         setMessages((p) => {
           if (p.find(m => String(m.message_id) === String(payload.message_id))) return p;
-          return [...p, payload];
+
+          let updated = p;
+          if (String(payload.sender_id) !== String(userId)) {
+            updated = p.map(m => (String(m.sender_id) === String(userId) && m.is_read !== 1) ? { ...m, is_read: 1 } : m);
+          }
+
+          const final = [...updated, payload];
+          // Persist the read status change for my messages
+          if (String(payload.sender_id) !== String(userId)) {
+            chatDb.saveMessages(updated.filter(m => String(m.sender_id) === String(userId)) as any);
+          }
+          return final;
         });
         if (String(payload.sender_id) !== String(userId)) {
           markRoomAsRead(payload.chat_room_id);
@@ -976,16 +1078,33 @@ function MessagesPageContent({
       });
     });
 
-    socket.on("chat:room:read", (data: any) => {
-      setMessages((p) => {
-        // If the other user read the room, all MY sent messages are now READ
-        const updated = p.map((m) =>
-          (String(m.sender_id) === String(userId) && m.is_read !== 1) ? { ...m, is_read: 1 } : m
-        );
-        // Persist all updated messages to DB
-        chatDb.saveMessages(updated.filter(m => String(m.sender_id) === String(userId)) as any);
-        return updated;
+    socket.on("chat:typing", (data: any) => {
+      setTypingStatus(prev => ({ ...prev, [data.chat_room_id]: data }));
+    });
+
+    socket.on("chat:typing:stop", (data: any) => {
+      setTypingStatus(prev => {
+        const next = { ...prev };
+        delete next[data.chat_room_id];
+        return next;
       });
+    });
+
+    socket.on("chat:room:read", (data: any) => {
+      if (selectedRoomRef.current && String(data.chat_room_id) === String(selectedRoomRef.current.chat_room_id)) {
+        setMessages((p) => {
+          // If the other user read the room, all MY sent messages are now READ
+          const updated = p.map((m) =>
+            (String(m.sender_id) === String(userId) && m.is_read !== 1) ? { ...m, is_read: 1 } : m
+          );
+          // Persist all updated messages to DB
+          chatDb.saveMessages(updated.filter(m => String(m.sender_id) === String(userId)) as any);
+          return updated;
+        });
+      }
+
+      // Also update the unread count for this room in the list
+      setUnreadMap(prev => ({ ...prev, [data.chat_room_id]: 0 }));
     });
 
     // Handle potential new room event
@@ -1104,10 +1223,9 @@ function MessagesPageContent({
       (async () => {
         try {
           setIsOrderDataLoading(true);
-          const res = await fetch(`${API_BASE_URL}/api/orders/${oid || oref}`, { headers });
-          const data = await res.json();
-          if (data.success) {
-            setTaggedOrderData(data.data);
+          const json = await safeFetch<any>(`/api/orders/${oid || oref}`, { headers });
+          if (json?.success) {
+            setTaggedOrderData(json.data);
           }
         } catch (err) {
           console.warn("Failed to fetch tagged order data", err);
@@ -1140,13 +1258,12 @@ function MessagesPageContent({
 
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const res = await fetch(`${API_BASE_URL}/api/orders/${identifier}`, {
+      const json = await safeFetch<any>(`/api/orders/${identifier}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
 
-      if (data.success) {
-        const order = data.data;
+      if (json?.success) {
+        const order = json.data;
         const currentUserId = String(userId);
 
         // Check if current user owns any business in this order or matches a staff member
@@ -1191,13 +1308,12 @@ function MessagesPageContent({
       const identifier = orderId || orderRef;
       if (open && identifier) {
         setLoading(true);
-        fetch(`${API_BASE_URL}/api/orders/${identifier}`, {
+        safeFetch<any>(`/api/orders/${identifier}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
-          .then(res => res.json())
-          .then(data => {
-            if (data.success) {
-              setOrder(data.data);
+          .then(json => {
+            if (json?.success) {
+              setOrder(json.data);
             }
           })
           .catch(err => console.error("Tracking fetch error", err))
@@ -1217,12 +1333,11 @@ function MessagesPageContent({
         const trackingOrderId = shipment?.items?.[0]?.order_id || shipment?.id || orderId;
 
         if (trackingOrderId) {
-          fetch(`${API_BASE_URL}/api/orders/${trackingOrderId}/tracking`, {
+          safeFetch<any>(`/api/orders/${trackingOrderId}/tracking`, {
             headers: { Authorization: `Bearer ${token}` }
           })
-            .then(res => res.json())
-            .then(data => {
-              if (data.success) setTrackingHistory(data.data);
+            .then(json => {
+              if (json?.success) setTrackingHistory(json.data);
             })
             .catch(err => console.error("History fetch error", err));
         }
@@ -1604,7 +1719,7 @@ function MessagesPageContent({
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
                               {rec.business?.business_name || rec.business_name || rec.full_name}
-                              {(rec.business?.business_id || rec.business_id) && vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                              {(rec.business?.business_id || rec.business_id) && !!vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
                                 <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
                               )}
                             </p>
@@ -1674,7 +1789,7 @@ function MessagesPageContent({
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
                                 {rec.business?.business_name || rec.business_name || rec.full_name}
-                                {(rec.business?.business_id || rec.business_id) && vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                                {(rec.business?.business_id || rec.business_id) && !!vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
                                   <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
                                 )}
                               </p>
@@ -1782,7 +1897,7 @@ function MessagesPageContent({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-slate-800 truncate mb-0.5 flex items-center gap-1">
                               {rec.business?.business_name || rec.business_name || rec.full_name}
-                              {(rec.business?.business_id || rec.business_id) && vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                              {(rec.business?.business_id || rec.business_id) && !!vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
                                 <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
                               )}
                             </p>
@@ -1871,7 +1986,7 @@ function MessagesPageContent({
                     <div className="min-w-0">
                       <h3 className="font-bold text-gray-900 truncate flex items-center gap-1">
                         {selectedRoom.business_name || selectedRoom.full_name || (selectedRoom.other_stoqle_id ? `Stoqle ID: ${selectedRoom.other_stoqle_id}` : `ID: ${selectedRoom.other_user_id}`)}
-                        {selectedRoom.business_id && vendorBadges[String(selectedRoom.business_id)]?.verified_badge && (
+                        {selectedRoom.business_id && !!vendorBadges[String(selectedRoom.business_id)]?.verified_badge && (
                           <VerifiedBadge size="xs" label={vendorBadges[String(selectedRoom.business_id)].badge_label} />
                         )}
                       </h3>
@@ -1892,7 +2007,47 @@ function MessagesPageContent({
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar relative z-10 overscroll-contain">
+              <div
+                className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar relative z-10 overscroll-contain"
+                ref={scrollContainerRef}
+                onScroll={(e) => {
+                  setIsScrolling(true);
+                  if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+
+                  const container = e.currentTarget;
+                  const markers = container.querySelectorAll<HTMLElement>('[data-date-label]');
+                  let currentMarker = null;
+                  let fallbackMarker = null;
+
+                  // Look for the date marker closest to the top of the container
+                  for (let i = 0; i < markers.length; i++) {
+                    const rect = markers[i].getBoundingClientRect();
+                    // Assuming container start is roughly around 100-200px based on header height
+                    if (rect.top >= 50 && rect.top < window.innerHeight / 2) {
+                      currentMarker = markers[i];
+                      break;
+                    } else if (rect.top < 50) {
+                      fallbackMarker = markers[i];
+                    }
+                  }
+
+                  const targetMarker = currentMarker || fallbackMarker || markers[0];
+                  if (targetMarker) {
+                    setFloatingDate(targetMarker.getAttribute('data-date-label'));
+                  }
+
+                  scrollTimeout.current = setTimeout(() => {
+                    setIsScrolling(false);
+                  }, 800);
+                }}
+              >
+                {/* ⚡ Floating Fix Timestamp */}
+                <div className={`sticky top-2 z-[60] flex justify-center pointer-events-none transition-opacity duration-300 ${isScrolling && floatingDate ? 'opacity-100' : 'opacity-0'}`}>
+                  <span className="px-3 py-1 bg-slate-800/90 backdrop-blur-md border border-slate-700 text-[10px] font-bold text-white rounded-full shadow-xl">
+                    {floatingDate}
+                  </span>
+                </div>
+
                 <div className="relative z-10 min-h-full flex flex-col">
                   {isMessagesLoading ? (
                     <div className="flex-1 flex flex-col gap-6 py-8 px-2 animate-pulse">
@@ -1947,263 +2102,106 @@ function MessagesPageContent({
                     </div>
                   ) : (
                     <div className="flex flex-col">
-                      {messages.map((m, idx) => {
-                        const prevMsg = messages[idx - 1];
-                        const currDateString = m.sent_at ? new Date(m.sent_at).toDateString() : "";
-                        const prevDateString = prevMsg?.sent_at ? new Date(prevMsg.sent_at).toDateString() : "";
-                        const showDateHeader = currDateString !== prevDateString;
-                        return (
-                          <React.Fragment key={m.message_id || m.sent_at || idx}>
-                            {showDateHeader && (
-                              <div className="flex justify-center my-4 sticky top-0 z-20">
-                                <span className="px-3 py-1 bg-white/70 backdrop-blur-md text-[9px] font-bold text-slate-400 rounded-full shadow-sm border border-slate-100  ">
-                                  {formatDateLabel(m.sent_at || null)}
-                                </span>
-                              </div>
-                            )}
-                            <ChatBubble
-                              mine={String(m.sender_id) === String(userId)}
-                              content={m.message_content}
-                              sentAt={m.sent_at}
-                              senderName={m.sender_business_name || m.sender_name}
-                              senderAvatar={formatUrl(
-                                String(m.sender_id) === String(userId)
-                                  ? (auth?.user?.business_logo || auth?.user?.profile_pic || auth?.user?.avatar)
-                                  : (m.sender_business_logo || m.sender_profile_pic)
+                      {(() => {
+                        const lastOutgoingMsg = [...messages].reverse().find(msg => String(msg.sender_id) === String(userId));
+                        const lastOutgoingMessageId = lastOutgoingMsg?.message_id;
+
+                        return messages.map((m, idx) => {
+                          const prevMsg = messages[idx - 1];
+                          const currDate = m.sent_at ? new Date(m.sent_at) : null;
+                          const prevDate = prevMsg?.sent_at ? new Date(prevMsg.sent_at) : null;
+                          const currDateString = currDate ? currDate.toDateString() : "";
+                          const prevDateString = prevDate ? prevDate.toDateString() : "";
+
+                          let showDateHeader = currDateString !== prevDateString;
+                          if (!showDateHeader && currDate && prevDate) {
+                            const diffMins = (currDate.getTime() - prevDate.getTime()) / (1000 * 60);
+                            if (diffMins > 15) {
+                              showDateHeader = true;
+                            }
+                          }
+
+                          const timeLabel = m.sent_at ? new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+                          const dateLabel = formatDateLabel(m.sent_at || null);
+                          const finalSeparatorLabel = currDateString !== prevDateString ? `${dateLabel} ${timeLabel}` : timeLabel;
+
+                          return (
+                            <React.Fragment key={m.message_id || m.sent_at || idx}>
+                              {showDateHeader && (
+                                <div className="flex justify-center my-4 relative z-10 w-full mb-6 mt-6" data-date-label={finalSeparatorLabel}>
+                                  <span className="px-3 py-1 bg-slate-50 border border-slate-100 text-[10px] font-bold text-slate-500 rounded-full shadow-sm">
+                                    {finalSeparatorLabel}
+                                  </span>
+                                </div>
                               )}
-                              isRead={m.is_read}
-                              status={m.status || "sent"}
-                              onRetry={() => {
-                                // We can't retry if it was a file since we didn't save the File object in Message state
-                                // but let's at least try if it was text or if we refactor more.
-                                // For now, let's just toast.
-                                toast.info("Retrying message...");
-                                if (m.message_type === "text") {
-                                  performSendMessage(m, null, m.message_content || "", m.chat_room_id);
-                                }
-                              }}
-                              messageType={m.message_type}
-                              file={m.file}
-                              fileUrl={formatUrl(m.file_url)}
-                              fileType={m.file_type}
-                              file_name={m.file_name || m.file?.file_name}
-                              product_id={m.product_id}
-                              product_name={m.product_name}
-                              product_price={m.product_price}
-                              product_image={m.product_image}
-                              product_variant={m.product_variant}
-                              order_id={m.order_id}
-                              order_ref={m.order_ref}
-                              onOrderClick={handleOrderClick}
-                              onProductClick={handleProductClick}
-                              onImageClick={handleImageClick}
-                              onPdfClick={handlePdfClick}
-                              onVideoClick={handleImageClick}
-                              senderId={m.sender_id}
-                              onAvatarClick={handleAvatarClick}
-                              messageId={m.message_id}
-                              onLongPress={handleMessageLongPress}
-                              isEdited={!!m.updated_at && m.updated_at !== m.sent_at}
-                              video_thumbnail={m.video_thumbnail}
-                            />
-                          </React.Fragment>
-                        );
-                      })}
+                              <div data-date-label={finalSeparatorLabel}>
+                                <ChatBubble
+                                  mine={String(m.sender_id) === String(userId)}
+                                  content={m.message_content}
+                                  sentAt={m.sent_at}
+                                  senderName={m.sender_business_name || m.sender_name}
+                                  senderAvatar={formatUrl(
+                                    String(m.sender_id) === String(userId)
+                                      ? (auth?.user?.business_logo || auth?.user?.profile_pic || auth?.user?.avatar)
+                                      : (m.sender_business_logo || m.sender_profile_pic)
+                                  )}
+                                  isRead={m.is_read}
+                                  status={m.status || "sent"}
+                                  showStatus={true}
+                                  onRetry={() => {
+                                    toast.info("Retrying message...");
+                                    if (m.message_type === "text") {
+                                      performSendMessage(m, null, m.message_content || "", m.chat_room_id);
+                                    }
+                                  }}
+                                  messageType={m.message_type}
+                                  file={m.file}
+                                  fileUrl={formatUrl(m.file_url)}
+                                  fileType={m.file_type}
+                                  file_name={m.file_name || m.file?.file_name}
+                                  product_id={m.product_id}
+                                  product_name={m.product_name}
+                                  product_price={m.product_price}
+                                  product_image={m.product_image}
+                                  product_variant={m.product_variant}
+                                  order_id={m.order_id}
+                                  order_ref={m.order_ref}
+                                  onOrderClick={handleOrderClick}
+                                  onProductClick={handleProductClick}
+                                  onImageClick={handleImageClick}
+                                  onPdfClick={handlePdfClick}
+                                  onVideoClick={handleImageClick}
+                                  senderId={m.sender_id}
+                                  onAvatarClick={handleAvatarClick}
+                                  messageId={m.message_id}
+                                  onLongPress={handleMessageLongPress}
+                                  isEdited={!!m.updated_at && m.updated_at !== m.sent_at}
+                                  video_thumbnail={m.video_thumbnail}
+                                  is_ai={m.is_ai}
+                                />
+                              </div>
+                            </React.Fragment>
+                          );
+                        });
+                      })()}
+
+                      {/* ⚡ Typing Indicator Overlay */}
+                      {selectedRoom && typingStatus[selectedRoom.chat_room_id] && (
+                        <ChatBubble
+                          mine={false}
+                          isTyping={true}
+                          senderName={typingStatus[selectedRoom.chat_room_id].sender_name || "Vendor"}
+                          senderAvatar={formatUrl(selectedRoom.business_logo || selectedRoom.profile_pic)}
+                          is_ai={typingStatus[selectedRoom.chat_room_id].is_ai}
+                        />
+                      )}
+
                       <div ref={messagesEndRef} className="h-1" />
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ⚡ Immersive Product Tag Preview Overlay (BEFORE SENDING) */}
-              <AnimatePresence mode="wait">
-                {taggedProduct && !selectedFile && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 1.05, y: 10 }}
-                    className="absolute inset-0 z-[120] bg-white/95 backdrop-blur-xl flex flex-col p-4 sm:p-8"
-                  >
-                    <div className="flex items-center justify-between mb-6 shrink-0">
-                      <div className="flex flex-col text-left">
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Tagging Product</h3>
-                        <p className="text-[10px] font-bold text-rose-500  tracking-widest font-black">Inquiry Mode</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setTaggedProduct(null);
-                          setNewMessage("");
-
-                          // Scrub URL params so it doesn't reappear on refresh
-                          const url = new URL(window.location.href);
-                          ['product_id', 'pname', 'pprice', 'pvariant', 'pimg'].forEach(p => url.searchParams.delete(p));
-                          window.history.replaceState(null, "", url.toString());
-                        }}
-                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
-                    <div className="flex-1 min-h-0 flex items-center justify-center relative group">
-                      <div className="relative max-w-sm rounded-[0.5rem] overflow-hidden  border-rose-50- bg-white transition-all hover:shadow-rose-500/10 hover:-translate-y-1">
-                        {taggedProduct.img && (
-                          <div className="aspect-square rounded-[0.5rem] overflow-hidden mb-5  border-slate-50 shadow-inner">
-                            <img src={taggedProduct.img} className="w-full h-full object-cover" alt="" />
-                          </div>
-                        )}
-                        <h4 className="text-lg font-black text-slate-900 leading-tight mb-2 tracking-tight">{taggedProduct.name}</h4>
-                        <p className="text-[12px] font-bold text-slate-400 mb-5">{taggedProduct.variant || "Base Model"}</p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                          <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-slate-300  tracking-widest mb-1">Total Price</span>
-                            <span className="text-xl font-black text-rose-500 tracking-tighter">
-                              ₦{Number(taggedProduct.price || 0).toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 mx-auto w-full max-w-xl">
-                      <div className="mb-3 px-2 flex justify-between items-end">
-                        <span className="text-[11px] font-black text-slate-400 tracking-widest flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                          Your Inquiry Message
-                        </span>
-                        <button onClick={() => {
-                          setTaggedProduct(null);
-                          setNewMessage("");
-
-                          // Scrub URL params
-                          const url = new URL(window.location.href);
-                          ['product_id', 'pname', 'pprice', 'pvariant', 'pimg'].forEach(p => url.searchParams.delete(p));
-                          window.history.replaceState(null, "", url.toString());
-                        }} className="text-[10px] font-black text-slate-400 hover:text-rose-500  tracking-widest transition-colors">Discard Tag</button>
-                      </div>
-                      <MessageInput
-                        value={newMessage}
-                        onChange={setNewMessage}
-                        onSend={handleSend}
-                        onFileSelect={handleFile}
-                        isSending={isSending}
-                        selectedFile={selectedFile}
-                        filePreview={filePreview}
-                        onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
-                        alwaysAllowSend={!!taggedProduct}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                {taggedOrderRef && !selectedFile && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 1.05, y: 10 }}
-                    className="absolute inset-0 z-[125] bg-white/95 backdrop-blur-xl flex flex-col p-4 sm:p-8"
-                  >
-                    <div className="flex items-center justify-between mb-6 shrink-0">
-                      <div className="flex flex-col text-left">
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Tagging Order</h3>
-                        <p className="text-[10px] font-bold text-rose-500 tracking-widest font-black ">Support Mode</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setTaggedOrderRef(null);
-                          setTaggedOrderId(null);
-                          setTaggedOrderData(null);
-                          setNewMessage("");
-
-                          // Scrub URL params
-                          const url = new URL(window.location.href);
-                          ['order_ref', 'order_id'].forEach(p => url.searchParams.delete(p));
-                          window.history.replaceState(null, "", url.toString());
-                        }}
-                        className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
-                    <div className="flex-1 min-h-0 flex items-center justify-center relative group">
-                      <div className="relative max-w-sm w-full shadow-2xl rounded-[2.5rem] overflow-hidden border border-slate-100 p-8 bg-white transition-all hover:-translate-y-1">
-                        <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden mb-6 shadow-inner border border-rose-100 flex items-center justify-center bg-rose-50 text-rose-500">
-                          {taggedOrderData?.items?.[0]?.product_image ? (
-                            <img src={taggedOrderData.items[0].product_image} className="w-full h-full object-cover" alt="" />
-                          ) : (
-                            <Package size={28} />
-                          )}
-                        </div>
-
-                        <div className="space-y-1 mb-6">
-                          <p className="text-[10px] font-black text-slate-300  tracking-widest">Order Reference</p>
-                          <h4 className="text-2xl font-black text-slate-900 leading-tight tracking-tighter ">{taggedOrderRef}</h4>
-                        </div>
-
-                        {taggedOrderData && (
-                          <div className="grid grid-cols-2 gap-4 mb-8">
-                            <div>
-                              <p className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Status</p>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black  tracking-wider ${taggedOrderData.status?.toLowerCase().includes('delivered') ? 'bg-emerald-100 text-emerald-600' :
-                                taggedOrderData.status?.toLowerCase().includes('cancel') ? 'bg-rose-100 text-rose-500' :
-                                  'bg-amber-100 text-amber-600'
-                                }`}>
-                                {taggedOrderData.status?.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Payment</p>
-                              <span className="text-[10px] font-bold text-slate-600">₦{Number(taggedOrderData.total_amount || 0).toLocaleString()}</span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                          <div className="flex flex-col">
-                            <span className="text-[9px] font-black text-slate-300  tracking-widest mb-1">Context</span>
-                            <span className="text-xs font-bold text-slate-500">Order Inquiry</span>
-                          </div>
-                          <div className="px-4 py-2 bg-rose-50 text-rose-500 rounded-2xl text-[10px] font-black  tracking-widest shadow-sm shadow-rose-100">
-                            Selected
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 mx-auto w-full max-w-xl">
-                      <div className="mb-3 px-2 flex justify-between items-end">
-                        <span className="text-[11px] font-black text-slate-400 tracking-widest flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                          Your Inquiry Message
-                        </span>
-                        <button onClick={() => {
-                          setTaggedOrderRef(null);
-                          setTaggedOrderId(null);
-                          setTaggedOrderData(null);
-                          setNewMessage("");
-
-                          // Scrub URL params
-                          const url = new URL(window.location.href);
-                          ['order_ref', 'order_id'].forEach(p => url.searchParams.delete(p));
-                          window.history.replaceState(null, "", url.toString());
-                        }} className="text-[10px] font-black text-slate-400 hover:text-rose-500 tracking-widest transition-colors">Discard Tag</button>
-                      </div>
-                      <MessageInput
-                        value={newMessage}
-                        onChange={setNewMessage}
-                        onSend={handleSend}
-                        onFileSelect={handleFile}
-                        isSending={isSending}
-                        selectedFile={selectedFile}
-                        filePreview={filePreview}
-                        onCancelFile={() => { setSelectedFile(null); setFilePreview(null); }}
-                        alwaysAllowSend={!!taggedOrderRef}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
               {/* ⚡ Fullscreen File Preview Overlay (BEFORE SENDING) */}
               <AnimatePresence>
@@ -2280,27 +2278,91 @@ function MessagesPageContent({
                     nav[aria-label="Primary"] { display: ${isShowingChat ? 'none' : 'flex'} !important; }
                   }
                 ` }} />
-                {taggedOrderRef && (
-                  <div className="mb-4 w-full p-2.5 sm:p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-1">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-rose-500 rounded-lg text-white shadow-sm shadow-rose-200">
-                        <Package size={14} />
+                {taggedProduct && (
+                  <div className="w-full p-2.5 bg-white border border-slate-100 rounded-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-slate-50 bg-slate-50">
+                        {taggedProduct.img ? (
+                          <img src={taggedProduct.img} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-rose-500">
+                            <Package size={20} />
+                          </div>
+                        )}
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] sm:text-xs font-black text-rose-500 tracking-tight leading-none ">Referencing Order</span>
-                        <span className="text-[11px] sm:text-sm font-bold text-rose-900 mt-1">{taggedOrderRef}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[9px] font-black text-rose-500 tracking-[0.15em] uppercase leading-none mb-1">Tagging Product</span>
+                        <span className="text-[13px] font-bold text-slate-900 truncate tracking-tight">{taggedProduct.name}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setTaggedOrderRef(null);
-                        setTaggedOrderId(null);
-                      }}
-                      className="p-1.5 rounded-full hover:bg-white text-rose-400 hover:text-rose-500 transition-colors shadow-sm active:scale-95"
-                    >
-                      <X size={16} />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleSend()}
+                        className="px-5 py-2 bg-rose-600 text-white rounded-full text-[10px] font-bold  active:scale-95 transition-all shadow-lg shadow-rose-500/20"
+                      >
+                        Send product
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTaggedProduct(null);
+                          const url = new URL(window.location.href);
+                          ['product_id', 'pname', 'pprice', 'pvariant', 'pimg'].forEach(p => url.searchParams.delete(p));
+                          window.history.replaceState(null, "", url.toString());
+                        }}
+                        className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors active:scale-90"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
                   </div>
+                )}
+
+                {taggedOrderRef && (
+                  <div className="mb-4 w-full p-2.5 bg-white border border-slate-100 rounded-2xl flex items-center justify-between gap-3 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 bg-rose-50 rounded-xl text-rose-500 flex items-center justify-center shrink-0 border border-rose-100">
+                        <Package size={18} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-rose-500 tracking-[0.15em] uppercase leading-none mb-1">Referencing Order</span>
+                        <span className="text-[13px] font-bold text-slate-900 tracking-tight">{taggedOrderRef}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleSend()}
+                        className="px-5 py-2.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-rose-500/20"
+                      >
+                        Send
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTaggedOrderRef(null);
+                          setTaggedOrderId(null);
+                        }}
+                        className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors active:scale-90"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ⚡ Business Quick Actions (I want to...) */}
+                {selectedRoom?.business_id && !taggedProduct && !taggedOrderRef && (
+                  <MessagingQuickActions
+                    isBusiness={true}
+                    onRate={(score, label) => {
+                      const emojiMap = { Worst: "😭", Poor: "😞", Average: "😐", Good: "😊", Perfect: "🤩" };
+                      const emoji = emojiMap[label as keyof typeof emojiMap] || "";
+                      const text = `I rated the service as ${label} ${emoji}`;
+                      handleSendDirectly(text);
+                    }}
+                    onSendItem={(tab) => {
+                      setQuickActionTab(tab);
+                      setIsQuickActionModalOpen(true);
+                    }}
+                  />
                 )}
 
                 <MessageInput
@@ -2315,6 +2377,20 @@ function MessagesPageContent({
                   alwaysAllowSend={!!(taggedProduct || taggedOrderRef)}
                 />
               </div>
+
+              {/* ⚡ Product Handoff Modal */}
+              {selectedRoom?.business_id && (
+                <ProductHandoffModal
+                  isOpen={isQuickActionModalOpen}
+                  onClose={() => setIsQuickActionModalOpen(false)}
+                  businessId={selectedRoom.business_id}
+                  initialTab={quickActionTab as any}
+                  onSelectProduct={(p) => {
+                    handleSendDirectly("", p);
+                    setIsQuickActionModalOpen(false);
+                  }}
+                />
+              )}
             </div>
           )}
         </main>
@@ -2727,12 +2803,11 @@ function OrderTrackingModal({ orderId, orderRef, open, onClose }: any) {
     const identifier = orderId || orderRef;
     if (open && identifier) {
       setLoading(true);
-      fetch(`${API_BASE_URL}/api/orders/${identifier}`, {
+      safeFetch<any>(`/api/orders/${identifier}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) setOrder(data.data);
+        .then(json => {
+          if (json?.success) setOrder(json.data);
         })
         .catch(err => console.error("Tracking fetch error", err))
         .finally(() => setLoading(false));

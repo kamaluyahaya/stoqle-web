@@ -439,40 +439,27 @@ export default function OrdersProductRecommendations({ activeTab, onProductClick
                 };
             });
 
-            // Map social posts to look like feed items
+            // Map social posts (they are already mapped by mapApiPost, so we just need to add feed-specific fields)
             const mappedSocialPosts = nextPosts.map((p: any) => {
                 const lp = p.linked_product || {};
                 const productThumbnail = lp.first_image || lp.image_url || (lp.media && lp.media.find((m: any) => m.type === "image")?.url);
 
                 return {
-                    ...p,
+                    ...p, // Keep all mapped fields from mapApiPost
                     product_id: `post-${p.id}`,
                     is_social_post: true,
                     title: p.caption || lp.title || "Social Post",
-                    first_image: p.thumbnail || p.src,
+                    // Use already formatted media if available
+                    first_image: p.thumbnail || p.src || productThumbnail || "",
                     price: lp.price || 0,
                     logo: p.user?.avatar || null,
                     isLiked: !!(p.liked_by_me || p.liked || p.liked_by_user),
                     linked_image: productThumbnail,
                     product_slug: lp.slug || lp.product_slug || (lp.title ? slugify(lp.title) : null),
-                    business_slug: lp.business_slug || p.user?.business_slug || p.business_slug || null,
+                    business_slug: lp.business_slug || p.user?.business_slug || p.business_slug || (p.business_name ? slugify(p.business_name) : (p.user?.name ? slugify(p.user.name) : null)),
                     business_name: lp.business_name || p.user?.name || "Vendor",
                     sold_count: lp.total_sold || lp.sold_count || 0,
                     followers_count: Number(lp.followers_count || p.followers_count || 0),
-                    isVideo: !!p.isVideo,
-                    src: p.src || p.final_video_url || p.original_video_url || "",
-                    allMedia: (p.allMedia && p.allMedia.length > 0) 
-                        ? p.allMedia.map((m: any) => ({ ...m, url: m.url || m.image_url, type: m.type || (isVideoUrl(m.url || m.image_url) ? "video" : "image") }))
-                        : (p.src ? [{ url: p.src, type: p.isVideo ? "video" : "image" }] : []),
-                    likes_count: p.likes_count ?? p.likeCount ?? 0,
-                    comment_count: p.comment_count ?? p.commentCount ?? 0,
-                    liked_by_user: !!(p.liked_by_me || p.liked || p.liked_by_user),
-                    user: p.user || {
-                        id: p.user_id || 0,
-                        name: p.author_name || "Vendor",
-                        username: p.author_handle || "",
-                        avatar: p.logo || p.author_pic || p.avatar || ""
-                    }
                 };
             });
 

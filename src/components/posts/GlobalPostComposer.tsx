@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { createSocialPost, fetchTrendingSounds, recordSoundUsage } from "@/src/lib/api/social";
+import { isOffline } from "@/src/lib/api/handler";
 import { useAuth } from "@/src/context/authContext";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -1141,6 +1142,7 @@ function ImagePreviewModal({
       setAudioFile(null);
     } else {
       try {
+        if (isOffline()) return;
         const audioUrl = sound.file_url || sound.url;
         const res = await fetch(audioUrl);
         const blob = await res.blob();
@@ -1957,6 +1959,12 @@ export default function GlobalPostComposer() {
     setIsLoading(true);
     setProgress(0);
     try {
+      if (isOffline()) {
+        toast.error("No internet connection. Please connect to internet to publish your post.");
+        setIsLoading(false);
+        return;
+      }
+
       const activeToken = getToken();
       if (!activeToken) {
         toast.error("You must be logged in to post");

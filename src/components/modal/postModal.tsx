@@ -21,9 +21,8 @@ import {
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import VerifiedBadge from "@/src/components/common/VerifiedBadge";
 import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
-import { EMOJI_SHORTCUTS } from "@/src/lib/constants/emojis";
-import { createPortal } from "react-dom";
 import { useAuth } from "@/src/context/authContext";
+import { isOffline, safeFetch, ApiError } from "@/src/lib/api/handler";
 import MobileVideoPlayer from "@/src/components/posts/mobileVideoPlayer";
 import LargeScreenVideoPlayer from "@/src/components/posts/largeScreenVideoPlayer";
 import { formatUrl } from "@/src/lib/utils/media";
@@ -61,6 +60,8 @@ import { CommentOverlay } from "./CommentOverlay";
 import type { Post, User, APIComment } from "@/src/lib/types";
 import { useSocialShare } from "@/src/hooks/useSocialShare";
 import PostShareModal from "./PostShareModal";
+import { createPortal } from "react-dom";
+import { EMOJI_SHORTCUTS } from "@/src/lib/constants/emojis";
 
 type Props = {
   post: Post;
@@ -576,10 +577,10 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
           logSocialActivity({
             social_post_id: trackedPostId,
             action_type: "view",
-            watch_time: 1, // small pad for the last second
+            watch_time: 1,
             watch_progress: data.max_progress,
             completed: data.completed,
-            skipped: data.max_progress < 10, // Consider skipped if closed very early
+            skipped: data.max_progress < 10,
             scroll_velocity_flag: fastScrollVelocityRef.current
           }, userToken || undefined).catch(() => { });
         });
@@ -618,7 +619,13 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
   // Handle real-time updates for this specific post
   useEffect(() => {
-    const socket = io(API_BASE_URL);
+    const socket = io(API_BASE_URL, {
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+    });
 
     socket.on("post:like", (data) => {
       const socketPostId = String(data.postId);
@@ -1130,12 +1137,10 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
     try {
       const offset = isLoadMore ? commentsOffset + COMMENTS_LIMIT : 0;
-      const res = await fetch(`${API_BASE_URL}/api/social/${activeId}/comments?limit=${COMMENTS_LIMIT}&offset=${offset}`, {
+      const json = await safeFetch<any>(`/api/social/${activeId}/comments?limit=${COMMENTS_LIMIT}&offset=${offset}`, {
         method: "GET",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
-      if (!res.ok) throw new Error("Failed to fetch comments");
-      const json = await res.json();
       const fetched: APIComment[] = json?.data?.comments || [];
 
       if (fetched.length < COMMENTS_LIMIT) {
@@ -1189,13 +1194,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     async function fetchFollowStatus() {
       if (!token) { setIsFollowing(false); return; }
       try {
-        const res = await fetch(`${API_BASE_URL}/api/follow/${userId}/status`, {
+        const json = await safeFetch<any>(`/api/follow/${userId}/status`, {
           method: "GET",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           signal: controller.signal,
         });
-        if (!res.ok) return;
-        const json = await res.json();
         const isFollowingFromServer = Boolean(json?.data?.isFollowing ?? json?.data?.is_following ?? false);
         setIsFollowing(isFollowingFromServer);
       } catch (err) {
@@ -1350,12 +1353,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
 
     try {
       const token = localGetToken();
-      const res = await fetch(`${API_BASE_URL}/api/social/comments/${commentId}/like`, {
+      const json = await safeFetch<any>(`/api/social/comments/${commentId}/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
-      const json = await res.json().catch(() => ({} as any));
-      if (!res.ok) {
+      if (!json.ok) {
         setComments((prev) =>
           prev.map((c) =>
             c.comment_id === commentId
@@ -1862,7 +1864,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                 ? { type: "spring", damping: 30, stiffness: 300 }
                 : { type: "spring", damping: 25, stiffness: 450, mass: 0.5 }
               }
-              className="relative z-10 w-full bg-white flex flex-col overflow-y-auto md:flex md:flex-row md:overflow-hidden md:w-[96vw] md:max-w-[1100px] md:h-[94vh] md:rounded-2xl shadow-2xl"
+              className="relative z-10 w-full bg-white flex flex-col overflow-y-auto md:flex md:flex-row md:overflow-hidden md:w-[96vw] md:max-w-[1100px] md:h-[94vh] md:rounded-2xl shadow-2xl min-h-[500px] sm:min-h-[600px] md:min-h-0"
+            // style={{
+            //   height: isMobileReels ? "100dvh" : (isLargeScreen ? "94vh" : "auto"),
+            //   maxHeight: "100dvh"
+            // }}
             >
               {backgroundAudioUrl && (
                 <audio
@@ -1891,8 +1897,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         className="flex-shrink-0 active:scale-95 transition-transform"
                       >
                         <img
-                          src={currentItem.user.avatar}
-                          alt={currentItem.user.name}
+                          src={currentItem.user?.avatar || ""}
+                          alt={currentItem.user?.name || "Author"}
                           className="h-10 w-10 rounded-full object-cover"
                         />
                       </Link>
@@ -1902,7 +1908,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                           onClick={(e) => e.stopPropagation()}
                           className="text-sm text-black font-semibold truncate hover:text-rose-500 transition-colors block flex items-center gap-1"
                         >
-                          {currentItem.user.name}
+                          {currentItem.user?.name || "Author"}
                           {!!currentItem.verified_badge || !!currentItem.user.is_partner || !!currentItem.linked_product?.verified_badge || !!currentItem.linked_product?.trusted_partner ? (
                             <VerifiedBadge size="xs" label="Trusted Partner" className="shrink-0" />
                           ) : !!currentItem.user.is_trusted ? (

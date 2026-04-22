@@ -1,9 +1,13 @@
-"use client";
-
-import { Send, Mic, Square, Play, Pause, Trash2, Volume2 } from "lucide-react";
+import { Send, Mic, Square, Play, Pause, Trash2, Volume2, Smile, X as CloseIcon } from "lucide-react";
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useAudio } from "@/src/context/audioContext";
-import { EMOJI_SHORTCUTS } from "@/src/lib/constants/emojis";
+import { motion, AnimatePresence } from "framer-motion";
+
+const EMOJI_PICKER_LIST = [
+    "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😮‍💨", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤔", "🤭", "🥱", "🤗", "🤫", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠",
+    "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟",
+    "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "🤜", "🤛", "🙌", "👐", "🤲", "🤝", "🙏", "👏", "🖐", "✋", "🖖", "👋", "✍️", "💅", "🤳", "💪", "🦾"
+];
 
 type MessageInputProps = {
     value: string;
@@ -15,6 +19,7 @@ type MessageInputProps = {
     filePreview?: string | null;
     onCancelFile?: () => void;
     alwaysAllowSend?: boolean;
+    hideEmojis?: boolean;
 };
 
 export const MessageInput: React.FC<MessageInputProps> = ({
@@ -34,6 +39,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const [recordingTime, setRecordingTime] = useState(0);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const emojiPickerRef = useRef<HTMLDivElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
@@ -87,16 +94,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         if (audioContextRef.current) audioContextRef.current.close();
         setSignalLevels(new Array(15).fill(4));
-    };
-
-    // Review visualizer logic (hook into internal audio tag)
-    const startReviewVisualizer = () => {
-        if (!audioRef.current || isPlaying) return;
-
-        // This is tricky because of CORS/MediaSource, but since it's a blob, it should be fine.
-        // For simplicity, we'll just run a pseudo-animation if playing, 
-        // OR better, we can actually hook it up if needed.
-        // Let's use a themed pulse for the review stage for maximum reliability.
     };
 
     // Recording duration timer
@@ -204,6 +201,24 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     // ⚡ DYNAMIC HEIGHT & FOCUS: When value changes (like auto-fill), update height and position cursor
     React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+                setShowEmojiPicker(false);
+            }
+        };
+
+        if (showEmojiPicker) {
+            document.addEventListener('mousedown', handleClickOutside);
+        } else {
+            document.removeEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showEmojiPicker]);
+
+    React.useEffect(() => {
         if (textareaRef.current) {
             const el = textareaRef.current;
             el.style.height = 'auto'; // Reset first
@@ -230,30 +245,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
     return (
         <div className="flex flex-col w-full gap-1 overflow-hidden">
-            {/* Emoji Shortcuts */}
-            {isFocused && (
-                <div
-                    className="w-full flex items-center gap-2 overflow-x-auto pb-1 px-4 no-scrollbar animate-in fade-in slide-in-from-bottom-1"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
-                >
-                    {EMOJI_SHORTCUTS.map((emoji) => (
-                        <button
-                            key={emoji}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()} // ⚡ CRITICAL: Prevents blur from firing on textarea
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onChange(value + emoji);
-                                textareaRef.current?.focus();
-                            }}
-                            className="flex-shrink-0 w-8 h-8 flex items-center justify-center active:scale-90 transition-all text-sm"
-                        >
-                            {emoji}
-                        </button>
-                    ))}
-                </div>
-            )}
-
             <div className="w-full p-1 border-gray-100 flex items-end gap-3">
                 <button
                     onClick={() => fileInputRef.current?.click()}
@@ -428,6 +419,75 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                             Release to finish recording
                         </div>
                     )}
+                </div>
+
+                {/* ⚡ Emoji Trigger */}
+                <div className="relative shrink-0">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowEmojiPicker(!showEmojiPicker);
+                        }}
+                        className={`flex items-center justify-center w-10 h-10 rounded-full transition-all active:scale-90 ${showEmojiPicker ? 'bg-rose-100 text-rose-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                        <Smile className="h-5 w-5" />
+                    </button>
+
+                    <AnimatePresence>
+                        {showEmojiPicker && (
+                            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setShowEmojiPicker(false)}
+                                    className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+                                />
+                                <motion.div
+                                    ref={emojiPickerRef}
+                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    className="relative w-full max-w-[320px] bg-white rounded-3xl shadow-2xl overflow-hidden p-5"
+                                >
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Emojis</h3>
+                                        <button
+                                            onClick={() => setShowEmojiPicker(false)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 transition-colors"
+                                        >
+                                            <CloseIcon className="h-4 w-4" />
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-6 gap-2 max-h-[350px] overflow-y-auto no-scrollbar pb-2">
+                                        {EMOJI_PICKER_LIST.map((emoji, idx) => (
+                                            <button
+                                                key={`${emoji}-${idx}`}
+                                                type="button"
+                                                onClick={() => {
+                                                    onChange(value + emoji);
+                                                    // For better UX, we don't auto-close so they can type multiple emojis
+                                                }}
+                                                className="w-10 h-10 flex items-center justify-center hover:bg-rose-50 rounded-xl text-2xl transition-all active:scale-90"
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-slate-50 flex justify-end">
+                                        <button
+                                            onClick={() => setShowEmojiPicker(false)}
+                                            className="px-6 py-2 bg-rose-500 text-white text-xs font-bold rounded-full shadow-lg shadow-rose-200 active:scale-95 transition-all"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
         </div>

@@ -5,7 +5,7 @@
  */
 
 import { API_BASE_URL } from "@/src/lib/config";
-import { safeFetch } from "./handler";
+import { safeFetch, isOffline } from "./handler";
 import type { Post } from "@/src/lib/types";
 
 const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
@@ -307,6 +307,7 @@ export async function prefetchMediaConservative(urls: Array<string | undefined>,
           const matched = await cache.match(req);
           if (matched) continue;
           await runDuringIdle(async () => {
+            if (isOffline()) return;
             try {
               const res = await fetch(u, { cache: "no-store" });
               if (!res.ok) return;

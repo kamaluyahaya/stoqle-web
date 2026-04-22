@@ -939,14 +939,14 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
                 localStorage.setItem('stoqle_guest_session', sessionId);
               }
               const visitorId = currentUserId;
-              
+
               // Only call if it's someone else looking at the profile
               if (visitorId !== String(normalized.user?.user_id)) {
                 fetch(`${base.replace(/\/$/, "")}/api/business/${normalized.business.business_id || normalized.business.id}/visit`, {
                   method: 'POST',
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ visitor_id: visitorId, session_id: sessionId })
-                }).catch(() => {});
+                }).catch(() => { });
               }
             } catch (err) {
               // ignore tracking storage errors
@@ -1775,7 +1775,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
             initial={{ y: 100, opacity: 0, x: "-50%" }}
             animate={{ y: 0, opacity: 1, x: "-50%" }}
             exit={{ y: 100, opacity: 0, x: "-50%" }}
-            className="fixed bottom-6 left-1/2 bg-white rounded-[1rem] border border-slate-100 p-3 flex items-center gap-3 w-[calc(100%-2rem)] max-w-[400px] shadow-2xl"
+            className="fixed bottom-6 left-1/2 bg-white rounded-[0.5rem] p-3 flex items-center gap-3 w-[calc(100%-2rem)] max-w-[400px] shadow-2xl"
           >
             {/* Left: Info */}
             <div className="flex items-center gap-3 min-w-0 flex-1">

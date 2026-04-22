@@ -105,7 +105,8 @@ export async function fetchProductById(productId: number | string, token?: strin
   const headers: any = {};
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  return safeFetch(`/api/products/${productId}`, { method: "GET", headers });
+  const safeId = encodeURIComponent(String(productId).trim());
+  return safeFetch(`/api/products/${safeId}`, { method: "GET", headers });
 }
 
 export async function fetchBusinessProducts(businessId: number | string, limit = 6, status?: string, exclude?: number | string, token?: string | null) {

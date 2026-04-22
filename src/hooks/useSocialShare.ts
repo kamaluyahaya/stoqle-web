@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { API_BASE_URL } from '@/src/lib/config';
+import { safeFetch } from '@/src/lib/api/handler';
 
 interface UseSocialShareReturn {
   /** Call to generate & cache the share URL for a social post. Idempotent per social_post_id. */
@@ -49,13 +49,12 @@ export function useSocialShare(token?: string | null): UseSocialShareReturn {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (tokenRef.current) headers['Authorization'] = `Bearer ${tokenRef.current}`;
 
-      const res = await fetch(`${API_BASE_URL}/api/social/share`, {
+      const json = await safeFetch<any>("/api/social/share", {
         method: 'POST',
         headers,
         body: JSON.stringify({ post_id: spid }),
       });
 
-      const json = await res.json();
       if (!json.ok || !json.data?.url) throw new Error(json.message || 'Failed to generate link');
 
       const url: string = json.data.url;
@@ -66,7 +65,7 @@ export function useSocialShare(token?: string | null): UseSocialShareReturn {
       setShareUrl(url);
       return url;
     } catch (err: any) {
-      console.error('[useSocialShare]', err);
+      // Errors are handled silently or via bubble to caller; we log structured error to console
       return null;
     } finally {
       isLoadingRef.current = false;

@@ -89,7 +89,7 @@ export const RoomItem: React.FC<RoomItemProps> = ({
                             }`}>
                             {displayName}
                         </p>
-                        {vendorBadge?.verified_badge && (
+                        {!!vendorBadge?.verified_badge && (
                             <VerifiedBadge size="xs" label={vendorBadge.badge_label} className="shrink-0" />
                         )}
                     </div>

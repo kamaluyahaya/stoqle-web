@@ -6,7 +6,7 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { useAuth } from "@/src/context/authContext";
 import { copyToClipboard } from "@/src/lib/utils/utils";
 import { useWallet } from "@/src/context/walletContext";
-import { ChevronLeft, ChevronDown, ChevronUp, MessageCircle, Package, MapPin, Search, ChevronRight, CheckCircle, AlertTriangle, Clock, X, Star, Info, SlidersHorizontal, XCircle, Truck, Copy, Camera, CheckCircle2, Send } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronUp, MessageCircle, Package, MapPin, Search, ChevronRight, CheckCircle, AlertTriangle, Clock, X, Star, Info, SlidersHorizontal, XCircle, Truck, Copy, Camera, CheckCircle2, Send, Trash2 } from "lucide-react";
 
 const REPORT_REASONS = [
     "Damaged item",
@@ -64,6 +64,7 @@ import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { formatUrl } from "@/src/lib/utils/media";
 import { fetchProductById, logUserActivity } from "@/src/lib/api/productApi";
 import { fetchSocialPostById, toggleSocialPostLike } from "@/src/lib/api/social";
+import { removePendingCheckout } from "@/src/lib/api/paymentApi";
 import PostModal from "@/src/components/modal/postModal";
 import { AnimatePresence } from "framer-motion";
 import Lightbox from "yet-another-react-lightbox";
@@ -113,6 +114,7 @@ interface VendorOrder {
     vendor_name: string;
     vendor_logo: string | null;
     profile_pic?: string | null;
+    vendor_owner_name?: string | null;
     reference_no: string;
     total: number;
     status: string;
@@ -158,14 +160,20 @@ interface PendingCheckout {
         business_id?: number,
         business_owner_id: number | null,
         product_image?: string | null,
+        business_image?: string | null,
         business_logo?: string | null,
-        business_profile_pic?: string | null
+        business_profile_pic?: string | null,
+        business_owner_name?: string | null,
+        business_slug?: string | null,
+        product_id?: number | string | null,
+        is_sold_out?: boolean
     }[];
     created_at: string;
     metadata: any;
 }
 
 import { useAudio } from "@/src/context/audioContext";
+import { safeFetch } from "@/src/lib/api/handler";
 
 const slugify = (str: string) =>
     String(str || "").toLowerCase().trim()
@@ -177,8 +185,10 @@ export default function MyOrdersPage() {
     const { playSound } = useAudio();
     const router = useRouter();
     const [dynamicNavHeight, setDynamicNavHeight] = useState(0);
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        setMounted(true);
         const updateHeight = () => {
             if (window.innerWidth >= 1024) { // matching 'lg' breakpoint
                 setDynamicNavHeight(64);
@@ -192,7 +202,12 @@ export default function MyOrdersPage() {
     }, []);
     const [orders, setOrders] = useState<MasterOrder[]>([]);
     const [pendingOrders, setPendingOrders] = useState<PendingCheckout[]>([]);
-    const [activeTab, setActiveTab] = useState("All");
+    const [activeTab, setActiveTab] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return sessionStorage.getItem("stoqle_orders_active_tab") || "All";
+        }
+        return "All";
+    });
     const [isLoading, setIsLoading] = useState(true);
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxSlides, setLightboxSlides] = useState<{ src: string }[]>([]);
@@ -261,6 +276,62 @@ export default function MyOrdersPage() {
         };
     }, [isTrackingModalOpen, isReviewModalOpen, isReportModalOpen, isReturnModalOpen, selectedImageUrl, isDeliveryCodeModalOpen]);
 
+    // Scroll restoration
+    useEffect(() => {
+        if (!isLoading && mounted) {
+            const savedScroll = sessionStorage.getItem("stoqle_orders_scroll_pos");
+            if (savedScroll && parseInt(savedScroll) > 0) {
+                setTimeout(() => {
+                    window.scrollTo({ top: parseInt(savedScroll), behavior: 'auto' });
+                }, 150);
+            }
+        }
+    }, [isLoading, mounted]);
+
+    // Save scroll on change
+    useEffect(() => {
+        const handleScroll = () => {
+            // Only save if not loading and a substantial scroll has occurred
+            if (!isLoading && window.scrollY > 0) {
+                sessionStorage.setItem("stoqle_orders_scroll_pos", window.scrollY.toString());
+            }
+        };
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, [isLoading]);
+
+    const handleRemovePending = async (reference: string) => {
+        const result = await Swal.fire({
+            title: "Remove Checkout?",
+            text: "This will clear this pending payment attempt. You can always restart checkout from your cart.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Yes, remove",
+            cancelButtonText: "Keep it",
+            confirmButtonColor: "#f43f5e", // rose-500
+            cancelButtonColor: "#94a3b8", // slate-400
+            customClass: {
+                popup: "rounded-[2rem]",
+                confirmButton: "rounded-xl font-bold px-6 py-3",
+                cancelButton: "rounded-xl font-bold px-6 py-3"
+            }
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const res = await removePendingCheckout(reference, token ?? undefined);
+            if (res.success || res.status === 'success') {
+                toast.success("Checkout attempt removed");
+                setPendingOrders(prev => prev.filter(p => p.reference !== reference));
+            } else {
+                toast.error(res.message || "Failed to remove");
+            }
+        } catch (e: any) {
+            toast.error(e.message || "Network error. Please try again.");
+        }
+    };
+
     const toggleMaster = (masterId: number, autoExpand?: boolean, firstVendorId?: number) => {
         setExpandedMasters(prev => {
             const isExpanding = !prev[masterId];
@@ -301,6 +372,11 @@ export default function MyOrdersPage() {
 
     const handleTabClick = (tab: string) => {
         setActiveTab(tab);
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem("stoqle_orders_active_tab", tab);
+            // Reset scroll when tab changes
+            sessionStorage.setItem("stoqle_orders_scroll_pos", "0");
+        }
         const element = tabRefs.current.get(tab);
         if (element) {
             element.scrollIntoView({
@@ -331,31 +407,32 @@ export default function MyOrdersPage() {
         try {
             if (showLoading) setIsLoading(true);
 
-            // Fetch both completed and pending concurrently
-            const [ordersRes, pendingRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/orders/customer`, {
+            // Fetch both completed and pending concurrently using safeFetch for resilient networking
+            const [ordersData, pendingData] = await Promise.all([
+                safeFetch<any>("/api/orders/customer", {
                     headers: { "Authorization": `Bearer ${token}` },
-                    cache: 'no-store'
                 }),
-                fetch(`${API_BASE_URL}/api/payment/my-pending`, {
+                safeFetch<any>("/api/payment/my-pending", {
                     headers: { "Authorization": `Bearer ${token}` },
-                    cache: 'no-store'
                 })
             ]);
 
-            const ordersData = await ordersRes.json();
-            const pendingData = await pendingRes.json();
-
-            if (ordersData.status === "success" || ordersData.success) {
+            if (ordersData && (ordersData.status === "success" || ordersData.success)) {
                 // Backend now deeply resolves structure!
                 setOrders(ordersData.data || []);
             }
-            if (pendingData.status === "success" || pendingData.success) {
+            if (pendingData && (pendingData.status === "success" || pendingData.success)) {
                 setPendingOrders(pendingData.data || []);
             }
-        } catch (err) {
+        } catch (err: any) {
+            // Silently handle offline/network errors to prevent console noise and annoying toasts
+            if (err?.isOffline || !navigator.onLine) return;
+            
             console.error("Fetch orders err:", err);
-            toast.error("Internal Server Error");
+            // Only show toast for actual server/logic failures, not network drops
+            if (err?.status && err.status !== 503) {
+                 toast.error(err?.message || "Internal Server Error");
+            }
         } finally {
             if (showLoading) setIsLoading(false);
         }
@@ -1082,10 +1159,10 @@ export default function MyOrdersPage() {
             // We want to keep the user on the orders page logically but show the pretty path
             const base = "/profile/orders";
             newUrl = `${base}/${bSlug}/${pSlug}`;
-            
+
             if (isReels) urlParams.set("reels", "true");
             else urlParams.delete("reels");
-            
+
             urlParams.delete("p");
             urlParams.delete("b");
             urlParams.delete("product_id");
@@ -1145,7 +1222,7 @@ export default function MyOrdersPage() {
                         return post;
                     });
                     setSocialPostModalOpen(true);
-                    
+
                     // Also maintain the pretty URL with slugs if we got them from the post
                     const lp = post.linked_product;
                     if (lp) {
@@ -1209,10 +1286,10 @@ export default function MyOrdersPage() {
             const qP = urlParams.get("p");
             const qB = urlParams.get("b");
             const isReels = urlParams.get("reels") === "true";
-            
+
             const currentPath = window.location.pathname;
             const pathParts = currentPath.split('/').filter(Boolean);
-            
+
             // Expected pretty path: /profile/orders/[vendor]/[product]
             const isPrettyPath = pathParts.length >= 4 && pathParts[0] === 'profile' && pathParts[1] === 'orders';
             const bSlugFromPath = isPrettyPath ? pathParts[2] : null;
@@ -1323,11 +1400,10 @@ export default function MyOrdersPage() {
         </div>
     );
 
-    if (!isHydrated) {
+    if (!mounted || !isHydrated) {
         return (
-            <div className="min-h-screen bg-[#F8FAFC]">
-                <div className="h-[60px] md:h-0"></div>
-                <main className="md:p-10 pb-20 p-3">
+            <div className="min-h-screen bg-slate-100 max-w-[100vw]" style={{ overflowX: 'clip' }}>
+                <main className=" md:p-4 pb-4">
                     <div className="mb-5">
                         <div className="w-48 h-8 bg-slate-200 animate-pulse rounded-xl mb-2" />
                     </div>
@@ -1472,7 +1548,7 @@ export default function MyOrdersPage() {
                                 >
                                     <span className="relative pb-1">
                                         {tab}
-                                        {count > 0 && (
+                                        {count > 0 && activeTab === tab && (
                                             <span className="ml-1 text-[11px] opacity-70">
                                                 ({count})
                                             </span>
@@ -1582,37 +1658,57 @@ export default function MyOrdersPage() {
                                                             ).map(([bid, items], bIdx) => (
                                                                 <div key={bid || bIdx} className="space-y-4">
                                                                     <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                                                                        <div className="flex items-center gap-3">
+                                                                        <div 
+                                                                            className="flex items-center gap-3 cursor-pointer hover:opacity-70 transition-opacity" 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const slug = items[0].business_slug || (items[0].business_name ? slugify(items[0].business_name) : items[0].business_id);
+                                                                                if (slug) router.push(`/shop/${slug}`);
+                                                                            }}
+                                                                        >
                                                                             <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden">
                                                                                 {items[0].business_logo || items[0].business_profile_pic ? (
                                                                                     <img src={formatUrl(items[0].business_logo || items[0].business_profile_pic)} alt="" className="w-full h-full object-cover" />
                                                                                 ) : (
-                                                                                    <div className="text-slate-200 font-bold text-lg">{items[0].business_name?.charAt(0)}</div>
+                                                                                    <div className="text-slate-200 font-bold text-lg">{(items[0].business_name || items[0].business_owner_name || 'S')?.charAt(0)}</div>
                                                                                 )}
                                                                             </div>
                                                                             <div className="flex-1 overflow-hidden">
-                                                                                <span className="text-[11px] font-semibold text-slate-600 block truncate max-w-[140px] md:max-w-none">{items[0].business_name}</span>
+                                                                                <span className="text-[11px] font-semibold text-slate-600 block truncate max-w-[140px] md:max-w-none">{items[0].business_name || items[0].business_owner_name || 'Stoqle Vendor'}</span>
                                                                             </div>
                                                                         </div>
-                                                                        {items[0].business_owner_id && (
+                                                                        <div className="flex items-center gap-2">
+                                                                            {items[0].business_owner_id && (
+                                                                                <button
+                                                                                    onClick={() => handleMessageVendor({
+                                                                                        business_owner_id: items[0].business_owner_id,
+                                                                                        sale_id: pending.reference as any,
+                                                                                        business_name: items[0].business_name
+                                                                                    } as any)}
+                                                                                    className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-lg text-[10px] transition hover:bg-rose-100 "
+                                                                                >
+                                                                                    <MessageCircle size={14} />
+                                                                                    Chat Vendor
+                                                                                </button>
+                                                                            )}
                                                                             <button
-                                                                                onClick={() => handleMessageVendor({
-                                                                                    business_owner_id: items[0].business_owner_id,
-                                                                                    sale_id: pending.reference as any,
-                                                                                    business_name: items[0].business_name
-                                                                                } as any)}
-                                                                                className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-500 rounded-lg text-[10px] transition hover:bg-rose-100 "
+                                                                                onClick={() => handleRemovePending(pending.reference)}
+                                                                                className="p-2 text-slate-300 hover:text-rose-500 transition-colors bg-slate-50 hover:bg-rose-50 rounded-lg"
+                                                                                title="Remove checkout attempt"
                                                                             >
-                                                                                <MessageCircle size={14} />
-                                                                                Chat Vendor
+                                                                                <Trash2 size={14} />
                                                                             </button>
-                                                                        )}
+                                                                        </div>
                                                                     </div>
 
                                                                     <div className="space-y-5">
                                                                         {items.map((item, idx) => (
-                                                                            <div key={item.title + idx} className="flex gap-4 items-center">
-                                                                                <div className="w-16 h-16 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 overflow-hidden ">
+                                                                            <div 
+                                                                                key={item.title + idx} 
+                                                                                className="flex gap-4 items-center cursor-pointer group/item hover:bg-slate-50/50 p-2 -m-2 rounded-xl transition-colors"
+                                                                                onClick={() => handleBuyAgain(item as any)}
+                                                                            >
+                                                                                <div className="w-16 h-16 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-100 overflow-hidden group-hover/item:border-rose-200 transition-colors">
                                                                                     {item.product_image ? (
                                                                                         <img src={formatUrl(item.product_image)} alt="" className="w-full h-full object-cover" />
                                                                                     ) : (
@@ -1620,14 +1716,19 @@ export default function MyOrdersPage() {
                                                                                     )}
                                                                                 </div>
                                                                                 <div className="flex-1">
-                                                                                    <h4 className="text-[12px]  text-slate-500 line-clamp-2 leading-snug">{item.title}</h4>
+                                                                                    <h4 className="text-[12px] text-slate-500 line-clamp-2 leading-snug group-hover/item:text-slate-800 transition-colors">{item.title}</h4>
                                                                                     {item.variant_info && (
                                                                                         <div className="flex items-center gap-1.5 mt-1.5">
                                                                                             <div className="w-1 h-1 rounded-full bg-rose-500/30" />
                                                                                             <p className="text-[10px] text-rose-500 font-bold tracking-wide ">{item.variant_info}</p>
                                                                                         </div>
                                                                                     )}
-                                                                                    <p className="text-xs text-slate-400 mt-2 font-medium">Qty: <span className="text-slate-600 font-bold">{item.quantity}</span> • <span className="text-slate-800 font-bold">₦{Number(item.price || item.unit_price || (items.length === 1 ? pending.amount : 0)).toLocaleString()}</span></p>
+                                                                                    {item.is_sold_out && (
+                                                                                        <div className="mt-1.5 px-2 py-0.5 bg-amber-50 border border-amber-100 rounded text-[9px] font-bold text-amber-600 flex items-center gap-1 w-fit">
+                                                                                            Sold Out
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <p className="text-xs text-slate-400 mt-2 font-medium">Qty: <span className="text-slate-600 font-bold">{item.quantity}</span> • <span className="text-slate-800 font-bold">₦{Number(item.unit_price || item.price || (items.length === 1 ? pending.amount : 0)).toLocaleString()}</span></p>
                                                                                 </div>
                                                                             </div>
                                                                         ))}
@@ -1640,12 +1741,21 @@ export default function MyOrdersPage() {
                                                                 <p className="text-[9px] font-semibold text-slate-400">Total interested</p>
                                                                 <p className="text-lg font-bold text-slate-900">₦{Number(pending.amount || 0).toLocaleString()}</p>
                                                             </div>
-                                                            <button
-                                                                onClick={() => router.push('/checkout')}
-                                                                className="px-6 py-2.5 bg-rose-500 text-white rounded-2xl font-bold text-[10px]   shadow-lg shadow-rose-500/20 active:scale-95 transition"
-                                                            >
-                                                                Continue to Pay
-                                                            </button>
+                                                            {pending.items.some(i => i.is_sold_out) ? (
+                                                                <button
+                                                                    onClick={() => router.push('/market')}
+                                                                    className="px-6 py-2.5 bg-slate-800 text-white rounded-2xl font-bold text-[10px]   shadow-lg shadow-slate-800/20 active:scale-95 transition"
+                                                                >
+                                                                    Sold Out (Find Similar)
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => router.push(`/checkout?reference=${pending.reference}`)}
+                                                                    className="px-6 py-2.5 bg-rose-500 text-white rounded-2xl font-bold text-[10px]   shadow-lg shadow-rose-500/20 active:scale-95 transition"
+                                                                >
+                                                                    Continue to Pay
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1716,16 +1826,31 @@ export default function MyOrdersPage() {
                                                                             <ChevronDown size={14} />
                                                                         </div>
                                                                         <div className="flex items-center gap-2.5">
-                                                                            <div className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                                                                            <div 
+                                                                                className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    const slug = (vendor as any).business_slug || (vendor.vendor_name ? slugify(vendor.vendor_name) : vendor.vendor_id);
+                                                                                    if (slug) router.push(`/shop/${slug}`);
+                                                                                }}
+                                                                            >
                                                                                 {vendor.vendor_logo || vendor.profile_pic ? (
                                                                                     <img src={formatUrl(vendor.vendor_logo || vendor.profile_pic)} alt="" className="w-full h-full object-cover" />
                                                                                 ) : (
-                                                                                    <div className="text-slate-300 font-bold text-xs">{vendor.vendor_name?.charAt(0)}</div>
+                                                                                    <div className="text-slate-300 font-bold text-xs">{(vendor.vendor_name || vendor.vendor_owner_name || 'V')?.charAt(0)}</div>
                                                                                 )}
                                                                             </div>
-                                                                            <div>
-                                                                                <h4 className="font-bold text-slate-700 text-xs md:text-sm truncate max-w-[150px] md:max-w-none">
-                                                                                    {vendor.vendor_name}
+                                                                            <div 
+                                                                                className="min-w-0 cursor-pointer group"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    // business_slug is part of vendor object if enriched by backend
+                                                                                    const slug = (vendor as any).business_slug || (vendor.vendor_name ? slugify(vendor.vendor_name) : vendor.vendor_id);
+                                                                                    if (slug) router.push(`/shop/${slug}`);
+                                                                                }}
+                                                                            >
+                                                                                <h4 className="font-bold text-slate-700 text-xs md:text-sm truncate max-w-[150px] md:max-w-none group-hover:text-rose-500 transition-colors">
+                                                                                    {vendor.vendor_name || vendor.vendor_owner_name || 'Stoqle Vendor'}
                                                                                 </h4>
                                                                                 <p className="text-[9px] font-bold text-slate-400">Ref: <span className="text-slate-500 ">{vendor.reference_no}</span></p>
                                                                             </div>
@@ -2527,8 +2652,8 @@ export default function MyOrdersPage() {
             />
             <AnimatePresence>
                 {socialPostModalOpen && selectedSocialPost && (
-                    <PostModal 
-                        key={`social-post-${selectedSocialPost.id}`}
+                    <PostModal
+                        key={`social-post-mod-${selectedSocialPost.social_post_id || selectedSocialPost.id}`}
                         open={socialPostModalOpen}
                         post={selectedSocialPost}
                         userToken={token}
@@ -2546,7 +2671,7 @@ export default function MyOrdersPage() {
                             const lp = p.linked_product || (p.is_social_post ? {} : p);
                             const prodSlug = p.product_slug || lp.slug || lp.product_slug || (lp.title ? slugify(lp.title) : null);
                             const bizSlug = p.business_slug || lp.business_slug || p.user?.business_slug;
-                            
+
                             updateUrl(p.product_id || `post-${p.id}`, bizSlug, prodSlug, true, true);
                         }}
                     />

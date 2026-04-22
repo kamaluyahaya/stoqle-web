@@ -40,6 +40,7 @@ export class ApiError extends Error {
             body: this.body,
             isOffline: this.isOffline,
             source: this.source,
+            stack: this.stack,
         };
     }
 }
@@ -68,13 +69,30 @@ export async function safeFetch<T = any>(
 
     // Pre-emptive offline check to suppress console noise
     if (isOffline()) {
-        throw new ApiError(
+        const err = new ApiError(
             "No internet connection.",
             0,
-            { message: "Offline state detected" },
+            { message: "Offline state detected", success: false },
             true,
             source
         );
+
+        // SILENCE STRATEGY: For GET requests, return a safe "offline" object
+        // instead of throwing. This prevents console noise and crashes in 
+        // components that don't use try/catch for background fetches.
+        if (!options.method || options.method.toUpperCase() === "GET") {
+            return {
+                success: false,
+                ok: false,
+                isOffline: true,
+                status: 0,
+                body: null,
+                message: "Offline",
+                error: err.toJSON()
+            } as any;
+        }
+
+        throw err;
     }
 
     try {
@@ -103,6 +121,9 @@ export async function safeFetch<T = any>(
     } catch (error: any) {
         // If it's already an ApiError, rethrow it
         if (error instanceof ApiError) throw error;
+
+        // Ignore AbortError (caller will handle or intentionally ignore)
+        if (error.name === "AbortError") throw error;
 
         // If we caught a raw TypeError (failed to fetch) or other network-level error
         const offline = isOffline();

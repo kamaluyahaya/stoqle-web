@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useAuth } from '@/src/context/authContext';
-import { API_BASE_URL } from '@/src/lib/config';
+import { safeFetch } from '@/src/lib/api/handler';
 
 // Global cache to prevent duplicate requests across different component instances
 const stoqleIdCache: Record<string, string> = {};
@@ -50,10 +50,7 @@ export function useStoqle() {
     // 3. Initiate new resolution request
     pendingRequests[id] = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/users/${id}/stoqle-id`);
-        if (!response.ok) return null;
-
-        const result = await response.json();
+        const result = await safeFetch<any>(`/api/auth/users/${id}/stoqle-id`);
         
         if (result.status === 'success' && result.data?.stoqle_id) {
           const sid = String(result.data.stoqle_id);
@@ -63,7 +60,7 @@ export function useStoqle() {
 
         return null;
       } catch (error) {
-        console.error(`[useStoqle] Failed to resolve Stoqle ID for user ${id}:`, error);
+        // Silent resolution failure — IDs are non-critical data points for stability
         return null;
       } finally {
         // Clear pending status once done
