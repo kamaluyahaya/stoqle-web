@@ -31,6 +31,8 @@ import { useAuth } from "@/src/context/authContext";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import AddProductWalkthrough from "@/src/components/business/inventory/AddProductWalkthrough";
+import { VendorBotModal } from "@/src/components/modal/VendorBotModal";
+import { Sparkles } from "lucide-react";
 
 
 /* ===========================
@@ -397,6 +399,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
   const { drafts, saveDraft, deleteDraft } = useProductDrafts();
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [draftsModalOpen, setDraftsModalOpen] = useState(false);
+  const [vendorBotOpen, setVendorBotOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
   // Mark as dirty when any main field changes (including video/thumbnail)
@@ -795,6 +798,7 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
       form.append("title", title);
       form.append("description", description);
       form.append("category", category);
+      form.append("status", "active");
 
       if (!hasVariants) {
         if (price !== "") form.append("price", String(price));
@@ -1024,6 +1028,13 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVendorBotOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-full transition-all"
+              title="Vendor Assistant AI"
+            >
+              <Sparkles className="w-4 h-4" /> AI Assistant
+            </button>
             <button
               onClick={openPreview}
               className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-full transition-all"
@@ -1568,6 +1579,15 @@ export default function AddProductPage({ onSubmit }: { onSubmit?: (payload: Form
           )}
         </button>
       </div>
+
+      <VendorBotModal 
+        isOpen={vendorBotOpen} 
+        onClose={() => setVendorBotOpen(false)} 
+        onProductPreview={(p) => {
+          setPreviewPayload(p);
+          setPreviewOpen(true);
+        }}
+      />
     </div>
   );
 }

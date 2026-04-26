@@ -67,14 +67,16 @@ export const mapApiPost = (p: any): Post => {
     src = NO_IMAGE_PLACEHOLDER;
   }
   const isVideo = p.cover_type === "video" || isVideoUrl(src);
-  const caption = p.text ?? p.subtitle ?? "";
-  const note_caption = p.subtitle ?? "";
+  const caption = p.text || "";
+  const subtitle = p.subtitle || "";
+  const note_caption = p.subtitle || p.text || "";
   return {
     id: apiId,
     apiId,
     src,
     isVideo,
     caption,
+    subtitle,
     note_caption,
     user: {
       id: p.user_id ?? p.user?.user_id ?? p.user?.id ?? 0,
@@ -122,6 +124,7 @@ export const mapApiPost = (p: any): Post => {
     likes_count: p.likes_count ?? p.likeCount ?? 0,
     comment_count: p.comment_count ?? p.comments_count ?? p.commentCount ?? 0,
     liked_by_user: Boolean(p.liked_by_me ?? p.liked ?? false),
+    is_following: Boolean(p.is_following ?? false),
     original_audio_url: formatLocalUrl(p.original_audio_url),
     original_video_url: formatLocalUrl(p.original_video_url),
   };

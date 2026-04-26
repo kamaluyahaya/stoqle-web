@@ -36,6 +36,7 @@ import ShareToFriendsModal from "../../../components/modal/shareToFriendsModal";
 import { API_BASE_URL } from "@/src/lib/config";
 import { createPortal } from "react-dom";
 import BalanceModal from "../../business/balanceModal";
+import { ChatRoomModal } from "../../../components/modal/ChatRoomModal";
 
 type HeaderProps = {
   profileApi: any | null;
@@ -127,6 +128,11 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
   const [unfollowConfirmOpen, setUnfollowConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [showFlyer, setShowFlyer] = useState(false);
+
+  // Messaging Modal State
+  const [chatModalOpen, setChatModalOpen] = useState(false);
+  const [activeChatRoomId, setActiveChatRoomId] = useState<string | number | null>(null);
+  const [activeChatUserId, setActiveChatUserId] = useState<string | number | null>(null);
 
 
   const [hideBalance, setHideBalance] = useState<boolean>(() => {
@@ -646,12 +652,18 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
       }
 
       if (convId) {
-        router.push(`/messages?room=${convId}`);
+        setActiveChatRoomId(convId);
+        setActiveChatUserId(profileUserId);
+        setChatModalOpen(true);
         return;
       }
-      router.push(`/messages?user=${profileUserId}`);
+      setActiveChatUserId(profileUserId);
+      setActiveChatRoomId(null);
+      setChatModalOpen(true);
     } catch (err) {
-      router.push(`/messages?user=${profileUserId}`);
+      setActiveChatUserId(profileUserId);
+      setActiveChatRoomId(null);
+      setChatModalOpen(true);
     } finally {
       setMessageLoading(false);
     }
@@ -2221,6 +2233,22 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           business={profileApi?.business}
         />
       )}
+      <ChatRoomModal
+        isOpen={chatModalOpen}
+        onClose={() => setChatModalOpen(false)}
+        roomId={activeChatRoomId}
+        targetUserId={activeChatUserId}
+        initialOtherUser={{
+          name: displayName,
+          logo: profileApi?.business?.business_logo || profileApi?.user?.profile_pic || profileApi?.business?.logo || profileApi?.profile_pic,
+          business_name: profileApi?.business?.business_name,
+          full_name: profileApi?.user?.full_name || profileApi?.user?.name,
+          business_id: profileApi?.business?.id || profileApi?.business?.business_id,
+          business_slug: profileApi?.business?.business_slug || profileApi?.business?.slug,
+          is_business: !!profileApi?.business,
+          category: profileApi?.business?.category,
+        }}
+      />
     </div>
   );
 }
@@ -2519,3 +2547,4 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
     </div>
   );
 }
+

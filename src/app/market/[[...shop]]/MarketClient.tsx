@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import { ArrowUp, ShoppingCart, WifiOff, RotateCcw } from "lucide-react";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
 import { VerifiedBadge, PartnerPill } from "@/src/components/common/VerifiedBadge";
-import VisitedShopsRail from "@/src/components/recommendations/VisitedShopsRail";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 type Props = {
     params: Promise<{ shop?: string[] }>;
@@ -40,6 +40,7 @@ type Props = {
     initialCategory?: string;
     softCategory?: boolean;
     relatedVendorIds?: number[];
+    hideCartIcon?: boolean;
 };
 
 const slugify = (str: string) =>
@@ -243,13 +244,6 @@ const ProductCard = React.memo(({
                     <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
                     </div>
-                    {/* Placeholder frame indicator */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
-                        </div>
-                    </div>
-
                     <img
                         src={formatUrl(p.first_image)}
                         className="w-full min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-all duration-700 group-hover:scale-110 relative z-[1]"
@@ -391,12 +385,7 @@ const ProductCard = React.memo(({
                 <div className="absolute inset-0 flex items-center justify-center">
                     <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
                 </div>
-                {/* Placeholder frame indicator */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="flex flex-col items-center gap-2">
-                        <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
-                    </div>
-                </div>
+
                 <motion.div
                     initial={entryVariants.initial}
                     animate={entryVariants.animate}
@@ -434,8 +423,6 @@ const ProductCard = React.memo(({
                             <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
                         </div>
                     )}
-
-
                 </motion.div>
 
 
@@ -697,7 +684,7 @@ if (typeof window !== "undefined") {
     MARKET_CACHE.lastFetchedAt = Number(localStorage.getItem("stoqle_market_cache_time") || 0);
 }
 
-export default function MarketClient({ params: paramsPromise, initialCategories, hideTabs, initialCategory, softCategory, relatedVendorIds }: Props) {
+export default function MarketClient({ params: paramsPromise, initialCategories, hideTabs, initialCategory, softCategory, relatedVendorIds, hideCartIcon }: Props) {
     const routeParams = React.use(paramsPromise);
     const [activeCategory, setActiveCategory] = useState<string>(initialCategory || MARKET_CACHE.category);
     const [products, setProducts] = useState<any[]>(initialCategory && initialCategory !== MARKET_CACHE.category ? [] : MARKET_CACHE.products);
@@ -750,6 +737,30 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     const [isScrolled, setIsScrolled] = useState(false);
     const [showScrollTop, setShowScrollTop] = useState(false);
     const LIMIT_SOCIAL = 5;
+
+    // --- INACTIVITY REFRESH ENGINE ---
+    const lastHiddenAt = useRef<number | null>(null);
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                lastHiddenAt.current = Date.now();
+            } else {
+                if (lastHiddenAt.current) {
+                    const elapsed = Date.now() - lastHiddenAt.current;
+                    const fiveMinutes = 5 * 60 * 1000;
+                    if (elapsed >= fiveMinutes) {
+                        console.log(`[Market] Inactivity detected (${Math.round(elapsed / 1000 / 60)}m), auto-refreshing feed...`);
+                        handleManualRefresh();
+                    }
+                    lastHiddenAt.current = null;
+                }
+            }
+        };
+
+        window.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => window.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, []);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -1691,11 +1702,9 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                             transition={{ type: "spring", damping: 30, stiffness: 300 }}
                             className="flex justify-center items-center py-6 bg-slate-50 overflow-hidden"
                         >
-                            <div className="flex items-center gap-2 px-6 py-3 rounded-full  border-slate-100">
-                                <svg className="w-4 h-4 text-slate-900 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                    <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
-                                </svg>
-                            </div>
+                            {/* <div className="flex items-center gap-2 px-6 py-3 rounded-full border-slate-100">
+                                <StoqleLoader size={20} />
+                            </div> */}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -1770,7 +1779,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 {/* Lazy Load Trigger */}
                 <div ref={loaderRef} className="py-10 flex justify-center">
                     {isLoadingMore && hasMore && (
-                        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+                        <StoqleLoader size={40} />
                     )}
                     {!hasMore && products.length > 0 && (
                         <p className="text-slate-400 text-xs italic">- THE END -</p>
@@ -1800,15 +1809,17 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 </AnimatePresence>
 
                 {/* Shopping Cart Button */}
-                <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => router.push('/cart')}
-                    className="w-12 h-12 bg-white text-slate-900 rounded-full shadow-2xl flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-colors"
-                    title="View Cart"
-                >
-                    <ShoppingCart className="w-5 h-5" />
-                </motion.button>
+                {!hideCartIcon && (
+                    <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => router.push('/cart')}
+                        className="w-12 h-12 bg-white text-slate-900 rounded-full shadow-2xl flex items-center justify-center border border-slate-100 hover:bg-slate-50 transition-colors"
+                        title="View Cart"
+                    >
+                        <ShoppingCart className="w-5 h-5" />
+                    </motion.button>
+                )}
             </div>
 
             {/* Render ProductPreviewModal directly! Reusing your existing component but with real mapping. */}

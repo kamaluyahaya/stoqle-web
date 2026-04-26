@@ -5,6 +5,7 @@ import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
 import { useAuth } from "@/src/context/authContext";
 import { isOffline, safeFetch } from "../../lib/api/handler";
 import Link from "next/link";
+import CachedImage from "@/src/components/common/CachedImage";
 
 type Props = {
     src: string | null;
@@ -33,6 +34,15 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
         }
     }, [profileUserId]);
 
+    useEffect(() => {
+        if (src) {
+            document.body.style.overflow = "hidden";
+        }
+        return () => {
+            document.body.style.overflow = "";
+        };
+    }, [src]);
+
     const fetchLikeStats = async () => {
         try {
             const token = localStorage.getItem("token");
@@ -50,7 +60,7 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
 
     const toggleLike = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!user) return; // Should probably open login modal
+        if (!user || isOwnProfile) return; 
 
         try {
             const token = localStorage.getItem("token");
@@ -115,7 +125,7 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                 <div className="relative flex flex-col items-center gap-6 w-full h-full justify-center">
                     <div className="relative w-full max-h-[85vh] flex items-center justify-center overflow-hidden">
                         <AnimatePresence initial={false} custom={direction} mode="popLayout">
-                            <motion.img
+                            <CachedImage
                                 key={src}
                                 custom={direction}
                                 variants={{
@@ -127,7 +137,7 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                                 animate="center"
                                 exit="exit"
                                 transition={{ x: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
-                                src={src || undefined}
+                                src={src || ""}
                                 alt="Full screen"
                                 drag={mediaList.length > 1 ? "x" : false}
                                 dragConstraints={{ left: 0, right: 0 }}
@@ -186,7 +196,8 @@ export default function ImageViewer({ src, onClose, profileUserId, mediaList = [
                                 {/* Like Toggle */}
                                 <button
                                     onClick={toggleLike}
-                                    className="flex items-center gap-2 group transition-all active:scale-90"
+                                    disabled={isOwnProfile}
+                                    className={`flex items-center gap-2 group transition-all ${isOwnProfile ? 'opacity-50 cursor-not-allowed' : 'active:scale-90'}`}
                                 >
                                     {liked ? (
                                         <HeartSolidIcon className="w-7 h-7 text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]" />

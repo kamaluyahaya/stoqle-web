@@ -34,6 +34,7 @@ type LargeScreenVideoPlayerProps = {
   onLongPress?: (e: React.MouseEvent | React.TouchEvent) => void;
   isActive?: boolean;
   fixedRatio?: number | null;
+  onLoadedMetadata?: (w: number, h: number) => void;
 };
 
 const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
@@ -63,6 +64,7 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
   onLongPress,
   isActive: isActiveProp,
   fixedRatio = null,
+  onLoadedMetadata,
 }: LargeScreenVideoPlayerProps) {
   const {
     isMuted: globalMute,
@@ -217,7 +219,10 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
 
     const onLoadedMeta = () => {
       setDuration(Math.min(video.duration || 0, 180));
-      if (video.videoWidth && video.videoHeight) setAspectRatio(video.videoWidth / video.videoHeight);
+      if (video.videoWidth && video.videoHeight) {
+        setAspectRatio(video.videoWidth / video.videoHeight);
+        onLoadedMetadata?.(video.videoWidth, video.videoHeight);
+      }
     };
 
     const onTime = () => {

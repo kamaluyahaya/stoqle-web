@@ -158,13 +158,13 @@ export const ProductHandoffModal: React.FC<Props> = ({
                 className="relative w-full max-w-lg bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] pointer-events-auto flex flex-col h-[80vh] sm:h-[80%] overflow-hidden"
             >
                 {/* Drag Handle (Mobile Only) */}
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 mb-2 shrink-0 sm:hidden" />
+                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 shrink-0 sm:hidden" />
 
                 {/* Header */}
-                <div className="px-6 py-4 flex items-center justify-between border-b border-slate-50 shrink-0 relative">
+                <div className="px-6 py-4 flex items-center justify-between shrink-0 relative">
                     <div className="w-10 opacity-0 pointer-events-none"><X size={20} /></div>
                     <div className="text-center">
-                        <h3 className="text-lg font-bold text-slate-900 tracking-tight">Please select product</h3>
+                        <h3 className="text-smlg:text-lg font-bold text-slate-900 tracking-tight">Please select product</h3>
                     </div>
                     <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-95">
                         <X size={20} />
@@ -172,7 +172,7 @@ export const ProductHandoffModal: React.FC<Props> = ({
                 </div>
 
                 {/* Tabs */}
-                <div className="flex px-6 shrink-0 gap-8 justify-center">
+                <div className="flex px-6 shrink-0 gap-8 ">
                     {(['view', 'cart', 'shop'] as const).map((tab) => (
                         <button
                             key={tab}
@@ -213,7 +213,6 @@ export const ProductHandoffModal: React.FC<Props> = ({
                                     <ShoppingBag size={40} />
                                 </div>
                             )}
-                            <h4 className="text-sm font-bold text-slate-900 mb-1">No items found</h4>
                             <p className="text-[10px] text-slate-400 max-w-[200px]">
                                 {activeTab === 'view' ? "You haven't viewed any products from this shop recently." :
                                     activeTab === 'cart' ? "There are no products from this shop in your cart." :
@@ -238,13 +237,10 @@ export const ProductHandoffModal: React.FC<Props> = ({
                                         />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h4 className="text-xs font-black text-slate-900 line-clamp-2 mb-1">{product.title}</h4>
+                                        <h4 className="text-xs font-semibold text-slate-900 line-clamp-2 mb-1">{product.title}</h4>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[11px] font-black text-rose-500">₦{Number(product.price).toLocaleString()}</span>
                                         </div>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-rose-500 group-hover:text-white transition-all">
-                                        <Send size={14} />
                                     </div>
                                 </motion.div>
                             ))}
@@ -258,12 +254,7 @@ export const ProductHandoffModal: React.FC<Props> = ({
                     )}
                 </div>
 
-                {/* Footer Tip */}
-                <div className="p-6 pt-2 border-t border-slate-50 shrink-0">
-                    <p className="text-[9px] font-medium text-slate-400 text-center">
-                        Tap any product to send it instantly as an inquiry to the vendor.
-                    </p>
-                </div>
+
             </motion.div>
         </div>
     );

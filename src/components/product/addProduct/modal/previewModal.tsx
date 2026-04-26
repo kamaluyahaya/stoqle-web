@@ -345,23 +345,23 @@ export default function ProductPreviewModal({
 
   useEffect(() => {
     if (!open || !payload?.productId) return;
-    
+
     // ⚡ Persist "Recently Viewed" for the Send Item feature
     try {
-        const viewed = JSON.parse(localStorage.getItem("stoqle_viewed_products") || "[]");
-        const newView = {
-            product_id: payload.productId,
-            title: payload.title,
-            price: payload.price,
-            thumbnail: images?.[0]?.url || '',
-            business_id: payload.businessId,
-            timestamp: Date.now()
-        };
-        const filtered = viewed.filter((v: any) => v.product_id !== payload.productId);
-        const updated = [newView, ...filtered].slice(0, 50);
-        localStorage.setItem("stoqle_viewed_products", JSON.stringify(updated));
+      const viewed = JSON.parse(localStorage.getItem("stoqle_viewed_products") || "[]");
+      const newView = {
+        product_id: payload.productId,
+        title: payload.title,
+        price: payload.price,
+        thumbnail: images?.[0]?.url || '',
+        business_id: payload.businessId,
+        timestamp: Date.now()
+      };
+      const filtered = viewed.filter((v: any) => v.product_id !== payload.productId);
+      const updated = [newView, ...filtered].slice(0, 50);
+      localStorage.setItem("stoqle_viewed_products", JSON.stringify(updated));
     } catch (e) {
-        console.warn("Failed to track viewed product", e);
+      console.warn("Failed to track viewed product", e);
     }
 
     const hasIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window;

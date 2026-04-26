@@ -33,6 +33,7 @@ import { fetchUserAddresses, UserAddress } from "@/src/lib/api/addressApi";
 import dynamic from "next/dynamic";
 import { estimateDelivery, EstimationResult } from "@/src/lib/deliveryEstimation";
 import CartWalkthrough from "@/src/components/cart/cartWalkthrough";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 const MarketClient = dynamic(() => import("../market/[[...shop]]/MarketClient"), { ssr: false, loading: () => <ShimmerGrid count={10} /> });
 
@@ -91,6 +92,7 @@ export default function CartPage() {
     const [address, setAddress] = useState<UserAddress | null>(null);
     const [vendorBadges, setVendorBadges] = useState<Record<number, VendorBadge>>({});
     const [isClient, setIsClient] = useState(false);
+    const [isNavigating, setIsNavigating] = useState(false);
 
     const marketParams = useMemo(() => Promise.resolve({ shop: [] }), []);
 
@@ -560,6 +562,7 @@ export default function CartPage() {
                     <MarketClient
                         params={marketParams}
                         hideTabs={true}
+                        hideCartIcon={true}
                         initialCategory={relatedCategory}
                         softCategory={true}
                         relatedVendorIds={cartVendorIds}
@@ -759,6 +762,7 @@ export default function CartPage() {
                         <MarketClient
                             params={marketParams}
                             hideTabs={true}
+                            hideCartIcon={true}
                             initialCategory={relatedCategory}
                             softCategory={true}
                             relatedVendorIds={cartVendorIds}
@@ -855,6 +859,7 @@ export default function CartPage() {
 
                                 // Store IDs in sessionStorage to avoid raw IDs in URL
                                 sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
+                                setIsNavigating(true);
                                 router.push(`/checkout`);
                             }}
                             className="w-fit px-6 bg-gradient-to-r from-rose-500 to-rose-500 text-white font-bold py-2 rounded-full shadow-lg shadow-rose-100 hover:shadow-rose-200 transition-all active:scale-[0.98]  items-center justify-center gap-2 text-xs"
@@ -872,11 +877,19 @@ export default function CartPage() {
                     setPhoneModalOpen(false);
                     if (selectedCartIds.length > 0) {
                         sessionStorage.setItem("stoqle_checkout_ids", JSON.stringify(selectedCartIds));
+                        setIsNavigating(true);
                         router.push(`/checkout`);
                     }
                 }}
             />
             {items.length > 0 && <CartWalkthrough />}
+
+            {/* Global Navigation Loader Overlay */}
+            {isNavigating && (
+                <div className="fixed inset-0 z-[10000] bg-transparent flex flex-col items-center justify-center animate-in fade-in duration-300">
+                    <StoqleLoader size={60} />
+                </div>
+            )}
         </div>
     );
 }

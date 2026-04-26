@@ -17,6 +17,8 @@ type RoomItemProps = {
         last_message?: any;
         last_message_time?: string | null;
         updated_at?: string | null;
+        last_active_at?: string | Date | null;
+        is_pinned?: boolean;
     };
     unread: number;
     active: boolean;
@@ -26,6 +28,7 @@ type RoomItemProps = {
 };
 
 import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
+import { Pin } from "lucide-react";
 
 export const RoomItem: React.FC<RoomItemProps> = ({
     room,
@@ -45,9 +48,9 @@ export const RoomItem: React.FC<RoomItemProps> = ({
             onClick={onClick}
             whileHover={{ scale: 1.01, x: 2 }}
             whileTap={{ scale: 0.98 }}
-            className={`flex items-center p-3.5 rounded-[1.25rem] cursor-pointer transition-all duration-300 gap-3 group relative ${active
-                ? "bg-white shadow-xl shadow-slate-200/50 ring-1 ring-slate-100 z-10"
-                : "hover:bg-white/50 border border-transparent hover:border-slate-100"
+            className={`flex items-center p-2 rounded-[0.5rem] cursor-pointer transition-all duration-300 gap-3 group relative ${active
+                ? "bg-white shadow-slate-200/50 ring-1 ring-slate-100 z-10"
+                : "hover:bg-white/50 border border-transparent "
                 }`}
         >
             <div className="relative flex-shrink-0">
@@ -62,7 +65,7 @@ export const RoomItem: React.FC<RoomItemProps> = ({
                         <img
                             src={avatarSrc}
                             alt={displayName}
-                            className={`w-12 h-12 rounded-full object-cover shadow-sm transition-all duration-500 ${active ? "ring-2 ring-rose-500 ring-offset-2" : "border-2 border-white"
+                            className={`w-12 h-12 rounded-full object-cover transition-all duration-500 ${active ? "border-2 border-white" : "border-2 border-white"
                                 }`}
                         />
                     ) : (
@@ -71,9 +74,20 @@ export const RoomItem: React.FC<RoomItemProps> = ({
                             {displayName.charAt(0).toUpperCase()}
                         </div>
                     )}
-                    {active && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white shadow-sm" />
-                    )}
+                    {(() => {
+                        const lastSeen = room.last_active_at;
+                        if (!lastSeen) return null;
+                        const isOnline = (new Date().getTime() - new Date(lastSeen).getTime()) < 120000;
+                        if (!isOnline) return null;
+                        return (
+                            <div className="absolute bottom-0 right-1 z-20">
+                                <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border-2 border-white"></span>
+                                </span>
+                            </div>
+                        );
+                    })()}
                 </div>
                 {unread > 0 && (
                     <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white ring-2 ring-rose-50">
@@ -93,12 +107,17 @@ export const RoomItem: React.FC<RoomItemProps> = ({
                             <VerifiedBadge size="xs" label={vendorBadge.badge_label} className="shrink-0" />
                         )}
                     </div>
-                    {timestamp && (
-                        <span className={`text-[10px] font-bold flex-shrink-0 tabular-nums ${active ? "text-rose-500" : "text-slate-400"
-                            }`}>
-                            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                    )}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                        {timestamp && (
+                            <span className={`text-[10px] font-bold tabular-nums ${active ? "text-rose-500" : "text-slate-400"
+                                }`}>
+                                {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        )}
+                        {room.is_pinned && (
+                            <Pin size={10} className={`${active ? "text-rose-500" : "text-slate-400"} fill-current rotate-45`} />
+                        )}
+                    </div>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                     <p className={`text-[11px] truncate font-medium leading-tight ${active ? "text-slate-600" : "text-slate-400"

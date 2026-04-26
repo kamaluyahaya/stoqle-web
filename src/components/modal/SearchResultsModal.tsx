@@ -35,7 +35,8 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { computeDiscountedPrice } from "@/src/lib/utils/product/price";
-import { formatDuration } from "@/src/lib/utils/product/duration";
+import { formatUrl } from "@/src/lib/utils/media";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 function LikeBurst() {
   const particles = Array.from({ length: 12 });
@@ -167,10 +168,9 @@ const PostCard = React.memo(({
           )}
         </motion.div>
 
-        {/* Placeholder frame indicator */}
         <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
-          <div className="flex flex-col items-center gap-2 opacity-20">
-            <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+          <div className="flex flex-col items-center gap-2 opacity-50">
+            <StoqleLoader size={28} />
             <span className="text-[10px] font-bold tracking-widest text-slate-400 ">Opening...</span>
           </div>
         </div>
@@ -426,14 +426,14 @@ const ProductCard = React.memo(({
 
           {!isVideoCover && fetchingProduct && (
             <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+              <StoqleLoader size={24} />
             </div>
           )}
         </motion.div>
 
         <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
-          <div className="flex flex-col items-center gap-2 opacity-20">
-            <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+          <div className="flex flex-col items-center gap-2 opacity-50">
+            <StoqleLoader size={28} />
             <span className="text-[10px] font-bold tracking-widest text-slate-400 ">Opening...</span>
           </div>
         </div>
@@ -720,14 +720,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     };
   }, [isOpen, shouldHideModal, isPage]);
 
-  const formatFullUrl = useCallback((url: string | undefined): string => {
-    if (!url) return "";
-    if (url.startsWith('http')) {
-      return url.replace('http://10.233.107.181:4000', API_BASE_URL);
-    }
-    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-    return `${API_BASE_URL}${cleanUrl}`;
-  }, []);
+  const formatFullUrl = (url: string | undefined): string => formatUrl(url);
 
   const formatProductUrl = useCallback((url: string) => {
     if (!url) return "https://via.placeholder.com/800x600?text=No+Image";
@@ -824,6 +817,45 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState<TabType>("all");
   const [productSubTab, setProductSubTab] = useState<ProductSubTab>("featurose");
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Sync state with props for back navigation persistence
+  useEffect(() => {
+    if (initialQuery !== undefined) {
+      setQuery(initialQuery);
+    }
+  }, [initialQuery]);
+
+  useEffect(() => {
+    if (initialTab !== undefined) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const mainTabsRef = useRef<HTMLDivElement>(null);
+  const subTabsRef = useRef<HTMLDivElement>(null);
+
+  // Auto-center active main tab on mobile
+  useEffect(() => {
+    const container = mainTabsRef.current;
+    if (!container) return;
+    const activeBtn = container.querySelector(`[data-active="true"]`) as HTMLElement;
+    if (activeBtn) {
+      const scrollLeft = activeBtn.offsetLeft - (container.offsetWidth / 2) + (activeBtn.offsetWidth / 2);
+      container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+    }
+  }, [activeTab]);
+
+  // Auto-center active sub tab on mobile
+  useEffect(() => {
+    const container = subTabsRef.current;
+    if (!container) return;
+    const activeBtn = container.querySelector(`[data-active="true"]`) as HTMLElement;
+    if (activeBtn) {
+      const scrollLeft = activeBtn.offsetLeft - (container.offsetWidth / 2) + (activeBtn.offsetWidth / 2);
+      container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+    }
+  }, [productSubTab]);
 
   // SWR Caching Logic
   const { data: swrData, error: swrError, isLoading: swrLoading, isValidating, mutate } = useSWR(
@@ -856,11 +888,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   }, [isOpen, query, activeTab, token]);
 
   const mapUnifiedSearchPostToPost = (p: any): any => {
-    const isVideo = p.cover_type === 'video' || (p.image && VIDEO_EXT_RE.test(p.image)) || !!p.final_video_url || !!p.original_video_url;
+    const isVideo = p.cover_type === 'video' || p.type === 'video' || (p.image && VIDEO_EXT_RE.test(p.image)) || !!p.final_video_url || !!p.original_video_url;
+    const isNote = p.cover_type === 'note' || p.type === 'note' || (!p.image && !isVideo);
     const finalVideoUrl = formatFullUrl(p.final_video_url || p.original_video_url);
 
-    // Media URL mapping
-    const finalSrc = isVideo ? (finalVideoUrl || formatFullUrl(p.image)) : formatFullUrl(p.image);
+    // Media URL mapping - Notes should NOT have a placeholder src, otherwise modal won't show the text
+    const finalSrc = isNote ? "" : (isVideo ? (finalVideoUrl || formatFullUrl(p.image)) : formatFullUrl(p.image));
 
     // Author image URL mapping
     const avatarUrl = formatFullUrl(p.logo || p.business_logo || p.vendor_logo || p.shop_logo || p.author_image || p.profile_pic || p.avatar || p.author_pic);
@@ -872,8 +905,10 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       thumbnail: formatFullUrl(p.image),
       final_video_url: finalVideoUrl,
       isVideo,
-      caption: p.text || p.subtitle || "",
-      note_caption: p.subtitle || "",
+      isImage: !isVideo && !isNote,
+      allMedia: (!isVideo && !isNote && finalSrc) ? [{ url: finalSrc, id: 'primary' }] : [],
+      caption: p.text || p.subtitle || p.caption || "",
+      note_caption: p.subtitle || p.text || p.caption || "",
       user: {
         id: p.author_id,
         name: p.author_name,
@@ -883,8 +918,8 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       author_handle: p.author_handle,
       liked: Boolean(p.liked_by_me),
       likeCount: p.like_count || 0,
-      coverType: p.cover_type,
-      noteConfig: p.config,
+      coverType: isNote ? 'note' : (isVideo ? 'video' : 'image'),
+      noteConfig: p.config || p.note_config,
       rawCreatedAt: p.created_at,
       location: p.location,
       is_product_linked: Boolean(p.is_product_linked),
@@ -898,19 +933,23 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     try {
       const urlData = await fetchSecurePostUrl(post.id, "search_feed", token);
       if (urlData) {
+        const currentUrl = new URL(window.location.href);
         if (urlData.url) {
-          window.history.pushState({ modal: true }, "", urlData.url);
-          // Only update properties that don't break playback (like tokens if needed)
-          // But don't overwrite src with a page URL!
+          // Construct new URL but keep existing search params
+          const newUrl = new URL(urlData.url, window.location.origin);
+          currentUrl.searchParams.forEach((val, key) => {
+            if (key !== 'post') newUrl.searchParams.set(key, val);
+          });
+          window.history.pushState({ modal: true }, "", newUrl.toString());
+          
           setSelectedPost((prev: any) => prev ? {
             ...prev,
             xsecToken: urlData.xsec_token,
             xsecSource: urlData.xsec_source
           } : null);
         } else {
-          const url = new URL(window.location.href);
-          url.searchParams.set("post", String(post.id));
-          window.history.pushState({ modal: true }, "", url.toString());
+          currentUrl.searchParams.set("post", String(post.id));
+          window.history.pushState({ modal: true }, "", currentUrl.toString());
         }
       }
       pushedRef.current = true;
@@ -923,17 +962,17 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   const closeModal = () => {
     setSelectedPost(null);
     try {
-      const url = new URL(window.location.href);
-      const hadParam = url.searchParams.has("post");
-      if (!hadParam) return;
-      if (pushedRef.current && window.history.state && window.history.state.modal) {
-        window.history.back();
+      if (pushedRef.current && typeof window !== 'undefined') {
+        if (window.history.state && window.history.state.modal) {
+          window.history.back();
+        } else {
+          // Fallback cleanup if back() is risky
+          const url = new URL(window.location.href);
+          url.searchParams.delete("post");
+          window.history.replaceState({}, "", url.toString());
+        }
         pushedRef.current = false;
-        return;
       }
-      url.searchParams.delete("post");
-      window.history.replaceState({}, "", url.toString());
-      pushedRef.current = false;
     } catch (err) {
       console.warn("Failed to clean URL after modal close", err);
     }
@@ -973,10 +1012,19 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     const onPop = (ev: PopStateEvent) => {
       try {
         const url = new URL(window.location.href);
+        let postId: number | null = null;
+        
+        // 1. Check query param
         const param = url.searchParams.get("post");
         if (param) {
-          const postId = Number(param);
-          if (isNaN(postId)) return;
+          postId = Number(param);
+        } else {
+          // 2. Check pathname (e.g. /social/post/123 or /post/123)
+          const match = url.pathname.match(/\/(?:social\/)?post\/(\d+)/);
+          if (match) postId = Number(match[1]);
+        }
+
+        if (postId && !isNaN(postId)) {
           if (selectedPost && Number(selectedPost.id) === postId) return;
           if (results?.posts) {
             const found = results.posts.find((p: any) => Number(p.id) === postId);
@@ -992,8 +1040,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       } catch { }
     };
     window.addEventListener('popstate', onPop);
+    
+    // Also run on initial mount if we have a post in the URL
+    onPop({} as PopStateEvent);
+
     return () => window.removeEventListener('popstate', onPop);
-  }, [results, selectedPost]);
+  }, [results, isOpen]); // removed selectedPost from deps to avoid loops, added isOpen
 
   const renderProductItem = (p: any) => (
     <div key={p.id} className="flex gap-4 p-4 bg-white border-b border-slate-50 active:bg-slate-50 transition-colors">
@@ -1135,7 +1187,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
+          <StoqleLoader size={44} />
           <p className="text-sm text-slate-400 font-medium">Fetching best results...</p>
         </div>
       );
@@ -1324,9 +1376,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       case "products":
         return (
           <div className="flex flex-col h-full bg-white">
-            <div className="flex items-center gap-6 px-5 h-11  border-slate-50 overflow-x-auto no-scrollbar sticky top-0 bg-white z-10 ">
+            <div
+              ref={subTabsRef}
+              className="flex items-stretch gap-10 px-8 h-14 border-b border-slate-50 overflow-x-auto no-scrollbar sticky top-0 bg-white z-10"
+            >
               {[
-                { id: "featurose", label: "Featurose" },
+                { id: "featurose", label: "Featuring" },
                 { id: "shop", label: "Shops" },
                 { id: "best-seller", label: "Best Seller" },
                 { id: "price-low", label: "Price Low" },
@@ -1334,14 +1389,20 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
               ].map(tab => (
                 <button
                   key={tab.id}
+                  data-active={productSubTab === tab.id}
                   onClick={() => setProductSubTab(tab.id as ProductSubTab)}
-                  className={`text-[12px] font-bold whitespace-nowrap transition-colors relative h-full ${productSubTab === tab.id ? "text-rose-500" : "text-slate-400"
+                  className={`text-[12px] font-bold whitespace-nowrap transition-colors relative flex items-center h-full ${productSubTab === tab.id ? "text-rose-500" : "text-slate-400"
                     }`}
                 >
-                  {tab.label}
-                  {productSubTab === tab.id && (
-                    <motion.div layoutId="prodSubUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500" />
-                  )}
+                  <span className="relative z-10 py-1 inline-flex flex-col items-center">
+                    {tab.label}
+                    {productSubTab === tab.id && (
+                      <motion.div
+                        layoutId="prodSubUnderline"
+                        className="absolute -bottom-2 w-1/2 h-[2.5px] bg-rose-500 rounded-full"
+                      />
+                    )}
+                  </span>
                 </button>
               ))}
             </div>
@@ -1431,7 +1492,10 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
             </div>
           </div>
 
-          <div className="flex items-center justify-between px-5 h-12 bg-white border-slate-100 sticky top-14 z-20">
+          <div
+            ref={mainTabsRef}
+            className="flex items-stretch gap-10 px-8 h-16 bg-white border-b border-slate-100 sticky top-14 z-20 overflow-x-auto no-scrollbar"
+          >
             {[
               { id: "all", label: "All" },
               { id: "users", label: "Users" },
@@ -1441,14 +1505,20 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
             ].map(tab => (
               <button
                 key={tab.id}
+                data-active={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
-                className={`text-[13px] font-bold transition-all relative h-full flex items-center ${activeTab === tab.id ? 'text-slate-700' : 'text-slate-400'
+                className={`text-[13px] font-bold transition-all relative flex items-center h-full ${activeTab === tab.id ? 'text-slate-700' : 'text-slate-400'
                   }`}
               >
-                {tab.label}
-                {activeTab === tab.id && (
-                  <motion.div layoutId="mainTabIndicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />
-                )}
+                <span className="relative z-10 py-1 inline-flex flex-col items-center">
+                  {tab.label}
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="mainTabIndicator"
+                      className="absolute -bottom-3 w-1/2 h-[2.5px] bg-rose-500 rounded-full"
+                    />
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -1495,7 +1565,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
         <button
           key="floating-cart-button"
           onClick={() => {
-            // onClose(); // optionally close search modal before navigating
+            setIsNavigating(true);
             router.push("/cart");
           }}
           className="fixed bottom-24 right-6 bg-rose-500 text-white p-3 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-90 flex items-center justify-center border-4 border-white group"
@@ -1509,6 +1579,13 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
           )}
         </button>
       )}
+      {/* Global Navigation Loader Overlay */}
+      {isNavigating && (
+        <div className="fixed inset-0 z-[10000] bg-transparent backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
+          <StoqleLoader size={60} />
+        </div>
+      )}
+
     </AnimatePresence>
   );
 }

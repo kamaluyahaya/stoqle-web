@@ -10,13 +10,15 @@ export default function InsightsTab({
     onProductClick,
     onInsightClick,
     loadingPreview,
-    totalCustomers
+    totalCustomers,
+    onMessage
 }: {
     products: any[],
     onProductClick?: (id: number) => void,
     onInsightClick?: (product: any) => void,
     loadingPreview?: number | string | null,
-    totalCustomers?: number
+    totalCustomers?: number,
+    onMessage?: (user: any) => void
 }) {
     const [loading, setLoading] = useState(true);
     const [insights, setInsights] = useState<any>(null);
@@ -182,12 +184,20 @@ export default function InsightsTab({
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        router.push(`/messages?user=${v.visitor_user_id}`)
+                                                        if (onMessage) {
+                                                            onMessage({
+                                                                ...v,
+                                                                user_id: v.visitor_user_id,
+                                                                id: v.visitor_user_id
+                                                            });
+                                                        } else {
+                                                            router.push(`/messages?user=${v.visitor_user_id}`)
+                                                        }
                                                     }}
-                                                    className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-full transition-colors"
+                                                    className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:bg-rose-500 hover:border-rose-500 hover:text-white rounded transition-colors inline-block"
                                                     title="Send Direct Message"
                                                 >
-                                                    <MessageCircle className="w-[18px] h-[18px]" />
+                                                    <MessageCircle className="w-4 h-4" />
                                                 </button>
                                             )}
                                         </div>

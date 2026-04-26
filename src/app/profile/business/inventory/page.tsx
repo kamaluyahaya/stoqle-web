@@ -50,7 +50,10 @@ import CustomersTab from "@/src/components/business/inventory/CustomersTab";
 import InsightsTab from "@/src/components/business/inventory/InsightsTab";
 import ProductInsightModal from "@/src/components/business/inventory/ProductInsightModal";
 import InventoryWalkthrough from "@/src/components/business/inventory/InventoryWalkthrough";
+import { ChatRoomModal } from "@/src/components/modal/ChatRoomModal";
+import { VendorBotModal } from "@/src/components/modal/VendorBotModal";
 import { API_BASE_URL } from "@/src/lib/config";
+import { Sparkles } from "lucide-react";
 
 // --- Types ---
 interface InventoryItem {
@@ -135,6 +138,20 @@ export default function SmartInventoryPage() {
     const [insightModal, setInsightModal] = useState<{ open: boolean; product: InventoryItem | null }>({ open: false, product: null });
     const [businessData, setBusinessData] = useState<any>(null);
     const [customerCount, setCustomerCount] = useState<number>(0);
+    const [chatModal, setChatModal] = useState<{ isOpen: boolean; userId: string | number | null; initialOtherUser: any }>({
+        isOpen: false,
+        userId: null,
+        initialOtherUser: null
+    });
+    const [vendorBotOpen, setVendorBotOpen] = useState(false);
+
+    const openChatModal = (customer: any) => {
+        setChatModal({
+            isOpen: true,
+            userId: customer.user_id || customer.id,
+            initialOtherUser: customer
+        });
+    };
 
     // Stats
     const stats = useMemo(() => {
@@ -508,6 +525,13 @@ export default function SmartInventoryPage() {
                             <RefreshCcw className={`w-4 h-4 text-slate-600 ${refreshing ? 'animate-spin' : ''}`} />
                         </button>
                         <button
+                            onClick={() => setVendorBotOpen(true)}
+                            className="p-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-xl shadow-md transition-all flex items-center justify-center group relative overflow-hidden"
+                            title="Vendor Assistant AI"
+                        >
+                            <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <button
                             id="inventory-guide-add"
                             onClick={async () => {
                                 const ok = await auth.ensureAccountVerified();
@@ -523,7 +547,7 @@ export default function SmartInventoryPage() {
 
             <div className="p-4 max-w-7xl mx-auto space-y-6">
 
-                {viewMode === 'customers' && <CustomersTab />}
+                {viewMode === 'customers' && <CustomersTab onMessage={openChatModal} />}
                 {viewMode === 'insights' && (
                     <InsightsTab
                         products={products}
@@ -531,6 +555,7 @@ export default function SmartInventoryPage() {
                         onInsightClick={(product) => setInsightModal({ open: true, product })}
                         loadingPreview={loadingPreview}
                         totalCustomers={customerCount}
+                        onMessage={openChatModal}
                     />
                 )}
 
@@ -1105,6 +1130,10 @@ export default function SmartInventoryPage() {
                     onClose={() => setInsightModal({ open: false, product: null })}
                     product={insightModal.product}
                 />
+                <VendorBotModal 
+                    isOpen={vendorBotOpen} 
+                    onClose={() => setVendorBotOpen(false)} 
+                />
 
                 {/* Mobile Bottom Navigation */}
                 <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white border-t border-slate-200 px-6 py-3 pb-[env(safe-area-inset-bottom,12px)] sm:hidden flex items-center justify-between shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
@@ -1143,6 +1172,14 @@ export default function SmartInventoryPage() {
                 </div>
             </div>
             <InventoryWalkthrough />
+
+            {/* Chat Room Modal */}
+            <ChatRoomModal
+                isOpen={chatModal.isOpen}
+                onClose={() => setChatModal(prev => ({ ...prev, isOpen: false }))}
+                targetUserId={chatModal.userId}
+                initialOtherUser={chatModal.initialOtherUser}
+            />
         </div>
     );
 }

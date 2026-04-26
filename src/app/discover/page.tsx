@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { ArrowUp, RotateCcw } from "lucide-react";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 const NO_IMAGE_PLACEHOLDER = "assets/images/post-icons.png"; // fallback post image
 const DEFAULT_AVATAR = "/assets/images/post-icons.png";
 
@@ -92,7 +93,7 @@ const PostCard = React.memo(({
         >
           {post.coverType === "note" && !post.src ? (
             <div
-              className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+              className="w-full h-[280px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
 
               style={getNoteStyles(post.noteConfig)}
             >
@@ -143,7 +144,7 @@ const PostCard = React.memo(({
               <img
                 src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
                 alt={post.caption}
-                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
+                className="w-full h-auto min-h-[200px] sm:min-h-[200px] max-h-[300px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
                 loading="lazy"
                 onLoad={(e) => {
                   (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
@@ -346,6 +347,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
   const [batchLoading, setBatchLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [isOpeningPost, setIsOpeningPost] = useState<boolean>(false);
   const [modalOrigin, setModalOrigin] = useState<{ x: number; y: number } | null>(null);
   const [offset, setOffset] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(true);
@@ -715,7 +717,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
 
   const openPostWithUrl = async (post: Post, e?: React.MouseEvent) => {
     if (e) setModalOrigin({ x: e.clientX, y: e.clientY });
-    setSelectedPost(post);
+    setIsOpeningPost(true);
 
     // Log view activity
     logSocialActivity({
@@ -743,6 +745,9 @@ function DiscoverFeed({ postCount = 100 }: Props) {
 
     window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
     pushedRef.current = true;
+
+    setSelectedPost(post);
+    setIsOpeningPost(false);
   };
 
   const closeModal = useCallback(() => {
@@ -853,11 +858,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="flex justify-center items-center py-6 bg-slate-50 overflow-hidden"
             >
-              <div className="flex items-center gap-2 px-6 py-3 rounded-full  border-slate-100">
-                <svg className="w-4 h-4 text-slate-900 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
-                </svg>
-              </div>
+              <StoqleLoader size={40} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -947,6 +948,13 @@ function DiscoverFeed({ postCount = 100 }: Props) {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
+
+      {/* Loader Overlay for Post Modal */}
+      {isOpeningPost && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={50} />
+        </div>
+      )}
     </>
   );
 }

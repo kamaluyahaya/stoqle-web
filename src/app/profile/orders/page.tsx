@@ -1160,8 +1160,13 @@ export default function MyOrdersPage() {
             const base = "/profile/orders";
             newUrl = `${base}/${bSlug}/${pSlug}`;
 
-            if (isReels) urlParams.set("reels", "true");
-            else urlParams.delete("reels");
+            if (isReels) {
+                urlParams.set("reels", "true");
+                if (productId) urlParams.set("post_id", String(productId).replace('post-', ''));
+            } else {
+                urlParams.delete("reels");
+                urlParams.delete("post_id");
+            }
 
             urlParams.delete("p");
             urlParams.delete("b");
@@ -1169,6 +1174,7 @@ export default function MyOrdersPage() {
         } else if (productId && !pSlug) {
             newUrl = "/profile/orders";
             urlParams.set("product_id", String(productId));
+            urlParams.delete("post_id");
         } else {
             // Fallback to base
             newUrl = "/profile/orders";
@@ -1176,6 +1182,7 @@ export default function MyOrdersPage() {
             urlParams.delete("reels");
             urlParams.delete("p");
             urlParams.delete("b");
+            urlParams.delete("post_id");
         }
 
         const search = urlParams.toString();
@@ -1203,9 +1210,14 @@ export default function MyOrdersPage() {
                 setSocialPostModalOpen(true);
             }
 
+            const rawId = String(productId).replace('post-', '');
+            if (!rawId || isNaN(Number(rawId)) || Number(rawId) === 0) {
+                 console.warn("Invalid or missing post ID, cannot fetch social post.");
+                 return;
+            }
+
             setIsPreviewFetching(true);
             try {
-                const rawId = String(productId).replace('post-', '');
                 const post = await fetchSocialPostById(Number(rawId), { token });
                 if (post) {
                     // Deep merge to preserve media from initialData if missing in re-fetch
@@ -1286,6 +1298,7 @@ export default function MyOrdersPage() {
             const qP = urlParams.get("p");
             const qB = urlParams.get("b");
             const isReels = urlParams.get("reels") === "true";
+            const postId = urlParams.get("post_id");
 
             const currentPath = window.location.pathname;
             const pathParts = currentPath.split('/').filter(Boolean);
@@ -1295,9 +1308,9 @@ export default function MyOrdersPage() {
             const bSlugFromPath = isPrettyPath ? pathParts[2] : null;
             const pSlugFromPath = isPrettyPath ? pathParts[3] : null;
 
-            if (productId || qP || pSlugFromPath) {
+            if (productId || qP || pSlugFromPath || (isReels && postId)) {
                 if (!previewProductModalOpen && !socialPostModalOpen && !isPreviewFetching) {
-                    const pid = productId || "";
+                    const pid = postId ? `post-${postId}` : (productId || "");
                     const bSlug = bSlugFromPath || qB || "";
                     const pSlug = pSlugFromPath || qP || "";
                     handleProductClick(pid, bSlug, pSlug, null, isReels);

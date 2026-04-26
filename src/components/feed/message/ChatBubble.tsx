@@ -2,7 +2,8 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Loader2, RotateCcw, AlertCircle, ShieldCheck, Zap, Download, Play, Pause } from "lucide-react";
+import { Loader2, RotateCcw, AlertCircle, ShieldCheck, Zap, Download, Play, Pause, ThumbsUp, ThumbsDown } from "lucide-react";
+import { safeFetch } from "@/src/lib/api/handler";
 import { chatDb } from "@/src/lib/services/chatDb";
 import { useAudio } from "@/src/context/audioContext";
 import { useAuth } from "@/src/context/authContext";
@@ -41,6 +42,7 @@ type MessageProps = {
     video_thumbnail?: string | null;
     isTyping?: boolean;
     is_ai?: boolean | number;
+    ai_rating?: number;
     showStatus?: boolean;
 };
 
@@ -94,10 +96,36 @@ export const ChatBubble: React.FC<MessageProps> = ({
     video_thumbnail,
     isTyping,
     is_ai,
+    ai_rating,
     showStatus = true
 }) => {
+    const { token } = useAuth();
     // Determine the actual URL and type from available props
     const actualUrl = fileUrl || file?.file_url;
+    const [localRating, setLocalRating] = React.useState(Number(ai_rating || 0));
+
+    React.useEffect(() => {
+        setLocalRating(Number(ai_rating || 0));
+    }, [ai_rating]);
+
+    const handleRating = async (val: number) => {
+        const newRating = localRating === val ? 0 : val;
+        setLocalRating(newRating);
+        const t = token || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+        try {
+            await safeFetch('/api/chat/bot-feedback', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${t}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message_id: messageId, rating: newRating })
+            });
+        } catch (err) {
+            console.error('Feedback error', err);
+            // Revert on error? Or just leave it.
+        }
+    };
     const actualType = fileType || (actualUrl ? (actualUrl.split('.').pop()?.toLowerCase()) : null);
 
     const isImage = actualUrl && (actualType?.includes('image') || ['jpg', 'jpeg', 'png', 'avif', 'gif', 'webp'].includes(actualType || ''));
@@ -108,6 +136,8 @@ export const ChatBubble: React.FC<MessageProps> = ({
     const [isImageLoading, setIsImageLoading] = React.useState(true);
     const [cachedUrl, setCachedUrl] = React.useState<string | null>(null);
     const [showIndividualTimestamp, setShowIndividualTimestamp] = React.useState(false);
+
+    const hasProductDetails = !!product_name || content?.includes('PRODUCT_CARD[') || content?.includes('![');
 
     // ⚡ INSTANT MEDIA RELOAD: Check cache on mount
     React.useEffect(() => {
@@ -259,9 +289,13 @@ export const ChatBubble: React.FC<MessageProps> = ({
                     }`}
             >
                 {!mine && senderName && (
-                    <span className="text-[9px] font-black text-slate-400 mb-1 ml-1  flex items-center gap-1.5 opacity-80">
-                        {senderName} {is_ai ? "ai" : ""}
-                        {is_ai && <ShieldCheck size={9} className="text-emerald-500" />}
+                    <span className="text-[9px] font-black text-slate-400 mb-1 ml-1 flex items-center gap-1.5 opacity-80">
+                        {senderName}
+                        {!!is_ai && (
+                            <span className="bg-blue-50 text-blue-600 p-1 rounded-[4px] text-[10px] font-bold border border-blue-100 inline-flex items-center leading-none ">
+                                ai
+                            </span>
+                        )}
                     </span>
                 )}
 
@@ -269,7 +303,9 @@ export const ChatBubble: React.FC<MessageProps> = ({
                 <div className={`flex items-end gap-2 ${mine ? "flex-row-reverse" : "flex-row"}`}>
                     <div
                         className={`relative overflow-hidden transition-all duration-300 ${mine
-                            ? (product_name ? "bg-slate-100 text-slate-900 rounded-xl" : "bg-blue-500 text-white rounded-xl")
+                            ? (hasProductDetails 
+                                ? "bg-white border border-slate-100 text-slate-800 rounded-xl" 
+                                : "bg-blue-500 text-white rounded-xl")
                             : "bg-white text-gray-800 border-gray-100 rounded-xl border "
                             } ${isImage || isVideo ? "p-1" : "p-1.5 px-1"}`}
                     >
@@ -430,7 +466,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
 
                                         {/* Filename and Meta under content */}
                                         <div className="px-1 py-1 w-full text-left">
-                                            <p className={`text-[11px] font-black truncate tracking-tight mb-0.5 ${mine ? "text-white" : "text-slate-800"}`}>
+                                            <p className={`text-[11px] font-black truncate tracking-tight mb-0.5 ${mine ? (hasProductDetails ? "text-slate-800" : "text-white") : "text-slate-800"}`}>
                                                 {(() => {
                                                     if (file_name) return file_name;
                                                     if (file?.file_name) return file.file_name;
@@ -465,7 +501,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         </div>
                                     </div>
                                 ) : isVoice ? (
-                                    <div className={`flex items-center gap-3 py-1 min-w-[200px] ${mine ? "text-white" : "text-slate-800"}`}>
+                                    <div className={`flex items-center gap-3 py-1 min-w-[200px] ${mine ? (hasProductDetails ? "text-slate-800" : "text-white") : "text-slate-800"}`}>
                                         <button
                                             onClick={toggleVoicePlayback}
                                             className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 shadow-sm ${mine ? "bg-white text-blue-500" : "bg-blue-500 text-white"}`}
@@ -637,23 +673,38 @@ export const ChatBubble: React.FC<MessageProps> = ({
                             <div className="relative group/text">
                                 <div className={`whitespace-pre-wrap break-words leading-relaxed px-1 p-0 py-0.5 ${actualUrl
                                     ? `text-[11px] font-medium leading-tight mt-1 ${mine ? "text-slate-500" : "text-gray-500"}`
-                                    : "text-sm"
+                                    : status === 'processing' ? "text-sm text-slate-400" : "text-sm"
                                     }`} style={{ hyphens: 'auto', WebkitHyphens: 'auto' }}>
                                     {(() => {
                                         if (!content) return null;
 
                                         // ⚡ NATIVE MARKDOWN & SMART TAG PARSER
-                                        // This regex finds ![alt](url), BUY_BTN[label|slug], and PRODUCT_CARD[name|image|price|variant|slug]
-                                        const regex = /(!\[.*?\]\(.*?\)|BUY_BTN\[.*?\|.*?\]|PRODUCT_CARD\[.*?\|.*?\|.*?\|.*?\|.*?\])/g;
+                                        // This regex finds ![alt](url), BUY_BTN[label|slug], PRODUCT_CARD[...], and COMPARE_GUIDE[...]
+                                        const regex = /(!\[.*?\]\(.*?\)|BUY_BTN\[.*?\|.*?\]|PRODUCT_CARD\[.*?\|.*?\|.*?\|.*?\|.*?\]|COMPARE_GUIDE\[(?:[\s\S]*?)\])/g;
                                         const parts = content.split(regex);
 
                                         return parts.map((part, i) => {
-                                            if (part) {
+                                            if (!part) return null;
+
+                                            const renderFormatted = (text: string) => {
+                                                const textParts = text.split(/(\*\*.*?\*\*|#\w+)/g);
+                                                return textParts.map((t, idx) => {
+                                                    if (t.startsWith('**') && t.endsWith('**') && t.length >= 4) {
+                                                        return <strong key={idx} className="font-bold">{t.slice(2, -2)}</strong>;
+                                                    }
+                                                    if (t.startsWith('#') && t.length > 1) {
+                                                        return <strong key={idx} className="font-bold">{t.slice(1)}</strong>;
+                                                    }
+                                                    return <span key={idx}>{t}</span>;
+                                                });
+                                            };
                                                 if (part.startsWith('PRODUCT_CARD[')) {
-                                                    const match = part.match(/PRODUCT_CARD\[(.*?)\|(.*?)\|(.*?)\|(.*?)\|(.*?)\]/);
+                                                    const match = part.match(/PRODUCT_CARD\[(.*?)\|(.*?)\|(.*?)\|(.*?)\|(.*?)(?:\|(.*?))?\]/);
                                                     if (match) {
-                                                        const [_, pName, pImg, pPrice, pVariant, pSlug] = match;
-                                                        const cleanPrice = pPrice.replace(/[^0-9.]/g, ''); // Extract numeric price safely
+                                                        const [_, pName, pImg, pPrice, pVariant, pSlug, pTag] = match;
+                                                        // ⚡ ROBUST PRICE EXTRACTION: Only take the first numeric sequence to avoid grabbing digits from variant image URLs
+                                                        const priceMatch = pPrice.match(/[\d,.]+/);
+                                                        const cleanPrice = priceMatch ? priceMatch[0].replace(/,/g, '') : '0';
 
                                                         return (
                                                             <div key={i} className="flex flex-col">
@@ -684,6 +735,15 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                                                 )}
                                                                             </div>
 
+                                                                            {/* ⚡ Status Tag (Promo, Sale, Stock, etc.) */}
+                                                                            {pTag && pTag !== 'N/A' && (
+                                                                                <div className="mt-1 flex items-center min-h-[16px]">
+                                                                                    <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1 truncate leading-tight">
+                                                                                        {pTag}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+
                                                                             <div className="flex items-center justify-between mt-1">
                                                                                 <span className={`text-[11px] font-black tabular-nums ${mine ? "text-rose-500" : "text-rose-500"}`}>
                                                                                     ₦{Number(cleanPrice || 0).toLocaleString()}
@@ -708,6 +768,30 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                             </div>
                                                         );
                                                     }
+                                                }
+
+                                                if (part.startsWith('COMPARE_GUIDE[')) {
+                                                    const inner = part.slice('COMPARE_GUIDE['.length, -1).trim();
+                                                    const lines = inner.split('\n').map(l => l.trim()).filter(Boolean);
+                                                    return (
+                                                        <div key={i} className="my-2 rounded-xl border border-slate-100 bg-slate-50 overflow-hidden">
+                                                            <div className="px-3 py-2 bg-slate-100 flex items-center gap-1.5">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                                                <span className="text-[9px] font-black tracking-widest text-slate-500 uppercase">Quick Comparison</span>
+                                                            </div>
+                                                            <ul className="px-3 py-2 flex flex-col gap-1.5">
+                                                                {lines.map((line, li) => {
+                                                                    const cleanLine = line.replace(/^[-•*]\s*/, '');
+                                                                    return (
+                                                                        <li key={li} className="flex items-start gap-1.5">
+                                                                            <span className="mt-[3px] shrink-0 w-1 h-1 rounded-full bg-rose-400" />
+                                                                            <span className="text-[11px] text-slate-600 leading-snug">{renderFormatted(cleanLine)}</span>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        </div>
+                                                    );
                                                 }
 
                                                 if (part.startsWith('![')) {
@@ -748,22 +832,10 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                     }
                                                 }
 
-                                                const renderFormatted = (text: string) => {
-                                                    const textParts = text.split(/(\*\*.*?\*\*|#\w+)/g);
-                                                    return textParts.map((t, idx) => {
-                                                        if (t.startsWith('**') && t.endsWith('**') && t.length >= 4) {
-                                                            return <strong key={idx} className="font-bold">{t.slice(2, -2)}</strong>;
-                                                        }
-                                                        if (t.startsWith('#') && t.length > 1) {
-                                                            return <strong key={idx} className="font-bold">{t.slice(1)}</strong>;
-                                                        }
-                                                        return <span key={idx}>{t}</span>;
-                                                    });
-                                                };
+
 
                                                 return <span key={i} className="break-words">{renderFormatted(part)}</span>;
-                                            }
-                                            return null;
+
                                         });
                                     })()}
                                 </div>
@@ -791,7 +863,7 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                     </span>
                                 )}
                                 {sentAt && (
-                                    <span className={`text-[8.5px] font-black tabular-nums drop-shadow-sm ${mine ? "text-white" : "text-gray-800"}`}>
+                                    <span className={`text-[8.5px] font-black tabular-nums drop-shadow-sm ${mine ? (hasProductDetails ? "text-slate-500" : "text-white") : "text-gray-800"}`}>
                                         {new Date(sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 )}
@@ -808,6 +880,28 @@ export const ChatBubble: React.FC<MessageProps> = ({
                         </div>
                     )}
                 </div>
+
+                {!!is_ai && !mine && (
+                    <div className="mt-1.5 flex items-center gap-2 ml-2">
+                        <div className="text-[8px] font-bold text-slate-400 opacity-60 transition-opacity hover:opacity-100 ">
+                            Generative by AI
+                        </div>
+                        <div className="flex items-center gap-1.5 ml-1">
+                            <button
+                                onClick={() => handleRating(1)}
+                                className={`transition-all duration-200 hover:scale-125 active:scale-95 ${localRating === 1 ? "text-emerald-500" : "text-slate-700 hover:text-emerald-400 opacity-40 hover:opacity-100"}`}
+                            >
+                                <ThumbsUp size={10} fill={localRating === 1 ? "currentColor" : "none"} />
+                            </button>
+                            <button
+                                onClick={() => handleRating(-1)}
+                                className={`transition-all duration-200 hover:scale-125 active:scale-95 ${localRating === -1 ? "text-rose-500" : "text-slate-700 hover:text-rose-400 opacity-40 hover:opacity-100"}`}
+                            >
+                                <ThumbsDown size={10} fill={localRating === -1 ? "currentColor" : "none"} />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
 
                 {/* Footer Only for failed messages */}

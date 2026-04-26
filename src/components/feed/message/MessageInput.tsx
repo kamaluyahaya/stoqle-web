@@ -234,8 +234,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }, [value]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        // Support Cmd+Enter or Ctrl+Enter for sending on desktop
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        // ⚡ Standard Chat Behavior: Enter to send, Shift+Enter for new line
+        if (e.key === "Enter" && !e.shiftKey) {
             if (value.trim() || selectedFile || audioUrl || alwaysAllowSend) {
                 e.preventDefault();
                 onSend();

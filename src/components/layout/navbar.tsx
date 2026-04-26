@@ -11,6 +11,7 @@ import SearchModal from "../modal/SearchModal";
 import SearchResultsModal from "../modal/SearchResultsModal";
 import HelpCenterModal from "../modal/HelpCenterModal";
 import SocialModal from "../modal/socialModal";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 import {
   Bars3Icon,
   XMarkIcon,
@@ -43,7 +44,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  // const [searchTab, setSearchTab] = useState<string | undefined>(undefined);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false); // new: mobile dropdown open
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null); // new: which submenu is visible
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -63,7 +64,8 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
       setSearchQuery("");
     }
     lastPath.current = pathname;
-  }, [pathname]);
+    setIsNavigating(false);
+  }, [pathname, searchParams]);
 
   const openTypingModal = () => {
     const params = new URLSearchParams(window.location.search);
@@ -248,6 +250,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                 {/* Group 1: Personal / Social - prioritizing per user request */}
                 <MenuGroup>
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="Add friends"
                     icon={UserPlusIcon}
                     onClick={() => {
@@ -257,6 +260,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                     }}
                   />
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="Draft"
                     icon={DocumentTextIcon}
                     href="/profile?tab=Drafts"
@@ -267,6 +271,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                 {/* Group 2: Creator & Comments */}
                 <MenuGroup>
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label={Boolean(user?.is_business_owner || user?.business_name || user?.business_id || user?.isBusiness) ? "My shop" : "Become a vendor"}
                     icon={SparklesIcon}
                     href="/profile/business/business-status"
@@ -274,6 +279,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                   />
                   {Boolean(user?.is_business_owner || user?.business_id) && (
                     <DrawerItem
+                      setIsNavigating={setIsNavigating}
                       label="Vendor onboarding"
                       icon={RocketLaunchIcon}
                       href="/profile/business/onboarding"
@@ -281,6 +287,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                     />
                   )}
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="My comments"
                     icon={ChatBubbleOvalLeftIcon}
                     href="/profile?tab=Comments"
@@ -291,12 +298,14 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                 {/* Group 3: Shopping & Finance - Wallet under Order */}
                 <MenuGroup>
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="Order"
                     icon={ShoppingBagIcon}
                     href="/profile/orders"
                     onClick={() => setShowMobileMenu(false)}
                   />
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="Wallet"
                     icon={CreditCardIcon}
                     onClick={() => {
@@ -305,6 +314,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                     }}
                   />
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="Cart"
                     icon={ShoppingCartIcon}
                     href="/cart"
@@ -316,6 +326,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                 {/* Group 4: Information */}
                 <MenuGroup>
                   <DrawerItem
+                    setIsNavigating={setIsNavigating}
                     label="Community Guidelines"
                     icon={InformationCircleIcon}
                     href="/community-guidelines"
@@ -360,6 +371,12 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
                       <Link
                         key={idx}
                         href={item.href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setShowMobileMenu(false);
+                          if (pathname !== item.href) setIsNavigating(true);
+                          router.push(item.href);
+                        }}
                         className="flex flex-col items-center gap-1 group"
                       >
                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 group-hover:border-rose-500 transition-all">
@@ -596,6 +613,13 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
           initialTab={socialModalTab}
         />
       )}
+
+      {/* Global Navigation Loader Overlay for Mobile Sidebar */}
+      {isNavigating && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={50} />
+        </div>
+      )}
     </>
   );
 }
@@ -616,13 +640,18 @@ function DrawerItem({
   href,
   onClick,
   badge,
+  setIsNavigating,
 }: {
   label: string;
   icon: any;
   href?: string;
-  onClick: () => void;
+  onClick: (e?: React.MouseEvent) => void;
   badge?: number;
+  setIsNavigating?: (val: boolean) => void;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const content = (
     <div className="flex items-center justify-between p-4 hover:bg-slate-100 active:bg-slate-200 transition-all group active:scale-[0.99] cursor-pointer">
       <div className="flex items-center gap-4">
@@ -643,15 +672,24 @@ function DrawerItem({
   );
 
   if (href) {
+    const handleNavigationClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      onClick(e);
+      if (setIsNavigating && pathname !== href.split('?')[0]) {
+        setIsNavigating(true);
+      }
+      router.push(href);
+    };
+
     return (
-      <Link href={href} onClick={onClick}>
+      <Link href={href} onClick={handleNavigationClick}>
         {content}
       </Link>
     );
   }
 
   return (
-    <div onClick={onClick}>
+    <div onClick={(e) => onClick(e)}>
       {content}
     </div>
   );

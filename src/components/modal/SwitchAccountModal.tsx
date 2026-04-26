@@ -6,6 +6,7 @@ import { useAuth } from "@/src/context/authContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import { toast } from "sonner";
 import Swal from "sweetalert2";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 const DEFAULT_AVATAR = "/assets/images/favio.png";
 
@@ -35,7 +36,20 @@ export function getSavedAccounts(): SavedAccount[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // ⚡ DEDUPLICATE: Ensure every user_id is unique to prevent React key collisions (Error 179)
+    const map = new Map<string, SavedAccount>();
+    parsed.forEach((acc: any) => {
+      const id = String(acc.user_id || acc.id);
+      if (id && id !== "undefined") {
+        map.set(id, { ...acc, user_id: id });
+      }
+    });
+
+    return Array.from(map.values()).slice(0, 5); // Keep only first 5 unique accounts
   } catch {
     return [];
   }
@@ -51,7 +65,9 @@ export function persistAccounts(accounts: SavedAccount[]) {
  */
 export function upsertSavedAccount(user: any, token: string) {
   const existing = getSavedAccounts();
-  const id = user.user_id || user.id;
+  const id = String(user.user_id || user.id);
+  if (!id || id === "undefined") return;
+
   const entry: SavedAccount = {
     user_id: id,
     full_name: user.full_name,
@@ -64,16 +80,16 @@ export function upsertSavedAccount(user: any, token: string) {
     token,
   };
 
-  const isExisting = existing.some((a) => a.user_id === id);
-  
-  // If it's a new account and we already have 5, don't add it
-  if (!isExisting && existing.length >= 5) {
+  // Filter out any existing entries for this ID (to replace them)
+  const otherAccounts = existing.filter((a) => a.user_id !== id);
+
+  // Limit to 5 accounts total
+  if (otherAccounts.length >= 5) {
+    persistAccounts(otherAccounts);
     return;
   }
 
-  const updated = isExisting
-    ? existing.map((a) => (a.user_id === id ? entry : a))
-    : [...existing, entry];
+  const updated = [entry, ...otherAccounts]; // Put latest account at the top
   persistAccounts(updated);
 }
 
@@ -88,7 +104,10 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
   const { user, token, _onLoginSuccess, openLogin } = useAuth() as any;
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [isReloading, setIsReloading] = useState(false);
   const prevTokenRef = useRef<string | null>(null);
+  // Guards against concurrent/double switch calls
+  const switchLockRef = useRef(false);
 
   // Sync current account on mount/change
   useEffect(() => {
@@ -105,7 +124,6 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
   // Detect when a new account was added (token changed after openLogin resolved)
   useEffect(() => {
     if (token && token !== prevTokenRef.current && prevTokenRef.current !== null) {
-      // new login successful — accounts already upserted via the useEffect above
       setAccounts(getSavedAccounts());
     }
     prevTokenRef.current = token;
@@ -114,22 +132,64 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
   const getDisplayName = (acc: SavedAccount) =>
     acc.business_name || acc.full_name || acc.author_name || "User";
 
-  const isActive = (acc: SavedAccount) =>
-    acc.user_id === (user?.user_id || user?.id);
+  const isActive = (acc: SavedAccount) => {
+    const activeId = String(user?.user_id || user?.id || "");
+    return acc.user_id === activeId;
+  };
 
   const switchTo = async (acc: SavedAccount) => {
-    if (isActive(acc) || switching) return;
+    // Prevent double-click / concurrent switches
+    if (isActive(acc) || switching || switchLockRef.current) return;
+    switchLockRef.current = true;
     setSwitching(acc.user_id);
 
     try {
-      // 1. Fetch full profile to ensure we have current verified status/info
-      // Even for old saved accounts missing email/phone_no, this restores them.
-      const resp = await fetch(`${API_BASE_URL}/api/profile/view/${acc.user_id}`, {
+      // ------------------------------------------------------------------
+      // Step 0: Mark current account as offline (switch_away)
+      // ------------------------------------------------------------------
+      if (token) {
+        fetch(`${API_BASE_URL}/api/activity/generic`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: "switch_away",
+            metadata: {
+              target_user_id: acc.user_id
+            }
+          }),
+        }).catch(() => { });
+      }
+
+      // ------------------------------------------------------------------
+      // Step 1: Validate the saved token is still accepted by the backend.
+      //         Using /api/auth/profile/me guarantees we only proceed with
+      //         a token that the backend actually accepts (not 401/403).
+      // ------------------------------------------------------------------
+      const validateResp = await fetch(`${API_BASE_URL}/api/auth/profile/me`, {
         headers: { Authorization: `Bearer ${acc.token}` },
       });
-      const json = await resp.json();
-      const liveUser = json?.data?.user;
 
+      if (!validateResp.ok) {
+        // Token is invalid / rejected — remove stale account and inform user
+        const updated = getSavedAccounts().filter((a) => a.user_id !== acc.user_id);
+        persistAccounts(updated);
+        setAccounts(updated);
+        toast.error(
+          `Session for ${getDisplayName(acc)} has expired. Please log in again.`
+        );
+        return;
+      }
+
+      const validateJson = await validateResp.json();
+      const liveUser = validateJson?.data?.user || validateJson?.data || null;
+
+      // ------------------------------------------------------------------
+      // Step 2: Build a clean, authoritative user object, preferring live
+      //         data but falling back to the saved snapshot.
+      // ------------------------------------------------------------------
       const userObj = {
         user_id: acc.user_id,
         full_name: liveUser?.full_name || acc.full_name,
@@ -139,92 +199,71 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
         email: liveUser?.email || acc.email,
         phone_no: liveUser?.phone_no || acc.phone_no,
         stoqle_id: liveUser?.stoqle_id || acc.stoqle_id,
+        is_business_owner: liveUser?.is_business_owner ?? false,
+        business_id: liveUser?.business_id || null,
+        isBusiness: liveUser?.isBusiness ?? false,
       };
 
-      // 2. Persist new active account (Full data)
+      // ------------------------------------------------------------------
+      // Step 3: Atomically commit the switch.
+      //   - Write to localStorage FIRST (source of truth on reload)
+      //   - Then update auth context (triggers React re-render)
+      //   - Then update saved accounts list
+      // All three happen synchronously before any async work.
+      // ------------------------------------------------------------------
       localStorage.setItem("token", acc.token);
       localStorage.setItem("user", JSON.stringify(userObj));
+      // Keep cookie in sync (7 days)
+      document.cookie = `token=${acc.token}; path=/; max-age=604800; SameSite=Lax`;
 
-      // 3. Update auth context (Immediate UI feedback)
       _onLoginSuccess(userObj, acc.token);
-
-      // Auto-update the saved list with the most recent info too
       upsertSavedAccount(userObj, acc.token);
 
-      // Log the switch activity to backend
-      try {
-        await fetch(`${API_BASE_URL}/api/activity/generic`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${acc.token}`
+      // ------------------------------------------------------------------
+      // Step 4: Log the switch to the backend (fire-and-forget, non-blocking)
+      // ------------------------------------------------------------------
+      fetch(`${API_BASE_URL}/api/activity/generic`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${acc.token}`,
+        },
+        body: JSON.stringify({
+          action: "switch_account",
+          metadata: {
+            target_user_id: acc.user_id,
+            target_email: acc.email,
           },
-          body: JSON.stringify({
-            action: 'switch_account',
-            metadata: {
-              target_user_id: acc.user_id,
-              target_email: acc.email
-            }
-          })
-        });
-      } catch (err) {
-        console.warn('Failed to log switch activity', err);
-      }
+        }),
+      }).catch((err) => console.warn("Failed to log switch activity", err));
 
       toast.success(`Switched to ${getDisplayName(acc)} successfully`);
       onClose();
 
-      // FULL RELOAD logic to ensure all pages (Discovery, Market, etc.) refresh with the new session
+      // Show full-screen loader immediately before the page reloads
+      setIsReloading(true);
       setTimeout(() => {
         window.location.reload();
-      }, 500); // slightly longer delay to ensure storage writes complete
+      }, 600);
     } catch (err: any) {
-      console.error("Account switch fetch error:", err);
-
-      // Log failed switch attempt
-      try {
-        await fetch(`${API_BASE_URL}/api/activity/generic`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${acc.token}`
-          },
-          body: JSON.stringify({
-            action: 'failed_switch_account',
-            metadata: {
-              target_user_id: acc.user_id,
-              error: err.message
-            }
-          })
-        });
-      } catch (logErr) {
-        console.warn('Failed to log failure action', logErr);
-      }
-
-      toast.error("Failed to restore full account info. Retrying with basic info...");
-
-      // Fallback: switch with base metadata if API fails
-      localStorage.setItem("token", acc.token);
-      localStorage.setItem("user", JSON.stringify(acc));
-      _onLoginSuccess(acc, acc.token);
-      onClose();
-      setTimeout(() => window.location.reload(), 500);
+      console.error("Account switch error:", err);
+      toast.error("Could not switch account. Please try again.");
     } finally {
       setSwitching(null);
+      switchLockRef.current = false;
     }
   };
 
   const removeAccount = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Check if Swal works with the modal's z-index (Swal is very high by default)
     const result = await Swal.fire({
       title: "Remove Account?",
       text: "This will remove the account from your saved list.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#ef4444", // rose-500
-      cancelButtonColor: "#94a3b8", // slate-400
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#94a3b8",
       confirmButtonText: "Yes, remove it",
     });
 
@@ -249,77 +288,92 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
     }
   };
 
-  const activeUserId = user?.user_id || user?.id;
+  const activeUserId = String(user?.user_id || user?.id || "");
   const activeUsername = user?.stoqle_id || user?.user_id || user?.id || "you";
 
-  // Responsive: bottom-sheet on mobile, centerose dialog on lg
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
+    <>
+      {/* Full-screen reload loader — shown immediately on account switch */}
+      <AnimatePresence>
+        {isReloading && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[600000] bg-black/50"
-            onClick={onClose}
-          />
-
-          {/* Mobile: Bottom Sheet */}
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 220 }}
-            className="fixed bottom-0 left-0 right-0 z-[700000] bg-white rounded-t-[0.5rem] shadow-2xl overflow-hidden lg:hidden"
-            style={{ maxHeight: "82vh" }}
+            className="fixed inset-0 z-[9999999] bg-transparent flex flex-col items-center justify-center gap-4"
           >
-            <ModalContent
-              accounts={accounts}
-              activeUserId={activeUserId}
-              activeUsername={activeUsername}
-              switching={switching}
-              isActive={isActive}
-              getDisplayName={getDisplayName}
-              switchTo={switchTo}
-              removeAccount={removeAccount}
-              handleAddAccount={handleAddAccount}
-              onClose={onClose}
-              isMobile
-            />
+            <StoqleLoader size={56} />
+            <p className="text-[13px] font-bold text-slate-400 tracking-wider">Switching account…</p>
           </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* Desktop: Centerose Dialog */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.94 }}
-            transition={{ type: "spring", damping: 28, stiffness: 260 }}
-            className="hidden lg:block fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[700000] bg-white rounded-[0.5rem] shadow-2xl overflow-hidden w-full max-w-md"
-            style={{ maxHeight: "80vh" }}
-          >
-            <ModalContent
-              accounts={accounts}
-              activeUserId={activeUserId}
-              activeUsername={activeUsername}
-              switching={switching}
-              isActive={isActive}
-              getDisplayName={getDisplayName}
-              switchTo={switchTo}
-              removeAccount={removeAccount}
-              handleAddAccount={handleAddAccount}
-              onClose={onClose}
-              isMobile={false}
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[600000] bg-black/50"
+              onClick={onClose}
             />
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+
+            {/* Mobile: Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 220 }}
+              className="fixed bottom-0 left-0 right-0 z-[700000] bg-white rounded-t-[0.5rem] shadow-2xl overflow-hidden lg:hidden"
+              style={{ maxHeight: "82vh" }}
+            >
+              <ModalContent
+                accounts={accounts}
+                activeUserId={activeUserId}
+                activeUsername={activeUsername}
+                switching={switching}
+                isActive={isActive}
+                getDisplayName={getDisplayName}
+                switchTo={switchTo}
+                removeAccount={removeAccount}
+                handleAddAccount={handleAddAccount}
+                onClose={onClose}
+                isMobile
+              />
+            </motion.div>
+
+            {/* Desktop: Centered Dialog */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              transition={{ type: "spring", damping: 28, stiffness: 260 }}
+              className="hidden lg:block fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[700000] bg-white rounded-[0.5rem] shadow-2xl overflow-hidden w-full max-w-md"
+              style={{ maxHeight: "80vh" }}
+            >
+              <ModalContent
+                accounts={accounts}
+                activeUserId={activeUserId}
+                activeUsername={activeUsername}
+                switching={switching}
+                isActive={isActive}
+                getDisplayName={getDisplayName}
+                switchTo={switchTo}
+                removeAccount={removeAccount}
+                handleAddAccount={handleAddAccount}
+                onClose={onClose}
+                isMobile={false}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
-// ── Sharose modal content ──────────────────────────────────────
+// ── Shared modal content ──────────────────────────────────────
 function ModalContent({
   accounts,
   activeUserId,
@@ -381,9 +435,9 @@ function ModalContent({
                 onClick={() => switchTo(acc)}
                 className={`flex items-center gap-3 p-3 rounded-2xl transition-all cursor-pointer select-none
                   ${active
-                    ? "bg-rose-50 border border-rose-100"
+                    ? "bg-slate-100 border border-slate-200"
                     : isLoading
-                      ? "bg-slate-100 opacity-70"
+                      ? "bg-slate-100 opacity-70 pointer-events-none"
                       : "bg-slate-50 hover:bg-slate-100 active:scale-[0.98]"
                   }`}
               >
@@ -418,14 +472,14 @@ function ModalContent({
                 {/* Status */}
                 <div className="shrink-0 flex items-center gap-2">
                   {active ? (
-                    <span className="flex items-center gap-1 text-[10px]  text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                       <CheckCircleIcon className="w-3 h-3" />
                       Active
                     </span>
                   ) : (
                     <button
                       onClick={(e) => removeAccount(acc.user_id, e)}
-                      className="text-[10px]  text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 px-2 py-1 rounded-full transition-colors"
+                      className="text-[10px] text-slate-400 hover:text-rose-500 bg-slate-100 hover:bg-rose-50 px-2 py-1 rounded-full transition-colors"
                     >
                       Remove
                     </button>
@@ -442,8 +496,8 @@ function ModalContent({
             onClick={handleAddAccount}
             disabled={accounts.length >= 5}
             className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed transition-all group active:scale-[0.98]
-              ${accounts.length >= 5 
-                ? "border-slate-100 bg-slate-50 cursor-not-allowed" 
+              ${accounts.length >= 5
+                ? "border-slate-100 bg-slate-50 cursor-not-allowed"
                 : "border-slate-200 hover:border-rose-300 hover:bg-rose-50/40"
               }`}
           >

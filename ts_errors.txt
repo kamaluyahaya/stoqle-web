@@ -1,0 +1,27 @@
+.next/dev/types/validator.ts(251,39): error TS2306: File '/Applications/CEO/Personal/Stoqle-package/stoqle-web/src/app/profile/post/page.tsx' is not a module.
+.next/types/validator.ts(197,39): error TS2307: Cannot find module '../../src/app/profile/business/my-store/page.js' or its corresponding type declarations.
+.next/types/validator.ts(260,39): error TS2306: File '/Applications/CEO/Personal/Stoqle-package/stoqle-web/src/app/profile/post/page.tsx' is not a module.
+.next/types/validator.ts(323,39): error TS2307: Cannot find module '../../src/app/shopping-reels/page.js' or its corresponding type declarations.
+src/components/modal/postModal.tsx(1893,5): error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+  Type 'undefined' is not assignable to type 'boolean'.
+src/components/modal/postModal.tsx(1893,20): error TS2322: Type 'string | number' is not assignable to type 'string'.
+  Type 'number' is not assignable to type 'string'.
+src/components/modal/PostModal/components/MobileReelsCommentSection.tsx(8,23): error TS2307: Cannot find module '@/src/components/common/LikeBurst' or its corresponding type declarations.
+src/components/modal/PostModal/components/MobileReelsView.tsx(11,31): error TS2307: Cannot find module '@/src/components/video/MobileVideoPlayer' or its corresponding type declarations.
+src/components/modal/PostModal/components/MobileReelsView.tsx(12,28): error TS2307: Cannot find module '@/src/components/video/CommentOverlay' or its corresponding type declarations.
+src/components/modal/PostModal/components/MobileReelsView.tsx(13,23): error TS2307: Cannot find module '@/src/components/video/VolumeHUD' or its corresponding type declarations.
+src/components/modal/PostModal/components/MobileReelsView.tsx(15,23): error TS2307: Cannot find module '@/src/components/common/LikeBurst' or its corresponding type declarations.
+src/components/modal/PostModal/components/MobileReelsView.tsx(232,41): error TS7006: Parameter 'el' implicitly has an 'any' type.
+src/components/modal/PostModal/components/MobileReelsView.tsx(236,47): error TS7006: Parameter 'cur' implicitly has an 'any' type.
+src/components/modal/PostModal/components/MobileReelsView.tsx(236,52): error TS7006: Parameter 'dur' implicitly has an 'any' type.
+src/components/modal/PostModal/components/StandardPostView.tsx(9,36): error TS2307: Cannot find module '@/src/components/video/LargeScreenVideoPlayer' or its corresponding type declarations.
+src/components/modal/PostModal/components/StandardPostView.tsx(11,23): error TS2307: Cannot find module '@/src/components/common/LikeBurst' or its corresponding type declarations.
+src/components/modal/PostModal/components/StandardPostView.tsx(151,35): error TS7006: Parameter 'el' implicitly has an 'any' type.
+src/components/modal/PostModal/components/StandardPostView.tsx(785,62): error TS2552: Cannot find name 'commentText'. Did you mean 'setCommentText'?
+src/components/modal/PostModal/index.tsx(4,10): error TS2305: Module '"./types"' has no exported member 'PostModalProps'.
+src/components/modal/PostModal/index.tsx(5,30): error TS2307: Cannot find module './hooks/usePostModal' or its corresponding type declarations.
+src/components/modal/PostModal/index.tsx(6,23): error TS2307: Cannot find module './components/ReelsView' or its corresponding type declarations.
+src/components/modal/PostModal/index.tsx(7,26): error TS2307: Cannot find module './components/StandardView' or its corresponding type declarations.
+src/components/modal/PostModal/index.tsx(8,29): error TS2307: Cannot find module './components/PostContextMenu' or its corresponding type declarations.
+src/components/modal/PostModal/index.tsx(121,30): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/components/modal/PostModal/index.tsx(134,30): error TS7006: Parameter 'e' implicitly has an 'any' type.

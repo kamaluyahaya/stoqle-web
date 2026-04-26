@@ -18,6 +18,8 @@ import UserAgreementModal from "./UserAgreementModal";
 import PrivacyPolicyModal from "./PrivacyPolicyModal";
 import LoginFAQModal from "./LoginFAQModal";
 import GoogleAuthModal from "./GoogleAuthModal";
+import EmojiPickerModal from "./EmojiPickerModal";
+import { ChevronRightIcon } from "@heroicons/react/24/outline";
 
 type Props = {
   isOpen: boolean;
@@ -72,6 +74,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showFAQ, setShowFAQ] = useState(false);
   const [showGoogleAuth, setShowGoogleAuth] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const isFullNameValid = React.useMemo(() => {
     const trimmed = fullName.trim();
@@ -458,7 +461,8 @@ export default function LoginModal({ isOpen, onClose }: Props) {
   }
 
   return createPortal(
-    <div
+    <>
+      <div
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
@@ -747,7 +751,7 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                       className="flex items-center gap-2 overflow-x-auto pb-1 px-1 scrollbar-hide"
                       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
-                      {EMOJI_SHORTCUTS.map((emoji) => (
+                      {EMOJI_SHORTCUTS.slice(0, 8).map((emoji) => (
                         <button
                           key={emoji}
                           type="button"
@@ -761,6 +765,15 @@ export default function LoginModal({ isOpen, onClose }: Props) {
                           {emoji}
                         </button>
                       ))}
+                      {/* View More Button */}
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiPicker(true)}
+                        className="flex-shrink-0 px-4 h-11 flex items-center gap-2 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all text-[11px] font-bold text-slate-500"
+                      >
+                        More
+                        <ChevronRightIcon className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                   <p></p>
@@ -926,34 +939,47 @@ export default function LoginModal({ isOpen, onClose }: Props) {
         )}
       </AnimatePresence>
 
-      <LoginFAQModal
-        isOpen={showFAQ}
-        onClose={() => setShowFAQ(false)}
-        onCloseAll={() => {
-          setShowFAQ(false);
-          onClose();
-        }}
-      />
-      <GoogleAuthModal
-        isOpen={showGoogleAuth}
-        onClose={() => setShowGoogleAuth(false)}
-        onConfirm={() => {
-          setShowGoogleAuth(false);
-          handleGoogleSignIn(null as any);
-        }}
-        onCloseAll={() => {
-          setShowGoogleAuth(false);
-          onClose();
-        }}
-        agreed={agreed}
-        setAgreed={setAgreed}
-        showAgreement={() => setShowAgreement(true)}
-        showPrivacy={() => setShowPrivacy(true)}
-      />
+    </div>
 
-      <UserAgreementModal open={showAgreement} onClose={() => setShowAgreement(false)} />
-      <PrivacyPolicyModal open={showPrivacy} onClose={() => setShowPrivacy(false)} />
-    </div>,
-    document.body
-  );
+    <LoginFAQModal
+      isOpen={showFAQ}
+      onClose={() => setShowFAQ(false)}
+      onCloseAll={() => {
+        setShowFAQ(false);
+        onClose();
+      }}
+    />
+    <GoogleAuthModal
+      isOpen={showGoogleAuth}
+      onClose={() => setShowGoogleAuth(false)}
+      onConfirm={() => {
+        setShowGoogleAuth(false);
+        handleGoogleSignIn(null as any);
+      }}
+      onCloseAll={() => {
+        setShowGoogleAuth(false);
+        onClose();
+      }}
+      agreed={agreed}
+      setAgreed={setAgreed}
+      showAgreement={() => setShowAgreement(true)}
+      showPrivacy={() => setShowPrivacy(true)}
+    />
+
+    <UserAgreementModal open={showAgreement} onClose={() => setShowAgreement(false)} />
+    <PrivacyPolicyModal open={showPrivacy} onClose={() => setShowPrivacy(false)} />
+
+    {showEmojiPicker && (
+      <EmojiPickerModal
+        isOpen={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelect={(emoji) => {
+          setFullName((prev) => prev + emoji);
+          fullNameRef.current?.focus();
+        }}
+      />
+    )}
+  </>,
+  document.body
+);
 }

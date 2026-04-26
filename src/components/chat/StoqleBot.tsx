@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Zap, ShieldCheck, X, Sparkles, MessageSquare, Info } from "lucide-react";
+import { Bot, Zap, ShieldCheck, X, Sparkles, MessageSquare, Info, Package } from "lucide-react";
 
 type BotProps = {
   /** Business context */
@@ -49,8 +49,8 @@ export default function StoqleBot({
             <h3 className="text-xs font-bold text-white">Assistant for {vendorName}</h3>
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={onDeactivate}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all group active:scale-95"
         >

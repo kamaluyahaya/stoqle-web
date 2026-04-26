@@ -18,6 +18,7 @@ type SocialUser = {
   is_following_viewer?: boolean;
   total_followers?: number;
   total_posts?: number;
+  unviewed_updates?: number;
   bio?: string;
   stoqle_id?: string | number;
 };
@@ -29,10 +30,11 @@ interface SocialModalProps {
   onClose: () => void;
   userId: string | number;
   initialTab?: SocialTab;
+  userName?: string;
   onFollowUpdate?: (targetUserId: string | number, following: boolean) => void;
 }
 
-const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, initialTab = "followers", onFollowUpdate }) => {
+const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, userName, initialTab = "followers", onFollowUpdate }) => {
   const [activeTab, setActiveTab] = useState<SocialTab>(initialTab);
   const [users, setUsers] = useState<SocialUser[]>([]);
   const [recommendedUsers, setRecommendedUsers] = useState<SocialUser[]>([]);
@@ -40,6 +42,9 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
   const [searchQuery, setSearchQuery] = useState("");
   const [unfollowConfirm, setUnfollowConfirm] = useState<SocialUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const cacheRef = useRef<Record<string, { users: SocialUser[]; timestamp: number }>>({});
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   const auth = useAuth() as any;
@@ -47,61 +52,73 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
   const token = auth?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
   const router = useRouter();
 
-  const tabs: { id: SocialTab; label: string }[] = [
+  const isCurrentUser = String(userId) === String(currentUserId) || userId === "me";
+
+  const allTabs: { id: SocialTab; label: string }[] = [
     { id: "friends", label: "Friends" },
     { id: "followers", label: "Followers" },
     { id: "following", label: "Following" },
     { id: "recommend", label: "Recommend" }
   ];
 
+  const tabs = isCurrentUser ? allTabs : allTabs.filter(t => t.id !== "friends");
+
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab);
+      if (!isCurrentUser && initialTab === "friends") {
+        setActiveTab("followers");
+      } else {
+        setActiveTab(initialTab);
+      }
       setSearchQuery("");
       setRecommendedUsers([]);
       setError(null);
+      setOffset(0);
+      setHasMore(true);
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, isCurrentUser]);
 
   useEffect(() => {
     if (isOpen) {
-      fetchData();
-    }
-  }, [isOpen, activeTab, userId]);
-
-  const fetchData = async () => {
-    setError(null);
-    // Check cache first
-    const cacheKey = `${activeTab}-${userId}`;
-    const cachedData = cacheRef.current[cacheKey];
-    if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
-      setUsers(cachedData.users);
-      // Also grab cached recommendations if not on recommend tab
-      if (activeTab !== "recommend") {
-        const recCache = cacheRef.current["recommendations"];
-        if (recCache && Date.now() - recCache.timestamp < CACHE_TTL) {
-          const existingIds = new Set(cachedData.users.map(u => String(u.user_id)));
-          setRecommendedUsers(recCache.users.filter(u => !existingIds.has(String(u.user_id))).slice(0, 5));
-        } else {
-          fetchRecommendations(cachedData.users);
+      // Small timeout ensures the DOM has updated and rendered the tabs
+      setTimeout(() => {
+        const activeTabEl = document.getElementById(`social-tab-${activeTab}`) || document.getElementById(`social-tab-other-${activeTab}`);
+        if (activeTabEl) {
+          activeTabEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
         }
-      } else {
-        setRecommendedUsers([]);
-      }
-      return;
+      }, 50);
     }
+  }, [activeTab, isOpen]);
 
-    setLoading(true);
+  useEffect(() => {
+    if (isOpen) {
+      setOffset(0);
+      setHasMore(true);
+      fetchData(0, false);
+    }
+  }, [isOpen, activeTab, userId, searchQuery]);
+
+  const fetchData = async (currentOffset: number, isLoadMore: boolean) => {
+    if (isLoadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
     try {
+      const limit = 10;
       let url = "";
+      const baseParams = `limit=${limit}&offset=${currentOffset}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`;
+
       if (activeTab === "followers") {
-        url = `${API_BASE_URL}/api/users/${userId}/followers`;
+        url = `${API_BASE_URL}/api/users/${userId}/followers?${baseParams}`;
       } else if (activeTab === "following") {
-        url = `${API_BASE_URL}/api/users/${userId}/following`;
+        url = `${API_BASE_URL}/api/users/${userId}/following?${baseParams}`;
       } else if (activeTab === "recommend") {
-        url = `${API_BASE_URL}/api/users/suggestions`;
+        url = `${API_BASE_URL}/api/users/suggestions?${baseParams}`;
       } else if (activeTab === "friends") {
-        url = `${API_BASE_URL}/api/users/${userId}/following`;
+        url = `${API_BASE_URL}/api/users/${userId}/following?${baseParams}`;
       }
 
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -112,15 +129,12 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
 
       if (!res.ok) {
         setError(data.message || "Failed to fetch users");
-        setLoading(false);
         return;
       }
 
       let rawList = [];
       if (activeTab === "recommend") {
-        const usersList = data?.data?.users || [];
-        const vendorsList = data?.data?.vendors || [];
-        rawList = [...usersList, ...vendorsList];
+        rawList = data?.data?.suggestions || data?.suggestions || data?.data?.users || data?.users || [];
       } else {
         rawList = data?.data?.items ?? data?.items ?? [];
       }
@@ -132,30 +146,34 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
         profile_pic: u.business_logo || u.profile_pic || u.avatar || `https://i.pravatar.cc/150?u=${u.user_id || u.id || u.staff_id}`
       }));
 
-      let filteroseList = list;
+      let filteredList = list;
       if (activeTab === "friends") {
-        filteroseList = list.filter((u: SocialUser) => u.is_following_viewer);
+        filteredList = list.filter((u: SocialUser) => u.is_following_viewer);
       }
 
-      setUsers(filteroseList);
+      if (isLoadMore) {
+        setUsers(prev => [...prev, ...filteredList]);
+      } else {
+        setUsers(filteredList);
+      }
+
+      setHasMore(list.length === limit);
       setError(null);
 
-      // Update Tab Cache
-      cacheRef.current[cacheKey] = { users: filteroseList, timestamp: Date.now() };
-
-      // Fetch recommendations if not on recommend tab
-      if (activeTab !== "recommend") {
-        fetchRecommendations(filteroseList);
-      } else {
+      // Fetch recommendations if not on recommend tab and it's not a load more
+      if (activeTab !== "recommend" && !isLoadMore) {
+        fetchRecommendations(filteredList);
+      } else if (activeTab === "recommend") {
         setRecommendedUsers([]);
       }
 
     } catch (err: any) {
       console.error("Failed to fetch users:", err);
-      setUsers([]);
+      if (!isLoadMore) setUsers([]);
       setError(err.message || "Failed to fetch users");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -275,17 +293,17 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
     }
   };
 
-  const filteroseUsers = users.filter(u =>
-    (u.full_name || u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (u.username || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteroseUsers = users; // Pagination already handles filtering/search on backend
 
   useEffect(() => {
     if (isOpen) {
-      const originalStyle = window.getComputedStyle(document.body).overflow;
+      const originalBodyOverflow = document.body.style.overflow;
+      const originalHtmlOverflow = document.documentElement.style.overflow;
       document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
       return () => {
-        document.body.style.overflow = originalStyle;
+        document.body.style.overflow = originalBodyOverflow;
+        document.documentElement.style.overflow = originalHtmlOverflow;
       };
     }
   }, [isOpen]);
@@ -294,6 +312,20 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
     onClose();
     const handle = targetUser.username;
     router.push(handle ? `/${handle}` : `/user/profile/${targetUser.user_id}`);
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (
+      target.scrollHeight - target.scrollTop <= target.clientHeight + 100 &&
+      !loading &&
+      !loadingMore &&
+      hasMore
+    ) {
+      const nextOffset = offset + 10;
+      setOffset(nextOffset);
+      fetchData(nextOffset, true);
+    }
   };
 
   return (
@@ -320,67 +352,115 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full bg-white  overflow-hidden flex flex-col h-[100dvh] sm:h-[80vh] sm:max-w-md sm:rounded-[0.5rem]"
             >
-              {/* Header */}
-              <div className="px-6 py-4 flex items-center justify-between border-b border-slate-50 shrink-0">
-                <h3 className="text-lg font-bold text-slate-900">Community</h3>
-                <button
-                  onClick={onClose}
-                  className="p-2 -mr-2 rounded-full hover:bg-slate-50 text-slate-400 transition-colors"
-                >
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Tabs */}
-              <div className="px-6 flex items-center gap-6 overflow-x-auto no-scrollbar border-b border-slate-100 shrink-0">
-                {tabs.map((tab) => {
-                  const isActive = activeTab === tab.id;
-
-                  return (
+              {/* Header & Tabs */}
+              {isCurrentUser ? (
+                <div className="px-4 pr-6 flex items-center justify-between border-b border-slate-100 shrink-0">
+                  <button
+                    onClick={onClose}
+                    className="p-2 -ml-2 rounded-full hover:bg-slate-50 text-slate-900 transition-colors z-10 shrink-0 mr-4"
+                  >
+                    <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
+                  </button>
+                  <div id="social-modal-tabs-container" className="flex items-center gap-6 overflow-x-auto no-scrollbar flex-1 pt-1 min-w-0">
+                    {tabs.map((tab) => {
+                      const isActive = activeTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          id={`social-tab-${tab.id}`}
+                          onClick={() => {
+                            setActiveTab(tab.id);
+                            setSearchQuery("");
+                          }}
+                          className={`relative py-3 text-sm font-bold whitespace-nowrap transition-all ${isActive
+                            ? "text-rose-500"
+                            : "text-slate-400 hover:text-slate-600"
+                            }`}
+                        >
+                          {tab.label}
+                          {isActive && (
+                            <motion.div
+                              layoutId="activeTabSocial"
+                              className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-t-full"
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Header */}
+                  <div className="px-6 py-4 flex items-center justify-between border-b border-slate-50 shrink-0 relative">
                     <button
-                      key={tab.id}
-                      onClick={() => {
-                        setActiveTab(tab.id);
-                        setSearchQuery("");
-                      }}
-                      className={`relative py-3 text-sm font-bold whitespace-nowrap transition-all ${isActive
-                        ? "text-rose-500"
-                        : "text-slate-400 hover:text-slate-600"
-                        }`}
+                      onClick={onClose}
+                      className="p-2 -ml-2 rounded-full hover:bg-slate-50 text-slate-900 transition-colors z-10 mr-auto"
                     >
-                      {tab.label}
-                      {isActive && (
-                        <motion.div
-                          layoutId="activeTabSocial"
-                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-t-full"
-                          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                        />
-                      )}
+                      <ChevronLeftIcon className="w-6 h-6 stroke-[2.5]" />
                     </button>
-                  );
-                })}
-              </div>
+                    <h3 className="lg:text-lg text-sm font-bold text-slate-900 absolute left-1/2 -translate-x-1/2 truncate max-w-[60%] text-center">
+                      {userName ? userName : "Community"}
+                    </h3>
+                    <div className="w-8"></div>
+                  </div>
+
+                  {/* Tabs */}
+                  <div className="px-6 flex items-center justify-center gap-6 overflow-x-auto no-scrollbar border-b border-slate-100 shrink-0">
+                    {tabs.map((tab) => {
+                      const isActive = activeTab === tab.id;
+
+                      return (
+                        <button
+                          key={tab.id}
+                          id={`social-tab-other-${tab.id}`}
+                          onClick={() => {
+                            setActiveTab(tab.id);
+                            setSearchQuery("");
+                          }}
+                          className={`relative py-3 text-sm font-bold whitespace-nowrap transition-all ${isActive
+                            ? "text-rose-500"
+                            : "text-slate-400 hover:text-slate-600"
+                            }`}
+                        >
+                          {tab.label}
+                          {isActive && (
+                            <motion.div
+                              layoutId="activeTabSocial"
+                              className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-t-full"
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
 
               {/* Search */}
               {(users.length > 0 || searchQuery) && (
                 <div className="px-6 py-3 shrink-0 flex flex-col gap-3">
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                      <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
+                  {activeTab !== "recommend" && (
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                        <MagnifyingGlassIcon className="w-4 h-4 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder={
+                          activeTab === "following" ? "Search people you follow..." :
+                            activeTab === "followers" ? "Search your followers..." :
+                              activeTab === "friends" ? "Search your mutual friends..." :
+                                "Search recommendations..."
+                        }
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-rose-100 placeholder:text-slate-400 focus:bg-white transition-all outline-none"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      placeholder={
-                        activeTab === "following" ? "Search people you follow..." :
-                          activeTab === "followers" ? "Search your followers..." :
-                            activeTab === "friends" ? "Search your mutual friends..." :
-                              "Search recommendations..."
-                      }
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-rose-100 placeholder:text-slate-400 focus:bg-white transition-all outline-none"
-                    />
-                  </div>
+                  )}
                   <div className="text-xs font-bold text-slate-900 pl-1 capitalize">
                     {activeTab === "recommend" ? "Recommendations" : activeTab} ({users.length})
                   </div>
@@ -388,7 +468,10 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
               )}
 
               {/* List */}
-              <div className="flex-1 overflow-y-auto px-4 pb-6 custom-scrollbar">
+              <div
+                className="flex-1 overflow-y-auto px-4 pb-6 custom-scrollbar"
+                onScroll={handleScroll}
+              >
                 {loading ? (
                   <div className="flex flex-col items-center justify-center py-20 gap-4">
                     <div className="w-8 h-8 border-3 border-rose-500 border-t-transparent rounded-full animate-spin" />
@@ -421,7 +504,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                     </p>
                     {error && (
                       <button
-                        onClick={() => { setError(null); fetchData(); }}
+                        onClick={() => { setError(null); fetchData(0, false); }}
                         className="mt-6 px-6 py-2 bg-slate-100 text-slate-600 rounded-full text-xs font-bold hover:bg-slate-200 transition-colors"
                       >
                         Try again
@@ -445,11 +528,6 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                             alt={user.full_name || user.name}
                             className="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm"
                           />
-                          {user.is_following_viewer && (
-                            <div className="absolute -bottom-1 -right-1 bg-green-500 border-2 border-white w-4 h-4 rounded-full flex items-center justify-center" title="Mutual Friend">
-                              <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                            </div>
-                          )}
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -457,16 +535,20 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                             {user.full_name || user.name}
                           </h4>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-slate-400 font-medium truncate">
-                              {user.username || 'stoqleID: ' + (user.stoqle_id || user.user_id)}
-                            </span>
-                            {user.total_followers !== undefined && (
-                              <>
-                                <span className="w-1 h-1 bg-slate-200 rounded-full" />
-                                <span className="text-[10px] text-slate-500 font-bold">
+                            {activeTab === "following" && (user.unviewed_updates || 0) > 0 ? (
+                              <span className="text-[10px] text-slate-500 bg-slate-100 p-1 rounded ">
+                                {user.unviewed_updates} {(user.unviewed_updates || 0) === 1 ? 'update' : 'update(s)'}
+                              </span>
+                            ) : (
+                              user.total_followers ? (
+                                <span className="text-[10px] text-slate-500 ">
                                   {user.total_followers} followers
                                 </span>
-                              </>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 ">
+                                  {`stoqle ID: ${user.stoqle_id}` || `@${user.username || `user_${user.user_id}`}`}
+                                </span>
+                              )
                             )}
                           </div>
                         </div>
@@ -495,6 +577,11 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                         )}
                       </motion.div>
                     ))}
+                    {loadingMore && (
+                      <div className="flex justify-center py-4">
+                        <div className="w-6 h-6 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -541,16 +628,20 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                               {user.full_name || user.name}
                             </h4>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] text-slate-400 font-medium truncate">
-                                @{user.username || 'stoqleID' + (user.stoqle_id || user.user_id)}
-                              </span>
-                              {user.total_followers !== undefined && (
-                                <>
-                                  <span className="w-1 h-1 bg-slate-200 rounded-full" />
+                              {activeTab === "following" && (user.unviewed_updates || 0) > 0 ? (
+                                <span className="text-[10px] text-rose-500 font-bold">
+                                  {user.unviewed_updates} new {(user.unviewed_updates || 0) === 1 ? 'update' : 'updates'}
+                                </span>
+                              ) : (
+                                user.total_followers ? (
                                   <span className="text-[10px] text-slate-500 font-bold">
                                     {user.total_followers} followers
                                   </span>
-                                </>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 font-bold">
+                                    @{user.stoqle_id || user.username || `user_${user.user_id}`}
+                                  </span>
+                                )
                               )}
                             </div>
                           </div>
@@ -577,6 +668,15 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, init
                           )}
                         </motion.div>
                       ))}
+                      <button
+                        onClick={() => {
+                          setActiveTab("recommend");
+                          setSearchQuery("");
+                        }}
+                        className="w-full py-4 text-xs font-bold text-rose-500 hover:bg-slate-50 rounded-2xl transition-colors border-[0.5px] border-dashed border-rose-200 mt-2"
+                      >
+                        View more recommendations
+                      </button>
                     </div>
                   </div>
                 )}

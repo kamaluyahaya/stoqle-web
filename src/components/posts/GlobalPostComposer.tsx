@@ -38,6 +38,7 @@ import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import type { PreviewPayload } from "@/src/types/product";
 import { API_BASE_URL } from "@/src/lib/config";
 import ProductSelectorModal from "@/src/components/product/ProductSelectorModal";
+import { getCachedLocationName } from "@/src/lib/location";
 const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 const FALLBACK_SOUNDS = [
@@ -1984,6 +1985,11 @@ export default function GlobalPostComposer() {
       formData.append("text", payload.text || "");
       formData.append("subtitle", payload.subtitle || "");
       formData.append("privacy", payload.privacy || "public");
+
+      const userLocation = getCachedLocationName();
+      if (userLocation) {
+        formData.append("location", userLocation);
+      }
 
       if (payload.linked_product_id) {
         formData.append("linked_product_id", String(payload.linked_product_id));

@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNextZIndex } from "@/src/lib/utils/z-index";
 import { ChevronLeftIcon, ClockIcon, XMarkIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
@@ -8,6 +6,7 @@ import { useAuth } from "@/src/context/authContext";
 import { fetchSearchSuggestions, fetchTrendingSearches, fetchRecentSearches, fetchUnifiedSearch } from "@/src/lib/api/searchApi";
 import { useRouter } from "next/navigation";
 import debounce from "lodash/debounce";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -51,11 +50,27 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
   const [isLoading, setIsLoading] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [view, setView] = useState<"initial" | "results">("initial");
+  // Opening loader: show briefly when modal first opens
+  const [isOpening, setIsOpening] = useState(false);
+  const prevOpenRef = useRef(false);
 
-  // Sync scroll lock
+  // Sync scroll lock + opening loader
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      prevOpenRef.current = false;
+      return;
+    }
     document.body.style.overflow = "hidden";
+    // Show a brief loader the first time the modal opens
+    if (!prevOpenRef.current) {
+      prevOpenRef.current = true;
+      setIsOpening(true);
+      const t = setTimeout(() => setIsOpening(false), 280);
+      return () => {
+        clearTimeout(t);
+        document.body.style.overflow = "auto";
+      };
+    }
     return () => {
       document.body.style.overflow = "auto";
     };
@@ -202,9 +217,9 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
             </div>
           </div>
         ) : isSuggesting ? (
-          <div className="flex flex-col items-center justify-center p-10 text-center opacity-50">
-            <ClockIcon className="w-10 h-10 text-slate-200 mb-2 animate-pulse" />
-            <p className="text-xs text-slate-400 font-medium">Looking for matches...</p>
+          <div className="flex flex-col items-center justify-center p-10 text-center opacity-70">
+            <StoqleLoader size={36} />
+            <p className="text-xs text-slate-400 font-medium mt-3">Looking for matches...</p>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center p-12 text-center">
@@ -327,7 +342,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
     <div className="flex-1 overflow-auto p-5 space-y-8">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
+          <StoqleLoader size={44} />
           <p className="text-sm text-slate-400 font-medium">Searching for "{searchQuery}"...</p>
         </div>
       ) : results ? (
@@ -463,6 +478,20 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
           onMouseDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
+          {/* Opening loader overlay — shows briefly on first open */}
+          <AnimatePresence>
+            {isOpening && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 z-50 bg-transparent flex items-center justify-center"
+              >
+                <StoqleLoader size={44} />
+              </motion.div>
+            )}
+          </AnimatePresence>
           <div className="h-14 flex items-center px-2 gap-2 border-b border-slate-50 bg-white sticky top-0 z-20">
             <button
               onClick={() => {

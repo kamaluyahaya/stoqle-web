@@ -1763,6 +1763,7 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
           isOpen={socialModalOpen}
           onClose={() => setSocialModalOpen(false)}
           userId={viewUserId}
+          userName={displayName}
           initialTab={activeSocialTab === "liked" ? "followers" : activeSocialTab as any}
           onFollowUpdate={handleFollowUpdate}
         />

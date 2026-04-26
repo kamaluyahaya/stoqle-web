@@ -2,7 +2,7 @@
 "use client";
 
 import { Profiler, useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   HomeIcon as HomeOutline,
@@ -17,9 +17,9 @@ import { UserCircleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
 import { useCart } from "@/src/context/cartContext";
-import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { API_BASE_URL } from "@/src/lib/config";
 import { Home, MessageCircleMore, } from "lucide-react";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 type Props = {
   navHeight: number;
@@ -32,7 +32,9 @@ export default function Sidebar({ navHeight, width }: Props) {
   const { unreadCount } = useChat();
   const { cartCount } = useCart();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
+  const [isNavigating, setIsNavigating] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -40,6 +42,11 @@ export default function Sidebar({ navHeight, width }: Props) {
   // Prevents hydration mismatch: auth state only available on client
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // Clear navigation loader when route actually updates
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname, searchParams]);
 
   // Directly check auth.user
   const isLoggedIn = !!auth?.user;
@@ -155,20 +162,25 @@ export default function Sidebar({ navHeight, width }: Props) {
               if (label === "Upload") {
                 window.dispatchEvent(new CustomEvent("showReleaseModal"));
               } else {
+                setIsNavigating(true);
                 router.push(href);
               }
             }
+          } else {
+            e.preventDefault();
+            setIsNavigating(true);
+            router.push(href);
           }
         }}
         className="w-full flex items-center justify-between rounded-full px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 cursor-pointer group transition-colors"
       >
         <div className="flex items-center gap-3">
           <Outline className="h-5 w-5 text-gray-500" />
-          <span>{label}</span>
+          <span>{String(label)}</span>
         </div>
-        {badgeCount > 0 && (
+        {Number(badgeCount) > 0 && (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
-            {badgeCount > 99 ? "99+" : badgeCount}
+            {Number(badgeCount) > 99 ? "99+" : Number(badgeCount)}
           </span>
         )}
       </Link>
@@ -492,6 +504,13 @@ export default function Sidebar({ navHeight, width }: Props) {
           </div>
         )}
       </div>
+
+      {/* Global Navigation Loader Overlay */}
+      {isNavigating && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={50} />
+        </div>
+      )}
     </aside>
   );
 }

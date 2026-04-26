@@ -33,7 +33,7 @@ function LikeBurst() {
     );
 }
 
-export default function CustomersTab() {
+export default function CustomersTab({ onMessage }: { onMessage?: (customer: any) => void }) {
     const router = useRouter();
     const [search, setSearch] = useState("");
     const [selectedCustomers, setSelectedCustomers] = useState<Set<number>>(new Set());
@@ -382,7 +382,8 @@ export default function CustomersTab() {
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    router.push(`/messages?user=${cid}`);
+                                                    if (onMessage) onMessage(customer);
+                                                    else router.push(`/messages?user=${cid}`);
                                                 }}
                                                 className=" hover:bg-rose-50 text-slate-400 hover:text-rose-500 rounded-full transition-colors border border-slate-100 hover:border-rose-100 "
                                                 title="Message Customer"
@@ -548,7 +549,8 @@ export default function CustomersTab() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            router.push(`/messages?user=${cid}`);
+                                                            if (onMessage) onMessage(customer);
+                                                            else router.push(`/messages?user=${cid}`);
                                                         }}
                                                         className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:bg-rose-500 hover:border-rose-500 hover:text-white rounded transition-colors inline-block"
                                                         title="Message Customer"

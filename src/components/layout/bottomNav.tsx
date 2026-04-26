@@ -30,6 +30,7 @@ type NavItem = {
 import { useChat } from "@/src/context/chatContext";
 import { API_BASE_URL } from "@/src/lib/config";
 import { Home, MessageCircleMore } from "lucide-react";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 export default function BottomNav() {
   const auth = useAuth();
@@ -39,9 +40,15 @@ export default function BottomNav() {
   const router = useRouter(); // add router
   const searchParams = useSearchParams();
   const [showReleaseModal, setShowReleaseModal] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   // Prevents hydration mismatch — auth state is client-only
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // Clear navigation loader when route actually updates
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [pathname, searchParams]);
 
   const isLoggedIn =
     !!(auth && (auth.user || (auth as any).token || (auth as any).isAuthenticated || (auth as any).loggedIn));
@@ -159,6 +166,7 @@ export default function BottomNav() {
                   return;
                 }
 
+                setIsNavigating(true);
                 router.push(it.href);
               };
 
@@ -191,6 +199,13 @@ export default function BottomNav() {
           </div>
         </div>
       </nav>
+
+      {/* Global Navigation Loader Overlay for Mobile */}
+      {isNavigating && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={50} />
+        </div>
+      )}
     </>
   );
 }

@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
 import { isOffline, safeFetch } from "@/src/lib/api/handler";
+import { API_BASE_URL } from "@/src/lib/config";
 
 type User = any; 
 
@@ -39,8 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resolverRef = useRef<LoginResolver>(null);
   const verificationResolverRef = useRef<LoginResolver>(null);
   const mountedRef = useRef(false);
+  // Guards: prevents a background refreshUser from overwriting auth state mid-switch
+  const switchGuardRef = useRef(false);
+  // Tracks heartbeat start time for active_duration calculation
+  const heartbeatStartRef = useRef<number>(Date.now());
 
   const refreshUser = async () => {
+    // Bail out during an active account switch to prevent stale data overwrite
+    if (switchGuardRef.current) return;
     const t = typeof window !== "undefined" ? localStorage.getItem("token") : token;
     if (!t) return;
     
@@ -134,6 +141,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [token, !!user]);
 
+  // ── Session heartbeat ────────────────────────────────────────────────────
+  // Pings the backend every 60 seconds to update active_duration_seconds
+  // and last_active_at in the user_sessions table.
+  useEffect(() => {
+    if (!token || !user) return;
+
+    const INTERVAL_MS = 60_000; // 60 seconds
+    heartbeatStartRef.current = Date.now();
+
+    const sendHeartbeat = async () => {
+      if (!token || switchGuardRef.current) return;
+      try {
+        const currentToken = typeof window !== "undefined" ? localStorage.getItem("token") : token;
+        if (!currentToken) return;
+        await fetch(`${API_BASE_URL}/api/activity/heartbeat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentToken}`,
+          },
+          body: JSON.stringify({ delta_seconds: Math.round(INTERVAL_MS / 1000) }),
+        });
+      } catch (e) {
+        // Heartbeat is best-effort — never throw
+      }
+    };
+
+    const heartbeatTimer = setInterval(sendHeartbeat, INTERVAL_MS);
+
+    return () => {
+      clearInterval(heartbeatTimer);
+    };
+  }, [token, !!user]);
+
   const openLogin = (): Promise<boolean> => {
     setLoginOpen(true);
     return new Promise((resolve) => {
@@ -186,11 +227,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const _onLoginSuccess = (u: User, t: string) => {
+    // Engage the switch guard so in-flight refreshUser calls don't stomp the new session
+    switchGuardRef.current = true;
     try {
       if (typeof window !== "undefined") {
         localStorage.setItem("token", t);
         localStorage.setItem("user", JSON.stringify(u));
-        document.cookie = `token=${t}; path=/; max-age=604800; SameSite=Lax`;
+        // Persistent cookie — no max-age means session cookie; user stays logged in
+        // until they manually log out or clear browser data.
+        document.cookie = `token=${t}; path=/; max-age=31536000; SameSite=Lax`;
       }
     } catch {}
 
@@ -202,6 +247,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resolverRef.current.resolve(u as any);
       resolverRef.current = null;
     }
+
+    // Release the guard after a short delay — long enough for React to re-render
+    // with the new token, preventing the next refreshUser tick from using the old token.
+    setTimeout(() => {
+      switchGuardRef.current = false;
+    }, 1500);
   };
 
   const onVerificationSuccess = (verifiedUser: User) => {
@@ -218,6 +269,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     if (typeof window !== "undefined") {
+      // Mark as offline on backend before wiping local state
+      if (token) {
+        fetch(`${API_BASE_URL}/api/activity/generic`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: "switch_away" }),
+        }).catch(() => {});
+      }
+
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
