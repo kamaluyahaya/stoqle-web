@@ -116,6 +116,7 @@ const mapApiPost = (p: any): Post => {
     linked_product: p?.linked_product,
     original_audio_url: p?.original_audio_url,
     original_video_url: p?.original_video_url,
+    post_public_id: p?.post_public_id,
   };
 };
 
@@ -1474,8 +1475,13 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const openPostWithUrl = (post: Post) => {
     setSelectedPost(post);
     try {
+      const username = post.author_handle || post.user.username || (profileApi?.user?.username) || "user";
+      const publicId = post.post_public_id || post.id;
+      const newPath = `/${username}/${publicId}`;
+
       const url = new URL(window.location.href);
-      url.searchParams.set("post", String(post.id));
+      url.pathname = newPath;
+      url.searchParams.set("xsec_source", "profile_dashboard");
       window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
       pushedRef.current = true;
     } catch (err) {
@@ -1487,23 +1493,35 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
   const closeModal = () => {
     setSelectedPost(null);
 
-    try {
-      const url = new URL(window.location.href);
-      const hadParam = url.searchParams.has("post");
-      if (!hadParam) return;
+    if (pushedRef.current && typeof window !== 'undefined' && window.history.state?.modal) {
+      window.history.back();
+      pushedRef.current = false;
+      return;
+    }
 
-      if (pushedRef.current && window.history.state && window.history.state.modal) {
-        window.history.back();
-        pushedRef.current = false;
-        return;
+    // Failsafe: Aggressive URL cleanup
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      let changed = false;
+
+      // 1. Check path-based postId (e.g. /username/3000...)
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts.length >= 2 && /^\d{11,}$/.test(pathParts[pathParts.length - 1])) {
+        url.pathname = "/profile";
+        changed = true;
       }
 
-      url.searchParams.delete("post");
-      window.history.replaceState({}, "", url.toString());
-      pushedRef.current = false;
-    } catch (err) {
-      console.warn("Failed to clean URL after modal close", err);
+      // 2. Check search param
+      if (url.searchParams.has("post")) {
+        url.searchParams.delete("post");
+        changed = true;
+      }
+
+      if (changed || url.pathname !== "/profile") {
+        window.history.replaceState({}, "", "/profile");
+      }
     }
+    pushedRef.current = false;
   };
 
   const toggleLike = async (postId: string | number) => {

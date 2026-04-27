@@ -887,7 +887,7 @@ export default function CartPage() {
             {/* Global Navigation Loader Overlay */}
             {isNavigating && (
                 <div className="fixed inset-0 z-[10000] bg-transparent flex flex-col items-center justify-center animate-in fade-in duration-300">
-                    <StoqleLoader size={60} />
+                    <StoqleLoader size={30} />
                 </div>
             )}
         </div>

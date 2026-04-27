@@ -11,9 +11,11 @@ import LargeScreenVideoPlayer from '@/src/components/posts/largeScreenVideoPlaye
 import VerifiedBadge from '@/src/components/common/VerifiedBadge';
 import LikeBurst from '@/src/components/common/LikeBurst';
 import CachedImage from '@/src/components/common/CachedImage';
-import PostCommentComposer from './PostCommentComposer';
+import CommentText from './CommentText';
 
 import { PostModalContext } from '../types';
+import { getNoteStyles } from '@/src/components/common/PostCard';
+import PostCommentComposer from './PostCommentComposer';
 
 interface StandardPostViewProps {
   ctx: PostModalContext;
@@ -24,7 +26,6 @@ export default function StandardPostView({ ctx }: StandardPostViewProps) {
     leftMediaRef,
     isLargeScreen,
     post,
-    getNoteStyles,
     activeHeartPops,
     handleVideoRegister,
     setMenuPosition,
@@ -557,7 +558,30 @@ export default function StandardPostView({ ctx }: StandardPostViewProps) {
                               )}
                             </div>
 
-                            <div className="mt-1 text-sm text-slate-600 mb-1">{c.comment_content}</div>
+                            <CommentText
+                              content={c.comment_content}
+                              metadata={c.metadata}
+                              onPostClick={(id, meta) => {
+                                if (meta?.handle && Number(id) >= 30000000000) {
+                                  window.location.href = `/${meta.handle}/${id}`;
+                                } else {
+                                  window.location.href = `/discover?post=${id}`;
+                                }
+                              }}
+                              onProductClick={(id) => ctx.handleProductClick(id as number)}
+                              onLocationClick={(meta) => {
+                                if (meta.lat && meta.lng) {
+                                  window.open(`https://www.google.com/maps/search/?api=1&query=${meta.lat},${meta.lng}`, '_blank');
+                                } else {
+                                  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(meta.name || meta.address)}`, '_blank');
+                                }
+                              }}
+                              onMediaClick={(meta) => {
+                                // For now, just show a toast or alert if it's a temp media
+                                alert("Viewing media: " + (meta.name || "Attachment"));
+                              }}
+                              className="mt-1 text-sm text-slate-600 mb-1"
+                            />
 
                             <div className="flex items-center gap-3 text-[11px] text-slate-400 relative w-full">
                               <span>{formatDate(c.comment_at)}</span>
@@ -674,7 +698,19 @@ export default function StandardPostView({ ctx }: StandardPostViewProps) {
                                         )}
                                       </div>
 
-                                      <div className="mt-0.5 text-xs text-slate-600 whitespace-pre-wrap mb-1">{r.comment_content}</div>
+                                      <CommentText
+                                        content={r.comment_content}
+                                        metadata={r.metadata}
+                                        onPostClick={(id, meta) => {
+                                if (meta?.handle && Number(id) >= 30000000000) {
+                                  window.location.href = `/${meta.handle}/${id}`;
+                                } else {
+                                  window.location.href = `/discover?post=${id}`;
+                                }
+                              }}
+                                        onProductClick={(id) => ctx.handleProductClick(id as number)}
+                                        className="mt-0.5 text-xs text-slate-600 whitespace-pre-wrap mb-1"
+                                      />
 
                                       <div className="flex items-center gap-3 text-[10px] text-slate-400 relative w-full">
                                         <div className="flex items-center gap-1.5">

@@ -1,7 +1,7 @@
 // userHeader.tsx
 "use client";
 
-import React, { useEffect, useMemo, useLayoutEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useLayoutEffect, useState, useRef, useCallback } from "react";
 import PostModal from "../../modal/postModal"; // adjust path if needed
 import { useAuth } from "@/src/context/authContext";
 import { useRouter, notFound } from "next/navigation";
@@ -27,7 +27,12 @@ import { toast } from "sonner";
 
 type ApiPost = any;
 
-type Props = { postCount?: number; userId?: string | number }; // <--- new userId prop
+type Props = { 
+  postCount?: number; 
+  userId?: string | number; 
+  identifierType?: 'slug' | 'stoqle_id' | 'user_id';
+  initialPostId?: string;
+};
 const STICKY_BUFFER = 10; // px — prevents shaking
 
 const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
@@ -121,6 +126,7 @@ const mapApiPost = (p: any): Post => {
     linked_product: p?.linked_product,
     original_audio_url: p?.original_audio_url,
     original_video_url: p?.original_video_url,
+    post_public_id: p?.post_public_id,
     allMedia,
   };
 };
@@ -565,7 +571,7 @@ const MasonryGrid = ({ items, type, openPostWithUrl, toggleLike, getNoteStyles, 
   );
 };
 
-export default function UserHeader({ postCount = 12, userId }: Props) {
+export default function UserHeader({ postCount = 12, userId, identifierType, initialPostId }: Props) {
   const [isNotFound, setIsNotFound] = useState(false);
   if (isNotFound) {
     notFound();
@@ -770,6 +776,25 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
     };
   }, [auth?.user?.user_id, auth?.user?.id]);
 
+  // Handle deep-linked post opening
+  useEffect(() => {
+    if (initialPostId && !selectedPost) {
+      const loadDeepLinkPost = async () => {
+        try {
+          const { fetchSocialPostById } = require("@/src/lib/api/social");
+          const post = await fetchSocialPostById(initialPostId, { token });
+          if (post) {
+            setSelectedPost(post);
+            pushedRef.current = false; // Initial load, don't back on close
+          }
+        } catch (err) {
+          console.error("Failed to load deep-link post", err);
+        }
+      };
+      loadDeepLinkPost();
+    }
+  }, [initialPostId, token]);
+
   const handleFollowUpdate = (targetUserId: string | number, following: boolean) => {
     const profileId = profileApi?.user?.user_id || profileApi?.user?.id || profileApi?.user_id;
     // If we're on SOMEONE ELSE'S profile and we just followed/unfollowed them
@@ -891,10 +916,14 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const endpoint =
+        let endpoint =
           viewUserId === "me"
             ? `${base.replace(/\/$/, "")}/api/auth/profile/me`
             : `${base.replace(/\/$/, "")}/api/auth/users/${encodeURIComponent(viewUserId)}`;
+
+        if (viewUserId !== "me" && identifierType) {
+          endpoint += `?identifier_type=${identifierType}`;
+        }
 
         const res = await fetch(endpoint, { signal: controller.signal, headers });
         if (res.status === 404) {
@@ -1308,46 +1337,68 @@ export default function UserHeader({ postCount = 12, userId }: Props) {
         xsecSource = urlData.xsec_source || "profile_feed";
       }
 
+      const username = post.author_handle || post.user.username || slugify(post.user.name);
+      const publicId = (post as any).post_public_id || post.id;
+      const newPath = `/${username}/${publicId}`;
+
       const url = new URL(window.location.href);
-      url.searchParams.set("post", String(post.id));
       if (xsecToken) url.searchParams.set("xsec_token", xsecToken);
       url.searchParams.set("xsec_source", xsecSource);
+      url.pathname = newPath;
 
       window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
       pushedRef.current = true;
     } catch (err) {
       console.warn("Failed to update URL", err);
-      // Fallback
+      const username = post.author_handle || post.user.username || slugify(post.user.name);
+      const publicId = (post as any).post_public_id || post.id;
+      const newPath = `/${username}/${publicId}`;
+
       const url = new URL(window.location.href);
-      url.searchParams.set("post", String(post.id));
+      url.pathname = newPath;
       url.searchParams.set("xsec_source", "profile_feed");
       window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
       pushedRef.current = true;
     }
   };
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setSelectedPost(null);
-    try {
-      const url = new URL(window.location.href);
-      const hadParam = url.searchParams.has("post");
-      if (!hadParam) return;
 
-      if (pushedRef.current && window.history.state && window.history.state.modal) {
-        window.history.back();
-        pushedRef.current = false;
-        return;
+    if (pushedRef.current && typeof window !== 'undefined' && window.history.state?.modal) {
+      window.history.back();
+      pushedRef.current = false;
+      return;
+    }
+
+    // Failsafe: Aggressive URL cleanup
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const username = profileApi?.user?.username || profileApi?.username || userId;
+      let changed = false;
+
+      // 1. Check path-based postId (e.g. /username/3000...)
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts.length >= 2 && /^\d{11,}$/.test(pathParts[pathParts.length - 1])) {
+        pathParts.pop();
+        url.pathname = `/${pathParts.join('/')}`;
+        changed = true;
       }
 
-      url.searchParams.delete("post");
-      url.searchParams.delete("xsec_token");
-      url.searchParams.delete("xsec_source");
-      window.history.replaceState({}, "", url.toString());
-      pushedRef.current = false;
-    } catch (err) {
-      console.warn("Failed to clean URL after modal close", err);
+      // 2. Check search param
+      if (url.searchParams.has("post")) {
+        url.searchParams.delete("post");
+        changed = true;
+      }
+
+      if (changed && username) {
+        window.history.replaceState({}, "", `/${username}`);
+      } else if (changed) {
+        window.history.replaceState({}, "", url.toString());
+      }
     }
-  };
+    pushedRef.current = false;
+  }, [profileApi, userId]);
 
   const toggleLike = async (postId: string | number) => {
     if (!token) {

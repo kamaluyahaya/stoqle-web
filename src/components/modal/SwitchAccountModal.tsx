@@ -301,7 +301,7 @@ export default function SwitchAccountModal({ open, onClose, onAddAccount }: Prop
             animate={{ opacity: 1 }}
             className="fixed inset-0 z-[9999999] bg-transparent flex flex-col items-center justify-center gap-4"
           >
-            <StoqleLoader size={56} />
+            <StoqleLoader size={30} />
             <p className="text-[13px] font-bold text-slate-400 tracking-wider">Switching account…</p>
           </motion.div>
         )}

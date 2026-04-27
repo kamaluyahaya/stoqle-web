@@ -612,17 +612,23 @@ function DiscoverFeed({ postCount = 100 }: Props) {
     if (observerTarget.current) observer.observe(observerTarget.current);
     return () => observer.disconnect();
   }, [hasMore, loading, batchLoading, offset, activeCategory]);
-
-  useEffect(() => {
+useEffect(() => {
     const tryOpenFromUrl = async () => {
       if (typeof window === "undefined") return;
       const url = new URL(window.location.href);
-      const param = url.searchParams.get("post");
-      if (!param) return;
-      const postId = Number(param);
-      if (isNaN(postId)) return;
+      const searchParam = url.searchParams.get("post");
+      
+      // Also check path pattern: /username/postId
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      let postIdFromPath = null;
+      if (pathParts.length === 2 && /^\d{11,}$/.test(pathParts[1])) {
+        postIdFromPath = pathParts[1];
+      }
 
-      const found = posts.find((p) => Number(p.id) === postId);
+      const param = searchParam || postIdFromPath;
+      if (!param) return;
+
+      const found = posts.find((p) => String(p.id) === String(param) || String((p as any).post_public_id) === String(param));
       if (found) {
         setSelectedPost(found);
         pushedRef.current = false;
@@ -630,37 +636,17 @@ function DiscoverFeed({ postCount = 100 }: Props) {
       }
 
       try {
-        const base = process.env.NEXT_PUBLIC_API_URL;
-        if (!base) throw new Error("NEXT_PUBLIC_API_URL is not defined in environment");
-
-        const fetchUrl = new URL(`${base.replace(/\/$/, "")}/api/social/${postId}`);
-        const xsecToken = url.searchParams.get("xsec_token");
-        const xsecSource = url.searchParams.get("xsec_source");
-        if (xsecToken) fetchUrl.searchParams.set("xsec_token", xsecToken);
-        if (xsecSource) fetchUrl.searchParams.set("xsec_source", xsecSource);
-
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const headers: any = {};
-        if (token) headers.Authorization = `Bearer ${token}`;
-
-        const json = await safeFetch<any>(fetchUrl.toString(), { headers });
-        const single = mapApiPost(json?.data?.post ?? json?.data ?? json);
+        const { fetchSocialPostById } = require("@/src/lib/api/social");
+        const single = await fetchSocialPostById(param, { token });
         setSelectedPost(single);
         pushedRef.current = false;
       } catch (err) {
-        setSelectedPost({
-          id: postId,
-          caption: "Post unavailable",
-          user: { name: "---", avatar: DEFAULT_AVATAR },
-          liked: false,
-          likeCount: 0,
-        } as Post);
-        pushedRef.current = false;
+        console.error("Failed to load post from URL", err);
       }
     };
 
     tryOpenFromUrl();
-  }, []);
+  }, [posts, token]);
 
   useEffect(() => {
     const onPop = (ev: PopStateEvent) => {
@@ -738,10 +724,14 @@ function DiscoverFeed({ postCount = 100 }: Props) {
       console.warn("Could not fetch secure token", err);
     }
 
+    const username = post.user.username || post.author_handle || "user";
+    const publicId = (post as any).post_public_id || post.id;
+    const newPath = `/${username}/${publicId}`;
+
     const url = new URL(window.location.href);
-    url.searchParams.set("post", String(post.id));
     if (xsecToken) url.searchParams.set("xsec_token", xsecToken);
     url.searchParams.set("xsec_source", xsecSource);
+    url.pathname = newPath;
 
     window.history.pushState({ postId: post.id, modal: true }, "", url.toString());
     pushedRef.current = true;
@@ -753,20 +743,35 @@ function DiscoverFeed({ postCount = 100 }: Props) {
   const closeModal = useCallback(() => {
     setSelectedPost(null);
 
-    // If we pushed a state, go back to revert it
-    // If not (e.g. initial load), just replace the URL
-    if (pushedRef.current) {
+    if (pushedRef.current && typeof window !== 'undefined' && window.history.state?.modal) {
       window.history.back();
       pushedRef.current = false;
-    } else {
+      return;
+    }
+
+    // Failsafe: Aggressive URL cleanup
+    if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
+      let changed = false;
+
+      // 1. Check path-based postId (e.g. /username/3000...)
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts.length >= 2 && /^\d{11,}$/.test(pathParts[pathParts.length - 1])) {
+        url.pathname = "/discover";
+        changed = true;
+      }
+
+      // 2. Check search param
       if (url.searchParams.has("post")) {
         url.searchParams.delete("post");
-        url.searchParams.delete("xsec_token");
-        url.searchParams.delete("xsec_source");
-        window.history.replaceState({}, "", url.toString());
+        changed = true;
+      }
+
+      if (changed || url.pathname !== "/discover") {
+        window.history.replaceState({}, "", "/discover");
       }
     }
+    pushedRef.current = false;
   }, []);
 
   const toggleLike = async (postId: string | number, skipApi = false) => {
@@ -858,7 +863,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="flex justify-center items-center py-6 bg-slate-50 overflow-hidden"
             >
-              <StoqleLoader size={40} />
+              <StoqleLoader size={30} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -949,12 +954,19 @@ function DiscoverFeed({ postCount = 100 }: Props) {
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      {/* Loader Overlay for Post Modal */}
-      {isOpeningPost && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
-          <StoqleLoader size={50} />
-        </div>
-      )}
+      {/* Instant Loader Overlay for Post Modal */}
+      <AnimatePresence>
+        {isOpeningPost && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none"
+          >
+            <StoqleLoader size={30} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

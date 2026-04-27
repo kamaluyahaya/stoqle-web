@@ -8,5 +8,5 @@ export default function UserProfilePage() {
   // Make sure userId is string | number | undefined
   const userId = Array.isArray(params.user_id) ? params.user_id[0] : params.user_id;
 
-  return <ProfileHeader userId={userId} />;
+  return <ProfileHeader userId={userId} identifierType="user_id" />;
 }

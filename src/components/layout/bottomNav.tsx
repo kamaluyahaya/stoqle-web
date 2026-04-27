@@ -202,8 +202,8 @@ export default function BottomNav() {
 
       {/* Global Navigation Loader Overlay for Mobile */}
       {isNavigating && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
-          <StoqleLoader size={50} />
+        <div className="fixed inset-0 z-[9999999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={30} />
         </div>
       )}
     </>

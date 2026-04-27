@@ -42,6 +42,8 @@ export default function EmojiPickerModal({ isOpen, onClose, onSelect }: Props) {
         className="fixed inset-0 z-[1000000] flex items-center justify-center p-4"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <motion.div
           initial={{ opacity: 0 }}
@@ -66,7 +68,15 @@ export default function EmojiPickerModal({ isOpen, onClose, onSelect }: Props) {
             {ALL_EMOJS.map((emoji, idx) => (
               <button
                 key={`${emoji}-${idx}`}
-                onClick={() => {
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelect(emoji);
+                  onClose();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onSelect(emoji);
                   onClose();
                 }}

@@ -8,8 +8,8 @@ interface StoqleLoaderProps {
   className?: string;
 }
 
-export default function StoqleLoader({ size = 44, className = "" }: StoqleLoaderProps) {
-  const strokeWidth = size * 0.05;
+export default function StoqleLoader({ size = 30, className = "" }: StoqleLoaderProps) {
+  const strokeWidth = size * 0.09;
   const r = (size - strokeWidth * 2) / 2;
   const cx = size / 2;
   const circumference = 2 * Math.PI * r;

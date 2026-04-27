@@ -34,6 +34,7 @@ export default function MediaViewer({
   const prevIndexRef = useRef(selectedIndex);
   const prevModeRef = useRef(viewMode);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
 
   React.useEffect(() => {
     if (selectedIndex !== prevIndexRef.current || viewMode !== prevModeRef.current) {
@@ -152,10 +153,7 @@ export default function MediaViewer({
     })
   };
 
-  const swipeConfidenceThreshold = 10000;
-  const swipePower = (offset: number, velocity: number) => {
-    return Math.abs(offset) * velocity;
-  };
+  const swipeThreshold = 50;
 
   // Compact View (Horizontal Scroll) for Reels 80% state
   if (isFromReel && !isExpanded) {
@@ -301,17 +299,25 @@ export default function MediaViewer({
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={1}
+            onDragStart={() => {
+              isDraggingRef.current = true;
+            }}
             onDragEnd={(e, { offset, velocity }) => {
-              const swipe = swipePower(offset.x, velocity.x);
+              setTimeout(() => {
+                isDraggingRef.current = false;
+              }, 100);
 
-              if (swipe < -swipeConfidenceThreshold) {
+              if (offset.x < -swipeThreshold) {
                 paginate(1);
-              } else if (swipe > swipeConfidenceThreshold) {
+              } else if (offset.x > swipeThreshold) {
                 paginate(-1);
               }
             }}
             className="absolute inset-0 w-full h-full flex items-center justify-center cursor-zoom-in"
-            onClick={() => setIsFullScreen(true)}
+            onClick={() => {
+              if (isDraggingRef.current) return;
+              setIsFullScreen(true);
+            }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={main.url} alt={main.name ?? payload.title} className="w-full h-full object-contain pointer-events-none" />

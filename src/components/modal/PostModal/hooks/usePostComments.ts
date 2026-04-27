@@ -184,7 +184,7 @@ export function usePostComments({
     }
   };
 
-  const handleAddComment = async (manualText?: string) => {
+  const handleAddComment = async (manualText?: string, metadata?: any[]) => {
     if (isPreview) {
       toast.info("Interactions are not allowed in preview mode");
       return;
@@ -215,6 +215,7 @@ export function usePostComments({
       location: getCachedLocationName(),
       likes_count: 0,
       liked_by_user: false,
+      metadata: metadata,
       parent_id: replyingTo?.parent_id ? replyingTo.parent_id : replyingTo?.comment_id ?? null,
     };
 
@@ -266,7 +267,8 @@ export function usePostComments({
           content: finalCommentText,
           location: location,
           user_ip: userIp,
-          parent_comment_id: optimisticComment.parent_id
+          parent_comment_id: optimisticComment.parent_id,
+          metadata: metadata
         }),
       });
 

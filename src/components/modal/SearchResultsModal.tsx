@@ -171,7 +171,6 @@ const PostCard = React.memo(({
         <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
           <div className="flex flex-col items-center gap-2 opacity-50">
             <StoqleLoader size={28} />
-            <span className="text-[10px] font-bold tracking-widest text-slate-400 ">Opening...</span>
           </div>
         </div>
       </div>
@@ -434,7 +433,6 @@ const ProductCard = React.memo(({
         <div className="absolute inset-0 -z-10 flex items-center justify-center bg-slate-50/50">
           <div className="flex flex-col items-center gap-2 opacity-50">
             <StoqleLoader size={28} />
-            <span className="text-[10px] font-bold tracking-widest text-slate-400 ">Opening...</span>
           </div>
         </div>
       </div>
@@ -932,26 +930,28 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     setSelectedPost(post);
     try {
       const urlData = await fetchSecurePostUrl(post.id, "search_feed", token);
+      
+      const username = post.author_handle || post.user?.username || "user";
+      const publicId = post.post_public_id || post.id;
+      const newPath = `/${username}/${publicId}`;
+
+      const currentUrl = new URL(window.location.href);
+      currentUrl.pathname = newPath;
+      
       if (urlData) {
-        const currentUrl = new URL(window.location.href);
-        if (urlData.url) {
-          // Construct new URL but keep existing search params
-          const newUrl = new URL(urlData.url, window.location.origin);
-          currentUrl.searchParams.forEach((val, key) => {
-            if (key !== 'post') newUrl.searchParams.set(key, val);
-          });
-          window.history.pushState({ modal: true }, "", newUrl.toString());
-          
-          setSelectedPost((prev: any) => prev ? {
-            ...prev,
-            xsecToken: urlData.xsec_token,
-            xsecSource: urlData.xsec_source
-          } : null);
-        } else {
-          currentUrl.searchParams.set("post", String(post.id));
-          window.history.pushState({ modal: true }, "", currentUrl.toString());
-        }
+        if (urlData.xsec_token) currentUrl.searchParams.set("xsec_token", urlData.xsec_token);
+        if (urlData.xsec_source) currentUrl.searchParams.set("xsec_source", urlData.xsec_source);
+
+        setSelectedPost((prev: any) => prev ? {
+          ...prev,
+          xsecToken: urlData.xsec_token,
+          xsecSource: urlData.xsec_source
+        } : null);
+      } else {
+        currentUrl.searchParams.set("xsec_source", "search_feed");
       }
+
+      window.history.pushState({ postId: post.id, modal: true }, "", currentUrl.toString());
       pushedRef.current = true;
     } catch (err) {
       console.warn("fetchSecurePostUrl failed", err);
@@ -962,17 +962,36 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   const closeModal = () => {
     setSelectedPost(null);
     try {
-      if (pushedRef.current && typeof window !== 'undefined') {
-        if (window.history.state && window.history.state.modal) {
-          window.history.back();
-        } else {
-          // Fallback cleanup if back() is risky
-          const url = new URL(window.location.href);
+      if (pushedRef.current && typeof window !== 'undefined' && window.history.state?.modal) {
+        window.history.back();
+        pushedRef.current = false;
+        return;
+      }
+
+      // Failsafe: Aggressive URL cleanup
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        let changed = false;
+
+        // 1. Check path-based postId (e.g. /username/3000...)
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts.length >= 2 && /^\d{11,}$/.test(pathParts[pathParts.length - 1])) {
+          pathParts.pop();
+          url.pathname = `/${pathParts.join('/')}`;
+          changed = true;
+        }
+
+        // 2. Check search param
+        if (url.searchParams.has("post")) {
           url.searchParams.delete("post");
+          changed = true;
+        }
+
+        if (changed) {
           window.history.replaceState({}, "", url.toString());
         }
-        pushedRef.current = false;
       }
+      pushedRef.current = false;
     } catch (err) {
       console.warn("Failed to clean URL after modal close", err);
     }
@@ -1013,7 +1032,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       try {
         const url = new URL(window.location.href);
         let postId: number | null = null;
-        
+
         // 1. Check query param
         const param = url.searchParams.get("post");
         if (param) {
@@ -1040,7 +1059,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       } catch { }
     };
     window.addEventListener('popstate', onPop);
-    
+
     // Also run on initial mount if we have a post in the URL
     onPop({} as PopStateEvent);
 
@@ -1187,8 +1206,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <StoqleLoader size={44} />
-          <p className="text-sm text-slate-400 font-medium">Fetching best results...</p>
+          <StoqleLoader size={30} />
         </div>
       );
     }
@@ -1582,7 +1600,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
       {/* Global Navigation Loader Overlay */}
       {isNavigating && (
         <div className="fixed inset-0 z-[10000] bg-transparent backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300">
-          <StoqleLoader size={60} />
+          <StoqleLoader size={30} />
         </div>
       )}
 

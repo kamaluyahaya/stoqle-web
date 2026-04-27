@@ -616,8 +616,8 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
 
       {/* Global Navigation Loader Overlay for Mobile Sidebar */}
       {isNavigating && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
-          <StoqleLoader size={50} />
+        <div className="fixed inset-0 z-[9999999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={30} />
         </div>
       )}
     </>

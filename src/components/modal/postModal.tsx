@@ -103,7 +103,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [viewerProfileUserId, setViewerProfileUserId] = useState<string | number | undefined>(undefined);
   const [isCommenting, setIsCommenting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-
+  const [showAttachmentsModal, setShowAttachmentsModal] = useState(false);
+  const [activeAttachmentModal, setActiveAttachmentModal] = useState<'posts' | 'products' | 'location' | 'media' | null>(null);
   // 1. UI & Layout Hook
   const {
     isClosing,
@@ -244,7 +245,13 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     setShowMentions,
     mentionsList,
     isLoadingMentions,
-    fetchMentions
+    isFetchingMoreMentions,
+    hasMoreMentions,
+    fetchMentions,
+    mentionsMap,
+    registerMention,
+    enrichTextWithSlugs,
+    currentQuery
   } = usePostMentions({ auth, userToken });
 
   // 7. Products Hook
@@ -406,8 +413,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     fastScrollVelocityRef, dismissSwipeGuide, reelsList, setCurrentReelIndex, lastScrollTimeRef,
     handleVideoRegister, activeVideoRef, handleVideoEnded, handleToggleLike, postLiked, showBurst,
     postLikeCount, setCommentSheetEntryType, currentItem, setIsCommenting, isCommenting, modalZIndex,
-    zIndex, showMentions, setShowMentions, isLoadingMentions, mentionsList, commentText, setCommentText,
+    zIndex, showMentions, setShowMentions, isLoadingMentions, isFetchingMoreMentions, hasMoreMentions,
+    mentionsList, commentText, setCommentText,
     commentTextRef, reelTextareaRef, replyingTo, setReplyingTo, handleAddComment, fetchMentions,
+    registerMention, enrichTextWithSlugs, currentQuery, mentionsMap, showAttachmentsModal, setShowAttachmentsModal,
+    activeAttachmentModal, setActiveAttachmentModal,
     commentPosting, EMOJI_SHORTCUTS, commentsScrollRef, handleCommentsScroll, comments, formatDate,
     loadingComments, expandedParents, setExpandedParents, toggleLikeComment, burstingCommentId,
     hasMoreComments, isFetchingMore, commentSheetHeight, handleProductClick, formatUrl, desktopTextareaRef,
@@ -701,8 +711,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       )}
       {/* Global Navigation Loader Overlay */}
       {isNavigating && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none">
-          <StoqleLoader size={50} />
+        <div className="fixed inset-0 z-[9999999999] flex items-center justify-center bg-transparent pointer-events-none">
+          <StoqleLoader size={30} />
         </div>
       )}
     </div>,

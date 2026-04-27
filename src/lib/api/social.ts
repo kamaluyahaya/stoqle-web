@@ -127,6 +127,7 @@ export const mapApiPost = (p: any): Post => {
     is_following: Boolean(p.is_following ?? false),
     original_audio_url: formatLocalUrl(p.original_audio_url),
     original_video_url: formatLocalUrl(p.original_video_url),
+    post_public_id: p.post_public_id,
   };
 };
 
@@ -187,11 +188,16 @@ export async function fetchLinkedProductPosts(opts: FetchPostsOptions = {}) {
 /**
  * Fetch a single post by ID
  */
-export async function fetchSocialPostById(postId: number, opts: FetchPostsOptions = {}) {
+export async function fetchSocialPostById(postId: number | string, opts: FetchPostsOptions = {}) {
+  const headers: any = {};
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+
   const json = await safeFetch<any>(`/api/social/${postId}`, {
     signal: opts.signal,
+    headers
   });
-  return mapApiPost(json?.data ?? json);
+  const postData = json?.data?.post || json?.data || json;
+  return mapApiPost(postData);
 }
 
 // Persistent cache for deep-link tokens

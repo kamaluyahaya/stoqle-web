@@ -234,7 +234,8 @@ const ProductCard = React.memo(({
                 onPointerEnter={() => {
                     // Elite predictive prefetching
                     const pSlug = p.slug || p.product_slug;
-                    if (pSlug) router.prefetch(`/product/${pSlug}`);
+                    const bizSlug = p.business_slug || (p.business_name ? slugify(p.business_name) : 'shop');
+                    if (pSlug) router.prefetch(`/market/${bizSlug}/${pSlug}`);
                     if (p.business_slug) router.prefetch(`/shop/${p.business_slug}`);
                     handlePrefetch && handlePrefetch(p.product_id, pSlug);
                 }}
@@ -370,7 +371,8 @@ const ProductCard = React.memo(({
             onPointerEnter={() => {
                 // Elite predictive prefetching
                 const pSlug = p.slug || p.product_slug;
-                if (pSlug) router.prefetch(`/product/${pSlug}`);
+                const bizSlug = p.business_slug || (p.business_name ? slugify(p.business_name) : 'shop');
+                if (pSlug) router.prefetch(`/market/${bizSlug}/${pSlug}`);
                 if (p.business_slug) router.prefetch(`/shop/${p.business_slug}`);
                 handlePrefetch && handlePrefetch(p.product_id, pSlug);
             }}
@@ -722,6 +724,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     const tabsRef = useRef<HTMLDivElement>(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showManualLoading, setShowManualLoading] = useState(false);
+    const [isOpeningProduct, setIsOpeningProduct] = useState(false);
     const LIMIT = 10;
 
     const router = useRouter();
@@ -1340,7 +1343,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
 
     const updateUrl = (productId: number | string | null, businessName?: string, isReels: boolean = false, businessSlug?: string, isSocialPost: boolean = false, productSlug?: string, replace: boolean = false) => {
         const params = new URLSearchParams(window.location.search);
-        const bizSlug = businessSlug || (businessName ? slugify(businessName) : (routeParams?.shop?.[0] || "product"));
+        const bizSlug = businessSlug || (businessName ? slugify(businessName) : (routeParams?.shop?.[0] || "shop"));
 
         if (productId || productSlug) {
             if (isReels) {
@@ -1444,6 +1447,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
 
     const handleProductClick = React.useCallback(async (productId: number | string, businessName?: string, e?: React.MouseEvent, businessSlug?: string, isSocialPost: boolean = false, productSlug?: string) => {
         if (fetchingProductId) return;
+        setIsOpeningProduct(true);
 
         // Capture click position
         if (e) {
@@ -1453,13 +1457,19 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
         }
 
         if (isSocialPost) {
-            const post = products.find(p => p.product_id === productId);
+            const post = products.find(p =>
+                p.is_social_post &&
+                (p.product_id === productId || p.product_slug === productSlug || p.slug === productSlug)
+            );
             if (post) {
                 // When watching reels/social posts from market, we want the product slug in the tab
-                updateUrl(productId, post.business_name, true, post.business_slug, true, post.product_slug);
+                updateUrl(post.product_id, post.business_name, true, post.business_slug, true, post.product_slug);
                 setSelectedSocialPost(post);
                 setSocialPostModalOpen(true);
+                setIsOpeningProduct(false);
             }
+            // If it's a social post but not in list, we might need a dedicated fetch (TBD based on API availability)
+            setIsOpeningProduct(false);
             return;
         }
 
@@ -1482,6 +1492,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             const initialPayload = mapProductToPreviewPayload(optimisticProduct, formatUrl);
             setSelectedProductPayload(initialPayload);
             setModalOpen(true);
+            setIsOpeningProduct(false);
         }
 
         try {
@@ -1499,7 +1510,10 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 setSelectedProductPayload(mappedPayload);
 
                 // Ensure modal is open if it wasn't already (e.g. product not found in local list)
-                if (!modalOpen) setModalOpen(true);
+                if (!modalOpen) {
+                    setModalOpen(true);
+                }
+                setIsOpeningProduct(false);
 
                 // Log view IMMEDIATELY
                 logUserActivity({
@@ -1522,8 +1536,9 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             });
         } finally {
             setFetchingProductId(null);
+            setIsOpeningProduct(false);
         }
-    }, [fetchingProductId, formatUrl, updateUrl, token, products]);
+    }, [fetchingProductId, formatUrl, updateUrl, token, products, modalOpen]);
 
     const handleReelsClick = React.useCallback(async (productId: number | string, businessName?: string, e?: React.MouseEvent, businessSlug?: string, productSlug?: string) => {
         handleProductClick(productId, businessName, e, businessSlug, false, productSlug);
@@ -1536,8 +1551,10 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             const isReels = params.get("reels") === "true";
             const currentPath = window.location.pathname;
             const pathParts = currentPath.split('/').filter(Boolean);
+
             // URL shape: /{base}/{bizSlug}/{productSlug}
-            const currentSlug = pathParts.length >= 3 ? pathParts[2] : (pathParts.length === 2 ? pathParts[1] : null);
+            // We ONLY trigger a modal if we have at least 3 parts (base, biz, product)
+            const currentSlug = pathParts.length >= 3 ? pathParts[2] : null;
 
             if (currentSlug) {
                 const alreadyOpenProduct = modalOpen && selectedProductPayload?.slug === currentSlug;
@@ -1554,7 +1571,9 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                             setSelectedSocialPost(post);
                             setSocialPostModalOpen(true);
                         } else {
-                            handleProductClick("", undefined, undefined, undefined, false, currentSlug);
+                            // If not found in current products list, we try to fetch it
+                            // Pass isSocialPost = true so handleProductClick knows how to handle it
+                            handleProductClick("", undefined, undefined, undefined, true, currentSlug);
                         }
                     }
                 } else {
@@ -1567,6 +1586,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                     }
                 }
             } else {
+                // If we are at the base /market or /market/shop, close any open modals
                 if (modalOpen) {
                     setModalOpen(false);
                     setSelectedProductPayload(null);
@@ -1589,7 +1609,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
         handleRouteChange();
 
         return () => window.removeEventListener('popstate', handleRouteChange);
-    }, [modalOpen, fetchingProductId, selectedProductPayload, handleProductClick]);
+    }, [modalOpen, fetchingProductId, selectedProductPayload, handleProductClick, socialPostModalOpen, selectedSocialPost, products]);
 
     return (
         <>
@@ -1779,7 +1799,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 {/* Lazy Load Trigger */}
                 <div ref={loaderRef} className="py-10 flex justify-center">
                     {isLoadingMore && hasMore && (
-                        <StoqleLoader size={40} />
+                        <StoqleLoader size={30} />
                     )}
                     {!hasMore && products.length > 0 && (
                         <p className="text-slate-400 text-xs italic">- THE END -</p>
@@ -1901,6 +1921,16 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             />
 
             <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+
+            {/* Instant Loader Overlay for Product/Post Modal */}
+            <AnimatePresence>
+                {isOpeningProduct && (
+                    <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none"
+                    >
+                        <StoqleLoader size={30} />
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* --- WARMING INSTANCE (Zero-Delay Optimization) --- 
                 We render a hidden instance of the modal once the page has products.

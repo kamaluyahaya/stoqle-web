@@ -17,6 +17,7 @@ import MediaViewer from "../preview/modal/mediaViewer";
 import ThumbnailList from "../preview/thumbnailList";
 import PolicyList from "../preview/policyList";
 import ActionBar from "../preview/actionBar";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 import PolicyModal from "./policyModalPreview";
 import ShippingModal from "./shippingModalPreview";
 import AddToCartModal from "./addToCartModal";
@@ -130,6 +131,7 @@ export default function ProductPreviewModal({
   const lastScrollY = useRef(0);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
   const [policyModalData, setPolicyModalData] = useState<{ title: string; body: string; type?: "shipping" | "policy" } | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1066,6 +1068,7 @@ export default function ProductPreviewModal({
     }
 
     // Redirect to messages page with the vendor's user ID and product info.
+    setIsNavigating(true);
     router.push(`/messages?${chatParams.toString()}`);
   };
 
@@ -1615,6 +1618,7 @@ export default function ProductPreviewModal({
                                 className="w-5 h-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setIsNavigating(true);
                                   router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`);
                                 }}
                               >
@@ -1629,6 +1633,7 @@ export default function ProductPreviewModal({
                                   className="text-[12px] text-slate-500 truncate cursor-pointer hover:text-rose-500 transition-colors"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    setIsNavigating(true);
                                     router.push(review.username ? `/${review.username}` : `/user/profile/${review.user_id}`);
                                   }}
                                 >
@@ -1669,8 +1674,13 @@ export default function ProductPreviewModal({
                         }
                         const handle = businessData?.business?.business_slug || businessData?.business?.user_id;
                         const productIdParam = payload?.productId ? `?product_id=${payload.productId}` : "";
-                        if (handle) router.push(`/${handle}${productIdParam}`);
-                        else if (businessData?.business?.user_id) router.push(`/user/profile/${businessData.business.user_id}${productIdParam}`);
+                        if (handle) {
+                          setIsNavigating(true);
+                          router.push(`/${handle}${productIdParam}`);
+                        } else if (businessData?.business?.user_id) {
+                          setIsNavigating(true);
+                          router.push(`/user/profile/${businessData.business.user_id}${productIdParam}`);
+                        }
                       }}
                     >
                       <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-300 flex items-center justify-center flex-shrink-0">
@@ -1717,7 +1727,7 @@ export default function ProductPreviewModal({
                         }
                         const slug = payload?.businessSlug || (payload?.businessName ? slugify(payload.businessName) : payload?.businessId);
                         if (slug) {
-                          onClose();
+                          setIsNavigating(true);
                           router.push(`/shop/${slug}`);
                         }
                       }}
@@ -1751,6 +1761,7 @@ export default function ProductPreviewModal({
                       <div className="mt-6 flex items-center justify-between mb-4 pb-2" onClick={() => {
                         const slug = payload.businessSlug || (payload.businessName ? slugify(payload.businessName) : null);
                         if (slug) {
+                          setIsNavigating(true);
                           router.push(`/shop/${slug}${payload.productId ? `?product_id=${payload.productId}` : ''}`);
                         }
                       }}>
@@ -1773,6 +1784,7 @@ export default function ProductPreviewModal({
                                   const bizName = businessData?.business?.business_name || "store";
                                   const bizSlug = businessData?.business?.business_slug || slugify(bizName);
                                   const prodSlug = p.slug;
+                                  setIsNavigating(true);
                                   router.push(`/market/${bizSlug}${prodSlug ? `/${prodSlug}` : ''}?product_id=${p.product_id}&reels=true`);
                                 }
                               } else if (onProductClick) {
@@ -2041,6 +2053,20 @@ export default function ProductPreviewModal({
         open={isSubsidyModalOpen}
         onClose={() => setIsSubsidyModalOpen(false)}
       />
+
+      {/* Global Navigation Loader Overlay */}
+      <AnimatePresence>
+        {isNavigating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999999999] flex items-center justify-center bg-transparent pointer-events-none"
+          >
+            <StoqleLoader size={30} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>,
     document.body
   );

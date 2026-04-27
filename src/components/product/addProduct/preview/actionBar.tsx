@@ -4,6 +4,8 @@ import { useAuth } from "@/src/context/authContext";
 import { fetchCartApi } from "@/src/lib/api/cartApi";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function ActionBar({
   onAddToCart,
@@ -28,6 +30,7 @@ export default function ActionBar({
   const currentUserBizId = user?.business_id || (user as any)?.business?.business_id;
   const isOwner = currentUserBizId && businessId && Number(currentUserBizId) === Number(businessId);
   const [localCount, setLocalCount] = useState(cartCount);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const isSoldOut = !hasVariants && Number(quantity || 0) <= 0;
 
@@ -91,6 +94,7 @@ export default function ActionBar({
             } else {
               const slug = businessSlug || (businessName ? slugify(businessName) : null);
               if (slug) {
+                setIsNavigating(true);
                 router.push(`/shop/${slug}${productId ? `?product_id=${productId}` : ''}`);
               }
             }
@@ -107,12 +111,24 @@ export default function ActionBar({
           <span className="text-[11px] text-slate-800 font-bold">Shop</span>
         </button>
 
-        <button onMouseDown={stop} onClick={() => onOpenChat && onOpenChat()} className="flex flex-col items-center justify-center w-14">
+        <button onMouseDown={stop} onClick={() => {
+          if (onOpenChat) {
+            setIsNavigating(true);
+            onOpenChat();
+          }
+        }} className="flex flex-col items-center justify-center w-14">
           <div className=" rounded-xl bg-white flex items-center justify-center hover:shadow-sm"><LifebuoyIcon className="w-5 h-5 text-slate-600" /></div>
           <span className="font-bold text-[11px] text-slate-800">Service</span>
         </button>
 
-        <div id="preview-cart-icon-ref" onClick={() => onCartClick ? onCartClick() : router.push("/cart")} className="relative flex flex-col items-center group w-14 cursor-pointer">
+        <div id="preview-cart-icon-ref" onClick={() => {
+          if (onCartClick) {
+            onCartClick();
+          } else {
+            setIsNavigating(true);
+            router.push("/cart");
+          }
+        }} className="relative flex flex-col items-center group w-14 cursor-pointer">
           <button onMouseDown={stop} className="rounded-xl bg-white flex items-center justify-center hover:shadow-sm transition-transform active:scale-95">
             <ShoppingCartIcon className="w-5 h-5 text-slate-600" />
           </button>
@@ -148,6 +164,20 @@ export default function ActionBar({
           )}
         </div>
       </div>
+
+      {/* Global Navigation Loader Overlay */}
+      <AnimatePresence>
+        {isNavigating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999999999] flex items-center justify-center bg-transparent pointer-events-none"
+          >
+            <StoqleLoader size={30} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

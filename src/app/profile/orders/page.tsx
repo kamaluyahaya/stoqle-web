@@ -66,6 +66,7 @@ import { fetchProductById, logUserActivity } from "@/src/lib/api/productApi";
 import { fetchSocialPostById, toggleSocialPostLike } from "@/src/lib/api/social";
 import { removePendingCheckout } from "@/src/lib/api/paymentApi";
 import PostModal from "@/src/components/modal/postModal";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 import { AnimatePresence } from "framer-motion";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
@@ -209,6 +210,14 @@ export default function MyOrdersPage() {
         return "All";
     });
     const [isLoading, setIsLoading] = useState(true);
+    const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            const savedTab = sessionStorage.getItem("stoqle_orders_active_tab") || "All";
+            return new Set([savedTab]);
+        }
+        return new Set(["All"]);
+    });
+    const [isTabTransitioning, setIsTabTransitioning] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxSlides, setLightboxSlides] = useState<{ src: string }[]>([]);
     const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -371,7 +380,17 @@ export default function MyOrdersPage() {
     };
 
     const handleTabClick = (tab: string) => {
-        setActiveTab(tab);
+        if (!visitedTabs.has(tab)) {
+            setIsTabTransitioning(true);
+            setTimeout(() => {
+                setActiveTab(tab);
+                setVisitedTabs(prev => new Set(prev).add(tab));
+                setIsTabTransitioning(false);
+            }, 800);
+        } else {
+            setActiveTab(tab);
+        }
+
         if (typeof window !== 'undefined') {
             sessionStorage.setItem("stoqle_orders_active_tab", tab);
             // Reset scroll when tab changes
@@ -427,11 +446,11 @@ export default function MyOrdersPage() {
         } catch (err: any) {
             // Silently handle offline/network errors to prevent console noise and annoying toasts
             if (err?.isOffline || !navigator.onLine) return;
-            
+
             console.error("Fetch orders err:", err);
             // Only show toast for actual server/logic failures, not network drops
             if (err?.status && err.status !== 503) {
-                 toast.error(err?.message || "Internal Server Error");
+                toast.error(err?.message || "Internal Server Error");
             }
         } finally {
             if (showLoading) setIsLoading(false);
@@ -1212,8 +1231,8 @@ export default function MyOrdersPage() {
 
             const rawId = String(productId).replace('post-', '');
             if (!rawId || isNaN(Number(rawId)) || Number(rawId) === 0) {
-                 console.warn("Invalid or missing post ID, cannot fetch social post.");
-                 return;
+                console.warn("Invalid or missing post ID, cannot fetch social post.");
+                return;
             }
 
             setIsPreviewFetching(true);
@@ -1589,6 +1608,11 @@ export default function MyOrdersPage() {
                         <div className="space-y-5">
                             {[1, 2, 3].map((i) => <OrderSkeleton key={i} />)}
                         </div>
+                    ) : isTabTransitioning ? (
+                        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none"
+                        >
+                            <StoqleLoader />
+                        </div>
                     ) : (activeTab === "Awaiting Payment" ? pendingOrders : filteredOrders).length === 0 ? (
                         <div className=" p-3 flex flex-col items-center justify-center text-center  shadow-slate-200/50 border border-slate-100">
                             <h3 className="text-sm text-slate-500 mb-2">
@@ -1628,7 +1652,7 @@ export default function MyOrdersPage() {
                         </div>
                     ) : activeTab === "Awaiting Payment" ? (
                         /* Render Pending Checkouts Grouped by Date */
-                        <div className="space-y-10 mt-4">
+                        <div className="space-y-10 mt-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
                             {(() => {
                                 const groupedPending = pendingOrders.reduce((groups: Record<string, PendingCheckout[]>, p) => {
                                     const group = getTimeGroup(p.created_at);
@@ -1671,8 +1695,8 @@ export default function MyOrdersPage() {
                                                             ).map(([bid, items], bIdx) => (
                                                                 <div key={bid || bIdx} className="space-y-4">
                                                                     <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                                                                        <div 
-                                                                            className="flex items-center gap-3 cursor-pointer hover:opacity-70 transition-opacity" 
+                                                                        <div
+                                                                            className="flex items-center gap-3 cursor-pointer hover:opacity-70 transition-opacity"
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 const slug = items[0].business_slug || (items[0].business_name ? slugify(items[0].business_name) : items[0].business_id);
@@ -1716,8 +1740,8 @@ export default function MyOrdersPage() {
 
                                                                     <div className="space-y-5">
                                                                         {items.map((item, idx) => (
-                                                                            <div 
-                                                                                key={item.title + idx} 
+                                                                            <div
+                                                                                key={item.title + idx}
                                                                                 className="flex gap-4 items-center cursor-pointer group/item hover:bg-slate-50/50 p-2 -m-2 rounded-xl transition-colors"
                                                                                 onClick={() => handleBuyAgain(item as any)}
                                                                             >
@@ -1779,7 +1803,7 @@ export default function MyOrdersPage() {
                             })()}
                         </div>
                     ) : (
-                        <div className="space-y-4 mt-4">
+                        <div className="space-y-4 mt-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
                             {groupOrder.map(groupName => {
                                 const groupItems = groupedOrders[groupName];
                                 if (!groupItems || groupItems.length === 0) return null;
@@ -1839,7 +1863,7 @@ export default function MyOrdersPage() {
                                                                             <ChevronDown size={14} />
                                                                         </div>
                                                                         <div className="flex items-center gap-2.5">
-                                                                            <div 
+                                                                            <div
                                                                                 className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
@@ -1853,7 +1877,7 @@ export default function MyOrdersPage() {
                                                                                     <div className="text-slate-300 font-bold text-xs">{(vendor.vendor_name || vendor.vendor_owner_name || 'V')?.charAt(0)}</div>
                                                                                 )}
                                                                             </div>
-                                                                            <div 
+                                                                            <div
                                                                                 className="min-w-0 cursor-pointer group"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
@@ -2184,14 +2208,16 @@ export default function MyOrdersPage() {
                         </div>
                     )}
 
-                    {/* 🌟 Tab-Aware Recommendations */}
-                    <OrdersProductRecommendations
-                        activeTab={activeTab}
-                        onProductClick={handleProductClick}
-                    />
+                    {!isTabTransitioning && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <OrdersProductRecommendations
+                                activeTab={activeTab}
+                                onProductClick={handleProductClick}
+                            />
+                        </div>
+                    )}
                 </div>
             </main>
-
 
             {/* Review Modal */}
             {isReviewModalOpen && selectedOrderForReview && (

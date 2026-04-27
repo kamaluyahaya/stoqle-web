@@ -218,7 +218,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
           </div>
         ) : isSuggesting ? (
           <div className="flex flex-col items-center justify-center p-10 text-center opacity-70">
-            <StoqleLoader size={36} />
+            <StoqleLoader size={30} />
             <p className="text-xs text-slate-400 font-medium mt-3">Looking for matches...</p>
           </div>
         ) : (
@@ -342,7 +342,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
     <div className="flex-1 overflow-auto p-5 space-y-8">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
-          <StoqleLoader size={44} />
+          <StoqleLoader size={30} />
           <p className="text-sm text-slate-400 font-medium">Searching for "{searchQuery}"...</p>
         </div>
       ) : results ? (
@@ -488,7 +488,7 @@ export default function SearchModal({ isOpen, onClose, onSearch, initialQuery = 
                 transition={{ duration: 0.15 }}
                 className="absolute inset-0 z-50 bg-transparent flex items-center justify-center"
               >
-                <StoqleLoader size={44} />
+                <StoqleLoader size={30} />
               </motion.div>
             )}
           </AnimatePresence>

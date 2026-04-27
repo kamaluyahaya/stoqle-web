@@ -34,12 +34,14 @@ export type APIComment = {
   posts_count?: number;
   liked_by_user?: boolean;
   parent_id?: number | null;
+  metadata?: any;
 };
 
 export type Post = {
   id: number | string;
   apiId?: number | string;
   social_post_id?: number | string;
+  post_public_id?: number | string;
   src?: string;
   isVideo?: boolean;
   isImage?: boolean;
@@ -52,6 +54,7 @@ export type Post = {
   liked: boolean;
   liked_by_me?: boolean;
   liked_by_user?: boolean;
+  is_following?: boolean;
   likeCount: number;
   likes_count?: number;
   likesCount?: number;

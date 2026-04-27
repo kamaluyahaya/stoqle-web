@@ -25,7 +25,13 @@ export interface PostModalContext {
   zIndex?: number;
   showMentions: boolean;
   setShowMentions: (val: boolean) => void;
+  showAttachmentsModal?: boolean;
+  setShowAttachmentsModal?: (val: boolean) => void;
+  activeAttachmentModal?: 'posts' | 'products' | 'location' | 'media' | null;
+  setActiveAttachmentModal?: (val: 'posts' | 'products' | 'location' | 'media' | null) => void;
   isLoadingMentions: boolean;
+  isFetchingMoreMentions: boolean;
+  hasMoreMentions: boolean;
   mentionsList: any[];
   commentText: string;
   setCommentText: React.Dispatch<React.SetStateAction<string>>;
@@ -33,8 +39,12 @@ export interface PostModalContext {
   reelTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   replyingTo: any | null;
   setReplyingTo: (val: any) => void;
-  handleAddComment: (text: string) => void;
-  fetchMentions: () => void;
+  handleAddComment: (text: string, metadata?: any[]) => void;
+  fetchMentions: (query?: string, isLoadMore?: boolean) => Promise<void>;
+  registerMention: (name: string, slug: string) => void;
+  enrichTextWithSlugs: (text: string) => string;
+  currentQuery: string;
+  mentionsMap: React.MutableRefObject<Record<string, string>>;
   commentPosting: boolean;
   EMOJI_SHORTCUTS: string[];
   commentsScrollRef: React.RefObject<HTMLDivElement | null>;

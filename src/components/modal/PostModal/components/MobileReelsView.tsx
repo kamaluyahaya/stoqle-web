@@ -79,14 +79,51 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
     setReplyingTo,
     fetchMentions,
     handleAddComment,
+    registerMention,
+    enrichTextWithSlugs,
+    isFetchingMoreMentions,
+    hasMoreMentions,
+    currentQuery,
+    setShowEmojiPicker,
     commentPosting,
     EMOJI_SHORTCUTS,
     desktopTextareaRef,
-    setShowEmojiPicker,
     setIsNavigating,
-    pendingTransitionRef
+    pendingTransitionRef,
   } = ctx;
 
+  const handleEnrichedSubmit = (text?: string) => {
+    const rawText = text ?? commentTextRef.current ?? commentText;
+    const enriched = enrichTextWithSlugs(rawText);
+    const final = enriched?.trim();
+    
+    if (final) {
+      handleAddComment(final);
+      setIsCommenting(false);
+      setShowMentions(false);
+      setCommentText("");
+      commentTextRef.current = "";
+    }
+  };
+
+  const autoAdjustHeight = () => {
+    if (reelTextareaRef.current) {
+      const el = reelTextareaRef.current;
+      el.style.height = 'auto';
+      el.style.height = Math.min(Math.max(el.scrollHeight, 44), 120) + 'px';
+    }
+  };
+
+  const handleMentionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollLeft + target.clientWidth >= target.scrollWidth - 50) {
+      if (hasMoreMentions && !isFetchingMoreMentions) {
+        fetchMentions(currentQuery, true);
+      }
+    }
+  };
+
+  const mirrorRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [showTransitionLoader, setShowTransitionLoader] = useState(false);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,8 +166,17 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
     // pressing Back from the profile returns to the correct page (not a stale
     // post/product URL that the modal may have pushed via pushState).
     try {
-      const cleanUrl = window.location.pathname.replace(/\/(product|post)\/[^/]+/, '');
-      window.history.replaceState(null, '', cleanUrl || '/');
+      // 1. Remove query params if any
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('post')) {
+        url.searchParams.delete('post');
+        window.history.replaceState(null, '', url.toString());
+      }
+      // 2. Remove path-based post markers if on /[username]/[postId]
+      const pathParts = window.location.pathname.split('/').filter(Boolean);
+      if (pathParts.length === 2 && /^\d{11,}$/.test(pathParts[1])) {
+        window.history.replaceState(null, '', `/${pathParts[0]}`);
+      }
     } catch { }
     router.push(href);
   };
@@ -359,8 +405,8 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                         <div className="absolute inset-0 pointer-events-none flex flex-col justify-end p-4 pb-2 bg-gradient-to-t from-black/70 via-transparent to-transparent z-[60]">
                           <div className="flex flex-col gap-2.5 pointer-events-auto">
                             <div className="flex items-center gap-2.5">
-                              <Link 
-                                href={rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`} 
+                              <Link
+                                href={rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`}
                                 onClick={(e) => handleProfileNavigation(e, rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`)}
                                 className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0"
                               >
@@ -368,11 +414,11 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                               </Link>
                               <div className="flex flex-col min-w-0">
                                 <div className="flex items-center gap-1 min-w-0">
-                                    <Link
-                                      href={rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`}
-                                      onClick={(e) => handleProfileNavigation(e, rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`)}
-                                      className="text-sm font-black text-white shadow-sm truncate hover:text-rose-400 transition-colors"
-                                    >
+                                  <Link
+                                    href={rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`}
+                                    onClick={(e) => handleProfileNavigation(e, rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`)}
+                                    className="text-sm font-black text-white  truncate hover:text-rose-400 transition-colors"
+                                  >
                                     {rp.user?.name || rp.author_name || "Unknown"}
                                   </Link>
                                   {!!rp.verified_badge || !!rp.user?.is_partner || !!rp.linked_product?.verified_badge || !!rp.linked_product?.trusted_partner ? (
@@ -597,7 +643,7 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                   transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
                   className="flex flex-col items-center gap-4"
                 >
-                  <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl flex items-center justify-center border border-white/20 shadow-2xl">
+                  <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl flex items-center justify-center border border-white/20 ">
                     <motion.div
                       animate={{ opacity: [0.3, 1, 0.3] }}
                       transition={{ repeat: Infinity, duration: 2 }}
@@ -715,16 +761,19 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
             onPointerDown={(e) => {
               if (e.target === e.currentTarget) {
                 setIsCommenting(false);
+                setShowMentions(false);
               }
             }}
             onTouchStart={(e) => {
               if (e.target === e.currentTarget) {
                 setIsCommenting(false);
+                setShowMentions(false);
               }
             }}
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) {
                 setIsCommenting(false);
+                setShowMentions(false);
               }
             }}
           />
@@ -735,7 +784,7 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
             exit={{ y: 100 }}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="relative bg-zinc-900 border-t border-white/10 px-4 py-4 pointer-events-auto w-full z-10"
+            className="relative bg-zinc-900 border-t border-white/10 py-4 px-4 pointer-events-auto w-full z-10"
             style={{
               paddingBottom: "var(--kb-pad, env(safe-area-inset-bottom, 24px))",
               transform: 'translateZ(0)',
@@ -744,76 +793,171 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
             onTouchStart={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
               {showMentions && (
                 <div className="relative">
-                  <div className="absolute bottom-2 left-0 w-full bg-zinc-800 border border-white/10 z-[110] max-h-[220px] overflow-y-auto no-scrollbar animate-in slide-in-from-bottom-2 duration-200">
-                    <div className="p-2.5 border-b border-white/5 sticky top-0 bg-zinc-800/90 backdrop-blur-md flex items-center justify-between">
-                      <button onClick={() => setShowMentions(false)} className="text-white/40 p-1 hover:text-white transition-colors"><XMarkIcon className="w-3.5 h-3.5" /></button>
+                  <div className="absolute bottom-2 left-0 w-full z-[110] animate-in slide-in-from-bottom-2 duration-200">
+                    <div className=" overflow-hidden flex flex-col">
+
+                      <div 
+                        onScroll={handleMentionsScroll}
+                        className="p-2 overflow-x-auto flex gap-2 no-scrollbar" 
+                        style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+                      >
+                        {isLoadingMentions ? (
+                          <div className="p-2 flex gap-4 overflow-hidden">
+                            {[...Array(10)].map((_, i) => (
+                              <div key={i} className="flex flex-col items-center gap-2 shrink-0 animate-pulse">
+                                <div className="w-12 h-12 rounded-full bg-white/10 shadow-inner" />
+                                <div className="w-14 h-2 rounded-full bg-white/10" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : mentionsList.length === 0 ? (
+                          <div className="py-4 w-full text-center text-white/40 text-xs font-medium italic">No users found</div>
+                        ) : (
+                          mentionsList.map((u: any) => {
+                            const fullName = u.full_name || u.business_name || u.user_name || u.name || 'User';
+                            const mentionDisplay = `@${fullName}\u200B`;
+                            const isSelected = commentText.includes(mentionDisplay);
+
+                            return (
+                              <button
+                                key={u.user_id || u.id}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const val = commentText;
+                                  const cursorRotate = reelTextareaRef.current?.selectionStart || val.length;
+                                  const textBeforeCursor = val.slice(0, cursorRotate);
+                                  const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+                                  const textAfterAt = textBeforeCursor.slice(lastAtIndex);
+                                  const isActiveQuery = lastAtIndex !== -1 && !textAfterAt.includes('\u200B');
+
+                                  if (isActiveQuery) {
+                                    const textAfterCursor = val.slice(cursorRotate);
+                                    const mentionDisplay = `@${fullName}\u200B`;
+                                    registerMention(mentionDisplay, u.username || u.business_slug || u.handle || u.slug || u.user_name || 'user');
+                                    const newText = val.slice(0, lastAtIndex) + mentionDisplay + " " + textAfterCursor;
+                                    setCommentText(newText);
+                                    commentTextRef.current = newText;
+                                  } else {
+                                    const mentionDisplay = `@${fullName}\u200B`;
+                                    if (isSelected) {
+                                      const updated = commentText.replace(mentionDisplay, '');
+                                      setCommentText(updated);
+                                      commentTextRef.current = updated;
+                                    } else {
+                                      registerMention(mentionDisplay, u.username || u.business_slug || u.handle || u.slug || u.user_name || 'user');
+                                      const spacer = val && !val.endsWith(' ') ? ' ' : '';
+                                      const newText = val + spacer + mentionDisplay + " ";
+                                      setCommentText(newText);
+                                      commentTextRef.current = newText;
+                                    }
+                                  }
+                                  reelTextareaRef.current?.focus();
+                                  setTimeout(autoAdjustHeight, 0);
+                                }}
+                                className={`flex flex-col items-center gap-1.5 p-2 min-w-[70px] max-w-[80px] rounded-lg transition-colors active:scale-95 shrink-0 ${isSelected ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                              >
+                                <div className="relative">
+                                  <div className="relative w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-zinc-900 shadow-inner">
+                                    <CachedImage
+                                      src={formatUrl(u.profile_pic || u.avatar || u.logo || u.profile_picture || "/assets/images/default-avatar.png")}
+                                      alt={fullName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  {isSelected && (
+                                    <div className="absolute -bottom-0.5 -right-0.5 bg-rose-500 rounded-full p-0.5 border-2 border-zinc-900 animate-in zoom-in duration-200">
+                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex flex-col min-w-0 w-full items-center">
+                                  <span className={`text-[10px] font-bold truncate w-full text-center leading-tight ${isSelected ? 'text-rose-500' : 'text-white'}`}>{fullName}</span>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                        {isFetchingMoreMentions && (
+                          <div className="shrink-0 flex flex-col items-center justify-center gap-1.5 px-4">
+                            <div className="w-12 h-12 rounded-full border-2 border-white/10 border-t-rose-500 animate-spin" />
+                            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">Loading...</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {isLoadingMentions ? (
-                      <div className="p-8 flex items-center justify-center">
-                        <div className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    ) : mentionsList.length === 0 ? (
-                      <div className="p-8 text-center text-white/40 text-xs font-medium italic">No followers or following found</div>
-                    ) : (
-                      <div className="py-1">
-                        {mentionsList.map((u: any) => (
-                          <button
-                            key={u.user_id || u.id}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const mention = `@${u.user_name || u.name} `;
-                              setCommentText(prev => prev + mention);
-                              commentTextRef.current += mention;
-                              reelTextareaRef.current?.focus();
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/5 transition-colors active:bg-white/10 text-left"
-                          >
-                            <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 flex-shrink-0">
-                              <CachedImage
-                                src={formatUrl(u.profile_picture || u.logo)}
-                                alt={u.user_name || u.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[13px] font-bold text-white truncate">{u.user_name || u.name}</span>
-                              <span className="text-[10px] text-white/50 font-medium truncate">@{u.user_name || u.name}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
-              <textarea
-                autoFocus
-                ref={reelTextareaRef}
-                rows={1}
-                value={commentText}
-                onChange={(e) => {
-                  // Sync both state AND ref so touch handlers always have fresh value
-                  commentTextRef.current = e.target.value;
-                  setCommentText(e.target.value);
-                  const el = e.target;
-                  el.style.height = 'auto';
-                  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    // Read from ref — always current
-                    const text = commentTextRef.current.trim();
-                    if (text) handleAddComment(text);
-                  }
-                }}
-                placeholder={replyingTo ? `Replying to ${(replyingTo as any).author_name || (replyingTo as any).user_name || 'someone'}...` : "Say something..."}
-                className="w-full bg-white/5 rounded-xl px-5 py-2 text-[14px] text-white outline-none border border-white/10 resize-none overflow-hidden leading-snug"
-              />
+              <div className="relative w-full">
+                <div
+                  ref={mirrorRef}
+                  className="absolute inset-0 px-5 py-3 text-[14px] font-medium leading-snug pointer-events-none whitespace-pre-wrap break-words overflow-hidden"
+                  aria-hidden="true"
+                >
+                  {commentText.split(/(@[^\u200B]+\u200B)/g).map((part, i) => {
+                    if (part.startsWith('@') && part.endsWith('\u200B')) {
+                      return (
+                        <span key={i} className="text-rose-500" style={{ textShadow: "0.5px 0 0 currentColor" }}>
+                          {part}
+                        </span>
+                      );
+                    }
+                    return <span key={i} className="text-white">{part}</span>;
+                  })}
+                </div>
+                <textarea
+                  autoFocus
+                  ref={reelTextareaRef}
+                  onScroll={(e) => {
+                    if (mirrorRef.current) {
+                      mirrorRef.current.scrollTop = e.currentTarget.scrollTop;
+                    }
+                  }}
+                  rows={2}
+                  value={commentText}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    commentTextRef.current = val;
+                    setCommentText(val);
+                    const el = e.target;
+                    el.style.height = 'auto';
+                    el.style.height = Math.min(Math.max(el.scrollHeight, 44), 120) + 'px';
+
+                    // Mention detection logic
+                    const cursorRotate = el.selectionStart;
+                    const textBeforeCursor = val.slice(0, cursorRotate);
+                    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+                    if (lastAtIndex !== -1) {
+                      const query = textBeforeCursor.slice(lastAtIndex + 1);
+                      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+                      if (!query.includes(' ') && (charBeforeAt === ' ' || charBeforeAt === '\n')) {
+                        setShowMentions(true);
+                        fetchMentions(query);
+                      } else {
+                        setShowMentions(false);
+                      }
+                    } else {
+                      setShowMentions(false);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleEnrichedSubmit();
+                    }
+                  }}
+                  style={{ caretColor: '#f43f5e' }}
+                  placeholder={replyingTo ? `Replying to ${(replyingTo as any).author_name || (replyingTo as any).user_name || 'someone'}...` : "Say something..."}
+                  className="w-full bg-white/5 rounded-xl px-5 py-3 text-[14px] font-medium text-transparent placeholder:text-white/40 outline-none border border-white/10 resize-none overflow-hidden leading-snug"
+                />
+              </div>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-4 px-1">
                   <button
@@ -823,7 +967,7 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                       if (!showMentions) fetchMentions();
                       setShowMentions(!showMentions);
                     }}
-                    className={`p-1.5 rounded-full transition-all active:scale-90 ${showMentions ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' : 'text-white/40 hover:bg-white/10'}`}
+                    className={`p-1.5 rounded-full transition-all active:scale-90 ${showMentions ? 'bg-rose-500 text-white shadow-rose-500/20' : 'text-white/40 hover:bg-white/10'}`}
                     title="Mention someone"
                   >
                     <span className="text-lg font-black leading-none px-0.5">@</span>
@@ -862,24 +1006,14 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                     onTouchEnd={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (commentPosting) return;
-                      const domText = reelTextareaRef.current?.value?.trim();
-                      const refText = commentTextRef.current?.trim();
-                      const text = domText || refText;
-                      if (!text) return;
-                      handleAddComment(text);
+                      handleEnrichedSubmit();
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      if (commentPosting) return;
-                      const domText = reelTextareaRef.current?.value?.trim();
-                      const refText = commentTextRef.current?.trim();
-                      const text = domText || refText;
-                      if (!text) return;
-                      handleAddComment(text);
+                      handleEnrichedSubmit();
                     }}
-                    className="px-8 py-2.5 rounded-full bg-rose-500 text-white text-[13px] font-black shadow-xl shadow-rose-500/20 active:scale-95 transition-all disabled:opacity-40"
+                    className="px-8 py-2.5 rounded-full bg-rose-500 text-white text-[13px] font-black  shadow-rose-500/20 active:scale-95 transition-all disabled:opacity-40"
                   >
                     {commentPosting ? "Sending..." : "Send"}
                   </button>

@@ -7,6 +7,7 @@ import { CheckBadgeIcon } from '@heroicons/react/24/solid';
 import VerifiedBadge from '@/src/components/common/VerifiedBadge';
 import LikeBurst from '@/src/components/common/LikeBurst';
 import PostCommentComposer from './PostCommentComposer';
+import CommentText from './CommentText';
 import { PostModalContext } from '../types';
 
 interface MobileReelsCommentSectionProps {
@@ -210,7 +211,29 @@ export default function MobileReelsCommentSection({ ctx }: MobileReelsCommentSec
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 ">Author</span>
                             )}
                           </div>
-                          <div className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{c.comment_content}</div>
+                          <CommentText 
+                            content={c.comment_content} 
+                            metadata={c.metadata}
+                            onPostClick={(id, meta) => {
+                              if (meta?.handle && Number(id) >= 30000000000) {
+                                window.location.href = `/${meta.handle}/${id}`;
+                              } else {
+                                window.location.href = `/discover?post=${id}`;
+                              }
+                            }}
+                            onProductClick={(id) => ctx.handleProductClick(id as number)}
+                            onLocationClick={(meta) => {
+                              if (meta.lat && meta.lng) {
+                                window.open(`https://www.google.com/maps/search/?api=1&query=${meta.lat},${meta.lng}`, '_blank');
+                              } else {
+                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(meta.name || meta.address)}`, '_blank');
+                              }
+                            }}
+                            onMediaClick={(meta) => {
+                              alert("Viewing media: " + (meta.name || "Attachment"));
+                            }}
+                            className="mt-1 text-sm text-slate-600 whitespace-pre-wrap" 
+                          />
 
                           <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400">
                             <div className="flex items-center gap-1.5">
@@ -304,7 +327,29 @@ export default function MobileReelsCommentSection({ ctx }: MobileReelsCommentSec
                                     <span className="text-[9px] px-1 py-0.5 rounded-full bg-rose-50 text-rose-500 border border-rose-100 ">Author</span>
                                   )}
                                 </div>
-                                <div className="mt-0.5 text-xs text-slate-600 whitespace-pre-wrap">{r.comment_content}</div>
+                                <CommentText 
+                                  content={r.comment_content} 
+                                  metadata={r.metadata}
+                                  onPostClick={(id, meta) => {
+                              if (meta?.handle && Number(id) >= 30000000000) {
+                                window.location.href = `/${meta.handle}/${id}`;
+                              } else {
+                                window.location.href = `/discover?post=${id}`;
+                              }
+                            }}
+                                  onProductClick={(id) => ctx.handleProductClick(id as number)}
+                                  onLocationClick={(meta) => {
+                                    if (meta.lat && meta.lng) {
+                                      window.open(`https://www.google.com/maps/search/?api=1&query=${meta.lat},${meta.lng}`, '_blank');
+                                    } else {
+                                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(meta.name || meta.address)}`, '_blank');
+                                    }
+                                  }}
+                                  onMediaClick={(meta) => {
+                                    alert("Viewing media: " + (meta.name || "Attachment"));
+                                  }}
+                                  className="mt-0.5 text-xs text-slate-600 whitespace-pre-wrap" 
+                                />
 
                                 <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-400">
                                   <div className="flex items-center gap-1.5">
