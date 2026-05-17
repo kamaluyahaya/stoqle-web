@@ -32,9 +32,8 @@ export function CacheProvider({ children }: { children: ReactNode }) {
     activeTabs: {},
   });
 
-  const getCachedProfile = (key: string) => state.profiles[key] || null;
-
-  const setCachedProfile = (key: string, data: any) => {
+  const getCachedProfile = React.useCallback((key: string) => state.profiles[key] || null, [state.profiles]);
+  const setCachedProfile = React.useCallback((key: string, data: any) => {
     setState((prev) => ({
       ...prev,
       profiles: { 
@@ -42,9 +41,8 @@ export function CacheProvider({ children }: { children: ReactNode }) {
         [key]: { ...(prev.profiles[key] || { mediaPosts: [], notePosts: [] }), data } 
       },
     }));
-  };
-
-  const setCachedProfilePosts = (key: string, mediaPosts: any[], notePosts: any[]) => {
+  }, []);
+  const setCachedProfilePosts = React.useCallback((key: string, mediaPosts: any[], notePosts: any[]) => {
     setState((prev) => ({
       ...prev,
       profiles: { 
@@ -52,59 +50,56 @@ export function CacheProvider({ children }: { children: ReactNode }) {
         [key]: { ...(prev.profiles[key] || { data: null }), mediaPosts, notePosts } 
       },
     }));
-  };
-
-  const getCachedShop = (key: string) => state.shops[key] || null;
-
-  const setCachedShop = (key: string, profile: any, products: any[]) => {
+  }, []);
+  const getCachedShop = React.useCallback((key: string) => state.shops[key] || null, [state.shops]);
+  const setCachedShop = React.useCallback((key: string, profile: any, products: any[]) => {
     setState((prev) => ({
       ...prev,
       shops: { ...prev.shops, [key]: { profile, products } },
     }));
-  };
-
-  const getScrollPosition = (key: string) => state.scrollPositions[key] || 0;
-
-  const setScrollPosition = (key: string, position: number) => {
+  }, []);
+  const getScrollPosition = React.useCallback((key: string) => state.scrollPositions[key] || 0, [state.scrollPositions]);
+  const setScrollPosition = React.useCallback((key: string, position: number) => {
     setState((prev) => ({
       ...prev,
       scrollPositions: { ...prev.scrollPositions, [key]: position },
     }));
-  };
-
-  const getActiveTab = (key: string) => state.activeTabs[key] ?? null;
-
-  const setActiveTab = (key: string, tab: string | number) => {
+  }, []);
+  const getActiveTab = React.useCallback((key: string) => state.activeTabs[key] ?? null, [state.activeTabs]);
+  const setActiveTab = React.useCallback((key: string, tab: string | number) => {
     setState((prev) => ({
       ...prev,
       activeTabs: { ...prev.activeTabs, [key]: tab },
     }));
-  };
-
-  const clearCache = () => {
+  }, []);
+  const clearCache = React.useCallback(() => {
     setState({
       profiles: {},
       shops: {},
       scrollPositions: {},
       activeTabs: {},
     });
-  };
+  }, []);
+
+  const value = React.useMemo(() => ({
+    getCachedProfile,
+    setCachedProfile,
+    setCachedProfilePosts,
+    getCachedShop,
+    setCachedShop,
+    getScrollPosition,
+    setScrollPosition,
+    getActiveTab,
+    setActiveTab,
+    clearCache,
+  }), [
+    getCachedProfile, setCachedProfile, setCachedProfilePosts,
+    getCachedShop, setCachedShop, getScrollPosition,
+    setScrollPosition, getActiveTab, setActiveTab, clearCache
+  ]);
 
   return (
-    <CacheContext.Provider
-      value={{
-        getCachedProfile,
-        setCachedProfile,
-        setCachedProfilePosts,
-        getCachedShop,
-        setCachedShop,
-        getScrollPosition,
-        setScrollPosition,
-        getActiveTab,
-        setActiveTab,
-        clearCache,
-      }}
-    >
+    <CacheContext.Provider value={value}>
       {children}
     </CacheContext.Provider>
   );

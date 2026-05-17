@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://10.123.11.181:4000';
+  process.env.NEXT_PUBLIC_API_URL || 'http://10.14.140.181:4000';
 
 export async function GET(
   request: NextRequest,

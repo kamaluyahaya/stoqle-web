@@ -27,8 +27,8 @@ export interface PostModalContext {
   setShowMentions: (val: boolean) => void;
   showAttachmentsModal?: boolean;
   setShowAttachmentsModal?: (val: boolean) => void;
-  activeAttachmentModal?: 'posts' | 'products' | 'location' | 'media' | null;
-  setActiveAttachmentModal?: (val: 'posts' | 'products' | 'location' | 'media' | null) => void;
+  activeAttachmentModal?: 'posts' | 'products' | 'location' | 'media' | 'voice' | null;
+  setActiveAttachmentModal?: (val: 'posts' | 'products' | 'location' | 'media' | 'voice' | null) => void;
   isLoadingMentions: boolean;
   isFetchingMoreMentions: boolean;
   hasMoreMentions: boolean;
@@ -39,7 +39,7 @@ export interface PostModalContext {
   reelTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   replyingTo: any | null;
   setReplyingTo: (val: any) => void;
-  handleAddComment: (text: string, metadata?: any[]) => void;
+  handleAddComment: (text: string, metadata?: any[], commentImageFiles?: File[], commentAudioFile?: File, voiceMeta?: any) => void;
   fetchMentions: (query?: string, isLoadMore?: boolean) => Promise<void>;
   registerMention: (name: string, slug: string) => void;
   enrichTextWithSlugs: (text: string) => string;
@@ -63,6 +63,21 @@ export interface PostModalContext {
   formatUrl: (url: string) => string;
   desktopTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   setShowEmojiPicker: (val: boolean) => void;
+  // Reply pagination
+  replyState: {
+    loadingIds: Set<number>;
+    offsets: Record<number, number>;
+    hasMore: Record<number, boolean>;
+    totals: Record<number, number>;
+  };
+  fetchMoreReplies: (parentCommentId: number) => Promise<void>;
+  deleteComment: (commentId: number) => Promise<void>;
+
+  // Comment Context Menu
+  contextMenuComment: any | null;
+  showCommentContextMenu: boolean;
+  setContextMenuComment: (comment: any | null) => void;
+  setShowCommentContextMenu: (val: boolean) => void;
 
   // Desktop Standard View
   leftMediaRef: React.RefObject<HTMLDivElement | null>;
@@ -82,6 +97,8 @@ export interface PostModalContext {
   setFirstImageAspectRatio: React.Dispatch<React.SetStateAction<number | null>>;
   setViewerProfileUserId: React.Dispatch<React.SetStateAction<string | number | undefined>>;
   setFullImageUrl: React.Dispatch<React.SetStateAction<string | null>>;
+  viewerImages: string[] | null;
+  setViewerImages: React.Dispatch<React.SetStateAction<string[] | null>>;
   hydratedLinkedProducts: Record<string, any>;
   activePostId: string | number;
   getDiscountedPrice: (lp: any) => number;
@@ -111,4 +128,6 @@ export interface PostModalContext {
   isNavigating?: boolean;
   setIsNavigating?: React.Dispatch<React.SetStateAction<boolean>>;
   pendingTransitionRef?: React.MutableRefObject<{ showing: boolean; timer: ReturnType<typeof setTimeout> | null }>;
+  externalPendingFiles: File[];
+  setExternalPendingFiles: React.Dispatch<React.SetStateAction<File[]>>;
 }

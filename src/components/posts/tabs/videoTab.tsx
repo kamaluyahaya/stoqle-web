@@ -198,7 +198,7 @@ export default function VideoTab({
                       caption: "Video Preview",
                       user: {
                         name: user?.full_name || user?.name || "Guest User",
-                        avatar: user?.profile_pic || user?.avatar || "https://via.placeholder.com/150",
+                        avatar: user?.profile_pic || user?.avatar || "/assets/images/favio.png",
                         id: user?.user_id || user?.id || 0
                       },
                       liked: false,

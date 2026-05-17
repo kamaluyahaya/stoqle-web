@@ -1,6 +1,7 @@
 // src/components/product/ProductSelectorModal.tsx
 "use client";
 
+import Image from "next/image";
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { XMarkIcon, EyeIcon, CheckIcon } from "@heroicons/react/24/outline";
@@ -139,10 +140,13 @@ export default function ProductSelectorModal({ onClose, onSelect, selectedId }: 
                     className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0 relative group"
                   >
                     {p.first_image || p.image_url || p.thumbnail || p.image ? (
-                      <img
+                      <Image
                         src={formatUrl(p.first_image || p.image_url || p.thumbnail || p.image)}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                        width={56}
+                        height={56}
+                        className="object-cover group-hover:scale-110 transition-transform"
                         alt=""
+                        unoptimized={formatUrl(p.first_image || p.image_url || p.thumbnail || p.image).startsWith('blob:')}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-300">

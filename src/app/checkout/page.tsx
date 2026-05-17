@@ -19,7 +19,7 @@ import { useWallet } from "@/src/context/walletContext";
 import PinVerifyModal from "@/src/components/business/pinVerifyModal";
 import PinSetupModal from "@/src/components/business/pinSetupModal";
 import { logUserActivity } from "@/src/lib/api/productApi";
-import ImageViewer from "@/src/components/modal/imageViewer";
+import PostImageViewer from "@/src/components/modal/PostImageViewer";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import AccountVerificationModal from "@/src/components/modal/accountVerificationModal";
@@ -339,7 +339,7 @@ export default function CheckoutPage() {
                         if (res.status === 'success' || res.ok) {
                             const sessionData = res.data;
                             setItems(sessionData.items || []);
-                            
+
                             if (sessionData.metadata?.address) {
                                 setAddress(sessionData.metadata.address);
                             }
@@ -1111,8 +1111,9 @@ export default function CheckoutPage() {
                 onUpdate={fetchDefaultAddress}
             />
 
-            <ImageViewer
-                src={viewerSrc}
+            <PostImageViewer
+                open={viewerOpen}
+                images={viewerSrc ? [viewerSrc] : []}
                 onClose={() => { setViewerOpen(false); setViewerSrc(null); }}
             />
         </div>

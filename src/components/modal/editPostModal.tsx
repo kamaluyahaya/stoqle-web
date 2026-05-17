@@ -1,6 +1,7 @@
 // src/components/modal/editPostModal.tsx
 "use client";
 
+import Image from "next/image";
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -282,7 +283,7 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
                           <div className="space-y-2">
                             <div className="flex items-center gap-1.5">
                               <div className="w-5 h-5 rounded-full border border-white/40 overflow-hidden bg-slate-200 shadow-sm">
-                                <img src={post.user?.avatar || "/assets/images/favio.png"} className="w-full h-full object-cover" alt="user" />
+                                <Image src={post.user?.avatar || "/assets/images/favio.png"} width={20} height={20} className="rounded-full object-cover" alt="user" />
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span className="text-white text-[8px] font-black shadow-sm truncate max-w-[60px] tracking-tight">{post.user?.name || "user"}</span>
@@ -303,15 +304,20 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center">
                     <AnimatePresence mode="wait">
-                      <motion.img
+                      <motion.div
                         key={index}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 1.05 }}
-                        src={mediaList[index]?.url || "/assets/images/favio.png"}
-                        className="w-full h-full object-contain"
-                        alt={`slide-${index}`}
-                      />
+                        className="w-full h-full relative"
+                      >
+                        <Image
+                          src={mediaList[index]?.url || "/assets/images/favio.png"}
+                          fill
+                          className="object-contain"
+                          alt={`slide-${index}`}
+                        />
+                      </motion.div>
                     </AnimatePresence>
                     <div className="absolute top-4 right-4 flex gap-2">
                       {mediaList.length > 1 && mediaList[index]?.id && (
@@ -416,11 +422,12 @@ export default function EditPostModal({ open, post, onClose, onUpdated }: Props)
                       >
                         {/* Thumbnail */}
                         <div className="w-11 h-11 rounded-xl overflow-hidden bg-white border border-slate-200 flex-shrink-0">
-                          <img
+                          <Image
                             src={selectedProduct.image_url || selectedProduct.first_image || "/assets/images/favio.png"}
-                            className="w-full h-full object-cover"
+                            width={44}
+                            height={44}
+                            className="object-cover"
                             alt="linked product"
-                            onError={(e) => { (e.target as HTMLImageElement).src = "/assets/images/favio.png"; }}
                           />
                         </div>
                         {/* Info */}

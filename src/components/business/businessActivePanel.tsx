@@ -23,6 +23,7 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { useWallet } from "@/src/context/walletContext";
 import { toast } from "sonner";
 import { InformationCircleIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
+import StoqleLoader from "../common/StoqleLoader";
 
 export default function EditBusinessProfile({
   apiBase = "",
@@ -49,6 +50,7 @@ export default function EditBusinessProfile({
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isPinSetupModalOpen, setIsPinSetupModalOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     setIsWithdrawModalOpen(searchParams.get('withdraw') === 'true');
@@ -354,6 +356,7 @@ export default function EditBusinessProfile({
             className={`w-full border-y py-1 overflow-hidden group cursor-pointer ${pendingOrdersCount > 0 ? "bg-orange-50 border-orange-100" : "bg-blue-50 border-blue-100"
               }`}
             onClick={() => {
+              setIsNavigating(true);
               if (pendingOrdersCount > 0) {
                 router.push("/profile/business/customer-order");
               } else {
@@ -416,14 +419,20 @@ export default function EditBusinessProfile({
         {/* Action grid */}
         <div id="guide-wallet-actions" className="mt-2 w-full">
           <div className="grid grid-cols-4 gap-2 lg:gap-5">
-            <Link href="/profile/business/customer-order" className="block">
+            <div
+              onClick={() => {
+                setIsNavigating(true);
+                router.push("/profile/business/customer-order");
+              }}
+              className="block cursor-pointer"
+            >
               <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white hover:shadow transition">
                 <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
                   <FaShoppingCart className="text-slate-700" size={18} />
                 </div>
                 <span className="text-xs font-medium text-slate-700">Orders</span>
               </div>
-            </Link>
+            </div>
 
             <div
               onClick={() => {
@@ -432,6 +441,7 @@ export default function EditBusinessProfile({
                   openEditor("Shipping Info", KEYS.shipping, normalizeShippingForModal(shipping));
                   return;
                 }
+                setIsNavigating(true);
                 router.push("/profile/business/inventory");
               }}
               className="block cursor-pointer"
@@ -569,6 +579,13 @@ export default function EditBusinessProfile({
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Background Syncing...
             </div>
+          </div>
+        )}
+
+        {isNavigating && (
+          <div className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center">
+            <StoqleLoader size={30} />
+
           </div>
         )}
       </div>

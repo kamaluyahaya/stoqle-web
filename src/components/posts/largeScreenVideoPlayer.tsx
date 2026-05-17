@@ -153,7 +153,7 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
   // 5. Playback Control Hub
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !isActive) return;
+    if (!video || !isActive || !src) return;
 
     videoPlaybackManager.setManualPause(playerId, userManualPause || false);
 
@@ -172,14 +172,14 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
 
       // Secondary check: if it's been active for a while but stuck in paused state without manual pause
       const heartbeat = setInterval(() => {
-        if (isActive && !userManualPause && video.paused && !loading && !isBuffering) {
+        if (isActive && !userManualPause && video.paused && !loading && !isBuffering && src) {
           videoPlaybackManager.authorizeAndPlay(playerId, finalMuted, finalVolume)
             .catch(() => { });
         }
       }, 3000);
       return () => clearInterval(heartbeat);
     }
-  }, [userManualPause, isActive, playerId, hasTriggeredPlay, loading, isBuffering]);
+  }, [userManualPause, isActive, playerId, hasTriggeredPlay, loading, isBuffering, src]);
 
   // 6. Media Source Setup
   useEffect(() => {
@@ -190,6 +190,7 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
     setError(null);
     setIsNativeReady(false);
     setIsFullyPainted(false);
+    setHasTriggeredPlay(false);
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
@@ -263,7 +264,7 @@ const LargeScreenVideoPlayer = memo(function LargeScreenVideoPlayer({
     };
   }, [src, loop, playerId]);
 
-  const appliedVideoClass = videoClassName || (aspectRatio && aspectRatio < 0.8 ? "object-cover" : "object-contain");
+  const appliedVideoClass = videoClassName || "object-contain";
 
   const togglePlay = async () => {
     const v = videoRef.current;

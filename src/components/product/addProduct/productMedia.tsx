@@ -1,5 +1,6 @@
 // src/components/product/ProductMedia.tsx
 "use client";
+import Image from "next/image";
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
@@ -119,14 +120,16 @@ export default function ProductMedia({ productImages, setProductImages, productV
             key={i}
             className="relative rounded-sm overflow-hidden bg-slate-50 aspect-[4/3]"
           >
-            <img
+            <Image
               src={src}
               alt={`img-${i}`}
+              fill
+              unoptimized={src.startsWith('blob:')}
               onClick={() => {
                 setLightboxIndex(i);
                 setLightboxOpen(true);
               }}
-              className="w-full h-full object-contain object-top cursor-zoom-in transition hover:scale-[1.02]"
+              className="object-contain object-top cursor-zoom-in transition hover:scale-[1.02]"
             />
 
             <button
@@ -231,7 +234,7 @@ export default function ProductMedia({ productImages, setProductImages, productV
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="h-7 w-7 rounded-full border border-white/40 p-0.5 shadow-xl bg-white/10 backdrop-blur-md overflow-hidden shrink-0">
                       {businessLogo ? (
-                        <img src={businessLogo} alt="logo" className="w-full h-full object-cover rounded-full" />
+                        <Image src={businessLogo} alt="logo" width={28} height={28} className="object-cover rounded-full" />
                       ) : (
                         <div className="w-full h-full bg-slate-800 flex items-center justify-center text-[10px] font-black text-white ">ST</div>
                       )}

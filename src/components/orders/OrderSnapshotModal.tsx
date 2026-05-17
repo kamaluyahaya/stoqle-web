@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ShieldCheck, Truck, RefreshCcw, Zap, HelpCircle } from "lucide-react";
@@ -91,7 +92,7 @@ export default function OrderSnapshotModal({ open, onClose, item }: Props) {
                             <div className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                                 <div className="w-16 h-16 bg-white rounded-xl overflow-hidden border border-slate-200 flex-shrink-0">
                                     {item.product_image ? (
-                                        <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                                        <Image src={item.product_image} alt={item.product_name} width={64} height={64} className="object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-slate-50">
                                             <ShieldCheck className="text-slate-300" size={24} />

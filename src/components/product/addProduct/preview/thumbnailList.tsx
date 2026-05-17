@@ -1,3 +1,4 @@
+import Image from "next/image";
 import React from "react";
 
 export default function ThumbnailList({
@@ -44,7 +45,7 @@ export default function ThumbnailList({
                 >
                   <div className="w-[50px] h-[50px] flex-shrink-0 rounded-[6px] overflow-hidden relative bg-slate-100 transition-all duration-300">
                     {v.url ? (
-                      <img src={v.url} alt={v.name} className="w-full h-full object-cover" />
+                      <Image src={v.url} alt={v.name || "variant"} width={50} height={50} className="object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-slate-50 text-[9px] text-slate-400 p-2 text-center leading-tight">
                         {v.name}

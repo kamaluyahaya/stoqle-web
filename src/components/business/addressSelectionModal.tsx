@@ -195,6 +195,7 @@ export default function AddressSelectionModal({
                   </div> */}
                 </div>
                 <button
+                  type="button"
                   aria-label="Close"
                   className="p-2 rounded-md hover:bg-slate-100"
                   onClick={() => setOpen(false)}
@@ -211,6 +212,7 @@ export default function AddressSelectionModal({
               <div className="px-4 border-slate-200">
                 <div className="flex gap-6 text-sm">
                   <button
+                    type="button"
                     className="text-left"
                     onClick={() => setLevel(0)}
                   >
@@ -221,6 +223,7 @@ export default function AddressSelectionModal({
                   </button>
 
                   <button
+                    type="button"
                     className="text-left"
                     onClick={() => selectedCountry && setLevel(1)}
                   >
@@ -231,6 +234,7 @@ export default function AddressSelectionModal({
                   </button>
 
                   <button
+                    type="button"
                     className="text-left"
                     onClick={() => selectedState && setLevel(2)}
                   >
@@ -256,6 +260,7 @@ export default function AddressSelectionModal({
                       return (
                         <li key={c} className="px-4">
                           <button
+                            type="button"
                             disabled={!isEnabled}
                             onClick={() => {
                               if (!isEnabled) return;
@@ -334,6 +339,7 @@ export default function AddressSelectionModal({
                           return (
                             <li key={s} className="px-4">
                               <button
+                                type="button"
                                 disabled={!isEnabled}
                                 onClick={() => {
                                   if (!isEnabled) return;
@@ -402,6 +408,7 @@ export default function AddressSelectionModal({
                           return (
                             <li key={l} className="px-4">
                               <button
+                                type="button"
                                 disabled={!isEnabled}
                                 onClick={() => isEnabled && handleLgaClick(l)}
                                 className={`w-full text-left py-3 flex items-center justify-between rounded-xl ${isEnabled ? "hover:bg-slate-50" : "cursor-not-allowed opacity-60"}`}
@@ -433,8 +440,9 @@ export default function AddressSelectionModal({
 
             <div className="sticky lg:bottom-5 md:bottom-5 bottom-15 z-20 bg-white px-4 py-4
                             pb-[env(safe-area-inset-bottom)]">
-              <div className="flex gap-3">
+               <div className="flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setOpen(false)}
                   className="flex-1 py-3 rounded-full border border-slate-200 text-sm font-medium"
                 >
@@ -442,6 +450,7 @@ export default function AddressSelectionModal({
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (!canNext()) return;
                     if (level === 0) {

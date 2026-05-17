@@ -1,3 +1,4 @@
+import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { LifebuoyIcon, BuildingStorefrontIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
@@ -84,7 +85,7 @@ export default function ActionBar({
     : (shopProfilePic && !shopProfilePic.includes('favio.png') ? shopProfilePic : null);
 
   return (
-    <div onMouseDown={stop} className="fixed lg:sticky left-0 bottom-0 z-40 w-full border-t border-slate-100 bg-white/95 backdrop-blur px-1 py-1">
+    <div onMouseDown={stop} className="sticky lg:sticky left-0 bottom-0 z-40 w-full border-t border-slate-100 bg-white/95 backdrop-blur px-1 py-1">
       <div className="flex items-center gap-1">
         <button
           onMouseDown={stop}
@@ -103,7 +104,7 @@ export default function ActionBar({
         >
           <div className="rounded-xl bg-white flex items-center justify-center overflow-hidden hover:shadow-sm">
             {displayLogo ? (
-              <img src={String(displayLogo)} alt="Shop logo" className="h-5 w-5 object-cover mt-1 border border-slate-300 rounded-full p-1" />
+              <Image src={String(displayLogo)} alt="Shop logo" width={20} height={20} className="object-cover mt-1 border border-slate-300 rounded-full p-1" />
             ) : (
               <BuildingStorefrontIcon className="w-5 h-5 text-slate-600" />
             )}

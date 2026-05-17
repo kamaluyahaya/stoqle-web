@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Package, MapPin, Phone, User, Calendar, ShoppingBag, Globe } from "lucide-react";
 import { getDistance } from "geolib";
 
@@ -135,7 +136,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
 
   // QR link (in real scenario this should be dynamic)
   const qrData = `https://stoqle.com/orders/${order.sale_id || order.payment_ref}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
+  const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=250&dotStyle=dots&finderStyle=circle&finderDotStyle=dots`;
 
   // Parse delivery address if JSON
   let delivery = { name: order.full_name, phone: order.phone, address: order.delivery_address, region: "" };
@@ -180,7 +181,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
         {/* HEADER SECTION */}
         <header className="flex justify-between items-start mb-2 pb-2">
           <div className="space-y-4">
-            <img src={vendorLogo} alt={vendorName} className="h-16 max-w-[250px] object-contain" />
+            <Image src={vendorLogo} alt={vendorName} width={250} height={64} className="h-16 w-auto object-contain" unoptimized />
             <h1 className="text-3xl font-bold tracking-tight text-slate-950">Order Summary</h1>
           </div>
           <div className="text-right">
@@ -200,7 +201,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
             </h2>
             <div className="flex items-center gap-4 mb-3">
               <div className="w-12 h-12 bg-white rounded-lg border border-slate-100 p-1 flex items-center justify-center">
-                <img src={vendorLogo} className="w-full h-full object-contain rounded-lg" alt="Business Logo" />
+                <Image src={vendorLogo} width={48} height={48} className="object-contain rounded-lg" alt="Business Logo" unoptimized />
               </div>
               <div>
                 <div className="font-extrabold text-slate-900 text-sm tracking-tight">{vendorName}</div>
@@ -259,7 +260,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
                   <tr key={idx} className="group">
                     <td className="px-6 py-5">
                       <div className="w-12 h-12 bg-slate-50 rounded-lg overflow-hidden border border-slate-100">
-                        <img src={formatUrl(item.product_image)} className="w-full h-full object-cover" alt={item.product_name} />
+                        <Image src={formatUrl(item.product_image)} width={48} height={48} className="object-cover" alt={item.product_name} unoptimized />
                       </div>
                     </td>
                     <td className="px-6 py-5">
@@ -330,7 +331,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
 
           {/* QR CODE SECTION */}
           <div className="flex flex-col items-center justify-center text-center p-6 bg-slate-50/30 rounded-lg border border-dashed border-slate-200">
-            <img src={qrUrl} alt="Order QR" className="w-24 h-24 mb-3 border-4 border-white shadow-lg rounded-lg" />
+            <Image src={qrUrl} alt="Order QR" width={96} height={96} className="border-4 border-white shadow-lg rounded-lg" unoptimized />
             <div className="text-[9px] font-black text-slate-400  tracking-widest">Order Verification Tag</div>
             <p className="text-[8px] text-slate-400 mt-1 max-w-[120px]">Scan to view real-time tracking and delivery status history.</p>
           </div>
@@ -340,7 +341,7 @@ const OrderSummaryFlyer = React.forwardRef<HTMLDivElement, { order: MasterOrder 
         <footer className="text-center pt-4 space-y-2">
           <div className="flex items-center justify-center gap-2 opacity-30 grayscale hover:grayscale-0 transition duration-500">
             <span className="text-xs font-black tracking-[0.3em] ">Powered by</span>
-            <img src="/assets/images/logo.png" className="h-4 object-contain" alt="Stoqle" />
+            <Image src="/assets/images/logo.png" width={80} height={16} className="h-4 w-auto object-contain" alt="Stoqle" unoptimized />
           </div>
           <p className="text-[10px] font-bold text-slate-400 tracking-wider">Built for sellers. Loved by buyers.</p>
 

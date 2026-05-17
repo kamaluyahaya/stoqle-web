@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { XMarkIcon, CameraIcon, PaperAirplaneIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
@@ -155,7 +156,13 @@ export default function HelpCenterModal({ isOpen, onClose }: HelpCenterModalProp
               <div className="flex flex-wrap gap-3">
                 {previews.map((src, idx) => (
                   <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden group">
-                    <img src={src} className="w-full h-full object-cover" alt="" />
+                    <Image
+                      src={src}
+                      fill
+                      className="object-cover"
+                      alt="feedback media"
+                      sizes="80px"
+                    />
                     <button
                       type="button"
                       onClick={() => removeFile(idx)}

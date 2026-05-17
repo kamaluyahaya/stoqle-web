@@ -3,6 +3,45 @@
 import React from "react";
 import { motion } from "framer-motion";
 
+/**
+ * Smart date formatter for chat room sidebar timestamps.
+ * - Today      → "09:45 AM"
+ * - Yesterday  → "Yesterday"
+ * - This year  → "21 March"
+ * - Older      → "21 March, 2025"
+ */
+function formatChatDate(isoString: string | null | undefined): string {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+
+    if (msgDay.getTime() === today.getTime()) {
+        // Today → show time
+        const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        return `${timeStr}`;
+    }
+    if (msgDay.getTime() === yesterday.getTime()) {
+        return "Yesterday";
+    }
+    if (date.getFullYear() === now.getFullYear()) {
+        // This year → "21 March"
+        return `${day} ${month}`;
+    }
+    // Older → "21 March, 2025"
+    return `${day} ${month}, ${year}`;
+}
+
 type RoomItemProps = {
     room: {
         chat_room_id: string | number;
@@ -111,7 +150,7 @@ export const RoomItem: React.FC<RoomItemProps> = ({
                         {timestamp && (
                             <span className={`text-[10px] font-bold tabular-nums ${active ? "text-rose-500" : "text-slate-400"
                                 }`}>
-                                {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {formatChatDate(timestamp)}
                             </span>
                         )}
                         {room.is_pinned && (

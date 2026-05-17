@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import React from "react";
 import { API_BASE_URL } from "@/src/lib/config";
 import { ProductSku } from "@/src/types/product";
@@ -44,30 +45,58 @@ export default function VariantSkuSection({
         if (!url) return null;
         if (typeof url !== "string") return null;
         if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
-        const apiBase = API_BASE_URL || "https://api.stoqle.com";
-        return url.startsWith("/public") ? `${apiBase}${url}` : `${apiBase}/public/${url}`;
+        
+        // Clean up the API base URL and ensure proper path formatting
+        const apiBase = (API_BASE_URL || "https://api.stoqle.com").replace(/\/$/, "");
+        const path = url.startsWith("/") ? url : `/${url}`;
+        
+        // If it already has /public, don't double it
+        if (path.startsWith("/public/")) return `${apiBase}${path}`;
+        return `${apiBase}/public${path}`;
     };
 
     const getSkuImageParts = (sku: ProductSku) => {
+        if (!sku.variantOptionIds || !Array.isArray(sku.variantOptionIds)) return [];
+        
         return sku.variantOptionIds.map((optionId) => {
-            const group = variantGroups.find((g: any) => g.entries.some((e: any) => e.id === optionId));
-            const entry = group?.entries.find((e: any) => e.id === optionId);
+            const sid = String(optionId);
+            // Find which group and entry this option belongs to
+            const group = variantGroups?.find((g: any) => 
+                g.entries?.some((e: any) => String(e.id) === sid)
+            );
+            const entry = group?.entries?.find((e: any) => String(e.id) === sid);
 
             let rawImage: string | null = null;
+            
+            // 1. Prioritize imagePreviews (blobs/local URLs)
             if (entry?.imagePreviews && entry.imagePreviews.length > 0) {
                 rawImage = entry.imagePreviews[0];
-            } else if (entry?.images && entry.images.length > 0) {
+            } 
+            // 2. Fallback to images array
+            else if (entry?.images && entry.images.length > 0) {
                 const first = entry.images[0];
                 if (typeof first === "string") {
                     rawImage = first;
                 } else if (first instanceof File || first instanceof Blob) {
-                    rawImage = URL.createObjectURL(first);
+                    // Avoid creating multiple object URLs if possible, 
+                    // but as a last resort for display:
+                    try {
+                        rawImage = URL.createObjectURL(first);
+                    } catch (e) {
+                        console.error("Failed to create object URL", e);
+                    }
                 }
+            }
+            // 3. Last fallback: check if the entry itself has an 'image' or 'image_url' property (server compatibility)
+            else if ((entry as any)?.image_url) {
+                rawImage = (entry as any).image_url;
+            } else if ((entry as any)?.image) {
+                rawImage = (entry as any).image;
             }
 
             return {
                 name: entry?.name || "Unknown",
-                image: formatImageUrl(rawImage),
+                image: rawImage ? formatImageUrl(rawImage) : null,
             };
         });
     };
@@ -100,7 +129,7 @@ export default function VariantSkuSection({
                                                 <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
                                                     {part.image && (
                                                         <div className="w-5 h-5 rounded-full bg-slate-200 overflow-hidden border border-slate-300 flex-shrink-0">
-                                                            <img src={part.image} alt={part.name} className="w-full h-full object-cover" />
+                                                            <Image src={part.image} alt={part.name} width={20} height={20} className="object-cover" />
                                                         </div>
                                                     )}
                                                     <span className="text-xs font-bold text-slate-800 break-words leading-tight max-w-[120px]">
@@ -199,7 +228,7 @@ export default function VariantSkuSection({
                                             <div key={idx} className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">
                                                 {part.image && (
                                                     <div className="w-6 h-6 rounded-full bg-slate-200 overflow-hidden border border-slate-300">
-                                                        <img src={part.image} alt={part.name} className="w-full h-full object-cover" />
+                                                        <Image src={part.image} alt={part.name} width={24} height={24} className="object-cover" />
                                                     </div>
                                                 )}
                                                 <span className="font-medium text-slate-700 text-xs">{part.name}</span>

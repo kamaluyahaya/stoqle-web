@@ -48,7 +48,7 @@ export default function UserSchoolModal({ open, initialValue, onClose, onSave }:
 
             <DefaultInput
               label="School / University"
-              placeholder="e.g. University of Lagos..."
+              placeholder="e.g. Kaduna State University..."
               value={school}
               onChange={setSchool}
             />

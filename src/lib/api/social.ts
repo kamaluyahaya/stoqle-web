@@ -9,7 +9,7 @@ import { safeFetch, isOffline } from "./handler";
 import type { Post } from "@/src/lib/types";
 
 const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
-const NO_IMAGE_PLACEHOLDER = "https://via.placeholder.com/800x600?text=No+Image";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 const isVideoUrl = (u?: string) => !!u && VIDEO_EXT_RE.test(u);
 
@@ -124,7 +124,7 @@ export const mapApiPost = (p: any): Post => {
     likes_count: p.likes_count ?? p.likeCount ?? 0,
     comment_count: p.comment_count ?? p.comments_count ?? p.commentCount ?? 0,
     liked_by_user: Boolean(p.liked_by_me ?? p.liked ?? false),
-    is_following: Boolean(p.is_following ?? false),
+    is_following: Boolean(p.author_is_followed ?? p.is_followed_by_me ?? p.is_following ?? p.user?.is_following ?? false),
     original_audio_url: formatLocalUrl(p.original_audio_url),
     original_video_url: formatLocalUrl(p.original_video_url),
     post_public_id: p.post_public_id,
@@ -143,6 +143,8 @@ type FetchPostsOptions = {
   buffer_ids?: (string | number)[];
   is_product_linked?: boolean;
   softCategory?: boolean;
+  business_category?: string;
+  v?: number | string;
 };
 
 /**
@@ -457,6 +459,8 @@ export async function fetchSmartReels(opts: FetchPostsOptions = {}): Promise<{ p
   if (opts.buffer_ids && opts.buffer_ids.length > 0) urlObj.searchParams.set("buffer_ids", opts.buffer_ids.join(","));
   if (opts.is_product_linked) urlObj.searchParams.set("is_product_linked", "true");
   if (opts.softCategory) urlObj.searchParams.set("soft_category", "true");
+  if (opts.business_category) urlObj.searchParams.set("business_category", String(opts.business_category));
+  if (opts.v) urlObj.searchParams.set("v", String(opts.v));
 
   const headers: any = {};
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;

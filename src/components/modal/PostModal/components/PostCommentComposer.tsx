@@ -1,19 +1,25 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
+  X,
   Smile,
   AtSign,
   MessageCircleMore,
-  Keyboard
+  Keyboard,
+  Mic,
+  Image as ImageIcon
 } from "lucide-react";
 import CachedImage from '@/src/components/common/CachedImage';
+import StoqleLoader from '@/src/components/common/StoqleLoader';
 import { PostModalContext } from '../types';
 import ComposerAttachmentsModal from './ComposerAttachmentsModal';
 import AttachmentPostsModal from './AttachmentPostsModal';
 import AttachmentProductsModal from './AttachmentProductsModal';
 import AttachmentLocationModal from './AttachmentLocationModal';
 import AttachmentMediaModal from './AttachmentMediaModal';
+import AttachmentVoiceModal from './AttachmentVoiceModal';
 
 interface PostCommentComposerProps {
   ctx: PostModalContext;
@@ -56,7 +62,67 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
 
   const mirrorRef = useRef<HTMLDivElement>(null);
   const metadataRef = useRef<any[]>([]);
+  const pendingImageFilesRef = useRef<File[]>([]);
+  const pendingAudioFileRef = useRef<File | undefined>(undefined);
+  const voiceMetaRef = useRef<any>(undefined);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const hiddenImageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = isMobileMode ? (reelTextareaRef as any) : (desktopTextareaRef as any);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Limit to 4 total
+    const totalCurrent = pendingImageFilesRef.current.length;
+    const allowed = files.slice(0, 4 - totalCurrent);
+
+    if (allowed.length > 0) {
+      const newFiles = [...pendingImageFilesRef.current, ...allowed];
+      pendingImageFilesRef.current = newFiles;
+
+      const newPreviews = allowed.map(f => URL.createObjectURL(f));
+      setImagePreviews(prev => [...prev, ...newPreviews]);
+    }
+
+    // Reset input
+    e.target.value = "";
+  };
+
+  const removeImage = (idx: number) => {
+    const url = imagePreviews[idx];
+    URL.revokeObjectURL(url);
+
+    setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+    pendingImageFilesRef.current = pendingImageFilesRef.current.filter((_, i) => i !== idx);
+  };
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ctx.externalPendingFiles.length > 0) {
+      const files = ctx.externalPendingFiles;
+      // Filter out duplicates and limit to 4
+      const existingNames = new Set(pendingImageFilesRef.current.map(f => f.name));
+      const newUniqueFiles = files.filter(f => !existingNames.has(f.name));
+      
+      const totalCurrent = pendingImageFilesRef.current.length;
+      const allowed = newUniqueFiles.slice(0, 4 - totalCurrent);
+
+      if (allowed.length > 0) {
+        pendingImageFilesRef.current = [...pendingImageFilesRef.current, ...allowed];
+        const newPreviews = allowed.map(f => URL.createObjectURL(f));
+        setImagePreviews(prev => [...prev, ...newPreviews]);
+      }
+      
+      // Clear the trigger
+      ctx.setExternalPendingFiles([]);
+    }
+  }, [ctx.externalPendingFiles, ctx.setExternalPendingFiles]);
 
   const handleEnrichedSubmit = (text?: string) => {
     const rawText = text ?? commentTextRef.current ?? commentText;
@@ -65,43 +131,80 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
     const enriched = enrichTextWithSlugs(rawText);
     const final = enriched?.trim();
 
-    if (final) {
+    if (final || pendingImageFilesRef.current.length > 0 || pendingAudioFileRef.current) {
       // Robust normalization helper for filtering
       const normalizeForFilter = (s: string) => s.replace(/[\s\u200B-\u200D\uFEFF]/g, '').toLowerCase();
-      const normFinal = normalizeForFilter(final);
+      const normFinal = normalizeForFilter(final || '');
 
       // Only send metadata for tokens that are actually present in the text
       const filteredMetadata = (metadataRef.current || []).filter(meta => {
         if (!meta.display) return false;
         return normFinal.includes(normalizeForFilter(meta.display));
       });
-      
-      handleAddComment(final, filteredMetadata);
+
+      const imageFiles = pendingImageFilesRef.current.length > 0 ? [...pendingImageFilesRef.current] : undefined;
+      const audioFile = pendingAudioFileRef.current;
+      const voiceMeta = voiceMetaRef.current;
+
+      handleAddComment(final || ' ', filteredMetadata, imageFiles, audioFile, voiceMeta);
       setIsCommenting(false);
       setShowMentions(false);
       setShowAttachmentsModal?.(false);
       metadataRef.current = [];
+      pendingImageFilesRef.current = [];
+      setImagePreviews([]);
+      pendingAudioFileRef.current = undefined;
+      voiceMetaRef.current = undefined;
     }
+  };
+
+  // Imperatively resize the textarea given a text value.
+  // Sets el.value directly so scrollHeight is measured on the ACTUAL new content
+  // without waiting for React to commit — the only race-condition-free path.
+  const resizeTextarea = (newText: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.value = newText;          // temporarily write so scrollHeight is accurate
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    const minH = isMobileMode ? 40 : 48;
+    const maxH = 120;
+    el.style.height = Math.max(minH, Math.min(scrollH, maxH)) + 'px';
+    el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden';
+    // React will sync el.value back to the state value on its next commit;
+    // since we pass the same newText to setCommentText, there's no visible change.
   };
 
   const handleInsertToken = (token: string, metadata: any) => {
     const val = commentText;
     const spacer = val && !val.endsWith(' ') ? ' ' : '';
     const newText = val + spacer + token + " ";
+    resizeTextarea(newText);     // immediate, synchronous resize
     setCommentText(newText);
     commentTextRef.current = newText;
     metadataRef.current.push(metadata);
-    textareaRef.current?.focus();
-    setTimeout(autoAdjustHeight, 0);
+
+    // If composer is not active, open it so the user can hit 'Send'
+    setIsCommenting(true);
+
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      // Ensure cursor is at the end of the new text
+      const pos = newText.length;
+      el.setSelectionRange(pos, pos);
+    }
   };
 
   const autoAdjustHeight = () => {
-    if (textareaRef.current) {
-      const el = textareaRef.current;
-      el.style.height = 'auto';
-      el.style.height = Math.max(isMobileMode ? 40 : 48, Math.min(el.scrollHeight, 120)) + 'px';
-      el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden';
-    }
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    const minH = isMobileMode ? 40 : 48;
+    const maxH = 120;
+    el.style.height = Math.max(minH, Math.min(scrollH, maxH)) + 'px';
+    el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden';
   };
 
   const handleMentionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -121,6 +224,20 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
     }
   }, [showAttachmentsModal, activeAttachmentModal]);
 
+  // useLayoutEffect fires synchronously AFTER React commits the new value to the
+  // controlled textarea — so scrollHeight is always measured on the correct content.
+  // (requestAnimationFrame inside useEffect had a race condition with React's commit)
+  React.useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    const minH = isMobileMode ? 40 : 48;
+    const maxH = 120;
+    el.style.height = Math.max(minH, Math.min(scrollH, maxH)) + 'px';
+    el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden';
+  }, [commentText]);
+
   const hasProduct = currentItem?.linked_product || currentItem?.is_product_linked;
   const noComments = (comments || []).length === 0;
 
@@ -133,7 +250,7 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
         : "Share your thoughts";
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       {isCommenting && (
         <motion.div
           key="comment-backdrop"
@@ -152,18 +269,18 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
       {isCommenting ? (
         <motion.div
           key={isMobileMode ? "sheet-comment-input-active" : "active-comment-input"}
-          initial={{ opacity: 0, y: isMobileMode ? 5 : 10 }}
+          initial={{ opacity: 0, y: isMobileMode ? 30 : 40 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: isMobileMode ? 5 : 10 }}
-          transition={{ duration: 0.15, ease: "easeOut" }}
+          exit={{ opacity: 0, y: isMobileMode ? 20 : 30 }}
+          transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
           onPointerDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           className={`${showAttachmentsModal && !activeAttachmentModal
             ? 'fixed bottom-[30vh] left-0 right-0 z-[210] p-4 border-t border-slate-200 sm:absolute sm:w-full sm:max-w-md sm:left-1/2 sm:-translate-x-1/2'
-            : `relative ${isMobileMode ? 'z-50 p-1' : 'z-[100]'}`
-            } space-y-3 pointer-events-auto bg-white transition-all duration-300 ease-in-out`}
+            : `relative ${isMobileMode ? 'z-[50]' : ''}`
+            } space-y-3 pointer-events-auto bg-white border-t border-slate-200 p-2 md:p-4`}
         >
           {showMentions && (
             <motion.div
@@ -210,24 +327,36 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
                             const mentionDisplay = `@${fullName}\u200B`;
                             registerMention(mentionDisplay, u.username || u.business_slug || u.handle || u.slug || u.user_name || 'user');
                             const newText = val.slice(0, lastAtIndex) + mentionDisplay + " " + textAfterCursor;
+                            resizeTextarea(newText);
                             setCommentText(newText);
                             commentTextRef.current = newText;
                           } else {
                             const mentionDisplay = `@${fullName}\u200B`;
                             if (isSelected) {
                               const updated = commentText.replace(mentionDisplay, '');
+                              resizeTextarea(updated);
                               setCommentText(updated);
                               commentTextRef.current = updated;
                             } else {
                               registerMention(mentionDisplay, u.username || u.business_slug || u.handle || u.slug || u.user_name || 'user');
                               const spacer = val && !val.endsWith(' ') ? ' ' : '';
                               const newText = val + spacer + mentionDisplay + " ";
+                              resizeTextarea(newText);
                               setCommentText(newText);
                               commentTextRef.current = newText;
                             }
                           }
-                          textareaRef.current?.focus();
-                          setTimeout(autoAdjustHeight, 0);
+                          let targetPos = commentTextRef.current.length;
+                          if (isActiveQuery) {
+                            const mentionDisplay = `@${fullName}\u200B`;
+                            targetPos = lastAtIndex + mentionDisplay.length + 1;
+                          }
+
+                          const el = textareaRef.current;
+                          if (el) {
+                            el.focus();
+                            el.setSelectionRange(targetPos, targetPos);
+                          }
                         }}
                         className="flex flex-col items-center gap-1.5 p-1 min-w-[72px] max-w-[80px] snap-center rounded-2xl transition-all duration-200"
                       >
@@ -273,11 +402,11 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
             >
               {commentText.split(/(@[^\u200B]+\u200B|\[(?:Product|Post|Location|Media): [^\]]+\])/g).map((part, i) => {
                 const isMention = part.startsWith('@') && part.endsWith('\u200B');
-                const isAttachment = part.startsWith('[') && part.endsWith(']') && 
-                                   (part.includes(': Product') || part.includes(': Post') || 
-                                    part.includes(': Location') || part.includes(': Media') ||
-                                    part.startsWith('[Product:') || part.startsWith('[Post:') || 
-                                    part.startsWith('[Location:') || part.startsWith('[Media:'));
+                const isAttachment = part.startsWith('[') && part.endsWith(']') &&
+                  (part.includes(': Product') || part.includes(': Post') ||
+                    part.includes(': Location') || part.includes(': Media') ||
+                    part.startsWith('[Product:') || part.startsWith('[Post:') ||
+                    part.startsWith('[Location:') || part.startsWith('[Media:'));
 
                 if (isMention || isAttachment) {
                   return (
@@ -309,19 +438,16 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
                   mirrorRef.current.scrollTop = e.currentTarget.scrollTop;
                 }
               }}
-              rows={2}
+              rows={1}
               value={commentText}
               onChange={(e) => {
                 const val = e.target.value;
                 setCommentText(val);
                 commentTextRef.current = val;
-                const el = e.target;
-                el.style.height = 'auto';
-                el.style.height = Math.max(isMobileMode ? 40 : 48, Math.min(el.scrollHeight, 120)) + 'px';
-                el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden';
+                requestAnimationFrame(autoAdjustHeight);
 
                 // Mention detection logic
-                const cursorRotate = el.selectionStart;
+                const cursorRotate = e.target.selectionStart;
                 const textBeforeCursor = val.slice(0, cursorRotate);
                 const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
@@ -349,7 +475,7 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
                   handleEnrichedSubmit();
                 }
               }}
-              style={{ caretColor: '#f43f5e' }}
+              style={{ caretColor: '#f43f5e', minHeight: isMobileMode ? '40px' : '48px' }}
               placeholder={activePlaceholder}
               className={`w-full rounded-xl bg-slate-100 text-transparent placeholder:text-slate-400 px-4 py-2 text-sm font-medium outline-none transition focus:ring-1 ${isMobileMode ? 'focus:ring-slate-200' : 'focus:ring-gray-300'} resize-none overflow-hidden leading-tight`}
               onClick={(e) => {
@@ -358,7 +484,44 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
               }}
               onMouseDown={(e) => !isMobileMode && e.stopPropagation()}
             />
+            <input
+              type="file"
+              ref={hiddenImageInputRef}
+              className="hidden"
+              accept="image/*"
+              multiple
+              onChange={handleImageChange}
+            />
           </div>
+
+          {imagePreviews.length > 0 && (
+            <div className="flex items-center gap-2 px-2 overflow-x-auto no-scrollbar py-2">
+              {imagePreviews.map((src, idx) => (
+                <div key={idx} className="relative flex-shrink-0 w-14 h-14 group">
+                  <div className="w-full h-full rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 flex items-center justify-center relative">
+                    <ImagePreviewThumbnail
+                      src={src}
+                      onClick={() => {
+                        ctx.setViewerImages?.(imagePreviews);
+                        ctx.setFullImageUrl?.(src);
+                      }}
+                    />
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeImage(idx);
+                    }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                    title="Remove image"
+                  >
+                    <X className="w-3 h-3 stroke-[3]" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-4 px-1">
               <button
@@ -391,6 +554,29 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  hiddenImageInputRef.current?.click();
+                }}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-all active:scale-90"
+                title="Add images"
+              >
+                <ImageIcon className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Trigger voice recording flow
+                  setActiveAttachmentModal?.('voice');
+                }}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-all active:scale-90"
+                title="Record voice note"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
                   setShowEmojiPicker(true);
                 }}
                 className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-all active:scale-90"
@@ -400,21 +586,7 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsCommenting(false);
-                  if (isMobileMode && ctx.setReplyingTo) ctx.setReplyingTo(null);
-                  setShowMentions(false);
-                  setShowAttachmentsModal?.(false);
-                }}
-                className={`px-4 py-2 rounded-full ${isMobileMode ? 'text-xs font-bold text-slate-500 bg-slate-50 border border-slate-100' : 'text-sm text-slate-600 hover:bg-slate-100'}`}
-              >
-                Cancel
-              </button>
+
 
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -423,11 +595,9 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  const text = commentText.trim();
-                  if (!text) return;
-                  handleEnrichedSubmit(text);
+                  handleEnrichedSubmit(commentText);
                 }}
-                disabled={commentPosting || !commentText.trim()}
+                disabled={commentPosting || (!commentText.trim() && imagePreviews.length === 0 && !voiceMetaRef.current)}
                 className={`${isMobileMode ? 'px-6 py-2 bg-rose-500 text-white text-xs font-black shadow-lg shadow-rose-500/20 active:scale-95 disabled:opacity-40 disabled:grayscale transition-all' : 'h-7 flex px-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:brightness-105 active:scale-95 text-sm disabled:opacity-50 disabled:grayscale transition-all'}`}
                 title="Send comment"
               >
@@ -505,8 +675,8 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
             key="comment-input-placeholder"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center gap-3"
+            exit={{ opacity: 0, transition: { duration: 0 } }}
+            className="flex items-center gap-3 bg-white border-t border-slate-200 p-2 md:p-4"
           >
             <button
               onClick={(e) => {
@@ -580,6 +750,20 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
           onInsertToken={handleInsertToken}
         />
       )}
+      {activeAttachmentModal === 'voice' && (
+        <AttachmentVoiceModal
+          key="attachment-voice"
+          ctx={ctx}
+          onClose={() => setActiveAttachmentModal?.(null)}
+          onInsertToken={(token, meta) => {
+            handleInsertToken(token, meta);
+            voiceMetaRef.current = meta;
+          }}
+          onFileSelected={(file) => {
+            pendingAudioFileRef.current = file;
+          }}
+        />
+      )}
       {activeAttachmentModal === 'media' && (
         <AttachmentMediaModal
           key="attachment-media"
@@ -589,9 +773,45 @@ export default function PostCommentComposer({ ctx, isMobileMode, desktopPlacehol
             setShowAttachmentsModal?.(false);
           }}
           onInsertToken={handleInsertToken}
+          onFilesSelected={(files) => {
+            pendingImageFilesRef.current = files;
+          }}
         />
       )}
     </AnimatePresence>
   );
 }
+
+const ImagePreviewThumbnail = ({ src, onClick }: { src: string; onClick: () => void }) => {
+  const [loaded, setLoaded] = React.useState(false);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center">
+      <AnimatePresence>
+        {!loaded && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0 flex items-center justify-center z-10"
+          >
+            <StoqleLoader size={20} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <Image
+        src={src}
+        fill
+        className={`object-cover cursor-pointer hover:brightness-90 transition-all duration-700 ease-out ${loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-110'}`}
+        alt="Selected"
+        onLoad={() => setLoaded(true)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        sizes="56px"
+      />
+    </div>
+  );
+};
 

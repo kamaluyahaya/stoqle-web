@@ -147,7 +147,7 @@ export function logUserActivity(
         headers,
         body: JSON.stringify(activity),
         keepalive: true,
-      }).catch(() => {}); // always silent — never throw
+      }).catch(() => { }); // always silent — never throw
 
       resolve();
     };
@@ -170,21 +170,29 @@ export async function fetchBusinessCategories() {
   });
 }
 
+export async function fetchProductCategories(businessCategory: string) {
+  return safeFetch(`/api/meta/product-categories?business_category=${encodeURIComponent(businessCategory)}`, {
+    method: "GET",
+  });
+}
+
 export async function fetchTrendingProducts(limit = 20, offset = 0) {
   return safeFetch(`/api/activity/trending?limit=${limit}&offset=${offset}`, {
     method: "GET",
   });
 }
 
-export async function fetchPersonalizedFeed(limit = 20, offset = 0, token?: string | null, businessCategory?: string | null, isPartner?: boolean, softCategory?: boolean, relatedVendorIds?: number[]) {
+export async function fetchPersonalizedFeed(limit = 20, offset = 0, token?: string | null, businessCategory?: string | null, isPartner?: boolean, softCategory?: boolean, relatedVendorIds?: number[], v?: number | string, productCategory?: string | null) {
   const headers: any = { "Accept": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  
+
   let url = `/api/activity/personalized?limit=${limit}&offset=${offset}`;
   if (businessCategory) url += `&business_category=${encodeURIComponent(businessCategory)}`;
+  if (productCategory) url += `&product_category=${encodeURIComponent(productCategory)}`;
   if (isPartner) url += `&is_partner=true`;
   if (softCategory) url += `&soft_category=true`;
   if (relatedVendorIds && relatedVendorIds.length > 0) url += `&related_vendor_ids=${relatedVendorIds.join(',')}`;
+  if (v) url += `&v=${v}`;
 
   return safeFetch(url, { method: "GET", headers });
 }

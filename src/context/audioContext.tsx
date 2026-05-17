@@ -22,6 +22,7 @@ const SOUND_MAP: Record<string, string> = {
   out_for_delivery: "/assets/sound/out_for_delivery.mp3",
   shipping: "/assets/sound/Shipping.mp3",
   credited: "/assets/sound/credited.mp3",
+  successful: "/assets/sound/successful.mp3",
 };
 
 export const AudioProvider = ({ children }: { children: React.ReactNode }) => {
@@ -107,6 +108,17 @@ export const AudioProvider = ({ children }: { children: React.ReactNode }) => {
   const registerPlayback = useCallback((id: string | null) => {
     setPlayingAudioId(id);
   }, []);
+
+  // Global listener for post creation success
+  useEffect(() => {
+    const handlePostCreated = () => {
+      playSound("successful");
+    };
+    window.addEventListener("post-created", handlePostCreated);
+    return () => {
+      window.removeEventListener("post-created", handlePostCreated);
+    };
+  }, [playSound]);
 
   return (
     <AudioContext.Provider value={{ 

@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from "react";
 import CategorySelectionModal from "../../input/default-select";
 import { motion, AnimatePresence } from "framer-motion";
+import { fetchMarkets, Market } from "@/src/lib/api/marketApi";
 
 type Props = {
   open: boolean;
@@ -14,16 +15,6 @@ type Props = {
   onSave?: (payloadJson: string) => Promise<void> | void;
 };
 
-// sample market options — replace with your real source if needed
-const MARKET_OPTIONS = [
-  "Kasuwan Barchi",
-  "Central Market",
-  "Kawo Market",
-  "Sabon Gari Market",
-  "Local Market",
-  "Online Shop",
-  "Other",
-];
 
 export default function MarketModal({
   open,
@@ -37,6 +28,7 @@ export default function MarketModal({
   const [saving, setSaving] = useState<boolean>(false);
 
   const [selectedMarket, setSelectedMarket] = useState<string>("");
+  const [marketOptions, setMarketOptions] = useState<string[]>([]);
   const [note, setNote] = useState<string>("");
   const [trustedPartner, setTrustedPartner] = useState<boolean>(isTrustedPartner);
 
@@ -50,33 +42,45 @@ export default function MarketModal({
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
+    const loadData = async () => {
+      try {
+        setLoading(true);
 
-    try {
-      let payloadStr = initialValue?.trim() || localStorage.getItem(prefKey) || "";
-      let parsed = payloadStr ? JSON.parse(payloadStr) : {};
+        // 1. Fetch real market options from DB
+        const markets = await fetchMarkets();
+        const options = markets.map(m => m.market_name);
+        if (!options.includes("Other")) options.push("Other");
+        setMarketOptions(options);
 
-      // Ensure default structure
-      parsed = {
-        from_market: parsed.from_market ?? parsed.market ?? parsed.market_affiliation ?? "",
-        note: parsed.note ?? parsed.notes ?? "",
-        trusted_partner:
-          typeof parsed.trusted_partner !== "undefined"
-            ? Boolean(parsed.trusted_partner)
-            : Boolean(isTrustedPartner),
-      };
+        // 2. Parse initialValue robustly
+        let payloadStr = initialValue?.trim() || localStorage.getItem(prefKey) || "";
+        let parsed = payloadStr ? JSON.parse(payloadStr) : {};
 
-      setSelectedMarket(parsed.from_market);
-      setNote(parsed.note);
-      setTrustedPartner(parsed.trusted_partner);
-    } catch (e) {
-      // fallback to default
-      setSelectedMarket(DEFAULT_PAYLOAD.from_market);
-      setNote(DEFAULT_PAYLOAD.note);
-      setTrustedPartner(Boolean(isTrustedPartner));
-    } finally {
-      setLoading(false);
-    }
+        // Ensure default structure
+        parsed = {
+          from_market: parsed.from_market ?? parsed.market ?? parsed.market_affiliation ?? "",
+          note: parsed.note ?? parsed.notes ?? "",
+          trusted_partner:
+            typeof parsed.trusted_partner !== "undefined"
+              ? Boolean(parsed.trusted_partner)
+              : Boolean(isTrustedPartner),
+        };
+
+        setSelectedMarket(parsed.from_market);
+        setNote(parsed.note);
+        setTrustedPartner(parsed.trusted_partner);
+      } catch (e) {
+        console.error("Failed to load market data", e);
+        // fallback to default
+        setSelectedMarket(DEFAULT_PAYLOAD.from_market);
+        setNote(DEFAULT_PAYLOAD.note);
+        setTrustedPartner(Boolean(isTrustedPartner));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [open, initialValue, prefKey, isTrustedPartner]);
 
   async function handleSave() {
@@ -159,7 +163,7 @@ export default function MarketModal({
                   >
                     <CategorySelectionModal
                       title="Select Market"
-                      options={MARKET_OPTIONS}
+                      options={marketOptions}
                       value={selectedMarket}
                       onSelected={(v) => setSelectedMarket(v)}
                       hintText="Choose a market"

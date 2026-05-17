@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { Camera, FileText, MapPin, ShoppingBag } from "lucide-react";
+import { Camera, FileText, MapPin, ShoppingBag, Mic } from "lucide-react";
 import { PostModalContext } from "../types";
 
 interface ComposerAttachmentsModalProps {
@@ -15,6 +15,7 @@ export default function ComposerAttachmentsModal({ ctx, onClose }: ComposerAttac
 
   const mainOptions = [
     { id: "media", icon: <Camera className="w-6 h-6" />, label: "Media" },
+    { id: "voice", icon: <Mic className="w-6 h-6" />, label: "Voice" },
     { id: "posts", icon: <FileText className="w-6 h-6" />, label: "Posts" },
     { id: "location", icon: <MapPin className="w-6 h-6" />, label: "Location" },
     { id: "products", icon: <ShoppingBag className="w-6 h-6" />, label: "Products" },
@@ -35,7 +36,7 @@ export default function ComposerAttachmentsModal({ ctx, onClose }: ComposerAttac
 
 
         <div className="flex-1 min-h-[200px] relative">
-          <div className="grid grid-cols-4 gap-4 p-6">
+          <div className="grid grid-cols-5 gap-4 p-6">
             {mainOptions.map(opt => (
               <button
                 key={opt.id}

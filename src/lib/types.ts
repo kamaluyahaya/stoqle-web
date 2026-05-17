@@ -34,7 +34,19 @@ export type APIComment = {
   posts_count?: number;
   liked_by_user?: boolean;
   parent_id?: number | null;
+  parent_comment_id?: number | null;
+  parent_author_name?: string;
+  parent_author_handle?: string;
   metadata?: any;
+  // Media attachment fields (stored as separate DB columns, returned via c.*)
+  comment_images?: string | string[] | null;  // JSON array of image URLs or raw array
+  audio_url?: string | null;
+  audio_duration_ms?: number | null;
+  audio_size_bytes?: number | null;
+  waveform_data?: string | number[] | null;   // JSON array of waveform amplitudes
+  voice_detected?: boolean | number | null;
+  audio_status?: 'none' | 'ready' | 'failed' | 'transcribing' | null;
+  transcription?: string | null;
 };
 
 export type Post = {

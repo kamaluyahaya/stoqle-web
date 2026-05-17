@@ -15,6 +15,7 @@ import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
 import { useCache } from "@/src/context/cacheContext";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
 import { SHOP_CACHE } from "@/src/lib/cache";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
 
 // Icons for bottom navigation
 import { HomeIcon, ListBulletIcon, CalendarDaysIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
@@ -57,11 +58,13 @@ export default function VendorShopPage() {
     const [clickPos, setClickPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [columns, setColumns] = useState(2);
     const [hasUnviewedReleases, setHasUnviewedReleases] = useState(false);
+    const restoredRef = useRef(false);
 
     // Share Modal State
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [shareUrl, setShareUrl] = useState("");
     const [isSharing, setIsSharing] = useState(false);
+    const [isNavigating, setIsNavigating] = useState(false);
 
     const newestReleaseId = useMemo(() => {
         if (!Array.isArray(products) || !products.length) return 0;
@@ -72,11 +75,11 @@ export default function VendorShopPage() {
     const trackedVisitRef = useRef(false);
     useEffect(() => {
         if (!bizSlug || !profileApi?.business || trackedVisitRef.current) return;
-        
+
         const bizId = profileApi.business.business_id || profileApi.business.id;
         const ownerId = profileApi.business.user_id;
         const currentUserId = auth?.user?.user_id ? String(auth.user.user_id) : null;
-        
+
         // Prevent owners from inflating their own numbers
         if (currentUserId === String(ownerId)) {
             trackedVisitRef.current = true;
@@ -84,42 +87,44 @@ export default function VendorShopPage() {
         }
 
         trackedVisitRef.current = true;
-        
+
         setTimeout(() => {
             try {
-              let sessionId = localStorage.getItem('stoqle_guest_session');
-              if (!sessionId) {
-                  sessionId = 'sg_' + Math.random().toString(36).substring(2, 15);
-                  localStorage.setItem('stoqle_guest_session', sessionId);
-              }
-              
-              const headers: any = { "Content-Type": "application/json" };
-              if (auth.token) headers.Authorization = `Bearer ${auth.token}`;
-              
-              fetch(`${API_BASE_URL.replace(/\/$/, "")}/api/business/${bizId}/visit`, {
-                  method: 'POST',
-                  headers,
-                  body: JSON.stringify({ visitor_id: currentUserId, session_id: sessionId })
-              }).catch(() => {});
-            } catch (err) {}
+                let sessionId = localStorage.getItem('stoqle_guest_session');
+                if (!sessionId) {
+                    sessionId = 'sg_' + Math.random().toString(36).substring(2, 15);
+                    localStorage.setItem('stoqle_guest_session', sessionId);
+                }
+
+                const headers: any = { "Content-Type": "application/json" };
+                if (auth.token) headers.Authorization = `Bearer ${auth.token}`;
+
+                fetch(`${API_BASE_URL.replace(/\/$/, "")}/api/business/${bizId}/visit`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ visitor_id: currentUserId, session_id: sessionId })
+                }).catch(() => { });
+            } catch (err) { }
         }, 1500);
     }, [bizSlug, profileApi?.business, auth?.user]);
 
     useEffect(() => {
         if (!bizSlug || !newestReleaseId) return;
         const lastSeen = localStorage.getItem(`shop_last_seen_${bizSlug}`);
-        if (!lastSeen || Number(lastSeen) < newestReleaseId) {
-            setHasUnviewedReleases(true);
-        } else {
-            setHasUnviewedReleases(false);
-        }
 
-        // If currently on New release tab, mark as seen
+        // If currently on New release tab, mark everything as seen
         if (activeNav === "New release") {
             localStorage.setItem(`shop_last_seen_${bizSlug}`, String(newestReleaseId));
-            setHasUnviewedReleases(false);
+            if (hasUnviewedReleases) setHasUnviewedReleases(false);
+            return;
         }
-    }, [bizSlug, newestReleaseId, activeNav]);
+
+        // Otherwise check if there are unviewed items
+        const hasUnviewed = !lastSeen || Number(lastSeen) < newestReleaseId;
+        if (hasUnviewed !== hasUnviewedReleases) {
+            setHasUnviewedReleases(hasUnviewed);
+        }
+    }, [bizSlug, newestReleaseId, activeNav, hasUnviewedReleases]);
 
     useEffect(() => {
         const updateColumns = () => {
@@ -180,8 +185,12 @@ export default function VendorShopPage() {
             }).catch(console.error);
         }
 
+        // 2. Tab Restoration Logic - Runs exactly once per bizSlug to hydrate state
         const savedTab = getActiveTab(`shop_${bizSlug}_nav`);
-        if (savedTab) setActiveNav(savedTab as any);
+        if (savedTab && savedTab !== activeNav && !restoredRef.current) {
+            setActiveNav(savedTab as any);
+        }
+        restoredRef.current = true;
 
         // 3. Background Data Fetching (Stale-while-Revalidate)
         async function loadShopSilently() {
@@ -225,7 +234,19 @@ export default function VendorShopPage() {
     // Save active nav state
     useEffect(() => {
         if (bizSlug) setActiveTab(`shop_${bizSlug}_nav`, activeNav);
-    }, [activeNav, bizSlug]);
+
+        // Lock body scroll when in Categories tab to allow independent internal scrolling
+        if (activeNav === "Categories") {
+            document.body.style.overflow = "hidden";
+            window.scrollTo({ top: 0, behavior: 'instant' as any });
+        } else {
+            document.body.style.overflow = "auto";
+        }
+
+        return () => {
+            document.body.style.overflow = "auto";
+        };
+    }, [activeNav, bizSlug, setActiveTab]);
 
     const updateUrl = (productId: number | string | null, replace: boolean = false, productSlug?: string) => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -470,7 +491,7 @@ export default function VendorShopPage() {
             <article
                 key={p.product_id}
                 onClick={(e) => handleProductClick(p.product_id, e, undefined, undefined, false, p.slug || p.product_slug)}
-                className="bg-white rounded-[0.5rem] overflow-hidden mx-2 border border-slate-100 flex flex-col group cursor-pointer"
+                className="bg-white rounded-[0.4rem] overflow-hidden  border border-slate-100 flex flex-col group cursor-pointer"
             >
                 <div className="relative aspect-square bg-slate-100">
                     <Image
@@ -504,8 +525,8 @@ export default function VendorShopPage() {
                                 {p.promo_title || p.sale_type || "Sale"} {promo}% OFF
                             </span>
                         ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                            <span className="text-[9px] text-rose-500 font-bold uppercase tracking-tight">
-                                Only {Number(p.total_quantity)} Left
+                            <span className="text-[9px] text-rose-500 font-bold ">
+                                {Number(p.total_quantity) < 1 ? "Sold out" : `Only ${p.total_quantity} Left`}
                             </span>
                         ) : hasSevenDayReturn ? (
                             <span className="text-[9px] text-blue-600 border-blue-500 border-[0.2px] px-1.5 py-0.5 ">
@@ -534,9 +555,10 @@ export default function VendorShopPage() {
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
                 onShare={handleShopShare}
+                onNavigate={() => setIsNavigating(true)}
             />
 
-            <main className="px-4 relative bg-white rounded-[0.5rem] p-4 -mt-6 z-10">
+            <main className="px-2 relative bg-white rounded-[0.5rem] p-2 -mt-6 z-10">
 
                 {/* HOMEPAGE CONTENT */}
                 {activeNav === "Home" && (
@@ -564,7 +586,7 @@ export default function VendorShopPage() {
 
                         {loading ? <ShimmerGrid count={8} /> : (
                             <div
-                                className="grid gap-1 sm:gap-4"
+                                className="grid gap-1 sm:gap-1"
                                 style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
                             >
                                 {filteredProducts.map(renderProductItem)}
@@ -575,9 +597,9 @@ export default function VendorShopPage() {
 
                 {/* CATEGORIES CONTENT */}
                 {activeNav === "Categories" && (
-                    <div className="flex gap-4 h-[calc(100vh-280px)]">
+                    <div className="flex gap-1 h-[calc(100dvh-200px)] sm:h-[calc(100vh-220px)]">
                         {/* Left sidebar - Sidebar stays left even on mobile but we'll use a narrow column */}
-                        <div className="w-1/4 min-w-[100px] border-r border-slate-200 overflow-y-auto pr-2 no-scrollbar">
+                        <div className="w-1/4 min-w-[100px] border-r border-slate-200 overflow-y-auto no-scrollbar">
                             {loading ? (
                                 <div className="space-y-4 pt-4">
                                     <div className="h-4 w-full bg-slate-100 animate-pulse rounded" />
@@ -590,7 +612,7 @@ export default function VendorShopPage() {
                                     <button
                                         key={cat}
                                         onClick={() => setSelectedCategory(cat)}
-                                        className={`w-full text-left py-3 px-2 text-xs font-bold rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-rose-50 text-rose-500" : "text-slate-600 hover:bg-slate-100"}`}
+                                        className={`w-full text-left text-xs font-bold px-2 py-2 rounded-lg mb-1 transition-all ${selectedCategory === cat ? "bg-rose-50 text-rose-500" : "text-slate-600 hover:bg-slate-100"}`}
                                     >
                                         {cat}
                                     </button>
@@ -598,9 +620,9 @@ export default function VendorShopPage() {
                             )}
                         </div>
                         {/* Right products */}
-                        <div className="flex-1 overflow-y-auto no-scrollbar">
+                        <div className="flex-1 overflow-y-auto no-scrollbar pb-40">
                             <div
-                                className="grid gap-3"
+                                className="grid gap-1"
                                 style={{ gridTemplateColumns: `repeat(${columns > 3 ? columns - 1 : 2}, minmax(0, 1fr))` }}
                             >
                                 {filteredProducts.map(renderProductItem)}
@@ -625,7 +647,7 @@ export default function VendorShopPage() {
                                             window.scrollTo({ top: y, behavior: 'smooth' });
                                         }
                                     }}
-                                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 rounded-full text-[10px] font-bold text-slate-600 whitespace-nowrap transition-all shadow-sm"
+                                    className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 rounded-full text-[10px] font-bold text-slate-600 whitespace-nowrap transition-all shadow-sm"
                                 >
                                     {group.label}
                                 </button>
@@ -634,12 +656,12 @@ export default function VendorShopPage() {
 
                         {groupedByDate.map((group: any, idx: number) => (
                             <div key={group.label + idx} id={`date-group-${idx}`} className="">
-                                <div className="flex items-center justify-between mb-3 bg-white px-3 py-2 rounded-lg border border-slate-100 sticky top-12 z-10 transition-all">
+                                <div className="flex items-center justify-between mb-3 bg-white px-2 py-2 rounded border border-slate-100 sticky top-12 z-10 transition-all">
                                     <h2 className="text-sm font-bold text-slate-800  tracking-tight">{group.label}</h2>
                                     <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">{group.products.length} Products</span>
                                 </div>
                                 <div
-                                    className="grid gap-4"
+                                    className="grid gap-0 gap-1"
                                     style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
                                 >
                                     {group.products.map(renderProductItem)}
@@ -717,11 +739,22 @@ export default function VendorShopPage() {
             {/* FLOATING CART BUTTON */}
             <button
                 id="cart-icon-ref"
-                onClick={() => router.push('/cart')}
+                onClick={() => {
+                    setIsNavigating(true);
+                    router.push('/cart');
+                }}
                 className="fixed bottom-20 right-6 z-[998] bg-rose-500 text-white p-2.5 rounded-full shadow-2xl hover:bg-rose-700 transition-all active:scale-95 flex items-center justify-center border-4 border-white"
             >
                 <ShoppingCartIcon className="w-5 h-5" />
             </button>
+
+            {isNavigating && (
+                <div className="fixed inset-0 z-[9999] bg-transparent flex items-center justify-center animate-in fade-in duration-200">
+                    <div className="flex flex-col items-center gap-4">
+                        <StoqleLoader size={30} />
+                    </div>
+                </div>
+            )}
 
             {shareModalOpen && (
                 <PostShareModal

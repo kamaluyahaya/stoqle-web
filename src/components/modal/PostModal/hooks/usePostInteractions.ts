@@ -17,6 +17,10 @@ interface UsePostInteractionsProps {
   isPreview?: boolean;
   onToggleLikeProp: (postId: string | number) => void;
   setIsPaused?: React.Dispatch<React.SetStateAction<boolean>>;
+  initialIsFollowing?: boolean;
+  onToggleFollow?: (val: boolean) => void;
+  targetUserId?: string | number | null;
+  isModalFullyVisible: boolean;
 }
 
 export function usePostInteractions({
@@ -30,11 +34,15 @@ export function usePostInteractions({
   setReelsList,
   isPreview,
   onToggleLikeProp,
-  setIsPaused
+  setIsPaused,
+  initialIsFollowing,
+  onToggleFollow,
+  targetUserId,
+  isModalFullyVisible
 }: UsePostInteractionsProps) {
   const [postLiked, setPostLiked] = useState<boolean>(false);
   const [postLikeCount, setPostLikeCount] = useState<number>(0);
-  const [isFollowing, setIsFollowing] = useState<boolean>(false);
+  const [isFollowing, setIsFollowing] = useState<boolean>(initialIsFollowing ?? false);
   const [followLoading, setFollowLoading] = useState<boolean>(false);
   const [showBurst, setShowBurst] = useState(false);
   const [activeHeartPops, setActiveHeartPops] = useState<{ id: string, x: number, y: number, rotate: number, offsetX: number, offsetY: number }[]>([]);
@@ -57,16 +65,29 @@ export function usePostInteractions({
 
   // Sync with prop changes or reel changes
   useEffect(() => {
-    const activeItem = isMobileReels ? reelsList[currentReelIndex] : post;
+    const activeItem = isMobileReels ? (reelsList[currentReelIndex] || post) : post;
     if (!activeItem) return;
 
     setPostLiked(Boolean(activeItem.liked_by_user ?? activeItem.liked_by_me ?? activeItem.liked ?? false));
     setPostLikeCount(Number(activeItem.likes_count ?? activeItem.total_likes ?? activeItem.likeCount ?? activeItem.likesCount ?? 0));
-    setIsFollowing(Boolean(activeItem.is_following ?? false));
-  }, [post.id, currentReelIndex, reelsList.length, isMobileReels]);
+    
+    // 🚀 Robust Follow State Detection:
+    // 1. If we are on a profile (targetUserId provided) AND the current post author
+    //    matches that profile ID, we prioritize the profile's 'initialIsFollowing' status.
+    // 2. Otherwise, we rely on the post object's own 'is_following' flag.
+    const authorId = activeItem?.user_id || activeItem?.author_id || activeItem?.user?.id;
+    const isMainProfileUser = targetUserId && authorId && String(targetUserId) === String(authorId);
+    const postFollowStatus = Boolean(activeItem.is_following ?? activeItem.author_is_followed ?? activeItem.user?.is_following ?? false);
+
+    if (isMainProfileUser && typeof initialIsFollowing === 'boolean') {
+      setIsFollowing(initialIsFollowing || postFollowStatus);
+    } else {
+      setIsFollowing(postFollowStatus);
+    }
+  }, [post.id, currentReelIndex, reelsList.length, isMobileReels, initialIsFollowing]);
 
   const toggleFollowAuthor = useCallback(async () => {
-    const activeItem = isMobileReels ? reelsList[currentReelIndex] : post;
+    const activeItem = isMobileReels ? (reelsList[currentReelIndex] || post) : post;
     const authorId = activeItem?.user_id || activeItem?.author_id || activeItem?.user?.id;
     if (!authorId || isPostOwner) return;
 
@@ -84,6 +105,7 @@ export function usePostInteractions({
       if (res && res.status === "success") {
         const nextFollowing = !isFollowing;
         setIsFollowing(nextFollowing);
+        if (onToggleFollow) onToggleFollow(nextFollowing);
         if (isMobileReels) {
           setReelsList(prev => prev.map(item => {
             const itemId = item.user_id || item.author_id || item.user?.id;
@@ -103,6 +125,7 @@ export function usePostInteractions({
 
   // Socket.io for real-time like updates
   useEffect(() => {
+    if (!isModalFullyVisible) return;
     const socket = io(API_BASE_URL, {
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -157,7 +180,7 @@ export function usePostInteractions({
     const ok = await auth.ensureAccountVerified();
     if (!ok) return;
 
-    const activeItem = isMobileReels ? reelsList[currentReelIndex] : post;
+    const activeItem = isMobileReels ? (reelsList[currentReelIndex] || post) : post;
     const activeId = activeItem.social_post_id ?? activeItem.id;
     const token = getToken();
     const oldLiked = postLiked;

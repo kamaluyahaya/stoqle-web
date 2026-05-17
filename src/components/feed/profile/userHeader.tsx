@@ -2,12 +2,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useLayoutEffect, useState, useRef, useCallback } from "react";
+import { useInView } from 'react-intersection-observer';
+import Image from "next/image";
 import PostModal from "../../modal/postModal"; // adjust path if needed
 import { useAuth } from "@/src/context/authContext";
 import { useRouter, notFound } from "next/navigation";
 import Header from "./header";
 import ShimmerGrid from "../../shimmer";
-import ImageViewer from "../../modal/imageViewer";
+import ProfileImageViewer from "../../modal/ProfileImageViewer";
 import { FaHeart, FaRegHeart, FaImages } from "react-icons/fa";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { fetchBusinessProducts, fetchProductById, toggleProductLike } from "@/src/lib/api/productApi";
@@ -23,13 +25,15 @@ import SocialModal from "../../modal/socialModal";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { toggleSocialPostLike } from "@/src/lib/api/social";
 import { toast } from "sonner";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
+import CachedImage from "../../common/CachedImage";
 
 
 type ApiPost = any;
 
-type Props = { 
-  postCount?: number; 
-  userId?: string | number; 
+type Props = {
+  postCount?: number;
+  userId?: string | number;
   identifierType?: 'slug' | 'stoqle_id' | 'user_id';
   initialPostId?: string;
 };
@@ -127,7 +131,9 @@ const mapApiPost = (p: any): Post => {
     original_audio_url: p?.original_audio_url,
     original_video_url: p?.original_video_url,
     post_public_id: p?.post_public_id,
+    comment_count: p?.comment_count ?? p?.comments_count ?? p?.commentCount ?? 0,
     allMedia,
+    is_following: Boolean(p?.author_is_followed ?? p?.is_followed_by_me ?? p?.is_following ?? p?.user?.is_following ?? false),
   };
 };
 
@@ -174,7 +180,7 @@ const PostCard = React.memo(({
       onClick={() => openPostWithUrl(post)}
       className="group flex flex-col sm:rounded-xl rounded-md bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
-      <div className="relative w-full bg-slate-200 overflow-hidden post-media">
+      <div className="relative w-full  bg-slate-200 overflow-hidden post-media min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]">
 
         {post.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
@@ -183,22 +189,16 @@ const PostCard = React.memo(({
         )}
 
         {post.isVideo && (
-          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
+          <div className="absolute top-3 right-3 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-black/50">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white ml-0.5">
               <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
             </svg>
           </div>
         )}
 
-        {!post.isVideo && post.allMedia && post.allMedia.length > 1 && (
-          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-            <FaImages className="text-white text-[10px]" />
-          </div>
-        )}
-
         {post.status === 'processing' && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
-            <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin mb-2" />
+            <StoqleLoader size={24} className="mb-2" />
             <span className="text-[10px] font-bold text-white px-2 text-center drop-shadow-md">
               Processing your video...
             </span>
@@ -207,7 +207,7 @@ const PostCard = React.memo(({
 
         {post.coverType === "note" && !post.src ? (
           <div
-            className="w-full  h-[250px] sm:h-[300px]  flex items-center justify-center p-6 relative overflow-hidden"
+            className="w-full h-[300px] sm:h-[330px] flex items-center justify-center p-6 relative overflow-hidden"
             style={getNoteStyles(post.noteConfig)}
           >
             {(() => {
@@ -232,11 +232,13 @@ const PostCard = React.memo(({
             </div>
           </div>
         ) : (
-          <img
-            src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
-            alt={post.caption}
-            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
-          />
+          <div className="w-full">
+            <CachedImage
+              src={post.thumbnail || (!post.isVideo ? post.src : "") || NO_IMAGE_PLACEHOLDER}
+              alt={post.caption || "Post thumbnail"}
+              className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
+            />
+          </div>
         )}
       </div>
 
@@ -251,7 +253,7 @@ const PostCard = React.memo(({
               className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
               onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar); }}
             >
-              <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
+              <Image src={post.user.avatar} width={20} height={20} className="rounded-full object-cover" alt={post.user.name} />
             </div>
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <span className="truncate text-[11px] font-semibold text-slate-400 capitalize">
@@ -379,7 +381,7 @@ const ProductCard = React.memo(({
       onClick={(e) => handleProductClick(p.product_id, p.business_name, e)}
       className="group flex flex-col rounded-lg bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
-      <div className="relative w-full bg-slate-50 overflow-hidden post-media">
+      <div className="relative w-full bg-slate-50 overflow-hidden post-media min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]">
 
         {p.isPinned && (
           <div className="absolute top-3 left-3 z-20 flex items-center px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-md">
@@ -393,14 +395,15 @@ const ProductCard = React.memo(({
             muted
             loop
             playsInline
-            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
+            className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
           />
         ) : (
-          <img
+          <CachedImage
             src={formatUrl(p.first_image)}
             alt={p.title}
-            className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110 relative z-[1]"
+            className="object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
           />
+
         )}
         {p.product_video && (
           <div className="absolute top-3 right-3 bg-black/30 backdrop-blur-md rounded-full z-10 p-1">
@@ -411,14 +414,14 @@ const ProductCard = React.memo(({
         )}
         {fetchingProduct && (
           <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+            <StoqleLoader size={18} />
           </div>
         )}
 
         {/* Placeholder frame indicator */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
+            <StoqleLoader size={20} className="opacity-40" />
           </div>
         </div>
       </div>
@@ -606,16 +609,18 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
   const suggestionTriggered = useRef(false);
   const scrollTracker = useRef(0);
   const [isMiniHeaderVisible, setIsMiniHeaderVisible] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
+  const { ref: contentRef, inView: contentInView } = useInView({ threshold: 0.1, triggerOnce: false });
 
   useEffect(() => {
     const fc = Number(profileApi?.stats?.followers ?? profileApi?.stats?.followers_count ?? 0);
     setFollowersCount(fc);
 
     if (profileApi) {
-      setIsFollowing(Boolean(profileApi.is_followed_by_me ?? profileApi.is_followed ?? false));
-      setIsBlocked(Boolean(profileApi.is_blocked_by_me ?? profileApi.is_blocked ?? false));
+      setIsFollowing(Boolean(profileApi.is_following ?? profileApi.is_followed_by_me ?? profileApi.is_followed ?? false));
+      setIsBlocked(Boolean(profileApi.is_blocked ?? profileApi.is_blocked_by_me ?? false));
     }
   }, [profileApi]);
 
@@ -823,7 +828,13 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
   useEffect(() => {
     const handleScroll = () => {
       // Suggestion logic - only for businesses and once profile is loaded
-      if (!isOwner && profileApi && profileApi.business && !isFollowing && !suggestionTriggered.current) {
+      const alreadyFollowing = isFollowing ||
+        profileApi?.is_followed_by_me ||
+        profileApi?.is_followed ||
+        profileApi?.is_following ||
+        profileApi?.user?.is_following;
+
+      if (!isOwner && profileApi && profileApi.business && !alreadyFollowing && !suggestionTriggered.current && !profileLoading) {
         if (window.scrollY > 400 && !suggestionTriggered.current) {
           suggestionTriggered.current = true;
           setShowFollowSuggestion(true);
@@ -916,13 +927,14 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        let endpoint =
+        const endpoint =
           viewUserId === "me"
             ? `${base.replace(/\/$/, "")}/api/auth/profile/me`
             : `${base.replace(/\/$/, "")}/api/auth/users/${encodeURIComponent(viewUserId)}`;
 
-        if (viewUserId !== "me" && identifierType) {
-          endpoint += `?identifier_type=${identifierType}`;
+        // ⚡ OFFLINE GUARD
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          throw new Error("offline");
         }
 
         const res = await fetch(endpoint, { signal: controller.signal, headers });
@@ -984,8 +996,14 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         }
       } catch (err: any) {
         if (err.name === "AbortError") return;
-        console.error("Failed to fetch profile:", err);
-        if (!cancelled) setProfileError(err.message ?? "Failed to load profile");
+
+        let errorMsg = err.message ?? "Failed to load profile";
+        if (err.message === "offline" || err.message?.toLowerCase().includes("failed to fetch")) {
+          errorMsg = "Network error: Please check your connection";
+        }
+
+        console.warn("[Profile] Load error:", errorMsg);
+        if (!cancelled) setProfileError(errorMsg);
       } finally {
         if (!cancelled) setProfileLoading(false);
       }
@@ -1000,7 +1018,13 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
 
   // fetch liked items if owner selects "Liked" tab
   useEffect(() => {
-    if (tabs[activeTabIndex] !== "Liked" || !isOwner) return;
+    if (tabs[activeTabIndex] !== "Liked" || !isOwner || !contentInView) return;
+
+    const tabKey = `liked_${viewUserId}`;
+    if (fetchedTabs.current.has(tabKey) && likedItems.length > 0) {
+      setLikedLoading(false);
+      return;
+    }
 
     let cancelled = false;
     async function loadLikedItems() {
@@ -1031,6 +1055,7 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         });
 
         setLikedItems(merged);
+        fetchedTabs.current.add(tabKey);
       } catch (err) {
         console.error("Failed to load liked items:", err);
       } finally {
@@ -1039,17 +1064,23 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
     }
     loadLikedItems();
     return () => { cancelled = true; };
-  }, [activeTabIndex, tabs, isOwner]);
+  }, [activeTabIndex, tabs, isOwner, viewUserId]);
 
-  // 🛍️ Lazy-load vendor products — only when the "Products" tab is active
+  // 🛍️ Load vendor products — when the "Products" tab is active OR to show the mobile header preview
   useEffect(() => {
-    // We fetch products if the user is a business owner, to show them in the store section of the header.
+    const isProductsTab = tabs[activeTabIndex] === "Products";
     const businessId = profileApi?.business?.business_id || profileApi?.business?.id;
-    if (!businessId || !profileApi?.is_business_owner) return;
+
+    // Trigger fetch if:
+    // 1. We are on the Products tab
+    // 2. AND the content area is in view
+    const shouldFetch = isProductsTab && contentInView;
+
+    if (!shouldFetch || !businessId || !profileApi?.is_business_owner) return;
 
     const tabKey = `products_${viewUserId}`;
     // Only fetch once per session (guard by fetchedTabs)
-    if (fetchedTabs.current.has(tabKey)) {
+    if (fetchedTabs.current.has(tabKey) && vendorProducts.length > 0) {
       setProductsLoading(false);
       return;
     }
@@ -1079,15 +1110,15 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         setVendorProducts(sortedProducts);
 
         fetchedTabs.current.add(tabKey);
-      } catch (err) {
-        console.error("Failed to load products", err);
+      } catch (err: any) {
+        console.warn("Failed to load products:", err.message);
         fetchedTabs.current.add(tabKey);
       } finally {
         setProductsLoading(false);
       }
     };
     loadVendorProducts();
-  }, [profileApi?.business?.business_id, profileApi?.is_business_owner, viewUserId]);
+  }, [activeTabIndex, tabs, profileApi?.business?.business_id, profileApi?.is_business_owner, viewUserId]);
 
   const handleFollow = async () => {
     if (!token) {
@@ -1118,7 +1149,7 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
   useEffect(() => {
     const activeTabName = tabs[activeTabIndex];
     const isPostsTab = activeTabName === "Notes" || activeTabName === "Posts";
-    if (!isPostsTab) return;
+    if (!isPostsTab || !contentInView) return;
 
     const tabKey = `posts_${viewUserId}`;
     const cached = getCachedProfile(String(viewUserId));
@@ -1201,10 +1232,16 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         fetchedTabs.current.add(tabKey);
       } catch (err: any) {
         if (err.name === "AbortError") return;
-        console.error("Failed to load posts:", err);
+
+        let errorMsg = err.message ?? "Failed to load posts";
+        if (err.message?.toLowerCase().includes("failed to fetch")) {
+          errorMsg = "Network error: Could not load posts";
+        }
+
+        console.warn("[ProfilePosts] Load error:", errorMsg);
         if (!cancelled) {
-          setPostsError(err.message ?? "Failed to load posts");
-          fetchedTabs.current.add(tabKey); // Mark fetched even on error so we don't infinitely retry
+          setPostsError(errorMsg);
+          fetchedTabs.current.add(tabKey);
         }
       } finally {
         if (!cancelled) setPostsLoading(false);
@@ -1589,10 +1626,10 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
       <div ref={tabsInnerRef} className="flex gap-8  overflow-hidden scrollbar-hide py-1">
         {profileLoading ? (
           <>
-            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
-            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
-            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
-            <div className="h-4 w-12 bg-slate-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-gray-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-gray-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-gray-100 animate-pulse rounded my-2" />
+            <div className="h-4 w-12 bg-gray-100 animate-pulse rounded my-2" />
           </>
         ) : (
           tabs.map((t, i) => (
@@ -1621,17 +1658,18 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
   );
 
   const TabPanes = (
-    <div className="relative overflow-hidden w-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <div ref={contentRef} className="relative overflow-hidden w-full min-h-[600px]" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <div className="flex transition-transform duration-450 ease-in-out items-start" style={{ width: `${tabs.length * 100}%`, transform: `translateX(-${activeTabIndex * (100 / tabs.length)}%)` }}>
 
         {/* Notes pane */}
         <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Notes" ? "auto" : "0", overflow: "hidden" }}>
           {postsLoading ? (
-            <ShimmerGrid count={10} />
+            <div className="flex justify-center py-12 min-h-[200px]">
+              <StoqleLoader size={30} />
+            </div>
           ) : notePosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No notes"
-                className="lg:w-30 lg:h-40 w-20 h-20 object-contain mb-4 opacity-80" />
+              <Image src="/assets/images/post.png" alt="No notes" width={160} height={160} className="object-cover mb-4 opacity-80" />
               <p className="text-sm font-medium">No note found.</p>
             </div>
           ) : (
@@ -1654,7 +1692,7 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
             <ShimmerGrid count={10} />
           ) : mediaPosts.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-              <img src="/assets/images/post.png" alt="No posts" className="lg:w-30 lg:h-40 w-20 h-20 object-contain mb-4 opacity-80" />
+              <Image src="/assets/images/post.png" alt="No posts" width={160} height={160} className="object-cover mb-4 opacity-80" />
               <p className="text-sm font-medium">No posts found.</p>
               {isOwner && (
                 <button
@@ -1690,10 +1728,12 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         {profileApi?.is_business_owner && profileApi?.business?.business_id && (
           <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Products" ? "auto" : "0", overflow: "hidden" }}>
             {productsLoading ? (
-              <ShimmerGrid count={10} />
+              <div className="flex justify-center py-12 min-h-[200px]">
+                <StoqleLoader size={30} />
+              </div>
             ) : vendorProducts.length === 0 ? (
               <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                <img src="/assets/images/post.png" alt="No products" className="lg:w-30 lg:h-40 w-20 h-20 object-contain mb-4 opacity-80" />
+                <Image src="/assets/images/post.png" alt="No products" width={160} height={160} className="object-contain mb-4 opacity-80" />
                 <p className="text-sm font-medium">Vendor has no product yet!.</p>
               </div>
             ) : (
@@ -1717,10 +1757,12 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
         {isOwner && tabs.includes("Liked") && (
           <div style={{ width: `${100 / tabs.length}%`, height: tabs[activeTabIndex] === "Liked" ? "auto" : "0", overflow: "hidden" }}>
             {likedLoading ? (
-              <ShimmerGrid count={10} />
+              <div className="flex justify-center py-12 min-h-[200px]">
+                <StoqleLoader size={30} />
+              </div>
             ) : likedItems.length === 0 ? (
               <div className="py-16 flex flex-col items-center justify-center text-center text-slate-500">
-                <img src="/assets/images/post.png" alt="No liked items" className="w-40 h-40 object-contain mb-4 opacity-80" />
+                <Image src="/assets/images/post.png" alt="No liked items" width={160} height={160} className="object-contain mb-4 opacity-80" />
                 <p className="text-sm font-medium">You haven't liked anything yet.</p>
               </div>
             ) : (
@@ -1760,9 +1802,13 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
           const business = profileApi?.business;
           if (business) {
             const slug = business.business_slug || (business.business_name ? slugify(business.business_name) : null);
-            if (slug) router.push(`/shop/${slug}`);
+            if (slug) {
+              setIsNavigating(true);
+              router.push(`/shop/${slug}`);
+            }
           }
         }}
+        onNavigate={() => setIsNavigating(true)}
         onFollowToggle={(val) => {
           setIsFollowing(val);
           setFollowersCount(prev => val ? prev + 1 : Math.max(0, prev - 1));
@@ -1792,6 +1838,12 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
             onClose={closeModal}
             onToggleLike={toggleLike}
             targetUserId={profileApi?.user?.user_id || profileApi?.user?.id || (viewUserId === "me" ? auth?.user?.user_id : viewUserId)}
+            isFollowing={isFollowing}
+            onToggleFollow={(val) => {
+              setIsFollowing(val);
+              setFollowersCount(prev => val ? prev + 1 : Math.max(0, prev - 1));
+            }}
+            reelsList={mediaPosts.filter(p => p.isVideo)}
           />
         )}
       </AnimatePresence>
@@ -1807,7 +1859,14 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
           onProductClick={handleProductClick}
         />
       )}
-      {fullImageUrl && <ImageViewer src={fullImageUrl} onClose={() => setFullImageUrl(null)} />}
+      {fullImageUrl && (
+        <ProfileImageViewer
+          open={!!fullImageUrl}
+          images={fullImageUrl ? [fullImageUrl] : []}
+          onClose={() => setFullImageUrl(null)}
+          profileUserId={profileApi?.user?.user_id ?? profileApi?.business?.user_id}
+        />
+      )}
 
       {socialModalOpen && (
         <SocialModal
@@ -1832,7 +1891,7 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
             {/* Left: Info */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="h-10 w-10 rounded-full overflow-hidden border border-slate-100 shrink-0">
-                <img
+                <Image
                   src={
                     profileApi?.business?.business_logo ??
                     profileApi?.business?.logo ??
@@ -1840,7 +1899,9 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
                     profileApi?.user?.avatar ??
                     DEFAULT_AVATAR
                   }
-                  className="w-full h-full object-cover"
+                  width={40}
+                  height={40}
+                  className="rounded-full object-cover"
                   alt={displayName}
                 />
               </div>
@@ -1865,6 +1926,14 @@ export default function UserHeader({ postCount = 12, userId, identifierType, ini
           </motion.div>
         )}
       </AnimatePresence>
+
+      {(isNavigating || fetchingProductId !== null) && (
+        <div className="fixed inset-0 z-[10000] bg-transparent flex items-center justify-center animate-in fade-in duration-200">
+          <div className="flex flex-col items-center gap-4">
+            <StoqleLoader size={30} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

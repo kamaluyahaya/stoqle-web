@@ -89,67 +89,74 @@ export default function ProfileCropperModal({
     }
   };
 
-  if (!isOpen || !image) return null;
-
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[10005] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
-      >
-        <div className="relative w-full max-w-lg aspect-square bg-[#1a1a1a] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-white/10 z-10 bg-[#1a1a1a]/80 backdrop-blur">
-            <h3 className="text-white font-bold">
-              {cropShape === 'round' ? 'Crop Profile Picture' : 'Crop Background Photo'}
-            </h3>
-            <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
-              <XMarkIcon className="w-6 h-6" />
-            </button>
-          </div>
+      {isOpen && image && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-[1000000] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+        >
+          <div 
+            className="relative w-full max-w-lg aspect-square bg-[#1a1a1a] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-white/10 z-10 bg-[#1a1a1a]/80 backdrop-blur">
+              <h3 className="text-white font-bold">
+                {cropShape === 'round' ? 'Crop Profile Picture' : 'Crop Background Photo'}
+              </h3>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onClose(); }} 
+                className="text-white/60 hover:text-white transition-colors p-2"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
 
-          <div className="relative flex-1 bg-black">
-            <Cropper
-              image={image}
-              crop={crop}
-              zoom={zoom}
-              aspect={aspect}
-              cropShape={cropShape}
-              showGrid={false}
-              onCropChange={onCropChange}
-              onCropComplete={onCropCompleteCallback}
-              onZoomChange={onZoomChange}
-            />
-          </div>
-
-          <div className="p-6 bg-[#1a1a1a] flex flex-col gap-4 z-10">
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-xs font-bold text-white/40  tracking-widest">
-                <span>Zoom</span>
-                <span>{Math.round(zoom * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                value={zoom}
-                min={1}
-                max={3}
-                step={0.1}
-                aria-labelledby="Zoom"
-                onChange={(e) => setZoom(Number(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+            <div className="relative flex-1 bg-black">
+              <Cropper
+                image={image}
+                crop={crop}
+                zoom={zoom}
+                aspect={aspect}
+                cropShape={cropShape}
+                showGrid={false}
+                onCropChange={onCropChange}
+                onCropComplete={onCropCompleteCallback}
+                onZoomChange={onZoomChange}
               />
             </div>
 
-            <button
-              onClick={handleSet}
-              className="w-full py-3.5 bg-white text-black font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all shadow-xl"
-            >
-              Set Photo
-            </button>
+            <div className="p-6 bg-[#1a1a1a] flex flex-col gap-4 z-10">
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between text-xs font-bold text-white/40  tracking-widest">
+                  <span>Zoom</span>
+                  <span>{Math.round(zoom * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+                />
+              </div>
+
+              <button
+                onClick={(e) => { e.stopPropagation(); handleSet(); }}
+                className="w-full py-3.5 bg-white text-black font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all shadow-xl"
+              >
+                Set Photo
+              </button>
+            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

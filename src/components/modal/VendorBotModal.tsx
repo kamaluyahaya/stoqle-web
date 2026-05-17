@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNextZIndex } from "@/src/lib/utils/z-index";
 import { Sparkles, Send, X, Loader2, ImagePlus } from "lucide-react";
@@ -242,11 +243,14 @@ export const VendorBotModal: React.FC<VendorBotModalProps> = ({
                       {msg.role === 'user' && msg.content.includes('[Uploaded Product Image:') ? (
                         <div className="flex flex-col gap-2">
                           <span className="text-xs opacity-90">I uploaded an image:</span>
-                          <img 
-                            src={msg.content.match(/\[Uploaded Product Image:\s*(.*?)\]/)?.[1]} 
-                            alt="Uploaded" 
-                            className="max-w-[150px] rounded-lg border border-rose-300" 
-                          />
+                          <div className="relative w-[150px] h-[150px]">
+                            <Image 
+                              src={msg.content.match(/\[Uploaded Product Image:\s*(.*?)\]/)?.[1] || ""} 
+                              alt="Uploaded" 
+                              fill
+                              className="object-cover rounded-lg border border-rose-300" 
+                            />
+                          </div>
                         </div>
                       ) : (
                         formatText(msg.content)

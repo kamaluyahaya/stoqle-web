@@ -324,9 +324,9 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                         loading="eager"
                                         onLoad={handleImageLoad}
                                         onClick={() => onImageClick && actualUrl && onImageClick(actualUrl)}
-                                        className={`max-w-full rounded-xl object-cover hover:opacity-95 transition-all cursor-pointer  ${isImageLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+                                        className={`w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] rounded-xl object-cover hover:opacity-95 transition-all cursor-pointer  ${isImageLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                                             }`}
-                                        style={{ maxHeight: '350px', minWidth: '180px', transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
+                                        style={{ transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
                                     />
                                 ) : isVideo ? (
                                     <div
@@ -351,10 +351,8 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                 <img
                                                     src={videoThumbUrl || video_thumbnail || ''}
                                                     alt="Video cover"
-                                                    className={`max-w-full rounded-xl object-cover transition-all duration-500 ${status === 'processing' ? 'blur-sm scale-95 opacity-80' : 'hover:opacity-95'}`}
+                                                    className={`w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] rounded-xl object-cover transition-all duration-500 ${status === 'processing' ? 'blur-sm scale-95 opacity-80' : 'hover:opacity-95'}`}
                                                     style={{
-                                                        maxHeight: '300px',
-                                                        minWidth: '180px',
                                                         display: 'block'
                                                     }}
                                                 />
@@ -364,10 +362,8 @@ export const ChatBubble: React.FC<MessageProps> = ({
                                                     crossOrigin="anonymous"
                                                     muted
                                                     playsInline
-                                                    className={`max-w-full rounded-xl object-cover transition-all duration-500 ${status === 'processing' ? 'blur-sm scale-95 opacity-80' : 'hover:opacity-95'}`}
+                                                    className={`w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] rounded-xl object-cover transition-all duration-500 ${status === 'processing' ? 'blur-sm scale-95 opacity-80' : 'hover:opacity-95'}`}
                                                     style={{
-                                                        maxHeight: '300px',
-                                                        minWidth: '180px',
                                                         display: 'block'
                                                     }}
                                                     preload="metadata"

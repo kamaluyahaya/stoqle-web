@@ -21,7 +21,7 @@ export default function AttachmentLocationModal({ ctx, onClose, onInsertToken }:
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [coords, setCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [coords, setCoords] = useState<{ lat: number, lng: number } | null>(null);
 
   useEffect(() => {
     initLocation();
@@ -74,7 +74,7 @@ export default function AttachmentLocationModal({ ctx, onClose, onInsertToken }:
       if (coords) {
         url += `&lat=${coords.lat}&lng=${coords.lng}`;
       }
-      
+
       const res = await safeFetch(url);
       if (res?.success && Array.isArray(res.data)) {
         setNearby(res.data);
@@ -144,11 +144,11 @@ export default function AttachmentLocationModal({ ctx, onClose, onInsertToken }:
             ) : (
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             )}
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for a place or city..." 
+              placeholder="Search for a place or city..."
               className="w-full bg-slate-100 border-none rounded-[0.5rem] py-2.5 pl-10 pr-4 text-sm font-medium focus:ring-2 focus:ring-orange-200 transition-all outline-none"
             />
           </div>
@@ -166,7 +166,7 @@ export default function AttachmentLocationModal({ ctx, onClose, onInsertToken }:
             ) : error ? (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
                 <p className="text-slate-400 text-xs font-medium mb-4">{error}</p>
-                <button 
+                <button
                   onClick={initLocation}
                   className="text-xs font-bold text-orange-500 hover:text-orange-600 underline"
                 >
@@ -175,8 +175,8 @@ export default function AttachmentLocationModal({ ctx, onClose, onInsertToken }:
               </div>
             ) : nearby.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
-                 <p className="text-slate-400 text-sm font-medium">No locations found</p>
-                 <p className="text-slate-300 text-[11px] mt-1">Try searching for a city or landmark above.</p>
+                <p className="text-slate-400 text-sm font-medium">No locations found</p>
+                <p className="text-slate-300 text-[11px] mt-1">Try searching for a city or landmark above.</p>
               </div>
             ) : (
               <div className="space-y-1">

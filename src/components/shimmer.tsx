@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 
 type ShimmerGridProps = { count?: number };
 
-export function ShimmerCard({ heightClass = "min-h-[200px] sm:min-h-[250px] max-h-[300px] sm:max-h-[350px]" }: { heightClass?: string }) {
+export function ShimmerCard({ heightClass = "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]" }: { heightClass?: string }) {
   return (
     <article
       className="group flex flex-col rounded-[1.05rem] bg-white cursor-default select-none border border-slate-100 overflow-hidden"
@@ -47,14 +47,14 @@ export default function ShimmerGrid({ count = 10 }: ShimmerGridProps) {
   }, []);
 
   const columnData = Array.from({ length: columns }, () => [] as any[]);
-  // Use mixed heights to simulate masonry
+  // Use standardized heights to match actual media cards and prevent CLS
   const heights = [
-    "aspect-[4/5]",
-    "aspect-[3/4]",
-    "aspect-[1/1]",
-    "aspect-[2/3]",
-    "h-[250px] sm:h-[320px]",
-    "h-[200px] sm:h-[280px]"
+    "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]",
+    "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]",
+    "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]",
+    "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]",
+    "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]",
+    "min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]"
   ];
 
   for (let i = 0; i < count; i++) {

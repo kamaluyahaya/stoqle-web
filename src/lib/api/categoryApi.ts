@@ -11,7 +11,7 @@ export type Category = {
 };
 
 
-export async function fetchMyCategories(token?: string): Promise<Category[]> {
+export async function fetchMyCategories(token?: string): Promise<any> {
   const t = token ?? (typeof window !== "undefined" ? localStorage.getItem("token") || undefined : undefined);
   return safeFetch("/api/category/me", {
     headers: {
@@ -48,6 +48,10 @@ export async function updateCategory(category_id: number, payload: { category_na
 /**
  * Fetch global business categories from the database.
  */
-export async function fetchBusinessCategories(): Promise<{id: number, name: string, description?: string}[]> {
+export async function fetchBusinessCategories(): Promise<any> {
   return safeFetch("/api/meta/business-categories");
+}
+
+export async function fetchCategoryPresets(): Promise<any> {
+  return safeFetch("/api/meta/category-presets");
 }

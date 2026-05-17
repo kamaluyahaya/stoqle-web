@@ -6,8 +6,8 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import OpenStorePage from "../open-store/page";
 import { API_BASE_URL } from "@/src/lib/config";
-import Shimmer from "@/src/components/business/business-shimmer";
-import { FaStore } from "react-icons/fa";
+import StoqleLoader from "@/src/components/common/StoqleLoader";
+import { FaStore, FaRocket, FaGlobe } from "react-icons/fa";
 import EditBusinessProfileWithBusinessInfo from "@/src/components/business/businessActivePanel";
 import { Business, BusinessPolicy } from "@/src/types/business";
 import { ChevronLeftIcon } from "@heroicons/react/24/outline";
@@ -15,6 +15,8 @@ import { useAuth } from "@/src/context/authContext";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
 import BusinessWalkthrough from "@/src/components/business/businessWalkthrough";
 import { QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
+import { ChevronRight, Check, Zap, ShieldCheck, Mail, Phone } from "lucide-react";
+import { motion } from "framer-motion";
 
 
 export default function BusinessStatusPage() {
@@ -127,36 +129,8 @@ export default function BusinessStatusPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 ">
-        <div className="mx-auto space-y-6">
-          {/* Header shimmer */}
-          <div className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
-            <Shimmer className="h-6 w-48" />
-            <Shimmer className="h-4 w-full" />
-            <Shimmer className="h-4 w-3/4" />
-          </div>
-
-          {/* Business card shimmer */}
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <Shimmer className="h-16 w-16 rounded-md" />
-              <div className="flex-1 space-y-2">
-                <Shimmer className="h-5 w-40" />
-                <Shimmer className="h-4 w-24" />
-              </div>
-            </div>
-          </div>
-
-          {/* Details shimmer */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-lg bg-white p-4 shadow-sm space-y-2">
-                <Shimmer className="h-3 w-24" />
-                <Shimmer className="h-4 w-full" />
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center">
+        <StoqleLoader size={30} />
       </div>
     );
   }
@@ -222,63 +196,152 @@ export default function BusinessStatusPage() {
       <div className="">
         {/* Pending Status Section */}
         {status === "pending" && (
-          <div className=" border border-slate-100 overflow-hidden">
-            <div className="relative h-64 bg-slate-50 flex items-center justify-center p-8">
-              <img
-                src="/business_pending_review.png"
-                alt="Verification Pending"
-                className="h-full object-contain rounded mix-blend-multiply"
-              />
-              <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold tracking-wider  animate-pulse">
-                Under Review
-              </div>
-            </div>
+          <div className="max-w-7xl mx-auto px-2 py-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative overflow-hidden rounded-[0.5rem] bg-white"
+            >
+              {/* Decorative background elements */}
+              <div className="absolute top-0 right-0 -mt-20 -mr-20 h-64 w-64 rounded-full bg-rose-500/5 blur-3xl" />
+              <div className="absolute bottom-0 left-0 -mb-20 -ml-20 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl" />
 
-            <div className="p-8">
-              <div className="text-center mb-8">
-                <h1 className="text-2xl font-bold text-slate-900 mb-3">Verification in Progress</h1>
-                <p className="text-slate-500 leading-relaxed max-w-md mx-auto">
-                  We've received your business details and our team is currently reviewing them.
-                  Typically, this takes <span className="text-slate-900 font-semibold">2–4 hours</span>.
-                </p>
-              </div>
+              <div className="relative z-10">
+                {/* Hero Section */}
+                <div className="bg-gradient-to-b from-slate-50 to-white p-8 sm:p-12 text-center border-b border-slate-50">
+                  <div className="relative inline-block mb-8">
+                    <div className="absolute inset-0 bg-rose-500/20 blur-2xl rounded-full scale-150 animate-pulse" />
+                    <div className="relative bg-white rounded-full p-6 shadow-xl border border-rose-50">
+                      <FaRocket className="w-12 h-12 text-rose-500" />
+                    </div>
+                  </div>
 
-              <div className="bg-slate-50 rounded-2xl p-6 mb-8 flex items-center gap-5 border border-slate-100">
-                <div className="h-16 w-16 bg-white rounded-xl shadow-sm border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-                  {business?.logo ? (
-                    <img src={business.logo} alt="Logo" className="h-full w-full object-cover" />
-                  ) : business?.profile_pic ? (
-                    <img src={business.profile_pic} alt="Profile" className="h-full w-full object-cover" />
-                  ) : (
-                    <FaStore className="text-slate-300 w-8 h-8" />
-                  )}
+                  <h1 className="tex-xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-4">
+                    Verification in Progress
+                  </h1>
+                  <p className="text-slate-500 text-sm sm:text-lg leading-relaxed max-w-md mx-auto">
+                    Your application is in the final stages of review. We're double-checking everything to ensure your shop launches perfectly.
+                  </p>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-bold text-slate-900 truncate">{business?.business_name || "New Business"}</h3>
-                  <p className="text-sm text-slate-500 truncate">{formatAddress(business?.business_address)}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded  tracking-tighter">
-                      {business?.business_category || "General"}
-                    </span>
-                    <span className="text-[10px] font-medium text-slate-400 italic">
-                      Submitted {business?.created_at ? formatDate(business.created_at) : ""}
-                    </span>
+
+                {/* Progress Steps */}
+                <div className="p-2 sm:p-1">
+                  <div className="flex justify-between items-start mb-12">
+                    {[
+                      { label: "Submitted", active: true, done: true },
+                      { label: "Reviewing", active: true, done: false },
+                      { label: "Approval", active: false, done: false },
+                    ].map((step, i, arr) => (
+                      <div key={step.label} className="flex flex-col items-center flex-1 relative">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center z-10 transition-all duration-500 ${step.done ? "bg-emerald-500 text-white" :
+                          step.active ? "bg-rose-500 text-white shadow-lg shadow-rose-200 ring-4 ring-rose-50" :
+                            "bg-slate-100 text-slate-400"
+                          }`}>
+                          {step.done ? <Check className="w-5 h-5" strokeWidth={3} /> : i + 1}
+                        </div>
+                        <span className={`mt-3 text-xs font-bold  ${step.active ? "text-slate-900" : "text-slate-400"}`}>
+                          {step.label}
+                        </span>
+                        {i < arr.length - 1 && (
+                          <div className={`absolute top-5 left-1/2 w-full h-0.5 -z-0 ${arr[i + 1].active ? "bg-rose-500" : "bg-slate-100"
+                            }`} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Business Preview Card */}
+                  <div className="bg-slate-50/50 rounded-[0.5rem] p-4 border border-slate-100 backdrop-blur-sm mb-12">
+                    {/* Mobile: Business Name & Status - Stacked */}
+                    <div className="flex flex-col items-start gap-2 mb-5 sm:hidden border-b border-slate-200/50 pb-4">
+                      <h3 className="font-bold sm:text-2xl text-md text-slate-900 truncate w-full">{business?.business_name || "New Business"}</h3>
+                      <div className="bg-amber-100 text-amber-700 text-[10px] px-3 py-1 rounded-full shrink-0">
+                        Pending Approval
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="h-20 w-20 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+                        {business?.logo ? (
+                          <img src={business.logo} alt="Logo" className="h-full w-full object-cover" />
+                        ) : business?.profile_pic ? (
+                          <img src={business.profile_pic} alt="Profile" className="h-full w-full object-cover" />
+                        ) : (
+                          <FaStore className="text-slate-200 w-10 h-10" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {/* Desktop: Business Name (Hidden on Mobile) */}
+                        <div className="hidden sm:flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-xl text-slate-900 truncate">{business?.business_name || "New Business"}</h3>
+                          <div className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full ">Pending</div>
+                        </div>
+
+                        <p className="text-sm text-slate-500 truncate mb-3">{formatAddress(business?.business_address)}</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400 bg-white/50 px-2 py-1 rounded-lg border border-slate-100">
+                            <FaGlobe className="w-3 h-3 text-blue-400" />
+                            {business?.business_category || "General Store"}
+                          </div>
+                          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-300" />
+                          <div className="text-xs font-medium text-slate-400 italic">
+                            Applied {business?.created_at ? formatDate(business.created_at) : "Today"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Helpful Tips */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-rose-100 transition-colors">
+                      <h4 className="font-bold text-slate-900 text-sm mb-1 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-500" />
+                        While you wait...
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">Prepare your product high-quality images and clear descriptions.</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-blue-100 transition-colors">
+                      <h4 className="font-bold text-slate-900 text-sm mb-1 flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-blue-500" />
+                        Quick Tip
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">Review our seller policies to ensure a smooth launch experience.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <button
+                      onClick={() => router.push("/market")}
+                      className="group w-full py-3 bg-rose-500 text-white rounded-full text-md hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
+                    >
+                      Explore the Market
+                      <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                    </button>
+                    <p className="text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                      <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Our team is processing requests in real-time
+                    </p>
+
+                    <div className="mt-6 pt-6 border-t border-slate-100">
+                      <p className="text-center text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-3">
+                        For urgent response
+                      </p>
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-xs font-bold text-slate-600">
+                        <a href="mailto:support@stoqle.com" className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-full hover:bg-rose-50 hover:text-rose-600 transition-all border border-slate-100">
+                          <Mail className="w-3.5 h-3.5" />
+                          support@stoqle.com
+                        </a>
+                        <a href="tel:+2348127494994" className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-full hover:bg-rose-50 hover:text-rose-600 transition-all border border-slate-100">
+                          <Phone className="w-3.5 h-3.5" />
+                          +234 8127494994
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => router.push("/market")}
-                  className="w-full py-3 bg-rose-500 text-white rounded-full  hover:bg-slate-800 transition-all active:scale-[0.98]"
-                >
-                  Go to Market
-                </button>
-                <p className="text-center text-xs text-slate-400">
-                  You'll receive a notification and email once approved.
-                </p>
-              </div>
-            </div>
+            </motion.div>
           </div>
         )}
 

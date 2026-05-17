@@ -12,11 +12,11 @@ import ShareRedirectClient from './ShareRedirectClient';
 const FRONTEND_URL =
   process.env.NEXT_PUBLIC_FRONTEND_URL ||
   process.env.NEXT_PUBLIC_APP_URL ||
-  'http://10.123.11.181:3000';
+  'http://10.14.140.181:3000';
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  'http://10.123.11.181:4000';
+  'http://10.14.140.181:4000';
 
 interface SocialMeta {
   code: string;

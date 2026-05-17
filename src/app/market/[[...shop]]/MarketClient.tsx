@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAuth } from "@/src/context/authContext";
-import ShimmerGrid from "@/src/components/shimmer";
 import { fetchProductById, toggleProductLike, logUserActivity } from "@/src/lib/api/productApi";
 import { fetchLinkedProductPosts, fetchSmartReels, toggleSocialPostLike } from "@/src/lib/api/social";
 // import PostModal from "@/src/components/modal/postModal";
@@ -19,17 +18,25 @@ const ProductPreviewModal = dynamic(() => import("@/src/components/product/addPr
 const ReelsModal = dynamic(() => import("@/src/components/product/addProduct/modal/reelsModal"), { ssr: false });
 const PostModal = dynamic(() => import("@/src/components/modal/postModal"), { ssr: false });
 const LoginModal = dynamic(() => import("@/src/components/modal/auth/loginModal"), { ssr: false });
+const SevenDayReturnModal = dynamic(() => import("@/src/components/business/policyModal/sevenDayReturnModal"), { ssr: false });
+const PrivacyPolicyModal = dynamic(() => import("@/src/components/modal/auth/PrivacyPolicyModal"), { ssr: false });
+const UserAgreementModal = dynamic(() => import("@/src/components/modal/auth/UserAgreementModal"), { ssr: false });
+const HelpCenterModal = dynamic(() => import("@/src/components/modal/HelpCenterModal"), { ssr: false });
 import { mapProductToPreviewPayload } from "@/src/lib/utils/product/mapping";
-import { fetchBusinessCategories, fetchTrendingProducts, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
+import { fetchBusinessCategories, fetchProductCategories, fetchTrendingProducts, fetchPersonalizedFeed } from "@/src/lib/api/productApi";
+import { fetchCartRecommendations } from "@/src/lib/api/cartApi";
 import { API_BASE_URL } from "@/src/lib/config";
 import { formatUrl } from "@/src/lib/utils/media";
 import { MARKET_CACHE } from "@/src/lib/cache";
 import { fetchActionableSummary } from "@/src/lib/api/orderApi";
 import { toast } from "sonner";
-import { ArrowUp, ShoppingCart, WifiOff, RotateCcw } from "lucide-react";
+import { ArrowUp, ShoppingCart, WifiOff, RotateCcw, ShieldCheck, ShoppingBag, Truck, RefreshCw, MessageSquare, Lock, ChevronRight } from "lucide-react";
 import { idbGet, idbSet } from "@/src/lib/utils/idb";
 import { VerifiedBadge, PartnerPill } from "@/src/components/common/VerifiedBadge";
 import StoqleLoader from "@/src/components/common/StoqleLoader";
+import MasonryGrid from "@/src/components/product/MasonryGrid";
+import ProductCard from "@/src/components/product/ProductCard";
+import { LikeBurst } from "@/src/components/product/LikeBurst";
 
 type Props = {
     params: Promise<{ shop?: string[] }>;
@@ -41,6 +48,9 @@ type Props = {
     softCategory?: boolean;
     relatedVendorIds?: number[];
     hideCartIcon?: boolean;
+    disableScrollPersistence?: boolean;
+    recommendationMode?: boolean;
+    hideSubCategories?: boolean;
 };
 
 const slugify = (str: string) =>
@@ -51,624 +61,18 @@ const slugify = (str: string) =>
         .replace(/\s+/g, "-")
         .replace(/-+/g, "-");
 
-function LikeBurst() {
-    const particles = Array.from({ length: 12 });
-    const colors = ["#EF4444", "#3B82F6", "#10B981", "#F59E0B"];
-    return (
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50">
-            {particles.map((_, i) => (
-                <motion.div
-                    key={i}
-                    initial={{ x: 0, y: 0, scale: 0, opacity: 1, rotate: 0 }}
-                    animate={{
-                        x: Math.cos((i * 30) * Math.PI / 180) * 60,
-                        y: Math.sin((i * 30) * Math.PI / 180) * 60,
-                        scale: [0.2, 1.2, 1.8, 0],
-                        opacity: [1, 1, 1, 0],
-                        rotate: [0, 45, 90]
-                    }}
-                    transition={{ duration: 0.7, ease: "easeOut" }}
-                    className="absolute"
-                >
-                    <FaHeart size={12} style={{ color: colors[i % colors.length] }} className="drop-shadow-sm" />
-                </motion.div>
-            ))}
-        </div>
-    );
-}
+
+const LIMIT = 10;
+const LIMIT_SOCIAL = 5;
 
 
 
-const ProductCard = React.memo(({
-    p,
-    index = 0,
-    isVideoCover,
-    formatUrl,
-    handleProductClick,
-    handleReelsClick,
-    handleLikeClick,
-    handlePostLikeClick,
-    handlePrefetch,
-    isLiked,
-    likeCount,
-    postLikeData,
-    fetchingProduct,
-    router,
-    isRestored = false,
-    isPartnerTab = false
-}: any) => {
-    const [showBurst, setShowBurst] = useState(false);
-    const cardRef = useRef<HTMLElement>(null);
-    const viewedRef = useRef(false);
-    const { token } = useAuth(); // Access token for background logging
 
-    useEffect(() => {
-        if (!p.product_id || p.isIntro || viewedRef.current) return;
-
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && !viewedRef.current) {
-                viewedRef.current = true;
-                // Log view activity in background for personalization
-                const actualId = p.is_social_post
-                    ? String(p.product_id).replace('post-', '')
-                    : p.product_id;
-
-                if (actualId && !isNaN(Number(actualId))) {
-                    logUserActivity({
-                        product_id: Number(actualId),
-                        action_type: 'view',
-                        category: p.category,
-                        business_id: p.business_id
-                    }, token || undefined).catch(() => { });
-                }
-                observer.unobserve(entries[0].target);
-            }
-        }, { threshold: 0.1 });
-
-        if (cardRef.current) {
-            observer.observe(cardRef.current);
-        }
-
-        return () => observer.disconnect();
-    }, [p.product_id, p.is_social_post, p.category, token, p.isIntro]);
-
-    const isPromoActive = useMemo(() => {
-        return !!(p.promo_title && p.promo_discount && (!p.promo_end || new Date(p.promo_end) >= new Date()));
-    }, [p.promo_title, p.promo_discount, p.promo_end]);
-
-    const isSaleActive = useMemo(() => {
-        return !!(!isPromoActive && p.sale_discount && Number(p.sale_discount) > 0);
-    }, [isPromoActive, p.sale_discount]);
-
-    const activeDiscount = isPromoActive ? p.promo_discount : isSaleActive ? p.sale_discount : 0;
-    const discountLabel = isPromoActive ? p.promo_title : isSaleActive ? (p.sale_type || "SALE") : "";
-
-    if (p.isIntro) {
-        return (
-            <motion.article
-                ref={cardRef as any}
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="rounded-[0.5rem] bg-white border border-emerald-50 p-4 shadow-sm shadow-emerald-100/40 flex flex-col justify-between h-full group relative overflow-hidden"
-            >
-                {/* Micro-animation background hint */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-
-                <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                        <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Certified Program</span>
-                    </div>
-
-                    <h2 className="text-xl font-bold text-slate-900 leading-none mb-1 italic tracking-tighter">
-                        Stoqle<span className="text-emerald-600">Partners</span>
-                    </h2>
-
-                    <p className="text-[10px] text-slate-500 font-medium leading-relaxed mb-6 max-w-[200px]">
-                        Elite businesses handpicked for reliability and exceptional service.
-                    </p>
-
-                    <div className="space-y-3.5 mb-6">
-                        {[
-                            { title: "Premium express delivery", sub: "Priority nationwide shipping" },
-                            { title: "Verified store status", sub: "Vetted for quality by Stoqle" },
-                            { title: "Exclusive shop deals", sub: "Save up to 25% on purchases" }
-                        ].map((offer, idx) => (
-                            <motion.div
-                                key={idx}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.2 + (idx * 0.1) }}
-                                className="flex items-start gap-3"
-                            >
-                                <div className="w-4.5 h-4.5 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
-                                    <svg className="w-2.5 h-2.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="text-[11px] font-bold text-slate-800 leading-none">{offer.title}</p>
-                                    <p className="text-[9px] text-slate-400 mt-1 font-medium">{offer.sub}</p>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="relative z-10 pt-4 border-t border-slate-50 mt-auto">
-                    <Link
-                        href="/partners"
-                        prefetch={true}
-                        className="text-[10px] font-bold text-emerald-600   flex items-center justify-between group/link"
-                    >
-                        Learn what makes a partner
-                        <span className="text-sm group-hover/link:translate-x-1 transition-transform ml-1">→</span>
-                    </Link>
-                </div>
-            </motion.article>
-        );
-    }
-
-    const entryVariants = {
-        initial: isRestored ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.95, y: 15 },
-        animate: { opacity: 1, scale: 1, y: 0 },
-        transition: isRestored ? { duration: 0 } : {
-            duration: 0.9,
-            delay: Math.min(index * 0.1, 1.2),
-            ease: [0.21, 1.11, 0.81, 0.99] as any
-        }
-    };
-
-    if (p.is_social_post) {
-        // Extract real post id from product_id ("post-123" → 123)
-        const rawPostId = String(p.product_id).replace('post-', '');
-        const postLd = postLikeData?.[rawPostId] ?? { liked: !!p.isLiked, count: p.likes_count || 0 };
-
-        return (
-            <motion.article
-                ref={cardRef as any}
-                initial={entryVariants.initial}
-                animate={entryVariants.animate}
-                transition={entryVariants.transition}
-                onClick={(e) => handleProductClick(p.product_id, p.business_name, e, p.business_slug, true, p.slug || p.product_slug)}
-                onPointerEnter={() => {
-                    // Elite predictive prefetching
-                    const pSlug = p.slug || p.product_slug;
-                    const bizSlug = p.business_slug || (p.business_name ? slugify(p.business_name) : 'shop');
-                    if (pSlug) router.prefetch(`/market/${bizSlug}/${pSlug}`);
-                    if (p.business_slug) router.prefetch(`/shop/${p.business_slug}`);
-                    handlePrefetch && handlePrefetch(p.product_id, pSlug);
-                }}
-                className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden relative"
-            >
-                <div className="relative w-full overflow-hidden bg-slate-100">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-                    </div>
-                    <img
-                        src={formatUrl(p.first_image)}
-                        className="w-full min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-all duration-700 group-hover:scale-110 relative z-[1]"
-                        loading="lazy"
-                        alt={p.title}
-                    />
-                    {/* Video badge */}
-                    {p.isVideo && (
-                        <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white text-[9px] font-black px-1.5 py-1.5 rounded-full z-10 flex items-center">
-                            <FaPlay size={7} className="text-white fill-current" />
-                        </div>
-                    )}
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                </div>
-
-                <div className="p-2">
-                    {/* Author row */}
-
-                    {/* Tagged Product Highlight (Image, Price, Sold) */}
-                    <div className="flex items-center gap-2 bg-slate-100 rounded-md mb-2 hover:bg-slate-100 transition-colors">
-                        <div className="w-8 h-8 relative rounded shrink-0 overflow-hidden bg-white">
-                            <Image
-                                src={p.linked_image ? formatUrl(p.linked_image) : (p.logo ? formatUrl(p.logo) : "/assets/images/favio.png")}
-                                alt="linked product"
-                                fill
-                                sizes="32px"
-                                className="object-cover"
-                            />
-                        </div>
-                        <div className="pr-1 min-w-0">
-                            <span className="text-slate-900 text-[11px] font-medium tracking-tight truncate">₦{Number(p.price || 0).toLocaleString()}</span>
-
-                        </div>
-                        <div className="ml-auto pr-1">
-                            {p.sold_count > 0 ? (
-                                <span className="text-[9px] text-slate-400  leading-none">{p.sold_count.toLocaleString()}+ sold by shop</span>
-                            ) : p.followers_count > 1 ? (
-                                <span className="text-[9px] text-slate-400 leading-none">{p.followers_count}+ store followers</span>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <h3 className="text-sm text-slate-800 line-clamp-2 leading-tight font-medium mb-1" title={p.title}>{p.title}</h3>
-
-                    {/* Name + Like row */}
-                    <div className="flex items-center justify-between mt-auto gap-2">
-
-                        <div className="flex items-center gap-2 min-w-0">
-                            <div className="h-4 w-4 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
-                                <Image
-                                    src={p.logo ? formatUrl(p.logo) : "/assets/images/favio.png"}
-                                    fill
-                                    sizes="16px"
-                                    className="object-cover"
-                                    alt="avatar"
-                                />
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-500 truncate">{p.business_name}</span>
-                        </div>
-
-                        {/* Like button — with spring & pulse animation */}
-                        <div
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (!postLd.liked) {
-                                    setShowBurst(true);
-                                    setTimeout(() => setShowBurst(false), 800);
-                                }
-                                handlePostLikeClick && handlePostLikeClick(e, rawPostId, postLd.liked, postLd.count);
-                            }}
-                            className="flex items-center gap-1 cursor-pointer shrink-0 relative"
-                            role="button"
-                            aria-label="Like post"
-                        >
-                            {showBurst && <div className="absolute inset-0 pointer-events-none -translate-y-4"><LikeBurst /></div>}
-                            <div className="relative w-4 h-4 flex items-center justify-center">
-                                <AnimatePresence>
-                                    <motion.div
-                                        key={postLd.liked ? "liked" : "unliked"}
-                                        initial={{ scale: 0.5, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        exit={{ scale: 0.5, opacity: 0 }}
-                                        transition={{ type: "spring", stiffness: 450, damping: 15 }}
-                                        className={`absolute flex items-center justify-center ${postLd.liked ? 'text-rose-500' : 'text-slate-400'}`}
-                                    >
-                                        {postLd.liked ? <FaHeart size={12} /> : <FaRegHeart size={12} />}
-                                    </motion.div>
-                                </AnimatePresence>
-
-                                {postLd.liked && (
-                                    <motion.div
-                                        initial={{ scale: 1, opacity: 1 }}
-                                        animate={{ scale: [1, 1.8, 1], opacity: [1, 0.4, 0] }}
-                                        transition={{ duration: 0.6 }}
-                                        className="absolute text-rose-500 pointer-events-none"
-                                    >
-                                        <FaHeart size={16} />
-                                    </motion.div>
-                                )}
-                            </div>
-
-                            <span className={`text-[10px]  transition-colors duration-200 ${postLd.liked ? 'text-rose-500' : 'text-slate-400'}`}>
-                                {postLd.count > 0 ? postLd.count : 'Like'}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </motion.article>
-        );
-    }
-
-    return (
-        <article
-            ref={cardRef as any}
-            key={`${p.product_id}${isVideoCover ? '-vid' : ''}`}
-            onClick={(e) => {
-                if (isVideoCover) {
-                    handleReelsClick(p.product_id, p.business_name, e, p.business_slug, p.slug || p.product_slug);
-                } else {
-                    handleProductClick(p.product_id, p.business_name, e, p.business_slug, false, p.slug || p.product_slug);
-                }
-            }}
-            onPointerEnter={() => {
-                // Elite predictive prefetching
-                const pSlug = p.slug || p.product_slug;
-                const bizSlug = p.business_slug || (p.business_name ? slugify(p.business_name) : 'shop');
-                if (pSlug) router.prefetch(`/market/${bizSlug}/${pSlug}`);
-                if (p.business_slug) router.prefetch(`/shop/${p.business_slug}`);
-                handlePrefetch && handlePrefetch(p.product_id, pSlug);
-            }}
-            className={`group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border overflow-hidden ${isPartnerTab ? "border-emerald-100 shadow-sm shadow-emerald-50/50" : "border-slate-100"}`}
-            style={{
-                willChange: "transform, opacity",
-                contentVisibility: "auto",
-                containIntrinsicSize: "auto 400px"
-            }}
-        >
-            <div className="relative w-full overflow-hidden bg-slate-100">
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-                </div>
-
-                <motion.div
-                    initial={entryVariants.initial}
-                    animate={entryVariants.animate}
-                    transition={entryVariants.transition}
-                    className="w-full h-full relative z-[1]"
-                >
-                    {p.product_video && isVideoCover ? (
-                        <video
-                            src={formatUrl(p.product_video!)}
-                            poster={formatUrl(p.first_image)}
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="w-full min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                    ) : (
-                        <div className="relative w-full h-auto">
-                            <img
-                                src={formatUrl(p.first_image)}
-                                alt={p.title}
-                                className="w-full min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-all duration-700 group-hover:scale-110"
-                                loading="lazy"
-                                onLoad={(e) => {
-                                    (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
-                                }}
-                                style={{ opacity: 0 }}
-                            />
-                        </div>
-                    )}
+// Shared components extracted to @/src/components/product/
 
 
-                    {!isVideoCover && fetchingProduct && (
-                        <div className="absolute inset-0 bg-white/30 z-20 flex items-center justify-center">
-                            <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                    )}
-                </motion.div>
 
 
-            </div>
-
-            <div className="p-3">
-                {isVideoCover ? (
-                    <>
-                        <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-1" title={p.title}>
-                            {p.trusted_partner === 1 && (
-                                <span className="inline-flex items-center gap-1 shrink-0 mr-1.5 align-text-bottom">
-                                    <PartnerPill />
-                                </span>
-                            )}
-                            <span className="align-middle ">{p.title || "Untitled Product"}</span>
-                        </h3>
-
-                        {(isPromoActive || p.sale_type || (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) || p.return_shipping_subsidy === 1 || p.market_name || (p.followers_count > 1)) && (
-                            <div className=" flex items-center min-h-[16px]">
-                                {isPromoActive ? (
-                                    <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1  truncate">
-                                        {p.promo_title} {p.promo_discount}% Off
-                                    </span>
-                                ) : p.sale_type ? (
-                                    <span className="text-[10px]  text-rose-500 border-rose-500 border-[0.5] px-1  truncate">
-                                        {p.sale_type} {p.sale_discount}% Off
-                                    </span>
-                                ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-500' : 'text-rose-500'} truncate`}>
-                                        {Number(p.total_quantity) <= 0 ? 'Out of stock' : `Only ${Number(p.total_quantity)} left`}
-                                    </span>
-                                ) : p.return_shipping_subsidy === 1 ? (
-                                    <span className="text-[10px] font-bold text-green-700   truncate">
-                                        Return Shipping Subsidy
-                                    </span>
-                                ) : p.market_name ? (
-                                    <span className="text-[10px] font-bold text-rose-500   truncate">
-                                        {p.market_name}
-                                    </span>
-                                ) : p.followers_count > 1 ? (
-                                    <span className="text-[10px] text-slate-500  px-1 rounded-sm truncate">
-                                        {p.followers_count}+ store followers
-                                    </span>
-                                ) : null}
-                            </div>
-                        )}
-
-                        <div className="flex items-center justify-between mt-1">
-                            <span className="text-slate-900 text-base font-semibold">₦{Number(p.price || 0).toLocaleString()}</span>
-                            {p.sold_count > 0 && (
-                                <span className="text-[10px] text-slate-400 font-medium">{p.sold_count.toLocaleString()}+ sold by shop</span>
-                            )}
-                        </div>
-
-
-                        <div className="flex items-center justify-between">
-
-                            <div
-                                className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    const slug = p.business_slug || (p.business_name ? slugify(p.business_name) : null);
-                                    if (slug) router.push(`/shop/${slug}`);
-                                }}
-                            >
-                                <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
-                                    <Image
-                                        src={p.logo ? formatUrl(p.logo) : (p.profile_pic ? formatUrl(p.profile_pic) : "/assets/images/favio.png")}
-                                        fill
-                                        sizes="20px"
-                                        className="object-cover"
-                                        alt="Vendor"
-                                    />
-                                </div>
-                                <span className="truncate text-[11px] font-semibold text-slate-600 hover:text-slate-900 transition-colors max-w-[150px]">
-                                    {p.business_name || "Unknown Store"}
-                                </span>
-                            </div>
-
-
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="flex items-center justify-between pt-1 border-slate-50">
-                            <div
-                                className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    const slug = p.business_slug || (p.business_name ? slugify(p.business_name) : null);
-                                    if (slug) router.push(`/shop/${slug}`);
-                                }}
-                            >
-                                <div className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative">
-                                    <Image
-                                        src={p.logo ? formatUrl(p.logo) : (p.profile_pic ? formatUrl(p.profile_pic) : "/assets/images/favio.png")}
-                                        fill
-                                        sizes="20px"
-                                        className="object-cover"
-                                        alt="Vendor"
-                                    />
-                                </div>
-                                <div className="flex flex-col">
-                                    <div className="flex items-center gap-1">
-                                        <span className="truncate text-[11px] text-orange-600 hover:text-slate-900 transition-colors">
-                                            {p.business_name || "Unknown Store"}
-                                        </span>
-                                        {p.trusted_partner === 1 && (
-                                            <VerifiedBadge label={p.market_name || "Trusted Partner"} size="xs" />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <h3 className="text-sm text-slate-800 line-clamp-2 leading-snug mb-1" title={p.title}>
-                            {p.trusted_partner === 1 && (
-                                <span className="inline-flex items-center gap-1 shrink-0 mr-1.5 align-text-bottom">
-                                    <PartnerPill />
-                                </span>
-                            )}
-                            <span className="align-middle ">{p.title || "Untitled Product"}</span>
-                        </h3>
-
-                        {(isPromoActive || p.sale_type || (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) || p.return_shipping_subsidy === 1 || p.market_name || (p.followers_count > 1)) && (
-                            <div className=" flex items-center min-h-[16px]">
-                                {isPromoActive ? (
-                                    <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1  truncate">
-                                        {p.promo_title} {p.promo_discount}% Off
-                                    </span>
-                                ) : p.sale_type ? (
-                                    <span className="text-[10px]  text-rose-500 border-rose-500 border-[0.5] px-1  truncate">
-                                        {p.sale_type} {p.sale_discount}% Off
-                                    </span>
-                                ) : (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? (
-                                    <span className={`text-[10px] font-bold ${Number(p.total_quantity) <= 0 ? 'text-rose-500' : 'text-rose-500'} truncate`}>
-                                        {Number(p.total_quantity) <= 0 ? 'Out of stock' : `Only ${Number(p.total_quantity)} left`}
-                                    </span>
-                                ) : p.return_shipping_subsidy === 1 ? (
-                                    <span className="text-[10px] font-bold text-green-700   truncate">
-                                        Return Shipping Subsidy
-                                    </span>
-                                ) : p.market_name ? (
-                                    <span className="text-[10px] font-bold text-rose-500   truncate">
-                                        {p.market_name}
-                                    </span>
-                                ) : p.followers_count > 1 ? (
-                                    <span className="text-[10px] text-slate-500  px-1 rounded-sm truncate">
-                                        {p.followers_count}+ store followers
-                                    </span>
-                                ) : null}
-                            </div>
-                        )}
-
-                        <div className="flex items-center justify-between mt-1">
-                            <span className="text-slate-900 text-base font-semibold">₦{Number(p.price || 0).toLocaleString()}</span>
-                            {p.sold_count > 0 && (
-                                <span className="text-[10px] text-slate-400 font-medium">{p.sold_count.toLocaleString()}+ sold by shop</span>
-                            )}
-                        </div>
-
-                    </>
-                )}
-            </div>
-        </article >
-    );
-}, (prevProps, nextProps) => {
-    // Custom comparison: extremely strict to prevent flickering
-    return prevProps.p.product_id === nextProps.p.product_id &&
-        prevProps.isLiked === nextProps.isLiked &&
-        prevProps.likeCount === nextProps.likeCount &&
-        prevProps.fetchingProduct === nextProps.fetchingProduct &&
-        prevProps.isVideoCover === nextProps.isVideoCover;
-});
-ProductCard.displayName = "ProductCard";
-
-const MasonryGrid = ({ items, likeData, postLikeData, fetchingProductId, handleProductClick, handleReelsClick, handleLikeClick, handlePostLikeClick, handlePrefetch, formatUrl, router, isRestored, isPartnerTab }: any) => {
-    const [columns, setColumns] = useState(5);
-
-    useEffect(() => {
-        const updateColumns = () => {
-            const w = window.innerWidth;
-            if (w < 700) setColumns(2);
-            else if (w < 1350) setColumns(3);
-            else if (w < 1650) setColumns(4);
-            else setColumns(5);
-        };
-        updateColumns();
-        window.addEventListener('resize', updateColumns);
-        return () => window.removeEventListener('resize', updateColumns);
-    }, []);
-
-    // Distribute items into columns (Serial Horizontal order)
-    const columnData = useMemo(() => {
-        const data = Array.from({ length: columns }, () => [] as any[]);
-        items.forEach((item: any, index: number) => {
-            data[index % columns].push(item);
-        });
-        return data;
-    }, [items, columns]);
-
-    return (
-        <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
-            {columnData.map((colItems, colIdx) => {
-                let visibilityClass = "flex-1 flex flex-col gap-2 sm:gap-6 min-w-0";
-                if (colIdx === 2) visibilityClass += " hidden [@media(min-width:700px)]:flex";
-                if (colIdx === 3) visibilityClass += " hidden [@media(min-width:1210px)]:flex";
-                if (colIdx === 4) visibilityClass += " hidden [@media(min-width:1430px)]:flex";
-
-                return (
-                    <div key={colIdx} className={visibilityClass}>
-                        {colItems.map((p: any) => {
-                            // Social posts use postLikeData; products use likeData
-                            const rawPostId = p.is_social_post ? String(p.product_id).replace('post-', '') : null;
-                            const ld = p.is_social_post
-                                ? (postLikeData?.[rawPostId!] ?? { liked: !!p.isLiked, count: p.likes_count || 0 })
-                                : (likeData[p.product_id] || { liked: !!p.isLiked, count: p.likes_count || 0 });
-                            return (
-                                <ProductCard
-                                    key={`${p.product_id}-${p.originalIndex}`}
-                                    index={p.originalIndex}
-                                    isVideoCover={!!p.product_video}
-                                    p={p}
-                                    formatUrl={formatUrl}
-                                    handleProductClick={(id: number | string, b: string, e: any, s: string, isSocial: boolean, ps?: string) => handleProductClick(id, b, e, s, isSocial, ps)}
-                                    handleReelsClick={(id: number | string, b: string, e: any, s: string, ps?: string) => handleReelsClick(id, b, e, s, ps)}
-                                    handleLikeClick={handleLikeClick}
-                                    handlePostLikeClick={handlePostLikeClick}
-                                    handlePrefetch={handlePrefetch}
-                                    isLiked={ld.liked}
-                                    likeCount={ld.count}
-                                    postLikeData={postLikeData}
-                                    fetchingProduct={fetchingProductId === p.product_id}
-                                    router={router}
-                                    isRestored={isRestored}
-                                    isPartnerTab={isPartnerTab}
-                                />
-                            );
-                        })}
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
 
 
 
@@ -682,16 +86,291 @@ if (typeof window !== "undefined") {
 
     // Legacy Cleanup
     localStorage.removeItem("stoqle_market_cache_products");
-
-    MARKET_CACHE.lastFetchedAt = Number(localStorage.getItem("stoqle_market_cache_time") || 0);
+    localStorage.removeItem("stoqle_market_cache_time"); // Also clean up the legacy timestamp
 }
 
-export default function MarketClient({ params: paramsPromise, initialCategories, hideTabs, initialCategory, softCategory, relatedVendorIds, hideCartIcon }: Props) {
+// ─── IN-MEMORY SUBCATEGORY CACHE (per business category) ───
+const SUBCAT_CACHE: Record<string, { name: string; image: string | null }[]> = {};
+
+type SubCat = { name: string; image: string | null };
+
+// ─── FOR-YOU QUICK-ACTION STRIP ───
+const FOR_YOU_ITEMS = [
+    { label: "Trending", icon: "/assets/icons/market/trending.png", href: null, action: "trending" },
+    { label: "Orders", icon: "/assets/icons/market/order.png", href: "/profile/orders", action: null },
+    { label: "Cart", icon: "/assets/icons/market/cart.png", href: "/cart", action: null },
+    { label: "Service", icon: "/assets/icons/market/service.png", href: "/market/service", action: null },
+    { label: "History", icon: "/assets/icons/market/history.png", href: "/market/history", action: null },
+] as const;
+
+const ForYouStrip = React.memo(({
+    onTrending,
+    router,
+    onNavigate,
+}: {
+    onTrending: () => void;
+    router: any;
+    onNavigate: (href: string) => void;
+}) => (
+    <div className="flex flex-wrap gap-y-4 gap-x-2 sm:gap-x-4 px-1 py-3">
+        {FOR_YOU_ITEMS.map((item) => (
+            <button
+                key={item.label}
+                onClick={() => {
+                    if (item.action === "trending") { onTrending(); }
+                    else if (item.href) {
+                        onNavigate(item.href);
+                    }
+                }}
+                className="flex flex-col items-center gap-1.5 shrink-0 group w-[calc((100%-32px)/5)] sm:w-[calc((100%-48px)/7)] lg:w-[calc((100%-80px)/10)]"
+            >
+                <div className="w-12 h-12 overflow-hidden flex items-center justify-center group-hover:shadow-md group-hover:border-rose-200 transition-all duration-200">
+                    <img
+                        src={item.icon}
+                        alt={item.label}
+                        className="w-8 h-8 object-contain"
+                        loading="eager"
+                    />
+                </div>
+                <span className="text-[10px] font-semibold text-slate-500 group-hover:text-rose-500 transition-colors max-w-full px-1 text-center leading-tight line-clamp-1">
+                    {item.label}
+                </span>
+            </button>
+        ))}
+    </div>
+));
+ForYouStrip.displayName = "ForYouStrip";
+
+const SubCategoryStrip = React.memo(({
+    category,
+    onSelect,
+    onNavigate,
+}: {
+    category: string;
+    onSelect: (name: string) => void;
+    onNavigate: (href: string) => void;
+}) => {
+    const [subcats, setSubcats] = React.useState<SubCat[]>(() => SUBCAT_CACHE[category] || []);
+    const [loading, setLoading] = React.useState(!SUBCAT_CACHE[category]);
+
+    React.useEffect(() => {
+        if (!category || category === "For you" || category === "Rules") return;
+        if (SUBCAT_CACHE[category]) {
+            setSubcats(SUBCAT_CACHE[category]);
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        fetchProductCategories(category)
+            .then((res: any) => {
+                const data: SubCat[] = res?.data || [];
+                SUBCAT_CACHE[category] = data;
+                setSubcats(data);
+            })
+            .catch(() => setSubcats([]))
+            .finally(() => setLoading(false));
+    }, [category]);
+
+    if (!category || category === "For you" || category === "Rules") return null;
+
+    if (loading) {
+        return (
+            <div className="flex flex-wrap gap-y-4 gap-x-2 sm:gap-x-4 px-1 py-3">
+                {Array.from({ length: 15 }).map((_, i) => (
+                    <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 w-[calc((100%-32px)/5)] sm:w-[calc((100%-48px)/7)] lg:w-[calc((100%-80px)/10)]">
+                        <div className="w-12 h-12 rounded bg-slate-100 animate-pulse" />
+                        <div className="w-10 h-2.5 rounded bg-slate-100 animate-pulse" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    if (subcats.length === 0) return null;
+
+    return (
+        <div className="flex flex-wrap gap-y-4 gap-x-2 sm:gap-x-4 px-1 py-3">
+            {subcats.slice(0, 30).map((sub, idx) => {
+                const isActive = false; // Subcategory navigation is now route-based
+                return (
+                    <button
+                        key={idx}
+                        onClick={() => onSelect(sub.name)}
+                        className="flex flex-col items-center gap-1.5 shrink-0 group w-[calc((100%-32px)/5)] sm:w-[calc((100%-48px)/7)] lg:w-[calc((100%-80px)/10)]"
+                    >
+                        <div className="w-12 h-12 overflow-hidden flex items-center justify-center transition-all duration-200 group-hover:shadow-md group-hover:border-rose-200">
+                            {sub.image ? (
+                                <img
+                                    src={sub.image}
+                                    alt={sub.name}
+                                    className="w-full h-full object-contain p-0.5"
+                                    loading="lazy"
+                                    onError={(e) => {
+                                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                    }}
+                                />
+                            ) : (
+                                <span className={`text-lg font-black ${isActive ? "text-rose-400" : "text-slate-300"}`}>
+                                    {sub.name[0]?.toUpperCase()}
+                                </span>
+                            )}
+                        </div>
+                        <span className={`text-[10px] font-semibold transition-colors max-w-full px-1 text-center leading-tight truncate ${isActive ? "text-rose-500" : "text-slate-500 group-hover:text-rose-500"
+                            }`}>
+                            {sub.name}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+});
+SubCategoryStrip.displayName = "SubCategoryStrip";
+
+const MarketSkeleton = React.memo(({ category, hideSubCategories }: { category: string, hideSubCategories?: boolean }) => {
+    return (
+        <div className="px-1 animate-in fade-in duration-500">
+            {/* Subcategory Strip Skeleton */}
+            {category !== "Rules" && !hideSubCategories && (
+                <div className="flex flex-wrap gap-y-4 gap-x-2 sm:gap-x-4 px-1 py-3 mb-4">
+                    {Array.from({ length: 10 }).map((_, i) => (
+                        <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 w-[calc((100%-32px)/5)] sm:w-[calc((100%-48px)/7)] lg:w-[calc((100%-80px)/10)]">
+                            <div className="w-12 h-12 rounded bg-slate-200/60 animate-pulse" />
+                            <div className="w-10 h-2.5 rounded bg-slate-200/60 animate-pulse" />
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Product Grid Skeleton (Masonry mimic) */}
+            <div className="flex gap-2 sm:gap-6 items-start w-full max-w-full overflow-hidden">
+                {[1, 2, 3, 4, 5].map((colIdx) => {
+                    let visibilityClass = "flex-1 flex flex-col gap-2 sm:gap-6 min-w-0";
+                    if (colIdx === 3) visibilityClass += " hidden [@media(min-width:700px)]:flex";
+                    if (colIdx === 4) visibilityClass += " hidden [@media(min-width:1210px)]:flex";
+                    if (colIdx === 5) visibilityClass += " hidden [@media(min-width:1430px)]:flex";
+
+                    return (
+                        <div key={colIdx} className={visibilityClass}>
+                            {Array.from({ length: 3 }).map((_, i) => {
+                                // Randomize height for masonry feel
+                                const heights = ["h-48", "h-64", "h-72", "h-56"];
+                                const h = heights[(i + colIdx) % heights.length];
+                                return (
+                                    <div key={i} className={`w-full ${h} rounded-2xl bg-slate-200/50 animate-pulse flex flex-col justify-end p-4 gap-2`}>
+                                        <div className="w-3/4 h-3 rounded-full bg-slate-200" />
+                                        <div className="w-1/2 h-3 rounded-full bg-slate-200" />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+});
+MarketSkeleton.displayName = "MarketSkeleton";
+
+const RulesSection = ({
+    onOpenPrivacy,
+    onOpenTerms,
+    onOpenReturns,
+    onOpenHelp,
+    onLinkClick
+}: {
+    onOpenPrivacy: () => void;
+    onOpenTerms: () => void;
+    onOpenReturns: () => void;
+    onOpenHelp: () => void;
+    onLinkClick: (href: string) => void;
+}) => {
+    const policies = [
+        { title: "Privacy policy", onClick: onOpenPrivacy },
+        { title: "Terms of service", onClick: onOpenTerms },
+        { title: "7days return policy", onClick: onOpenReturns },
+        { title: "Shipping Fee coverage", href: "/help/shipping" },
+        { title: "Become a vendor", href: "/profile/business/business-status" },
+        { title: "Shop owner policy", href: "/help/shop-owner-policy" },
+        { title: "Help center", onClick: onOpenHelp },
+    ];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className=" mx-auto px-4 py-12"
+        >
+            <div className="p-4">
+                <div className="flex flex-col items-center text-center mb-10">
+                    <h2 className="text-5xl font-black text-rose-500 mb-2">stoqle</h2>
+                </div>
+
+                <div className="flex flex-col">
+                    {policies.map((policy, idx) => {
+                        const content = (
+                            <>
+                                <span className="text-slate-800 text-[14px] font-bold group-hover:text-rose-600 transition-colors">
+                                    {policy.title}
+                                </span>
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center group-hover:bg-rose-50 transition-colors">
+                                    <ChevronRight size={18} className="text-slate-400 group-hover:text-rose-500 transition-colors" />
+                                </div>
+                            </>
+                        );
+
+                        if (policy.onClick) {
+                            return (
+                                <button
+                                    key={idx}
+                                    onClick={policy.onClick}
+                                    className="flex items-center justify-between py-2 border-b border-slate-200 last:border-0 group hover:px-2 transition-all duration-300 w-full text-left"
+                                >
+                                    {content}
+                                </button>
+                            );
+                        }
+
+                        return (
+                            <button
+                                key={idx}
+                                onClick={() => onLinkClick(policy.href || "#")}
+                                className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0 group hover:px-2 transition-all duration-300 w-full text-left"
+                            >
+                                {content}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </motion.div >
+    );
+};
+
+export default function MarketClient({ params: paramsPromise, initialCategories, hideTabs, initialCategory, softCategory, relatedVendorIds, hideCartIcon, disableScrollPersistence, recommendationMode, hideSubCategories }: Props) {
     const routeParams = React.use(paramsPromise);
-    const [activeCategory, setActiveCategory] = useState<string>(initialCategory || MARKET_CACHE.category);
-    const [products, setProducts] = useState<any[]>(initialCategory && initialCategory !== MARKET_CACHE.category ? [] : MARKET_CACHE.products);
-    const [loading, setLoading] = useState<boolean>(initialCategory && initialCategory !== MARKET_CACHE.category ? true : MARKET_CACHE.products.length === 0);
-    const [isRestoring, setIsRestoring] = useState(false);
+    const [activeCategory, setActiveCategory] = useState<string>(initialCategory || "For you");
+
+    // Restore cached category after mount to avoid hydration mismatch
+    useEffect(() => {
+        if (!initialCategory && MARKET_CACHE.activeCategory !== "For you") {
+            setActiveCategory(MARKET_CACHE.activeCategory);
+        }
+    }, [initialCategory]);
+    const [products, setProducts] = useState<any[]>(() => {
+        const cached = MARKET_CACHE.categoryData[initialCategory || MARKET_CACHE.activeCategory];
+        // If we have cached products, mark them as restored to bypass initial animation
+        return cached?.products ? cached.products.map(p => ({ ...p, isRestored: true })) : [];
+    });
+    const [loading, setLoading] = useState<boolean>(() => {
+        const cached = MARKET_CACHE.categoryData[initialCategory || MARKET_CACHE.activeCategory];
+        return !cached;
+    });
+    // Initialize isRestoring based on whether we loaded cached products
+    const [isRestoring, setIsRestoring] = useState(() => {
+        const cached = MARKET_CACHE.categoryData[initialCategory || MARKET_CACHE.activeCategory];
+        return !!(cached && cached.products && cached.products.length > 0);
+    });
     const lastOfflineToastRef = useRef<number>(0);
 
     const showOfflineToast = useCallback(() => {
@@ -704,6 +383,12 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             lastOfflineToastRef.current = now;
         }
     }, []);
+
+    const [pullDistance, setPullDistance] = useState(0);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const touchStartY = useRef(0);
+    const isPulling = useRef(false);
+
     const [error, setError] = useState<string | null>(null);
     const [selectedProductPayload, setSelectedProductPayload] = useState<PreviewPayload | null>(null);
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -716,16 +401,24 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     const [clickPos, setClickPos] = useState({ x: 0, y: 0 });
 
     // --- Pagination State ---
-    const [page, setPage] = useState(MARKET_CACHE.page);
-    const [hasMore, setHasMore] = useState(MARKET_CACHE.hasMore);
-    const [socialCursor, setSocialCursor] = useState<string | null>(null);
+    const [page, setPage] = useState(() => {
+        const cached = MARKET_CACHE.categoryData[initialCategory || MARKET_CACHE.activeCategory];
+        return cached?.page || 0;
+    });
+    const [hasMore, setHasMore] = useState(() => {
+        const cached = MARKET_CACHE.categoryData[initialCategory || MARKET_CACHE.activeCategory];
+        return cached ? cached.hasMore : true;
+    });
+    const [socialCursor, setSocialCursor] = useState<string | null>(() => {
+        const cached = MARKET_CACHE.categoryData[initialCategory || MARKET_CACHE.activeCategory];
+        return cached?.socialCursor || null;
+    });
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const loaderRef = useRef<HTMLDivElement>(null);
     const tabsRef = useRef<HTMLDivElement>(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [showManualLoading, setShowManualLoading] = useState(false);
     const [isOpeningProduct, setIsOpeningProduct] = useState(false);
-    const LIMIT = 10;
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -734,12 +427,84 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     const { user, token, isHydrated } = auth;
     const [showLoginModal, setShowLoginModal] = useState(false);
 
+    // --- Policy Modals State ---
+    const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+    const [termsModalOpen, setTermsModalOpen] = useState(false);
+    const [returnsModalOpen, setReturnsModalOpen] = useState(false);
+    const [helpModalOpen, setHelpModalOpen] = useState(false);
+
     // --- Actionable Orders State ---
     const [actionableData, setActionableData] = useState<{ vendorPendingCount: number, customerDeliveredCount: number, customerOutForDeliveryCount: number } | null>(null);
-    const [fetchedCategories, setFetchedCategories] = useState<string[]>(MARKET_CACHE.categories);
+    const [fetchedCategories, setFetchedCategories] = useState<string[]>([]);
     const [isScrolled, setIsScrolled] = useState(false);
     const [showScrollTop, setShowScrollTop] = useState(false);
-    const LIMIT_SOCIAL = 5;
+
+    useEffect(() => {
+        if (initialCategories && initialCategories.length > 0) {
+            setFetchedCategories(initialCategories);
+        } else if (MARKET_CACHE.categories.length > 0) {
+            setFetchedCategories(MARKET_CACHE.categories);
+        }
+    }, [initialCategories]);
+
+    // --- Touch pull-to-refresh listener ---
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const handleTouchStart = (e: TouchEvent) => {
+            if (modalOpen || reelsModalOpen || socialPostModalOpen || privacyModalOpen || termsModalOpen || returnsModalOpen || helpModalOpen) return;
+            const containerScrollTop = window.scrollY || document.documentElement.scrollTop;
+            if (containerScrollTop <= 2) {
+                touchStartY.current = e.touches[0].pageY;
+                isPulling.current = true;
+            } else {
+                isPulling.current = false;
+            }
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (!isPulling.current) return;
+            const currentY = e.touches[0].pageY;
+            const diff = currentY - touchStartY.current;
+
+            if (diff > 0) {
+                const distance = Math.min(diff * 0.45, 90);
+                setPullDistance(distance);
+                if (distance > 10) {
+                    if (e.cancelable) e.preventDefault();
+                }
+            }
+        };
+
+        const handleTouchEnd = () => {
+            if (!isPulling.current) return;
+            isPulling.current = false;
+
+            if (pullDistance > 60) {
+                setIsRefreshing(true);
+                handleManualRefresh();
+                setTimeout(() => {
+                    setIsRefreshing(false);
+                    setPullDistance(0);
+                }, 1500);
+            } else {
+                setPullDistance(0);
+            }
+        };
+
+        window.addEventListener("touchstart", handleTouchStart, { passive: false });
+        window.addEventListener("touchmove", handleTouchMove, { passive: false });
+        window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+        return () => {
+            window.removeEventListener("touchstart", handleTouchStart);
+            window.removeEventListener("touchmove", handleTouchMove);
+            window.removeEventListener("touchend", handleTouchEnd);
+        };
+    }, [pullDistance, activeCategory, modalOpen, reelsModalOpen, socialPostModalOpen, privacyModalOpen, termsModalOpen, returnsModalOpen, helpModalOpen]);
+
+    // --- Subcategory search filter ---
+
 
     // --- INACTIVITY REFRESH ENGINE ---
     const lastHiddenAt = useRef<number | null>(null);
@@ -766,7 +531,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
     }, []);
 
     useEffect(() => {
-        const handleScroll = () => {
+        const handleScrollHeader = () => {
             if (window.scrollY > 50) {
                 setIsScrolled(true);
             } else {
@@ -774,55 +539,32 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             }
             setShowScrollTop(window.scrollY > 400);
         };
-        window.addEventListener("scroll", handleScroll, { passive: true });
-        return () => window.removeEventListener("scroll", handleScroll);
+        window.addEventListener("scroll", handleScrollHeader, { passive: true });
+        return () => window.removeEventListener("scroll", handleScrollHeader);
     }, []);
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // --- IDB Initialization & Cross-Tab Sync ---
-    useEffect(() => {
-        // 1. Initial IDB Hydration
-        if (products.length === 0) {
-            idbGet<any[]>("stoqle_market_cache_products").then((data) => {
-                if (data && data.length > 0 && activeCategory === MARKET_CACHE.category) {
-                    MARKET_CACHE.products = data;
-                    setProducts(data);
-                    setIsRestoring(true);
-                    setLoading(false);
-                }
-            }).catch(console.error);
-        }
-
-        // 2. Cross-Tab Sync Worker
-        const handleStorage = (e: StorageEvent) => {
-            if (e.key === "stoqle_market_cache_time") {
-                // Another tab updated the cache! Let's pull the latest IDB data silently.
-                idbGet<any[]>("stoqle_market_cache_products").then((data) => {
-                    if (data && data.length > 0) {
-                        MARKET_CACHE.products = data;
-                        setProducts(data);
-                    }
-                }).catch(console.error);
-            }
-        };
-        window.addEventListener("storage", handleStorage);
-        return () => window.removeEventListener("storage", handleStorage);
-    }, [activeCategory]);
+    // --- IDB Initialization & Cross-Tab Sync (Legacy clean up: now handled by categoryData) ---
+    // The previous global IDB state for stoqle_market_cache_products was monolithic.
+    // Future enhancements can implement a per-category indexeddb cache, but for now
+    // memory cache (MARKET_CACHE.categoryData) serves the "blink-eye" soft navigations.
 
 
     const handleManualRefresh = () => {
         scrollToTop();
         setShowManualLoading(true);
         setTimeout(() => {
-            MARKET_CACHE.products = [];
-            MARKET_CACHE.page = 0;
-            MARKET_CACHE.category = ""; // Force fresh load
-            setRefreshKey(prev => prev + 1);
+            // Force a full clean refresh
+            delete MARKET_CACHE.categoryData[activeCategory];
+            setProducts([]); // Clear current products to force the big loader
+            setLoading(true); // Show the main loader
+            setIsRestoring(false);
+            setRefreshKey(Date.now()); // Use timestamp to ensure unique effect trigger
             setShowManualLoading(false);
-        }, 600);
+        }, 400);
     };
 
     useEffect(() => {
@@ -986,52 +728,81 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
 
     // We could fetch actual categories or just have common ones
     const CATEGORIES = useMemo(
-        () => fetchedCategories.length > 0 ? fetchedCategories : ["For you", "PARTNERS"],
+        () => {
+            const base = fetchedCategories.length > 0 ? fetchedCategories : ["For you", "PARTNERS"];
+            return [...base, "Rules"];
+        },
         [fetchedCategories]
     );
 
 
     const fetchPage = async (pageNum: number) => {
-        if (!hasMore || isLoadingMore) return;
+        // Rules tab is static; skip fetching
+        if (activeCategory === "Rules") {
+            setLoading(false);
+            setIsLoadingMore(false);
+            return;
+        }
+
+        // Only guard against hasMore if we are actually paginating (pageNum > 0)
+        // Initial loads (pageNum === 0) should always proceed to ensure data freshness or clear loading states.
+        if ((!hasMore && pageNum > 0) || isLoadingMore) return;
 
         setIsLoadingMore(true);
-        // Instant Optimization: Only show loading shimmer if we literally have zero products to show
-        if (pageNum === 0 && products.length === 0) setLoading(true);
+        // Instant Optimization: Only show loading state if we literally have zero products to show
+        if (pageNum === 0) {
+            if (products.length === 0) setLoading(true);
+            setIsRestoring(false);
+        }
 
         try {
             let nextProducts: ProductFeedItem[] = [];
             let nextPosts: any[] = [];
+            let currentNextCursor: string | null = null;
 
             if (activeCategory === "PARTNERS") {
-                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true, softCategory, relatedVendorIds);
+                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, null, true, softCategory, relatedVendorIds, pageNum === 0 ? refreshKey : undefined);
                 nextProducts = res?.data || [];
+            } else if (recommendationMode) {
+                const res = await fetchCartRecommendations(token!, LIMIT, pageNum * LIMIT);
+                nextProducts = res?.data?.items || [];
+                // If we got fewer items than requested, we've reached the end
+                if (nextProducts.length < LIMIT) setHasMore(false);
             } else {
                 const bizCat = activeCategory === "For you" ? null : activeCategory;
-                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, bizCat, false, softCategory, relatedVendorIds);
+                const res = await fetchPersonalizedFeed(LIMIT, pageNum * LIMIT, token, bizCat, false, softCategory, relatedVendorIds, pageNum === 0 ? refreshKey : undefined);
                 nextProducts = res?.data || [];
 
                 // Fetch social posts with linked products using the dynamic Smart Reels engine
-                if (activeCategory === "For you" || activeCategory === "PARTNERS" || softCategory) {
-                    try {
-                        const { posts, nextCursor } = await fetchSmartReels({
-                            limit: LIMIT_SOCIAL,
-                            cursor: pageNum === 0 ? null : socialCursor,
-                            token: token || undefined,
-                            is_product_linked: true,
-                            softCategory
-                        });
-                        nextPosts = posts;
-                        setSocialCursor(nextCursor);
-                    } catch (err: any) {
-                        console.error("Failed to fetch linked social posts", err);
-                    }
+                try {
+                    const { posts, nextCursor } = await fetchSmartReels({
+                        limit: LIMIT_SOCIAL,
+                        cursor: pageNum === 0 ? null : socialCursor,
+                        token: token || undefined,
+                        is_product_linked: true,
+                        softCategory,
+                        business_category: bizCat || undefined,
+                        v: pageNum === 0 ? refreshKey : undefined
+                    });
+                    nextPosts = posts;
+                    currentNextCursor = nextCursor;
+                    setSocialCursor(nextCursor);
+                } catch (err: any) {
+                    console.error("Failed to fetch linked social posts", err);
                 }
             }
 
-            // If this was an authenticated fetch, mark the cache as personalized
+            // If this was an authenticated fetch, mark the category cache as personalized
             if (pageNum === 0) {
-                MARKET_CACHE.personalized = !!token;
-                MARKET_CACHE.lastFetchedAt = Date.now();
+                if (!MARKET_CACHE.categoryData[activeCategory]) {
+                    MARKET_CACHE.categoryData[activeCategory] = {
+                        products: [], page: 0, hasMore: true, scrollPos: 0,
+                        socialCursor: null, lastFetchedAt: Date.now(), personalized: !!token
+                    };
+                } else {
+                    MARKET_CACHE.categoryData[activeCategory].personalized = !!token;
+                    MARKET_CACHE.categoryData[activeCategory].lastFetchedAt = Date.now();
+                }
             }
 
             // Update likeData based on all fetched products
@@ -1138,30 +909,41 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 // Stale (viewed-linked-product) posts always at the bottom
                 stalePosts.forEach((post: any) => combined.push(post));
 
+                // ─── FINAL DEDUPLICATION ──────────────────────────────────────────
+                // Ensure no items are duplicated within the combined batch itself
+                const seenInBatch = new Set();
+                const deduplicatedCombined: any[] = [];
+                combined.forEach(item => {
+                    if (!seenInBatch.has(item.product_id)) {
+                        deduplicatedCombined.push(item);
+                        seenInBatch.add(item.product_id);
+                    }
+                });
+
 
                 // ─── Assign originalIndex AFTER combining so animation is serial ──
                 // Each item's delay is based on its true visual slot, not on whether
                 // it's a product or a social post.
                 const baseOffset = pageNum === 0 ? 0 : prev.length;
-                combined.forEach((item, i) => {
+                deduplicatedCombined.forEach((item, i) => {
                     item.originalIndex = baseOffset + i;
                 });
 
                 const existingIds = new Set(prev.map(p => p.product_id));
-                const unique = combined.filter((p) => !existingIds.has(p.product_id));
-                const finalProducts = pageNum === 0 ? combined : [...prev, ...unique];
+                const unique = deduplicatedCombined.filter((p) => !existingIds.has(p.product_id));
+                const finalProducts = pageNum === 0 ? deduplicatedCombined : [...prev, ...unique];
 
                 if (!hideTabs) {
-                    MARKET_CACHE.products = finalProducts;
-                    MARKET_CACHE.page = pageNum + 1;
-                    MARKET_CACHE.hasMore = nextProducts.length >= LIMIT;
+                    MARKET_CACHE.categoryData[activeCategory] = {
+                        products: finalProducts,
+                        page: pageNum + 1,
+                        hasMore: nextProducts.length >= LIMIT,
+                        scrollPos: window.scrollY,
+                        socialCursor: currentNextCursor || null,
+                        lastFetchedAt: Date.now(),
+                        personalized: !!token
+                    };
                     MARKET_CACHE.likeData = { ...likeData, ...nextLikeData };
-
-                    // Persist for next session's "blink eye" load via IDB
-                    if (typeof window !== "undefined" && pageNum === 0) {
-                        idbSet("stoqle_market_cache_products", finalProducts).catch(console.error);
-                        localStorage.setItem("stoqle_market_cache_time", Date.now().toString());
-                    }
                 }
 
                 return finalProducts;
@@ -1182,7 +964,14 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                     idbGet<any[]>("stoqle_market_cache_products").then((data) => {
                         if (data && data.length > 0) {
                             setProducts(data);
-                            MARKET_CACHE.products = data;
+                            if (MARKET_CACHE.categoryData[activeCategory]) {
+                                MARKET_CACHE.categoryData[activeCategory].products = data;
+                            } else {
+                                MARKET_CACHE.categoryData[activeCategory] = {
+                                    products: data, page: 0, hasMore: true, scrollPos: 0,
+                                    socialCursor: null, lastFetchedAt: Date.now(), personalized: false
+                                };
+                            }
                             setError(null); // Clear error if we found cache
                         } else {
                             setError("No internet connection and no cached products found.");
@@ -1218,37 +1007,88 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
         if (!isHydrated) return; // Wait for auth state to be resolved from storage
 
         const CACHE_TTL = 1000 * 60 * 5; // 5 mins
+        const cached = MARKET_CACHE.categoryData[activeCategory];
 
-        // If we have cached products for the right category...
-        if (MARKET_CACHE.products.length > 0 && MARKET_CACHE.category === activeCategory) {
-            const isFresh = Date.now() - MARKET_CACHE.lastFetchedAt < CACHE_TTL;
-            // ...but we just got a token and the cache isn't personalized, we MUST re-fetch
-            const needsPersonalization = token && !MARKET_CACHE.personalized && activeCategory !== "Trending";
+        if (cached && cached.products.length > 0) {
+            const isFresh = Date.now() - cached.lastFetchedAt < CACHE_TTL;
+            const needsPersonalization = token && !cached.personalized && activeCategory !== "Trending";
 
             if (!needsPersonalization && isFresh) {
-                setProducts(MARKET_CACHE.products);
+                // Mark loaded cached products as restored to skip sequential animation
+                setProducts(cached.products.map(p => ({ ...p, isRestored: true })));
+                setPage(cached.page);
+                setHasMore(cached.hasMore);
+                setSocialCursor(cached.socialCursor);
                 setLoading(false);
+                setIsRestoring(true);
+
+                // Restore scroll position
+                setTimeout(() => {
+                    window.scrollTo({ top: cached.scrollPos, behavior: "instant" });
+                    // After a short delay, we can turn off the restoring flag so future appends animate
+                    setTimeout(() => setIsRestoring(false), 100);
+                }, 10);
                 return;
             }
         }
 
-        // Only clear if category actually changed and it's not the restored state
-        if (!hideTabs && MARKET_CACHE.category !== activeCategory) {
-            MARKET_CACHE.products = [];
-            MARKET_CACHE.page = 0;
-            MARKET_CACHE.hasMore = true;
-            MARKET_CACHE.category = activeCategory;
-        }
-
         setPage(0);
         setHasMore(true);
-        // Optimization: Do NOT clear existing products if we're just refreshing/personalizing
-        // This ensures the "blink eye" instant opening of the page.
-        if (products.length === 0) setProducts([]);
+        setSocialCursor(null);
+        if (products.length === 0) setLoading(true);
 
         fetchPage(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isHydrated, token, activeCategory, refreshKey]);
+
+    const onCategoryChange = useCallback((newCat: string) => {
+        if (newCat === activeCategory) {
+            handleManualRefresh();
+            return;
+        }
+
+        // 1. Save current state to cache before switching
+        MARKET_CACHE.categoryData[activeCategory] = {
+            products,
+            page,
+            hasMore,
+            scrollPos: window.scrollY,
+            socialCursor,
+            lastFetchedAt: MARKET_CACHE.categoryData[activeCategory]?.lastFetchedAt || Date.now(),
+            personalized: MARKET_CACHE.categoryData[activeCategory]?.personalized || !!token
+        };
+
+        // 2. Clear current view state to prevent showing wrong products
+        const cached = MARKET_CACHE.categoryData[newCat];
+        if (cached) {
+            // Mark loaded cached products as restored to skip sequential animation
+            setProducts(cached.products.map(p => ({ ...p, isRestored: true })));
+            setPage(cached.page);
+            setHasMore(cached.hasMore);
+            setSocialCursor(cached.socialCursor);
+            setLoading(false);
+            setError(null);
+            setIsRestoring(true);
+
+            // Restore scroll position after a micro-task to ensure layout is ready
+            setTimeout(() => {
+                window.scrollTo({ top: cached.scrollPos, behavior: "instant" });
+                // After a short delay, we can turn off the restoring flag so future appends animate
+                setTimeout(() => setIsRestoring(false), 100);
+            }, 0);
+        } else {
+            setProducts([]);
+            setPage(0);
+            setHasMore(true);
+            setSocialCursor(null);
+            setLoading(true);
+            setError(null);
+            window.scrollTo({ top: 0, behavior: "instant" });
+        }
+
+        setActiveCategory(newCat);
+        MARKET_CACHE.activeCategory = newCat;
+    }, [activeCategory, products, page, hasMore, socialCursor, token]);
 
     // Sync active category if initialCategory prop changes (e.g. from cart updates)
     useEffect(() => {
@@ -1293,26 +1133,51 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
 
     // Handle Scroll Persistence
     useEffect(() => {
+        if (disableScrollPersistence) return;
+
         const handleScroll = () => {
-            MARKET_CACHE.scrollPos = window.scrollY;
+            // Guard: Only update market cache if we are actually on a market/shop route
+            if (!window.location.pathname.startsWith("/market") && !window.location.pathname.startsWith("/shop")) return;
+            if (products.length === 0 || loading) return;
+
+            const currentScroll = window.scrollY;
+            if (MARKET_CACHE.categoryData[activeCategory]) {
+                MARKET_CACHE.categoryData[activeCategory].scrollPos = currentScroll;
+            }
             if (typeof window !== "undefined" && !navigator.onLine) {
                 showOfflineToast();
             }
         };
         window.addEventListener("scroll", handleScroll, { passive: true });
         return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
+    }, [activeCategory, products.length, loading]);
 
-    // Restore Scroll Position
+    // Initial Mount: Reset to top ONLY if we are not restoring from a specific category cache
     useEffect(() => {
+        if (disableScrollPersistence) return;
+
+        if (typeof window !== 'undefined') {
+            window.history.scrollRestoration = 'manual';
+        }
+
+        if (!isRestoring) {
+            window.scrollTo({ top: 0, behavior: "instant" });
+        }
+    }, []); // Run once on mount
+
+    // Restore Scroll Position when returning to the page
+    useEffect(() => {
+        if (disableScrollPersistence) return;
         if (isRestoring && products.length > 0) {
             const timer = setTimeout(() => {
-                window.scrollTo(0, MARKET_CACHE.scrollPos);
-                setIsRestoring(false);
-            }, 50);
+                const targetScroll = MARKET_CACHE.categoryData[activeCategory]?.scrollPos || 0;
+                window.scrollTo(0, targetScroll);
+                // Turn off restoring flag after layout settles
+                setTimeout(() => setIsRestoring(false), 150);
+            }, 100);
             return () => clearTimeout(timer);
         }
-    }, [products, isRestoring]);
+    }, [products, isRestoring, activeCategory]);
 
     // Scroll listener for lazy loading
     useEffect(() => {
@@ -1367,7 +1232,7 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             newUrl += search ? `?${search}` : "";
 
             if (newUrl !== window.location.pathname + window.location.search) {
-                if (replace) {
+                if (replace || recommendationMode) {
                     window.history.replaceState(window.history.state, "", newUrl);
                 } else {
                     window.history.pushState(window.history.state, "", newUrl);
@@ -1613,15 +1478,72 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
 
     return (
         <>
-            <section className={`min-h-screen transition-colors duration-500 pb-10 ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-slate-50"}`}>
+            {/* Dynamic Pull-to-Refresh Indicator */}
+            {(pullDistance > 0 || isRefreshing) && (
+                <div 
+                    style={{ 
+                        top: isScrolled ? "0px" : "64px",
+                        height: `${isRefreshing ? 60 : pullDistance}px`,
+                        opacity: isRefreshing ? 1 : Math.min(pullDistance / 40, 1),
+                    }}
+                    className="fixed left-0 right-0 z-[2600] flex items-center justify-center pointer-events-none transition-all duration-150"
+                >
+                    <div 
+                        style={{
+                            transform: `translateY(${isRefreshing ? 12 : Math.max(0, pullDistance - 40)}px)`,
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 shadow-md border border-slate-100 backdrop-blur-sm transition-transform duration-75"
+                    >
+                        <div 
+                            style={{ 
+                                transform: isRefreshing ? undefined : `rotate(${pullDistance * 4.5}deg)`,
+                                transition: isRefreshing ? "none" : "transform 75ms linear"
+                            }}
+                            className="flex items-center justify-center shrink-0"
+                        >
+                            <StoqleLoader size={14} />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-600">
+                            {isRefreshing ? "Refreshing..." : pullDistance > 60 ? "Release to refresh" : "Pull to refresh"}
+                        </span>
+                    </div>
+                </div>
+            )}
+            <motion.section 
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.1}
+                onDragEnd={(e, info) => {
+                    // Only handle swipes if no modal is open
+                    if (modalOpen || reelsModalOpen || socialPostModalOpen || privacyModalOpen || termsModalOpen || returnsModalOpen || helpModalOpen) return;
+                    
+                    const threshold = 100;
+                    const velocityThreshold = 500;
+                    const { offset, velocity } = info;
+
+                    if (Math.abs(offset.x) > threshold || Math.abs(velocity.x) > velocityThreshold) {
+                        // Prevent swipe if user is mostly scrolling vertically
+                        if (Math.abs(offset.y) > Math.abs(offset.x)) return;
+
+                        const currentIndex = CATEGORIES.indexOf(activeCategory);
+                        if (offset.x < -threshold && currentIndex < CATEGORIES.length - 1) {
+                            // Swiped Left -> Next Tab
+                            onCategoryChange(CATEGORIES[currentIndex + 1]);
+                        } else if (offset.x > threshold && currentIndex > 0) {
+                            // Swiped Right -> Previous Tab
+                            onCategoryChange(CATEGORIES[currentIndex - 1]);
+                        }
+                    }
+                }}
+                className={`min-h-screen transition-colors duration-500 pb-10 ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-slate-50"}`}>
                 {!hideTabs && (
-                    <div className={`sticky transition-all duration-500 ${isScrolled ? "top-0 z-[2500] " : "top-[64px] z-20"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"}`}>
+                    <div className={`sticky z-20 ${isScrolled ? "top-0 !z-[2500]" : "top-[64px]"} ${activeCategory === "PARTNERS" ? "bg-[#f0fdf4]" : "bg-white"} transition-colors duration-500`}>
                         <div ref={tabsRef} className="flex px-4 py-2.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth">
                             {CATEGORIES.map((item) => (
                                 <button
                                     key={item}
                                     data-active={activeCategory === item}
-                                    onClick={() => setActiveCategory(item)}
+                                    onClick={() => onCategoryChange(item)}
                                     className={`whitespace-nowrap relative rounded-full px-3 py-1.5 text-sm transition-all ${activeCategory === "PARTNERS"
                                         ? item === "PARTNERS"
                                             ? "text-emerald-600 font-bold italic tracking-tighter"
@@ -1722,15 +1644,15 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                             transition={{ type: "spring", damping: 30, stiffness: 300 }}
                             className="flex justify-center items-center py-6 bg-slate-50 overflow-hidden"
                         >
-                            {/* <div className="flex items-center gap-2 px-6 py-3 rounded-full border-slate-100">
+                            <div className="flex items-center gap-2 px-6 py-3 ">
                                 <StoqleLoader size={20} />
-                            </div> */}
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
 
                 {loading ? (
-                    <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
+                    <MarketSkeleton category={activeCategory} hideSubCategories={hideSubCategories} />
                 ) : error ? (
                     <div className="py-24 flex flex-col items-center justify-center text-center px-4">
                         <motion.div
@@ -1763,50 +1685,126 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                     </div>
                 ) : (
                     <div className="px-1">
-                        {filteredProducts.length > 0 ? (
-                            <MasonryGrid
-                                items={filteredProducts}
-                                likeData={likeData}
-                                postLikeData={postLikeData}
-                                fetchingProductId={fetchingProductId}
-                                handleProductClick={handleProductClick}
-                                handleReelsClick={handleReelsClick}
-                                handleLikeClick={handleLikeClick}
-                                handlePostLikeClick={handlePostLikeClick}
-                                handlePrefetch={handlePrefetch}
-                                formatUrl={formatUrl}
-                                router={router}
-                                isRestored={isRestoring}
-                                isPartnerTab={activeCategory === "PARTNERS"}
+                        {activeCategory === "Rules" ? (
+                            <RulesSection
+                                onOpenPrivacy={() => {
+                                    setIsOpeningProduct(true);
+                                    setTimeout(() => {
+                                        setPrivacyModalOpen(true);
+                                        setIsOpeningProduct(false);
+                                    }, 600);
+                                }}
+                                onOpenTerms={() => {
+                                    setIsOpeningProduct(true);
+                                    setTimeout(() => {
+                                        setTermsModalOpen(true);
+                                        setIsOpeningProduct(false);
+                                    }, 600);
+                                }}
+                                onOpenReturns={() => {
+                                    setIsOpeningProduct(true);
+                                    setTimeout(() => {
+                                        setReturnsModalOpen(true);
+                                        setIsOpeningProduct(false);
+                                    }, 600);
+                                }}
+                                onOpenHelp={() => {
+                                    setIsOpeningProduct(true);
+                                    setTimeout(() => {
+                                        setHelpModalOpen(true);
+                                        setIsOpeningProduct(false);
+                                    }, 600);
+                                }}
+                                onLinkClick={(href) => {
+                                    setIsOpeningProduct(true);
+                                    setTimeout(() => {
+                                        router.push(href);
+                                        // We keep it true for a bit while next.js starts the transition
+                                        setTimeout(() => setIsOpeningProduct(false), 1000);
+                                    }, 600);
+                                }}
                             />
                         ) : (
-                            <div className="py-20 flex flex-col items-center justify-center text-slate-400">
-                                <div className="w-20 h-20 opacity-20 mb-4">
-                                    <ShoppingCart className="w-full h-full" />
-                                </div>
-                                <p className="text-sm font-medium">No results found in this category</p>
-                                <button
-                                    onClick={() => setActiveCategory("For you")}
-                                    className="mt-4 text-xs font-bold text-rose-500 hover:underline"
-                                >
-                                    View all products
-                                </button>
-                            </div>
+                            <>
+                                {/* ── For You quick-action strip ── */}
+                                {activeCategory === "For you" && !hideSubCategories && (
+                                    <ForYouStrip
+                                        router={router}
+                                        onTrending={() => {
+                                            // scroll to top so Trending feed is visible
+                                            window.scrollTo({ top: 0, behavior: "smooth" });
+                                        }}
+                                        onNavigate={(href) => {
+                                            setIsOpeningProduct(true);
+                                            router.push(href);
+                                        }}
+                                    />
+                                )}
+
+                                {/* ── Subcategory strip for business categories ── */}
+                                {activeCategory !== "For you" && activeCategory !== "Rules" && !hideSubCategories && (
+                                    <SubCategoryStrip
+                                        category={activeCategory}
+                                        onSelect={(name) => {
+                                            const href = `/market/subcategory/${encodeURIComponent(activeCategory)}/${encodeURIComponent(name)}`;
+                                            setIsOpeningProduct(true);
+                                            router.push(href);
+                                        }}
+                                        onNavigate={(href) => {
+                                            setIsOpeningProduct(true);
+                                            router.push(href);
+                                        }}
+                                    />
+                                )}
+
+                                {filteredProducts.length > 0 ? (
+                                    <MasonryGrid
+                                        items={filteredProducts}
+                                        likeData={likeData}
+                                        postLikeData={postLikeData}
+                                        fetchingProductId={fetchingProductId}
+                                        handleProductClick={handleProductClick}
+                                        handleReelsClick={handleReelsClick}
+                                        handleLikeClick={handleLikeClick}
+                                        handlePostLikeClick={handlePostLikeClick}
+                                        handlePrefetch={handlePrefetch}
+                                        formatUrl={formatUrl}
+                                        router={router}
+                                        isRestored={isRestoring}
+                                        isPartnerTab={activeCategory === "PARTNERS"}
+                                    />
+                                ) : (
+                                    <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+                                        <div className="w-30 h-30 ">
+                                            <img src="/assets/images/cart.png" alt="" />
+                                        </div>
+                                        <p className="text-sm font-medium">No results found in this category</p>
+                                        <button
+                                            onClick={() => setActiveCategory("For you")}
+                                            className="mt-4 text-xs font-bold text-rose-500 hover:underline"
+                                        >
+                                            View all products
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 )}
 
-                {/* Lazy Load Trigger */}
-                <div ref={loaderRef} className="py-10 flex justify-center">
-                    {isLoadingMore && hasMore && (
-                        <StoqleLoader size={30} />
-                    )}
-                    {!hasMore && products.length > 0 && (
-                        <p className="text-slate-400 text-xs italic">- THE END -</p>
-                    )}
-                </div>
+                {/* Lazy Load Trigger - only show if not in main loading/error state */}
+                {!loading && !error && (
+                    <div ref={loaderRef} className="py-10 flex justify-center">
+                        {isLoadingMore && hasMore && (
+                            <StoqleLoader size={30} />
+                        )}
+                        {!hasMore && products.length > 0 && (
+                            <p className="text-slate-400 text-xs italic">- THE END -</p>
+                        )}
+                    </div>
+                )}
 
-            </section >
+            </motion.section >
 
             {/* Floating Action Buttons */}
             <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-3">
@@ -1925,9 +1923,11 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
             {/* Instant Loader Overlay for Product/Post Modal */}
             <AnimatePresence>
                 {isOpeningProduct && (
-                    <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-transparent pointer-events-none"
+                    <div className="fixed inset-0 z-[999999] flex items-center justify-center pointer-events-none"
                     >
-                        <StoqleLoader size={30} />
+                        <div className="">
+                            <StoqleLoader size={30} />
+                        </div>
                     </div>
                 )}
             </AnimatePresence>
@@ -1947,7 +1947,15 @@ export default function MarketClient({ params: paramsPromise, initialCategories,
                 </div>
             )}
 
+            <PrivacyPolicyModal open={privacyModalOpen} onClose={() => setPrivacyModalOpen(false)} />
+            <UserAgreementModal open={termsModalOpen} onClose={() => setTermsModalOpen(false)} />
+            <SevenDayReturnModal open={returnsModalOpen} onClose={() => setReturnsModalOpen(false)} />
+            <HelpCenterModal isOpen={helpModalOpen} onClose={() => setHelpModalOpen(false)} />
+
             <style jsx global>{`
+                html {
+                    scroll-behavior: smooth;
+                }
                 @keyframes fadeIn {
                     from { opacity: 0; }
                     to { opacity: 1; }

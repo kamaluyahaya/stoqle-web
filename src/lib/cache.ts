@@ -11,15 +11,19 @@ export const DISCOVERY_CACHE = {
 };
 
 export const MARKET_CACHE = {
-  products: [] as any[],
   categories: [] as string[],
-  page: 0,
-  hasMore: true,
-  category: "For you",
+  activeCategory: "For you",
+  categoryData: {} as Record<string, {
+    products: any[],
+    page: number,
+    hasMore: boolean,
+    scrollPos: number,
+    socialCursor: string | null,
+    lastFetchedAt: number,
+    personalized: boolean
+  }>,
   likeData: {} as Record<number, { liked: boolean, count: number }>,
-  scrollPos: 0,
-  lastFetchedAt: 0,
-  personalized: false
+  globalScrollPos: 0,
 };
 
 export const PROFILE_CACHE = {

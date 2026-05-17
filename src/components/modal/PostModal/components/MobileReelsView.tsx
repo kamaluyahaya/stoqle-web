@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ChevronLeft, Search, Share2, MessageCircleMore } from 'lucide-react';
+import { ChevronLeft, Search, Share2, MessageCircleMore, Plus, Mic, Image as ImageIcon, Keyboard } from 'lucide-react';
 import { FaHeart, FaRegHeart } from 'react-icons/fa6';
+import { toast } from "sonner";
 import { XMarkIcon, FaceSmileIcon } from '@heroicons/react/24/outline';
 import { CheckBadgeIcon } from '@heroicons/react/24/solid';
 import { createPortal } from 'react-dom';
@@ -18,6 +19,12 @@ import CachedImage from '@/src/components/common/CachedImage';
 
 import MobileReelsCommentSection from './MobileReelsCommentSection';
 import { PostModalContext } from '../types';
+import ComposerAttachmentsModal from './ComposerAttachmentsModal';
+import AttachmentPostsModal from './AttachmentPostsModal';
+import AttachmentProductsModal from './AttachmentProductsModal';
+import AttachmentLocationModal from './AttachmentLocationModal';
+import AttachmentMediaModal from './AttachmentMediaModal';
+import AttachmentVoiceModal from './AttachmentVoiceModal';
 
 interface MobileReelsViewProps {
   ctx: PostModalContext;
@@ -90,28 +97,128 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
     desktopTextareaRef,
     setIsNavigating,
     pendingTransitionRef,
+    showAttachmentsModal,
+    setShowAttachmentsModal,
+    activeAttachmentModal,
+    setActiveAttachmentModal,
   } = ctx;
+
+  const metadataRef = useRef<any[]>([]);
+  const pendingImageFilesRef = useRef<File[]>([]);
+  const pendingAudioFileRef = useRef<File | undefined>(undefined);
+  const voiceMetaRef = useRef<any>(undefined);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const hiddenImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Limit to 4 total
+    const totalCurrent = pendingImageFilesRef.current.length;
+    const allowed = files.slice(0, 4 - totalCurrent);
+
+    if (allowed.length > 0) {
+      const newFiles = [...pendingImageFilesRef.current, ...allowed];
+      pendingImageFilesRef.current = newFiles;
+
+      const newPreviews = allowed.map(f => URL.createObjectURL(f));
+      setImagePreviews(prev => [...prev, ...newPreviews]);
+    }
+
+    // Reset input
+    e.target.value = "";
+  };
+
+  const removeImage = (idx: number) => {
+    const url = imagePreviews[idx];
+    URL.revokeObjectURL(url);
+
+    setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+    pendingImageFilesRef.current = pendingImageFilesRef.current.filter((_, i) => i !== idx);
+  };
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
+
+  const handleInsertToken = (token: string, metadata: any) => {
+    const val = commentText;
+    const spacer = val && !val.endsWith(' ') ? ' ' : '';
+    const newText = val + spacer + token + " ";
+    resizeReelTextarea(newText);
+    setCommentText(newText);
+    commentTextRef.current = newText;
+    metadataRef.current.push(metadata);
+
+    // Ensure composer is active
+    setIsCommenting(true);
+
+    const el = reelTextareaRef.current;
+    if (el) {
+      el.focus();
+      const pos = newText.length;
+      el.setSelectionRange(pos, pos);
+    }
+  };
 
   const handleEnrichedSubmit = (text?: string) => {
     const rawText = text ?? commentTextRef.current ?? commentText;
     const enriched = enrichTextWithSlugs(rawText);
     const final = enriched?.trim();
-    
-    if (final) {
-      handleAddComment(final);
+
+    if (final || pendingImageFilesRef.current.length > 0 || pendingAudioFileRef.current) {
+      const normalizeForFilter = (s: string) => s.replace(/[\s\u200B-\u200D\uFEFF]/g, '').toLowerCase();
+      const normFinal = normalizeForFilter(final || '');
+
+      const filteredMetadata = (metadataRef.current || []).filter(meta => {
+        if (!meta.display) return false;
+        return normFinal.includes(normalizeForFilter(meta.display));
+      });
+
+      const imageFiles = pendingImageFilesRef.current.length > 0 ? [...pendingImageFilesRef.current] : undefined;
+      const audioFile = pendingAudioFileRef.current;
+      const voiceMeta = voiceMetaRef.current;
+
+      handleAddComment(final || ' ', filteredMetadata, imageFiles, audioFile, voiceMeta);
       setIsCommenting(false);
       setShowMentions(false);
+      setShowAttachmentsModal?.(false);
       setCommentText("");
       commentTextRef.current = "";
+      metadataRef.current = [];
+      pendingImageFilesRef.current = [];
+      setImagePreviews([]);
+      pendingAudioFileRef.current = undefined;
+      voiceMetaRef.current = undefined;
     }
   };
 
   const autoAdjustHeight = () => {
-    if (reelTextareaRef.current) {
-      const el = reelTextareaRef.current;
-      el.style.height = 'auto';
-      el.style.height = Math.min(Math.max(el.scrollHeight, 44), 120) + 'px';
-    }
+    const el = reelTextareaRef.current;
+    if (!el) return;
+    // Collapse to 0 first so scrollHeight gives true content height,
+    // not the rows-attribute natural height (which 'auto' would use)
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    const next = Math.max(44, Math.min(scrollH, 120));
+    el.style.height = next + 'px';
+    el.style.overflowY = scrollH > 120 ? 'auto' : 'hidden';
+  };
+
+  // Imperatively resize using the actual new text — bypasses React's render cycle
+  // so height is always correct even for programmatic text changes (mentions, tokens)
+  const resizeReelTextarea = (newText: string) => {
+    const el = reelTextareaRef.current;
+    if (!el) return;
+    el.value = newText;          // temporarily write for accurate scrollHeight
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    el.style.height = Math.max(44, Math.min(scrollH, 120)) + 'px';
+    el.style.overflowY = scrollH > 120 ? 'auto' : 'hidden';
+    // React will sync el.value back on its next commit (same value = no visual change)
   };
 
   const handleMentionsScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -141,6 +248,17 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
       setShowTransitionLoader(false);
     }
   }, [currentReelIndex]);
+
+  // useEffect fires after the browser has painted, which is safer for SSR
+  // — ensures scrollHeight is always measured on current content, no race condition
+  useEffect(() => {
+    const el = reelTextareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    el.style.height = Math.max(44, Math.min(scrollH, 120)) + 'px';
+    el.style.overflowY = scrollH > 120 ? 'auto' : 'hidden';
+  }, [commentText]);
 
   // Helper: show the transition loader for up to 3s, then auto-hide
   const triggerTransitionLoader = useCallback((nextIndex: number, totalCount: number) => {
@@ -227,6 +345,10 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                 } else {
                   // No more reels — trigger prefetch and show brief loader
                   window.dispatchEvent(new CustomEvent("trigger-reel-prefetch"));
+                  toast.info("End of feed", {
+                    position: "bottom-center",
+                    duration: 1500,
+                  });
                 }
               } else {
                 // SWIPE DOWN -> PREV REEL
@@ -408,9 +530,15 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                               <Link
                                 href={rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`}
                                 onClick={(e) => handleProfileNavigation(e, rp.author_handle ? `/${rp.author_handle}` : `/user/profile/${rp.user?.id || rp.user_id || rp.author_id}`)}
-                                className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0"
+                                className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-slate-800 shrink-0 relative"
                               >
-                                <img src={rp.user?.avatar || rp.author_pic || "https://via.placeholder.com/100x100?text=User"} className="w-full h-full object-cover" alt="author" />
+                                <Image
+                                  src={rp.user?.avatar || rp.author_pic || "/assets/images/favio.png"}
+                                  fill
+                                  className="object-cover"
+                                  alt="author"
+                                  sizes="40px"
+                                />
                               </Link>
                               <div className="flex flex-col min-w-0">
                                 <div className="flex items-center gap-1 min-w-0">
@@ -689,7 +817,9 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                 </button>
               </div>
 
-              <div className="flex items-center gap-4">
+
+
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 min-w-[32px]">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleToggleLike(e); }}
@@ -799,9 +929,9 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                   <div className="absolute bottom-2 left-0 w-full z-[110] animate-in slide-in-from-bottom-2 duration-200">
                     <div className=" overflow-hidden flex flex-col">
 
-                      <div 
+                      <div
                         onScroll={handleMentionsScroll}
-                        className="p-2 overflow-x-auto flex gap-2 no-scrollbar" 
+                        className="p-2 overflow-x-auto flex gap-2 no-scrollbar"
                         style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
                       >
                         {isLoadingMentions ? (
@@ -839,24 +969,36 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                                     const mentionDisplay = `@${fullName}\u200B`;
                                     registerMention(mentionDisplay, u.username || u.business_slug || u.handle || u.slug || u.user_name || 'user');
                                     const newText = val.slice(0, lastAtIndex) + mentionDisplay + " " + textAfterCursor;
+                                    resizeReelTextarea(newText);
                                     setCommentText(newText);
                                     commentTextRef.current = newText;
                                   } else {
                                     const mentionDisplay = `@${fullName}\u200B`;
                                     if (isSelected) {
                                       const updated = commentText.replace(mentionDisplay, '');
+                                      resizeReelTextarea(updated);
                                       setCommentText(updated);
                                       commentTextRef.current = updated;
                                     } else {
                                       registerMention(mentionDisplay, u.username || u.business_slug || u.handle || u.slug || u.user_name || 'user');
                                       const spacer = val && !val.endsWith(' ') ? ' ' : '';
                                       const newText = val + spacer + mentionDisplay + " ";
+                                      resizeReelTextarea(newText);
                                       setCommentText(newText);
                                       commentTextRef.current = newText;
                                     }
                                   }
-                                  reelTextareaRef.current?.focus();
-                                  setTimeout(autoAdjustHeight, 0);
+                                  let targetPos = commentTextRef.current.length;
+                                  if (isActiveQuery) {
+                                    const mentionDisplay = `@${fullName}\u200B`;
+                                    targetPos = lastAtIndex + mentionDisplay.length + 1;
+                                  }
+
+                                  const el = reelTextareaRef.current;
+                                  if (el) {
+                                    el.focus();
+                                    el.setSelectionRange(targetPos, targetPos);
+                                  }
                                 }}
                                 className={`flex flex-col items-center gap-1.5 p-2 min-w-[70px] max-w-[80px] rounded-lg transition-colors active:scale-95 shrink-0 ${isSelected ? 'bg-white/10' : 'hover:bg-white/5'}`}
                               >
@@ -919,18 +1061,16 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                       mirrorRef.current.scrollTop = e.currentTarget.scrollTop;
                     }
                   }}
-                  rows={2}
+                  rows={1}
                   value={commentText}
                   onChange={(e) => {
                     const val = e.target.value;
                     commentTextRef.current = val;
                     setCommentText(val);
-                    const el = e.target;
-                    el.style.height = 'auto';
-                    el.style.height = Math.min(Math.max(el.scrollHeight, 44), 120) + 'px';
+                    requestAnimationFrame(autoAdjustHeight);
 
                     // Mention detection logic
-                    const cursorRotate = el.selectionStart;
+                    const cursorRotate = e.target.selectionStart;
                     const textBeforeCursor = val.slice(0, cursorRotate);
                     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
@@ -953,13 +1093,50 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                       handleEnrichedSubmit();
                     }
                   }}
-                  style={{ caretColor: '#f43f5e' }}
+                  style={{ caretColor: '#f43f5e', minHeight: '44px' }}
                   placeholder={replyingTo ? `Replying to ${(replyingTo as any).author_name || (replyingTo as any).user_name || 'someone'}...` : "Say something..."}
                   className="w-full bg-white/5 rounded-xl px-5 py-3 text-[14px] font-medium text-transparent placeholder:text-white/40 outline-none border border-white/10 resize-none overflow-hidden leading-snug"
                 />
+                <input
+                  type="file"
+                  ref={hiddenImageInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageChange}
+                />
               </div>
-              <div className="flex items-center justify-between gap-3">
+
+              {imagePreviews.length > 0 && (
+                <div className="flex items-center gap-2 px-1 overflow-x-auto no-scrollbar py-1">
+                  {imagePreviews.map((src, idx) => (
+                    <div key={idx} className="relative flex-shrink-0 w-14 h-14 group">
+                      <div className="w-full h-full rounded-xl overflow-hidden border border-white/10 shadow-sm bg-white/5 flex items-center justify-center relative">
+                        <Image
+                          src={src}
+                          alt="preview"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(idx);
+                        }}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                        title="Remove image"
+                      >
+                        <XMarkIcon className="w-3 h-3 stroke-[3]" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-1">
                 <div className="flex items-center gap-4 px-1">
+
                   <button
                     type="button"
                     onClick={(e) => {
@@ -976,31 +1153,18 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowEmojiPicker(true);
+                      hiddenImageInputRef.current?.click();
                     }}
                     className="p-1.5 rounded-full text-white/40 hover:bg-white/10 transition-all active:scale-90"
-                    title="Add emoji"
+                    title="Add images"
                   >
-                    <FaceSmileIcon className="w-5 h-5" />
+                    <ImageIcon className="w-5 h-5" />
                   </button>
+
+
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onTouchEnd={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setIsCommenting(false);
-                      setShowMentions(false);
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsCommenting(false);
-                      setShowMentions(false);
-                    }}
-                    className="px-5 py-2.5 rounded-full text-[13px] font-bold text-white/60 hover:text-white transition-colors"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex items-center gap-1">
+
                   <button
                     disabled={commentPosting || !commentText.trim()}
                     onTouchEnd={(e) => {
@@ -1021,7 +1185,7 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
               </div>
               {/* Emoji Shortcuts */}
               <div
-                className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 no-scrollbar"
+                className="flex items-center gap-1 overflow-x-auto px-0.5 no-scrollbar"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
               >
                 {EMOJI_SHORTCUTS.slice(0, 10).map((emoji) => (
@@ -1061,6 +1225,149 @@ export default function MobileReelsView({ ctx }: MobileReelsViewProps) {
         document.body
       )}
       <MobileReelsCommentSection ctx={ctx} />
+
+      {/* Attachment Modals for Reels Portal */}
+      <AttachmentModalsPortal
+        ctx={ctx}
+        handleInsertToken={handleInsertToken}
+        pendingImageFilesRef={pendingImageFilesRef}
+        setImagePreviews={setImagePreviews}
+        pendingAudioFileRef={pendingAudioFileRef}
+        voiceMetaRef={voiceMetaRef}
+      />
     </div>
   );
 }
+
+
+
+function AttachmentModalsPortal({
+  ctx,
+  handleInsertToken,
+  pendingImageFilesRef,
+  setImagePreviews,
+  pendingAudioFileRef,
+  voiceMetaRef
+}: {
+  ctx: PostModalContext,
+  handleInsertToken: (token: string, metadata: any) => void,
+  pendingImageFilesRef: React.MutableRefObject<File[]>,
+  setImagePreviews: React.Dispatch<React.SetStateAction<string[]>>,
+  pendingAudioFileRef: React.MutableRefObject<File | undefined>,
+  voiceMetaRef: React.MutableRefObject<any>
+}) {
+  const {
+    showAttachmentsModal,
+    setShowAttachmentsModal,
+    activeAttachmentModal,
+    setActiveAttachmentModal,
+    zIndex,
+    modalZIndex,
+  } = ctx;
+
+  if (!showAttachmentsModal && !activeAttachmentModal) return null;
+  if (typeof document === "undefined") return null;
+
+  // Use a higher z-index than the comment input portal (which is at +50)
+  const portalZIndex = (zIndex || modalZIndex) + 100;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: portalZIndex }}
+    >
+      <AnimatePresence>
+        {showAttachmentsModal && (
+          <motion.div
+            key="selection-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-transparent pointer-events-auto"
+            style={{ zIndex: portalZIndex }}
+            onClick={() => setShowAttachmentsModal?.(false)}
+          />
+        )}
+        {activeAttachmentModal && (
+          <motion.div
+            key="active-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-[2px] pointer-events-auto"
+            style={{ zIndex: portalZIndex }}
+            onClick={() => {
+              setActiveAttachmentModal?.(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <div className="relative z-[1] pointer-events-none h-full w-full">
+        {showAttachmentsModal && (
+          <ComposerAttachmentsModal
+            key="attachments-modal"
+            ctx={ctx}
+            onClose={() => setShowAttachmentsModal?.(false)}
+          />
+        )}
+        {activeAttachmentModal === 'posts' && (
+          <AttachmentPostsModal
+            key="attachment-posts"
+            ctx={ctx}
+            onClose={() => setActiveAttachmentModal?.(null)}
+            onInsertToken={handleInsertToken}
+          />
+        )}
+        {activeAttachmentModal === 'products' && (
+          <AttachmentProductsModal
+            key="attachment-products"
+            ctx={ctx}
+            onClose={() => setActiveAttachmentModal?.(null)}
+            onInsertToken={handleInsertToken}
+          />
+        )}
+        {activeAttachmentModal === 'location' && (
+          <AttachmentLocationModal
+            key="attachment-location"
+            ctx={ctx}
+            onClose={() => setActiveAttachmentModal?.(null)}
+            onInsertToken={handleInsertToken}
+          />
+        )}
+        {activeAttachmentModal === 'voice' && (
+          <AttachmentVoiceModal
+            key="attachment-voice"
+            ctx={ctx}
+            onClose={() => setActiveAttachmentModal?.(null)}
+            onInsertToken={(token, meta) => {
+              handleInsertToken(token, meta);
+              voiceMetaRef.current = meta;
+            }}
+            onFileSelected={(file) => {
+              pendingAudioFileRef.current = file;
+            }}
+          />
+        )}
+        {activeAttachmentModal === 'media' && (
+          <AttachmentMediaModal
+            key="attachment-media"
+            ctx={ctx}
+            onClose={() => {
+              setActiveAttachmentModal?.(null);
+              setShowAttachmentsModal?.(false);
+            }}
+            onInsertToken={handleInsertToken}
+            onFilesSelected={(files) => {
+              pendingImageFilesRef.current.push(...files);
+              const newPreviews = files.map(f => URL.createObjectURL(f));
+              setImagePreviews(prev => [...prev, ...newPreviews]);
+            }}
+          />
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+

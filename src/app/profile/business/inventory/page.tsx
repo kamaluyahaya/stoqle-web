@@ -545,7 +545,7 @@ export default function SmartInventoryPage() {
                 </div>
             </div>
 
-            <div className="p-4 max-w-7xl mx-auto space-y-6">
+            <div className="p-4 mx-auto space-y-6">
 
                 {viewMode === 'customers' && <CustomersTab onMessage={openChatModal} />}
                 {viewMode === 'insights' && (
@@ -1130,9 +1130,9 @@ export default function SmartInventoryPage() {
                     onClose={() => setInsightModal({ open: false, product: null })}
                     product={insightModal.product}
                 />
-                <VendorBotModal 
-                    isOpen={vendorBotOpen} 
-                    onClose={() => setVendorBotOpen(false)} 
+                <VendorBotModal
+                    isOpen={vendorBotOpen}
+                    onClose={() => setVendorBotOpen(false)}
                 />
 
                 {/* Mobile Bottom Navigation */}

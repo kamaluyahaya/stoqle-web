@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from "@/src/lib/config";
 import { useAuth } from "@/src/context/authContext";
@@ -479,7 +480,7 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, user
                   </div>
                 ) : (filteroseUsers.length === 0 || error) ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-10">
-                    <img src="/assets/images/message-icons.png" alt="No users found" className="w-24 opacity-50 mb-4" />
+                    <Image src="/assets/images/message-icons.png" alt="No users found" width={96} height={96} className="opacity-50 mb-4" />
                     <p className="text-sm font-bold text-slate-900">
                       {error ? "Access Restricted" : searchQuery
                         ? "No users match your search"
@@ -523,10 +524,12 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, user
                         onClick={() => handleUserClick(user)}
                       >
                         <div className="relative flex-shrink-0">
-                          <img
+                          <Image
                             src={user.profile_pic || user.avatar || `https://i.pravatar.cc/150?u=${user.user_id}`}
-                            alt={user.full_name || user.name}
-                            className="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm"
+                            alt={user.full_name || user.name || "User"}
+                            width={48}
+                            height={48}
+                            className="rounded-full object-cover ring-2 ring-white shadow-sm"
                           />
                         </div>
 
@@ -611,10 +614,12 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, user
                           onClick={() => handleUserClick(user)}
                         >
                           <div className="relative flex-shrink-0">
-                            <img
+                            <Image
                               src={user.profile_pic || user.avatar || `https://i.pravatar.cc/150?u=${user.user_id}`}
-                              alt={user.full_name || user.name}
-                              className="w-12 h-12 rounded-full object-cover ring-2 ring-slate-100 shadow-sm"
+                              alt={user.full_name || user.name || "Recommended User"}
+                              width={48}
+                              height={48}
+                              className="rounded-full object-cover ring-2 ring-slate-100 shadow-sm"
                             />
                             {user.is_following_viewer && (
                               <div className="absolute -bottom-1 -right-1 bg-green-500 border-2 border-white w-4 h-4 rounded-full flex items-center justify-center" title="Mutual Friend">
@@ -715,10 +720,12 @@ const SocialModal: React.FC<SocialModalProps> = ({ isOpen, onClose, userId, user
             >
               <div className="mb-4">
                 <div className="w-16 h-16 mx-auto mb-3 rounded-full overflow-hidden ring-4 ring-slate-50">
-                  <img
+                  <Image
                     src={unfollowConfirm.profile_pic || unfollowConfirm.avatar || `https://i.pravatar.cc/150?u=${unfollowConfirm.user_id}`}
-                    className="w-full h-full object-cover"
-                    alt=""
+                    width={64}
+                    height={64}
+                    className="object-cover"
+                    alt="Unfollow confirmation"
                   />
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">

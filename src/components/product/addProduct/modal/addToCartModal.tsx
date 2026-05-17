@@ -132,24 +132,12 @@ export default function AddToCartModal({
             const initialModes: Record<string, "gallery" | "list"> = {};
             const groupCount = payload.variantGroups.length;
 
+            const firstGroup = payload.variantGroups[0];
+            const firstGroupHasMany = (firstGroup?.entries?.length || 0) > 6;
+
             payload.variantGroups.forEach((g) => {
-                const groupHasImages = g.entries.some(
-                    (ent) => ent.images && ent.images.length > 0
-                );
-
-                let shouldBeList = false;
-                if (groupCount > 1) {
-                    // If multiple groups, use list if it has images and more than 3 variants
-                    if (groupHasImages && g.entries.length > 3) {
-                        shouldBeList = true;
-                    }
-                } else {
-                    // If only one group, use list automatically if more than 6 variants
-                    if (g.entries.length > 6) {
-                        shouldBeList = true;
-                    }
-                }
-
+                // Adjust: should be in list view only if it has 2 variant groups and the first variant group has more than 2 lines (> 6 entries)
+                const shouldBeList = groupCount === 2 && firstGroupHasMany;
                 initialModes[g.id] = shouldBeList ? "list" : "gallery";
             });
             setVariantViewModes(initialModes);

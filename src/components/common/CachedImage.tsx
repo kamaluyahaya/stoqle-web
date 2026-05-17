@@ -22,11 +22,12 @@ const CachedImage: React.FC<CachedImageProps> = ({ src, ...props }) => {
 
     async function loadAndCache() {
       if (!src) return;
-      
+
       const url = await getOrFetchImage(src);
       if (active) {
-        // If the returned URL is a blob URL, we store it to revoke later
-        if (url.startsWith("blob:")) {
+        // If the returned URL is a blob URL AND it is DIFFERENT from the original src,
+        // it means we generated it here and should revoke it later.
+        if (url.startsWith("blob:") && url !== src) {
           blobUrl = url;
           setIsLoadedFromCache(true);
         }

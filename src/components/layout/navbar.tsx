@@ -230,7 +230,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 h-screen w-[75%] bg-white z-[500000] flex flex-col shadow-2xl overflow-hidden"
+              className="fixed top-0 right-0 h-[100dvh] w-[75%] bg-white z-[500000] flex flex-col shadow-2xl overflow-hidden"
             >
               {/* Header (Top of Drawer) */}
               <div className="p-4 mt-5 relative flex items-center justify-center border-gray-50 bg-white">
@@ -338,7 +338,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
 
 
               {/* Bottom Footer Section */}
-              <div className="p-6  border-gray-100">
+              <div className="p-6 border-gray-100 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                 <div className="flex items-center justify-around">
                   {[
                     { label: "Scan", icon: QrCodeIcon, href: "/scan" },
@@ -443,7 +443,7 @@ export default function Navbar({ height, hideHeaderOnMobile }: Props) {
 
           {/* RIGHT — Desktop menus */}
           <div className="hidden lg:block">
-            <RightMenus />
+            <RightMenus setIsNavigating={setIsNavigating} />
           </div>
 
           {/* RIGHT — Mobile icons (search icon + hamburger). Visible under lg */}

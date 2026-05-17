@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import type { VariantEntry, VariantEntryCardProps } from "@/src/types/product";
 
 
@@ -29,10 +30,13 @@ export default function VariantEntryCard({
       {/* IMAGE */}
       {allowImages && entry.imagePreviews.length > 0 && (
         <div className="flex-shrink-0 w-16 h-16 m-2 rounded-lg bg-slate-100 overflow-hidden">
-          <img
+          <Image
             src={entry.imagePreviews[0]}
             alt={entry.name}
-            className="w-full h-full object-cover"
+            width={64}
+            height={64}
+            className="object-cover"
+            unoptimized={entry.imagePreviews[0].startsWith('blob:')}
           />
         </div>
       )}

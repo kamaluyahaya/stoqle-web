@@ -131,7 +131,10 @@ export async function safeFetch<T = any>(
         throw new ApiError(
             offline ? "Network connection lost" : (error?.message || "Internal network error"),
             0,
-            { originalError: error?.message || "Unknown" },
+            { 
+                originalError: error?.message || "Unknown",
+                isNetwork: true 
+            },
             offline,
             source
         );

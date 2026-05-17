@@ -723,7 +723,7 @@ function FlyerPreview({ data, user, formatUrl, divRef }: { data: any, user: any,
 
             <div className="relative w-24 h-24 bg-white rounded-[1rem] p-2 shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform border-[3px] border-white overflow-hidden">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`https://stoqle.com/shop/${data?.business_slug || data?.slug || data?.business_id || "0"}`)}`}
+                src={`https://quickchart.io/qr?text=${encodeURIComponent(`https://stoqle.com/shop/${data?.business_slug || data?.slug || data?.business_id || "0"}`)}&size=150&dotStyle=dots&finderStyle=circle&finderDotStyle=dots`}
                 alt="QR Code"
                 className="w-full h-full object-contain"
               />

@@ -1,7 +1,7 @@
 "use client";
 
 import { API_BASE_URL } from "@/src/lib/config";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
@@ -21,7 +21,7 @@ import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { ChevronLeftIcon, ChevronRightIcon, ChatBubbleBottomCenterTextIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { chatDb, type CachedMessage, type CachedRoom } from "@/src/lib/services/chatDb";
 import { Package, X, CheckCircle, ChevronRight, Zap, RefreshCw, AlertCircle, AlertTriangle, Copy, XCircle, MoreHorizontal, Pin, BellOff, ShieldAlert, Flag } from "lucide-react";
-import ImageViewer from "@/src/components/modal/imageViewer"; // Added ImageViewer import
+import ProfileImageViewer from "@/src/components/modal/ProfileImageViewer";
 import { MESSAGES_CACHE } from "@/src/lib/cache";
 import { copyToClipboard } from "@/src/lib/utils/utils";
 import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
@@ -135,9 +135,16 @@ export function ChatView({
   const userParam = targetUserIdProp || searchParams.get("user") || searchParams.get("user_id") || searchParams.get("u_id");
   const router = useRouter();
 
+  // ⚡ SSR GUARD: prevents hydration mismatches from client-only data (auth, localStorage, navigator)
+  const [isMounted, setIsMounted] = useState(false);
+  const [isOnline, setIsOnline] = useState(true); // assume online for SSR
+
   const [rooms, setRooms] = useState<ChatRoom[]>(MESSAGES_CACHE.chatSessions);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const selectedRoomRef = useRef<ChatRoom | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isSyncingRef = useRef(false);
   const [isBotActive, setIsBotActive] = useState(false);
   const [typingStatus, setTypingStatus] = useState<Record<string, any>>({});
   const [messages, setMessages] = useState<Message[]>([]);
@@ -145,7 +152,6 @@ export function ChatView({
   const [newMessage, setNewMessage] = useState("");
   const [unreadMap, setUnreadMap] = useState<Record<string | number, number>>({});
   const socketRef = useRef<Socket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const prevRoomIdRef = useRef<string | number | null>(null);
   const [query, setQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -176,7 +182,7 @@ export function ChatView({
   const [isQuickActionModalOpen, setIsQuickActionModalOpen] = useState(false);
   const [quickActionTab, setQuickActionTab] = useState<string>("products");
 
-  const loadFFmpeg = async () => {
+  const loadFFmpeg = useCallback(async () => {
     if (ffmpegRef.current) return ffmpegRef.current;
     const ffmpeg = new FFmpeg();
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
@@ -186,7 +192,7 @@ export function ChatView({
     });
     ffmpegRef.current = ffmpeg;
     return ffmpeg;
-  };
+  }, []);
 
   // Tracking Modal State
   const [trackingOrderId, setTrackingOrderId] = useState<string | number | null>(null);
@@ -216,6 +222,20 @@ export function ChatView({
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
 
+  // ⚡ CLIENT MOUNT + ONLINE STATUS
+  useEffect(() => {
+    setIsMounted(true);
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isAiThinking) {
       setAiCounter(0);
@@ -243,6 +263,11 @@ export function ChatView({
       // Subtracting vv.offsetTop handles cases where the browser scrolls the page up to show the input.
       setVisibleHeight(vv.height);
       setKeyboardHeight(window.innerHeight - vv.height);
+      
+      // Force the page scroll back to top so the header isn't pushed out of view
+      if (vv.offsetTop > 0 || window.scrollY > 0) {
+        window.scrollTo(0, 0);
+      }
     };
     vv.addEventListener("resize", updateVisibility);
     vv.addEventListener("scroll", updateVisibility);
@@ -323,11 +348,14 @@ export function ChatView({
       });
       setUnreadMap(cacheUnread);
       setRoomsLoaded(true); // Allow UI to proceed with cached (or legitimately empty) data
+
+      // ⚡ PREVENT RELOAD: If cache is recent and valid, skip the background API call.
+      // Websockets will handle real-time updates anyway.
+      if (isRecent && cached.length > 0) {
+        return;
+      }
     }
 
-    // We removed the early return to enforce background Stale-While-Revalidate (SWR).
-    // The UI is already populated from the cache above, so the network request below 
-    // happens silently in the background, updating state on success without spinners.
     try {
       const json = await safeFetch<any>(`/api/chat/room`, { headers });
       const list = json?.rooms || json?.chatRooms || json?.data || json || [];
@@ -385,6 +413,7 @@ export function ChatView({
   }
 
   async function markRoomAsRead(chat_room_id: string | number) {
+    if (!chat_room_id || String(chat_room_id).startsWith('pending-')) return;
     try {
       await safeFetch(`/api/chat/mark-room-as-read/${chat_room_id}`, {
         method: "PUT",
@@ -398,43 +427,59 @@ export function ChatView({
   }
 
   async function fetchMessages(chat_room_id: string | number) {
+    // ⚡ FIX: Clear messages immediately when switching rooms to prevent showing old data
+    setMessages([]);
+    setIsMessagesLoading(true);
+
     if (String(chat_room_id).startsWith('pending-')) {
-      setMessages([]);
       setIsMessagesLoading(false);
       return;
     }
-    // ⚡ STEP 1: LOAD FROM LOCAL CACHE FIRST (INSTANT) - Try cache BEFORE showing loader
-    const cached = await chatDb.getMessages(chat_room_id);
-    const CACHE_TTL = 1000 * 60 * 5;
-    const lastFetch = MESSAGES_CACHE.roomsFetchedAt[String(chat_room_id)] || 0;
-    const isRecent = Date.now() - lastFetch < CACHE_TTL;
 
-    if (cached.length > 0 || isRecent) {
-      if (cached.length > 0) {
-        setMessages(cached as any);
-      }
-      setIsMessagesLoading(false); // Bypasses loader entirely
-      // Synchronous scroll for instant feel
+    // ⚡ STEP 1: INSTANT LOAD FROM INDEXEDDB — always run regardless of connectivity
+    const cached = await chatDb.getMessages(chat_room_id, 100);
+    if (cached.length > 0) {
+      setMessages(cached as any);
+      setIsMessagesLoading(false);
       setTimeout(() => scrollToBottom("auto"), 5);
-
-      // We removed the early return here as well. Data will continuously
-      // sync via SWR behind the scenes if there are changes.
     } else {
-      // ⚡ Only clear and show spinner if we HAVE NO CACHED DATA
-      setMessages([]);
       setIsMessagesLoading(true);
     }
 
+    // ⚡ STEP 2: OFFLINE GUARD — if no internet, we're done (cache already shown)
+    if (!navigator.onLine) {
+      setIsMessagesLoading(false);
+      return;
+    }
+
+    // ⚡ STEP 3: BACKGROUND NETWORK SYNC (Stale-While-Revalidate)
     try {
       const json = await safeFetch<any>(`/api/chat/messages/${chat_room_id}`, { headers });
       const list = json?.messages || json?.chatMessages || json?.data || json || [];
       const freshMessages = Array.isArray(list) ? list : [];
 
-      // ⚡ STEP 2: SYNC SILENTLY IN BACKGROUND
-      // Update local cache and state silently
-      if (JSON.stringify(freshMessages) !== JSON.stringify(cached) || !cached.length) {
-        setMessages(freshMessages);
-        chatDb.saveMessages(freshMessages as any);
+      if (freshMessages.length > 0 || cached.length > 0) {
+        // Only update state if the content actually changed to avoid unnecessary re-renders
+        const cachedIds = cached.map((m) => String(m.message_id)).join(",");
+        const freshIds = freshMessages.map((m: any) => String(m.message_id)).join(",");
+        
+        if (cachedIds !== freshIds || cached.length !== freshMessages.length || (freshMessages.length === 0 && cached.length > 0)) {
+          // Merge: keep optimistic/pending messages that aren't in server response yet
+          const serverIdSet = new Set(freshMessages.map((m: any) => String(m.message_id)));
+          const localOnlyPending = (cached as any[]).filter(
+            (m) => (m.status === "sending" || m.status === "processing") && !serverIdSet.has(String(m.message_id))
+          );
+          const merged = [...freshMessages, ...localOnlyPending];
+          merged.sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime());
+          setMessages(merged);
+          
+          if (freshMessages.length > 0) {
+            chatDb.saveMessages(freshMessages as any);
+          }
+        }
+      } else {
+        // Both API and Cache are empty, ensure we show the "Say hello" state
+        setMessages([]);
       }
 
       MESSAGES_CACHE.roomsFetchedAt[String(chat_room_id)] = Date.now();
@@ -442,11 +487,11 @@ export function ChatView({
       markRoomAsRead(chat_room_id);
       setTimeout(() => scrollToBottom("auto"), 30);
     } catch (err) {
-      console.warn("fetchMessages sync failed", err);
+      console.warn("[fetchMessages] Network sync failed — showing cached data", err);
       setIsMessagesLoading(false);
-      if (messages.length === 0 && !cached.length) setMessages([]);
     }
   }
+
 
   async function fetchRecommendations() {
     setLoadingRecs(true);
@@ -656,6 +701,7 @@ export function ChatView({
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
+    chatDb.saveMessages([optimisticMsg as any]);
 
     const savedContent = finalContent.trim();
     const savedFile = selectedFile;
@@ -700,16 +746,39 @@ export function ChatView({
     handleSend(content, productData);
   }
 
-  async function performSendMessage(tempMsg: Message, file: File | null, content: string, roomId: string | number) {
+  const performSendMessage = useCallback(async (tempMsg: Message, file: File | null, content: string, roomId: string | number) => {
+    // ⚡ PRE-EMPTIVE OFFLINE GUARD: Cache but don't fail
+    if (isOffline()) {
+      // Keep status as 'sending' (loading) instead of 'failed'
+      setIsSending(false);
+      return;
+    }
+
+    // ⚡ PENDING ROOM GUARD: If room is still being created, wait for sync to handle it
+    if (String(roomId).startsWith('pending-')) {
+      setIsSending(false);
+      return;
+    }
+
     try {
+      // ⚡ CONCURRENCY GUARD: Mark as processing to prevent background sync from picking it up
+      await chatDb.saveMessages([{ ...tempMsg, status: "processing" } as any]);
+
       let finalMessage: Message;
       let uploadFile = file;
 
-      // ⚡ STOQLE BOT INTEGRATION: Trigger bot if active and either no file OR file + text
-      const shouldTriggerBot = isBotActive && (!uploadFile || content.trim() || tempMsg.product_id || tempMsg.order_ref);
+      // ⚡ STOQLE BOT INTEGRATION: Trigger bot if active for this specific room
+      // If we're syncing a background room, check if it's a business. 
+      // If it's the current room, respect the active isBotActive state.
+      const targetRoom = rooms.find(r => String(r.chat_room_id) === String(roomId));
+      const roomIsBusiness = !!(targetRoom?.business_id || targetRoom?.business_name);
+      const effectiveIsBotActive = (selectedRoom && String(selectedRoom.chat_room_id) === String(roomId)) 
+        ? isBotActive 
+        : roomIsBusiness;
+
+      const shouldTriggerBot = effectiveIsBotActive && (!uploadFile || content.trim() || tempMsg.product_id || tempMsg.order_ref);
 
       if (shouldTriggerBot) {
-        setIsAiThinking(true); // ⚡ Start AI thinking cycle
         try {
           const botPayload = {
             chat_room_id: roomId,
@@ -725,6 +794,7 @@ export function ChatView({
             history: messages.slice(-8).map(m => ({ role: String(m.sender_id) === String(userId) ? 'user' : 'bot', content: m.message_content }))
           };
 
+          setIsAiThinking(true); // ⚡ Start AI thinking ONLY when actually calling the API
           const botResponse = await safeFetch<any>("/api/chat/bot", {
             method: "POST",
             headers: { "Content-Type": "application/json", ...headers },
@@ -733,14 +803,20 @@ export function ChatView({
 
           if (botResponse?.success && !uploadFile) {
             setIsAiThinking(false);
+            // ⚡ UPDATE PERSISTENCE: Mark as sent and clean up temp ID
+            if (tempMsg.message_id && String(tempMsg.message_id).startsWith('temp-')) {
+              await chatDb.deleteMessages([tempMsg.message_id as string | number]);
+            }
+            const finalUserMsg = { ...tempMsg, status: "sent" as const };
+            setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? finalUserMsg : m));
+            chatDb.saveMessages([finalUserMsg as any]);
+
             // If No file, we are done (bot saved user msg + responded)
             return;
           }
           // If file was present, we continue to standard upload logic below
         } catch (botErr: any) {
-          console.error("[StoqleBot] API Error:", botErr);
-
-          // ⚡ If it's a network/connection error, notify user and stop (prevents confusing fallbacks)
+          // If it's a network/connection error, notify user and stop
           if (
             botErr?.isOffline ||
             botErr?.status === 0 ||
@@ -748,10 +824,11 @@ export function ChatView({
             botErr?.message?.toLowerCase().includes('network') ||
             botErr?.message?.toLowerCase().includes('fetch')
           ) {
-            toast.error("Network connection error. Please check your internet and try again.");
+            // Keep status as 'sending' to allow auto-sync later
             setIsAiThinking(false);
             return;
           }
+          console.warn("[StoqleBot] Interaction Error:", botErr);
           // Continue to standard message logic if bot fails for other reasons (e.g., 500 but online)
         } finally {
           setIsAiThinking(false); // ⚡ Ensure thinking stops
@@ -861,7 +938,7 @@ export function ChatView({
           file_url: msgObj.file_url || msgObj.file?.file_url || json.uploadedFile?.file_url || json.file_url || msgObj.url,
           file_type: msgObj.file_type || msgObj.file?.file_type || json.uploadedFile?.file_type || json.file_type || msgObj.type,
           status: "sent"
-        };
+        } as Message;
       } else {
         const payload = {
           chat_room_id: roomId,
@@ -889,10 +966,17 @@ export function ChatView({
           sent_at: msgObj.sent_at || new Date().toISOString(),
           message_content: msgObj.message_content || payload.message_content,
           status: "sent"
-        };
+        } as Message;
+      }
+
+      // ⚡ UPDATE PERSISTENCE: Mark as sent in DB and State
+      // Remove the temporary message from DB first to prevent resync loops
+      if (tempMsg.message_id && String(tempMsg.message_id).startsWith('temp-')) {
+        await chatDb.deleteMessages([tempMsg.message_id as string | number]);
       }
 
       setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? finalMessage : m));
+      chatDb.saveMessages([finalMessage as any]);
 
       // Clean up local blob URL
       if (tempMsg.file_url && tempMsg.file_url.startsWith('blob:')) {
@@ -912,18 +996,30 @@ export function ChatView({
         const finalRooms = sortRooms([updatedRoom as ChatRoom, ...otherRooms]);
         return finalRooms;
       });
-    } catch (err) {
+    } catch (err: any) {
       console.warn("performSendMessage Error:", err);
-      // Mark as failed instead of removing
-      setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? { ...m, status: "failed" } : m));
-      toast.error(err instanceof Error ? err.message : "Message failed to send. Please try again.");
+
+      const isNetwork = err?.isOffline || err?.status === 0 || err?.message?.toLowerCase().includes('fetch') || err?.message?.toLowerCase().includes('network');
+
+      if (isNetwork) {
+        // ⚡ RESET LOCK: Downgrade from 'processing' back to 'sending' so the
+        // background sync picks it up immediately on reconnection, without
+        // waiting for the 5-min _recoverStaleLocks eviction timer.
+        chatDb.saveMessages([{ ...tempMsg, status: "sending" } as any]);
+      } else {
+        // Hard failure (400, 500, etc) — show the error and mark as failed
+        const failedMsg: Message = { ...tempMsg, status: "failed" };
+        setMessages(p => p.map(m => m.message_id === tempMsg.message_id ? failedMsg : m));
+        chatDb.saveMessages([failedMsg as any]);
+        toast.error(err instanceof Error ? err.message : "Message failed to send. Please try again.");
+      }
     } finally {
       setIsSending(false);
     }
-  }
+  }, [isBotActive, messages, userId, headers, loadFFmpeg, rooms, selectedRoom]);
 
   async function markMessageAsRead(message_id?: string | number) {
-    if (!message_id) return;
+    if (!message_id || String(message_id).startsWith('temp-')) return;
     try {
       await safeFetch(`/api/chat/mark-as-read/${message_id}`, {
         method: "PUT",
@@ -998,6 +1094,18 @@ export function ChatView({
   async function handleDeleteMessage() {
     if (!selectedMessageForAction?.message_id) return;
     const msgId = selectedMessageForAction.message_id;
+
+    // ⚡ OPTIMISTIC/OFFLINE GUARD:
+    // If it's a temporary message, just delete it locally and from DB.
+    if (String(msgId).startsWith('temp-')) {
+      setMessages(prev => prev.filter(m => String(m.message_id) !== String(msgId)));
+      chatDb.deleteMessages([msgId as string | number]);
+      setIsMessageActionOpen(false);
+      setSelectedMessageForAction(null);
+      toast.success("Message removed");
+      return;
+    }
+
     try {
       const json = await safeFetch<any>(`/api/chat/message/${msgId}`, {
         method: "DELETE",
@@ -1006,7 +1114,7 @@ export function ChatView({
       if (json && !json.isOffline) {
         // Optimistic update already handled by socket, but ensure local state is clean
         setMessages(prev => prev.filter(m => String(m.message_id) !== String(msgId)));
-        chatDb.deleteMessages([msgId]);
+        chatDb.deleteMessages([msgId as string | number]);
         setIsMessageActionOpen(false);
         toast.success("Message deleted");
       } else {
@@ -1039,6 +1147,20 @@ export function ChatView({
     if (!selectedMessageForAction?.message_id || !newMessage.trim()) return;
     const msgId = selectedMessageForAction.message_id;
     const updatedContent = newMessage.trim();
+
+    // ⚡ OPTIMISTIC/OFFLINE GUARD:
+    // If editing a message not yet synced to server, just update local state & DB
+    if (String(msgId).startsWith('temp-')) {
+      const now = new Date().toISOString();
+      setMessages(prev => prev.map(m => String(m.message_id) === String(msgId) ? { ...m, message_content: updatedContent, updated_at: now } : m));
+      chatDb.saveMessages([{ ...selectedMessageForAction, message_content: updatedContent, updated_at: now } as any]);
+      setNewMessage("");
+      setIsEditingMessage(false);
+      setSelectedMessageForAction(null);
+      toast.success("Message updated locally");
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
       const json = await safeFetch<any>(`/api/chat/message-content/${msgId}`, {
@@ -1064,8 +1186,7 @@ export function ChatView({
       }
     } catch (err: any) {
       console.error("Update failed", err);
-      // Already toasted above if it was a fetch error, but handle network errors here
-      if (!err.message.includes("Update failed")) {
+      if (!err.message?.includes("Update failed")) {
         toast.error("Network error: Could not update message");
       }
     } finally {
@@ -1284,6 +1405,84 @@ export function ChatView({
     return () => { socket.disconnect(); };
   }, [userId]);
 
+  /**
+   * Helper to resolve a temporary 'pending-xxx' room ID to a real backend ID
+   */
+  const resolveRoomId = useCallback(async (roomId: string | number) => {
+    if (!String(roomId).startsWith('pending-')) return roomId;
+
+    const otherUserId = String(roomId).replace('pending-', '');
+    try {
+      const json = await safeFetch<any>(`/api/chat/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ other_user_id: otherUserId })
+      });
+      const newRoom = json?.chatRoom || json?.data || json;
+      if (newRoom?.chat_room_id) {
+        return newRoom.chat_room_id;
+      }
+    } catch (e) {
+      console.error("Failed to resolve pending room", e);
+    }
+    return roomId; // Fallback to pending
+  }, [token]);
+
+  /**
+   * ⚡ OFFLINE AUTO-SYNC: Retry all 'sending' messages from IndexedDB
+   */
+  const syncPendingMessages = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    
+    try {
+      const pending = await chatDb.getPendingMessages();
+      if (!pending || pending.length === 0) return;
+
+      console.log(`[Sync] Found ${pending.length} pending messages`);
+
+      for (const msg of pending) {
+        try {
+          let currentRoomId = msg.chat_room_id;
+          if (String(currentRoomId).startsWith('pending-')) {
+            const realId = await resolveRoomId(currentRoomId);
+            if (realId === currentRoomId) continue; // Still couldn't create room
+            
+            currentRoomId = realId;
+            // Update message in DB & State with real ID
+            await chatDb.saveMessages([{ ...msg, chat_room_id: realId } as any]);
+            setMessages(prev => prev.map(m => String(m.message_id) === String(msg.message_id) ? { ...m, chat_room_id: realId } : m));
+          }
+
+          if (currentRoomId && !String(currentRoomId).startsWith('pending-')) {
+            await performSendMessage(msg as any, msg.file || null, msg.message_content || "", currentRoomId);
+          }
+        } catch (msgErr) {
+          console.error(`[Sync] Error processing msg ${msg.message_id}:`, msgErr);
+        }
+      }
+    } catch (err) {
+      console.warn("[Sync] Background sync outer failure:", err);
+    } finally {
+      isSyncingRef.current = false;
+    }
+  }, [userId, token, resolveRoomId, performSendMessage]);
+
+  useEffect(() => {
+    // Initial sync check
+    const timer = setTimeout(syncPendingMessages, 3000);
+
+    const handleOnline = () => {
+      syncPendingMessages();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [syncPendingMessages]);
+
   // Initial load & Periodic Refresh for Real-time Statuses
   useEffect(() => {
     fetchRooms();
@@ -1303,7 +1502,7 @@ export function ChatView({
   useEffect(() => {
     // If we have an initial user, we can start showing the UI even before rooms are fully loaded
     if (!selectedRoom && userParam && initialOtherUser && String(initialOtherUser.user_id || initialOtherUser.id) === String(userParam)) {
-       handleStartNewChat(userParam);
+      handleStartNewChat(userParam);
     }
 
     if (!roomsLoaded) return;
@@ -1796,261 +1995,188 @@ export function ChatView({
   };
 
   return (
-    <div className={`bg-slate-100 overflow-hidden pt-[env(safe-area-inset-top)] sm:pt-0 overscroll-none ${hideSidebar ? 'h-full' : 'h-dvh'} flex flex-col`}>
+    <div 
+      className={`bg-slate-100 overflow-hidden pt-[env(safe-area-inset-top)] sm:pt-0 overscroll-none flex flex-col w-full`}
+      style={visibleHeight && (isShowingChat || hideSidebar) ? { height: `${visibleHeight}px` } : { height: hideSidebar ? '100%' : '100dvh' }}
+    >
       {/* ⚡ NEW: Persistent Modal Header at the very top level */}
       {hideSidebar && (
-         <header className="px-4 py-2 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-[200] shrink-0 relative gap-1 w-full">
-            <div className="flex items-center min-w-0 flex-1">
-              <button onClick={onClose} className="p-2 -ml-3 rounded-full hover:bg-gray-100 text-gray-400 transition-all">
-                <ChevronLeftIcon className="h-6 w-6" />
-              </button>
-              <div className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity">
-                {(selectedRoom?.business_logo || selectedRoom?.profile_pic || initialOtherUser?.logo || initialOtherUser?.profile_pic) ? (
-                  <img 
-                    src={formatUrl(selectedRoom?.business_logo || selectedRoom?.profile_pic || initialOtherUser?.logo || initialOtherUser?.profile_pic)} 
-                    className="w-10 h-10 rounded-full object-cover shrink-0"
-                    alt=""
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-slate-100 animate-pulse shrink-0" />
-                )}
-                <div className="min-w-0">
-                  <h3 className="font-bold text-gray-900 truncate text-[12px] lg:text-[14px]">
-                    {selectedRoom?.business_name || selectedRoom?.full_name || initialOtherUser?.name || initialOtherUser?.business_name || initialOtherUser?.full_name || "Connecting..."}
-                  </h3>
-                  <div className="flex items-center gap-1.5 truncate">
-                     {selectedRoom ? (
-                        (() => {
-                          const statusStr = formatLastSeen(selectedRoom.last_active_at);
-                          const isOnline = statusStr === "Online";
-                          return (
-                            <>
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></span>
-                              <span className="text-[10px] text-gray-400 font-medium shrink-0">{isOnline ? 'Online' : `Last seen ${statusStr}`}</span>
-                            </>
-                          );
-                        })()
-                     ) : (
-                       <>
-                         <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"></span>
-                         <span className="text-[10px] text-gray-400 font-medium truncate">Connecting...</span>
-                       </>
-                     )}
-                     {(selectedRoom?.business_name || initialOtherUser?.is_business) && (
-                       <>
-                         <span className="text-gray-300 shrink-0">•</span>
-                         <span className="text-[10px] text-slate-400 truncate">
-                           Business account {(selectedRoom?.business_category || initialOtherUser?.category) ? `• ${selectedRoom?.business_category || initialOtherUser?.category}` : ''}
-                         </span>
-                       </>
-                     )}
-                  </div>
+        <header className="px-4 py-2 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-[200] shrink-0 relative gap-1 w-full">
+          <div className="flex items-center min-w-0 flex-1">
+            <button onClick={onClose} className="p-2 -ml-3 rounded-full hover:bg-gray-100 text-gray-400 transition-all">
+              <ChevronLeftIcon className="h-6 w-6" />
+            </button>
+            <div className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity">
+              {(selectedRoom?.business_logo || selectedRoom?.profile_pic || initialOtherUser?.logo || initialOtherUser?.profile_pic) ? (
+                <img
+                  src={formatUrl(selectedRoom?.business_logo || selectedRoom?.profile_pic || initialOtherUser?.logo || initialOtherUser?.profile_pic)}
+                  className="w-10 h-10 rounded-full object-cover shrink-0"
+                  alt=""
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-slate-100 animate-pulse shrink-0" />
+              )}
+              <div className="min-w-0">
+                <h3 className="font-bold text-gray-900 truncate text-[12px] lg:text-[14px]">
+                  {selectedRoom?.business_name || selectedRoom?.full_name || initialOtherUser?.name || initialOtherUser?.business_name || initialOtherUser?.full_name || "Connecting..."}
+                </h3>
+                <div className="flex items-center gap-1.5 truncate">
+                  {selectedRoom ? (
+                    (() => {
+                      const statusStr = formatLastSeen(selectedRoom.last_active_at);
+                      const isOnline = statusStr === "Online";
+                      return (
+                        <>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                          <span className="text-[10px] text-gray-400 font-medium shrink-0">{isOnline ? 'Online' : `Last seen ${statusStr}`}</span>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"></span>
+                      <span className="text-[10px] text-gray-400 font-medium truncate">Connecting...</span>
+                    </>
+                  )}
+                  {(selectedRoom?.business_name || initialOtherUser?.is_business) && (
+                    <>
+                      <span className="text-gray-300 shrink-0">•</span>
+                      <span className="text-[10px] text-slate-400 truncate">
+                        Business account {(selectedRoom?.business_category || initialOtherUser?.category) ? `• ${selectedRoom?.business_category || initialOtherUser?.category}` : ''}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
+          </div>
 
-            {(selectedRoom?.business_id || initialOtherUser?.business_id) && (
-              <button 
-                onClick={() => {
-                  const slug = selectedRoom?.business_slug || selectedRoom?.business_id || initialOtherUser?.business_slug || initialOtherUser?.business_id;
-                  router.push(`/shop/${slug}`);
-                }}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-50 font-bold text-rose-500 hover:bg-rose-50 transition-all text-[10px] border-[0.5] border-rose-500 shrink-0"
-              >
-                Visit Shop
-              </button>
-            )}
-
-            <button 
-              onClick={() => setIsOptionsOpen(true)}
-              className="p-2 text-gray-400 hover:text-rose-500 transition-all"
+          {(selectedRoom?.business_id || initialOtherUser?.business_id) && (
+            <button
+              onClick={() => {
+                const slug = selectedRoom?.business_slug || selectedRoom?.business_id || initialOtherUser?.business_slug || initialOtherUser?.business_id;
+                router.push(`/shop/${slug}`);
+              }}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-50 font-bold text-rose-500 hover:bg-rose-50 transition-all text-[10px] border-[0.5] border-rose-500 shrink-0"
             >
-              <MoreHorizontal size={20} />
+              Visit Shop
             </button>
-         </header>
+          )}
+
+          <button
+            onClick={() => setIsOptionsOpen(true)}
+            className="p-2 text-gray-400 hover:text-rose-500 transition-all"
+          >
+            <MoreHorizontal size={20} />
+          </button>
+        </header>
       )}
 
-      {/* ⚡ VISUAL VIEWPORT SYNC: By using visibleHeight, we precisely track the top of the mobile keyboard */}
-      <div
-        className={`flex-1 flex overflow-hidden overscroll-none`}
-        style={visibleHeight && (isShowingChat || hideSidebar) ? { height: `${visibleHeight}px` } : {}}
-      >
+      {/* ⚡ VISUAL VIEWPORT SYNC: Outer container controls exact height */}
+      <div className={`flex-1 flex overflow-hidden overscroll-none min-h-0`}>
         {!hideSidebar && (
           <aside className={`${isShowingChat ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] flex-col bg-slate-100 border-r border-gray-100`}>
-          <div className="p-4 sm:p-6 pb-2 shrink-0 h-[80px] flex flex-col justify-center">
-            <AnimatePresence mode="wait">
-              {!isSearchingList ? (
-                <motion.div
-                  key="header-content"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="flex items-center gap-4"
-                >
-                  <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
-                  <div className="flex-1" />
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setIsSearchingList(true)}
-                      className="p-2 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-colors"
-                    >
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="p-4 sm:p-6 pb-2 shrink-0 h-[80px] flex flex-col justify-center">
+              <AnimatePresence mode="wait">
+                {!isSearchingList ? (
+                  <motion.div
+                    key="header-content"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="flex items-center gap-4"
+                  >
+                    <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
+                    <div className="flex-1" />
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setIsSearchingList(true)}
+                        className="p-2 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-colors"
+                      >
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </button>
+                      <button onClick={fetchRooms} className="p-2 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-colors">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="search-mode"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="relative group w-full"
+                  >
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
-                    </button>
-                    <button onClick={fetchRooms} className="p-2 rounded-full hover:bg-rose-50 text-gray-400 hover:text-rose-500 transition-colors">
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="search-mode"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="relative group w-full"
-                >
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search conversations..."
-                    className="w-full bg-white pl-10 pr-10 py-2.5 rounded-full border border-rose-200 text-sm focus:ring-2 focus:ring-rose-100 focus:border-rose-500 outline-none shadow-sm"
-                  />
-                  <button
-                    onClick={() => {
-                      setIsSearchingList(false);
-                      setQuery("");
-                    }}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-rose-500 transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
-            {!roomsLoaded && rooms.length === 0 ? (
-              <div className="space-y-1">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="flex items-center p-3.5 rounded-[1.25rem] bg-white/40 animate-pulse gap-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="h-3 w-28 bg-slate-200 rounded-full" />
-                        <div className="h-2 w-10 bg-slate-100 rounded-full" />
-                      </div>
-                      <div className="h-2.5 w-40 bg-slate-100 rounded-full" />
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : rooms.length > 0 ? (
-              <>
-                {filtered.map((room) => (
-                  <RoomItem
-                    key={String(room.chat_room_id)}
-                    room={room as any}
-                    unread={unreadMap[room.chat_room_id] || 0}
-                    active={!!(selectedRoom && String(selectedRoom.chat_room_id) === String(room.chat_room_id))}
-                    onClick={() => {
-                      setSelectedRoomWithCleanup(room);
-                      if (!hideSidebar) {
-                        router.push(`/messages?room=${room.chat_room_id}`);
-                      }
-                    }}
-                    onAvatarClick={handleAvatarClick}
-                    vendorBadge={room.business_id ? vendorBadges[String(room.business_id)] : undefined}
-                  />
-                ))}
-
-                {/* Show recommendations at the end if not searching */}
-                {!query && recommendations.length > 0 && (
-                  <div className="pt-8 pb-4">
-                    <h4 className="text-[10px] font-bold text-slate-400   px-2 mb-3">People You May Know</h4>
-                    <div className="space-y-1">
-                      {recommendations.map((rec, i) => (
-                        <div
-                          key={rec.user_id || i}
-                          onClick={() => {
-                            const handle = rec.username || rec.business?.business_slug || rec.business_slug;
-                            router.push(handle ? `/${handle}` : `/user/profile/${rec.user_id}`);
-                          }}
-                          className="flex items-center gap-3 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors text-left group"
-                        >
-                          <img
-                            src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
-                            className="w-8 h-8 rounded-full border border-white shadow-sm object-cover cursor-pointer transition-transform hover:scale-105"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAvatarClick(rec.user_id, rec.business?.logo || rec.business_logo || rec.profile_pic || "", rec.business?.business_name || rec.business_name || rec.full_name);
-                            }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
-                              {rec.business?.business_name || rec.business_name || rec.full_name}
-                              {(rec.business?.business_id || rec.business_id) && !!vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
-                                <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
-                              )}
-                            </p>
-                            <p className="text-[9px] text-slate-400 truncate">{rec.username || "stoqle ID:" + rec.stoqle_id}</p>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartNewChat(rec.user_id);
-                            }}
-                            className="px-3 py-1 rounded-full border-[0.5px] border-rose-500 text-rose-500 hover:bg-rose-50 text-[9px] font-bold transition-all active:scale-95"
-                          >
-                            Message
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                    <input
+                      autoFocus
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search conversations..."
+                      className="w-full bg-white pl-10 pr-10 py-2.5 rounded-full border border-rose-200 text-sm focus:ring-2 focus:ring-rose-100 focus:border-rose-500 outline-none shadow-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        setIsSearchingList(false);
+                        setQuery("");
+                      }}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-rose-500 transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  </motion.div>
                 )}
-              </>
-            ) : (
-              <div className="py-10 text-center space-y-6">
-                <div className="flex flex-col items-center">
-                  <img src="/assets/images/message-icon.png" className="w-20 opacity-40 mb-4" alt="No messages" />
-                  <p className="text-sm font-bold text-gray-900 px-10">No messages yet</p>
-                  <p className="text-xs text-gray-400 mt-1 px-10">Connect with people and start a conversation</p>
-                </div>
-
-                <div className="pt-6 border-t border-gray-50 mx-2">
-                  <h4 className="text-[10px] font-bold text-slate-400   text-left px-2 mb-3">People You May Know</h4>
-                  {loadingRecs ? (
-                    <div className="p-2 space-y-3 animate-pulse">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0" />
-                          <div className="flex-1 space-y-2">
-                            <div className="h-2 w-24 bg-slate-100 rounded" />
-                            <div className="h-1.5 w-16 bg-slate-50 rounded" />
-                          </div>
+              </AnimatePresence>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
+              {!roomsLoaded && rooms.length === 0 ? (
+                <div className="space-y-1">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="flex items-center p-3.5 rounded-[1.25rem] bg-white/40 animate-pulse gap-3">
+                      <div className="w-12 h-12 rounded-full bg-slate-200 shrink-0" />
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="h-3 w-28 bg-slate-200 rounded-full" />
+                          <div className="h-2 w-10 bg-slate-100 rounded-full" />
                         </div>
-                      ))}
+                        <div className="h-2.5 w-40 bg-slate-100 rounded-full" />
+                      </div>
                     </div>
-                  ) : (
-                    <AnimatePresence mode="popLayout">
-                      <motion.div
-                        key="recs-list"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.4, ease: "easeOut" }}
-                        className="space-y-1"
-                      >
+                  ))}
+                </div>
+              ) : rooms.length > 0 ? (
+                <>
+                  {filtered.map((room) => (
+                    <RoomItem
+                      key={String(room.chat_room_id)}
+                      room={room as any}
+                      unread={unreadMap[room.chat_room_id] || 0}
+                      active={!!(selectedRoom && String(selectedRoom.chat_room_id) === String(room.chat_room_id))}
+                      onClick={() => {
+                        setSelectedRoomWithCleanup(room);
+                        if (!hideSidebar) {
+                          router.push(`/messages?room=${room.chat_room_id}`);
+                        }
+                      }}
+                      onAvatarClick={handleAvatarClick}
+                      vendorBadge={room.business_id ? vendorBadges[String(room.business_id)] : undefined}
+                    />
+                  ))}
+
+                  {/* Show recommendations at the end if not searching */}
+                  {!query && recommendations.length > 0 && (
+                    <div className="pt-8 pb-4">
+                      <h4 className="text-[10px] font-bold text-slate-400   px-2 mb-3">People You May Know</h4>
+                      <div className="space-y-1">
                         {recommendations.map((rec, i) => (
                           <div
                             key={rec.user_id || i}
@@ -2062,8 +2188,11 @@ export function ChatView({
                           >
                             <img
                               src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
-                              className="w-8 h-8 rounded-full border border-white shadow-sm object-cover"
-                              alt=""
+                              className="w-8 h-8 rounded-full border border-white shadow-sm object-cover cursor-pointer transition-transform hover:scale-105"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAvatarClick(rec.user_id, rec.business?.logo || rec.business_logo || rec.profile_pic || "", rec.business?.business_name || rec.business_name || rec.full_name);
+                              }}
                             />
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
@@ -2072,18 +2201,88 @@ export function ChatView({
                                   <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
                                 )}
                               </p>
-                              <p className="text-[9px] text-slate-400 truncate">@{rec.username || "stoqleID" + rec.user_id}</p>
+                              <p className="text-[9px] text-slate-400 truncate">{rec.username || "stoqle ID:" + rec.stoqle_id}</p>
                             </div>
-                            <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 transition-colors" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartNewChat(rec.user_id);
+                              }}
+                              className="px-3 py-1 rounded-full border-[0.5px] border-rose-500 text-rose-500 hover:bg-rose-50 text-[9px] font-bold transition-all active:scale-95"
+                            >
+                              Message
+                            </button>
                           </div>
                         ))}
-                      </motion.div>
-                    </AnimatePresence>
+                      </div>
+                    </div>
                   )}
+                </>
+              ) : (
+                <div className="py-10 text-center space-y-6">
+                  <div className="flex flex-col items-center">
+                    <img src="/assets/images/message-icon.png" className="w-20 opacity-40 mb-4" alt="No messages" />
+                    <p className="text-sm font-bold text-gray-900 px-10">No messages yet</p>
+                    <p className="text-xs text-gray-400 mt-1 px-10">Connect with people and start a conversation</p>
+                  </div>
+
+                  <div className="pt-6 border-t border-gray-50 mx-2">
+                    <h4 className="text-[10px] font-bold text-slate-400   text-left px-2 mb-3">People You May Know</h4>
+                    {loadingRecs ? (
+                      <div className="p-2 space-y-3 animate-pulse">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0" />
+                            <div className="flex-1 space-y-2">
+                              <div className="h-2 w-24 bg-slate-100 rounded" />
+                              <div className="h-1.5 w-16 bg-slate-50 rounded" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <AnimatePresence mode="popLayout">
+                        <motion.div
+                          key="recs-list"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.4, ease: "easeOut" }}
+                          className="space-y-1"
+                        >
+                          {recommendations.map((rec, i) => (
+                            <div
+                              key={rec.user_id || i}
+                              onClick={() => {
+                                const handle = rec.username || rec.business?.business_slug || rec.business_slug;
+                                router.push(handle ? `/${handle}` : `/user/profile/${rec.user_id}`);
+                              }}
+                              className="flex items-center gap-3 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors text-left group"
+                            >
+                              <img
+                                src={rec.business?.logo || rec.business_logo || rec.profile_pic || `https://i.pravatar.cc/150?u=${rec.user_id}`}
+                                className="w-8 h-8 rounded-full border border-white shadow-sm object-cover"
+                                alt=""
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
+                                  {rec.business?.business_name || rec.business_name || rec.full_name}
+                                  {(rec.business?.business_id || rec.business_id) && !!vendorBadges[String(rec.business?.business_id || rec.business_id)]?.verified_badge && (
+                                    <VerifiedBadge size="xs" label={vendorBadges[String(rec.business?.business_id || rec.business_id)].badge_label} />
+                                  )}
+                                </p>
+                                <p className="text-[9px] text-slate-400 truncate">@{rec.username || "stoqleID" + rec.user_id}</p>
+                              </div>
+                              <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 transition-colors" />
+                            </div>
+                          ))}
+                        </motion.div>
+                      </AnimatePresence>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           </aside>
         )}
 
@@ -2115,9 +2314,9 @@ export function ChatView({
                     <div className="h-20 w-[85%] max-w-[400px] bg-slate-100/50 rounded-2xl rounded-tl-none" />
                   </div>
                 </div>
-                
+
                 <div className="absolute bottom-10 left-0 right-0 flex justify-center z-20">
-                   <p className="text-[10px] font-black text-slate-300 tracking-[0.2em] animate-pulse">Securing Connection...</p>
+                  <p className="text-[10px] font-black text-slate-300 tracking-[0.2em] animate-pulse">Securing Connection...</p>
                 </div>
               </div>
             ) : (
@@ -2131,12 +2330,14 @@ export function ChatView({
                   </div>
 
                   <h2 className="text-3xl font-bold text-slate-900  tracking-tight mb-3 flex items-center gap-3">
-                    <img
-                      src={auth?.user?.profile_pic || auth?.user?.avatar || `https://i.pravatar.cc/150?u=${userId}`}
-                      className="w-10 h-10 rounded-full border-2 border-white shadow-md object-cover"
-                      alt=""
-                    />
-                    {auth?.user?.full_name || auth?.user?.name || "Ready to Connect?"}
+                    {isMounted && (
+                      <img
+                        src={auth?.user?.profile_pic || auth?.user?.avatar || `https://i.pravatar.cc/150?u=${userId}`}
+                        className="w-10 h-10 rounded-full border-2 border-white shadow-md object-cover"
+                        alt=""
+                      />
+                    )}
+                    {isMounted ? (auth?.user?.full_name || auth?.user?.name || "Ready to Connect?") : "Ready to Connect?"}
                   </h2>
                   <p className="text-slate-400 font-medium mb-12 text-center max-w-sm leading-relaxed">
                     Select a conversation from the sidebar or start a new one with people you may know.
@@ -2787,10 +2988,11 @@ export function ChatView({
 
       {/* Profile Picture Modal (using social image viewer) */}
       {isProfileModalOpen && activeAvatarUrl && (
-        <ImageViewer
-          src={activeAvatarUrl}
+        <ProfileImageViewer
+          open={!!activeAvatarUrl}
+          images={activeAvatarUrl ? [activeAvatarUrl] : []}
           onClose={() => setIsProfileModalOpen(false)}
-          profileUserId={activeProfileId || undefined}
+          profileUserId={activeProfileId || 0}
         />
       )}
 

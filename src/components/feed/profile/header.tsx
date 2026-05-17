@@ -8,6 +8,7 @@ let suggestionPoolGlobal: any[] = [];
 let hasShownSuggestionsGlobal = false;
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/authContext"; // adjust path
 import { useCart } from "@/src/context/cartContext";
@@ -28,7 +29,7 @@ import { formatUrl } from "@/src/lib/utils/media";
 import { toPng } from "html-to-image";
 
 
-import ImageViewer from "../../../components/modal/imageViewer";
+import ProfileImageViewer from "../../../components/modal/ProfileImageViewer";
 import MediaViewer from "../../product/addProduct/preview/modal/mediaViewer";
 import { CameraIcon } from "@heroicons/react/24/solid";
 import ProfileCropperModal from "../../../components/modal/profileCropperModal";
@@ -37,6 +38,7 @@ import { API_BASE_URL } from "@/src/lib/config";
 import { createPortal } from "react-dom";
 import BalanceModal from "../../business/balanceModal";
 import { ChatRoomModal } from "../../../components/modal/ChatRoomModal";
+import StoqleLoader from "../../common/StoqleLoader";
 
 type HeaderProps = {
   profileApi: any | null;
@@ -44,6 +46,7 @@ type HeaderProps = {
   onLogout?: () => void;
   onSocialClick?: (tab: "friends" | "followers" | "following" | "recommend" | "liked") => void;
   onVisitShop?: () => void;
+  onNavigate?: () => void;
   onFollowToggle?: (following: boolean) => void;
   isFollowing?: boolean;
   followersCount?: number;
@@ -55,7 +58,7 @@ const DEFAULT_AVATAR = "/assets/images/favio.png";
 const DEFAULT_BANNER = "/assets/images/background.png";
 const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
-export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop, onFollowToggle, isFollowing: isFollowingProp, followersCount: followersCountProp, isBlocked: isBlockedProp, products }: HeaderProps) {
+export default function Header({ profileApi, displayName, onLogout, onSocialClick, onVisitShop, onNavigate, onFollowToggle, isFollowing: isFollowingProp, followersCount: followersCountProp, isBlocked: isBlockedProp, products }: HeaderProps) {
   const router = useRouter();
   const [localBg, setLocalBg] = useState<string | null>(null);
   const hasBg = !!(localBg || profileApi?.bg_photo_url || profileApi?.user?.bg_photo_url || profileApi?.business?.bg_photo_url || (profileApi ? DEFAULT_BANNER : null));
@@ -200,7 +203,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         if (!mounted) return;
 
         if (statusJson && statusJson.data && typeof statusJson.data.isFollowing === "boolean") {
-          setIsFollowing(Boolean(statusJson.data.isFollowing));
+          const nextFollowing = Boolean(statusJson.data.isFollowing);
+          setIsFollowing(nextFollowing);
+          // If we have a parent listener, notify it so it can sync its state (e.g. for PostModal)
+          if (onFollowToggle && typeof isFollowingProp === 'boolean' && isFollowingProp !== nextFollowing) {
+            onFollowToggle(nextFollowing);
+          }
         } else {
           if (typeof isFollowingProp !== 'boolean') {
             setIsFollowing(Boolean(profileApi?.is_followed_by_me ?? profileApi?.is_followed ?? false));
@@ -476,7 +484,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     );
     if (!bgUrl || bgUrl.includes('favio.png')) return;
 
-    const img = new Image();
+    const img = new window.Image();
     img.crossOrigin = "Anonymous";
     img.src = bgUrl;
     img.onload = () => {
@@ -505,6 +513,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
   const handleNavigate = (href: string) => {
     setOpen(false);
+    onNavigate?.();
     router.push(href);
   };
   // e.stopPropagation();
@@ -678,6 +687,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
     reader.onload = () => {
       setCropperImage(reader.result as string);
       setShowCropper(true);
+      setFullImageUrl(null);
     };
     reader.readAsDataURL(file);
   };
@@ -834,7 +844,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         {isOwner ? (
           <>
             <button
-              onClick={() => handleNavigate("/settings/")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNavigate("/settings/");
+              }}
               className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
             >
               <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
@@ -843,7 +856,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               Settings
             </button>
             <button
-              onClick={() => handleNavigate("/profile/business/business-status")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNavigate("/profile/business/business-status");
+              }}
               className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
             >
               <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
@@ -852,7 +868,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               {profileApi?.is_business_owner ? "My shop" : "Open store"}
             </button>
             <button
-              onClick={() => handleNavigate("/profile/orders/")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNavigate("/profile/orders/");
+              }}
               className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
             >
               <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
@@ -861,7 +880,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
               Order
             </button>
             <button
-              onClick={handleBalance}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBalance();
+              }}
               className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
             >
               <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-sans text-xs">
@@ -891,6 +913,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
           onClick={(e) => {
             e.stopPropagation();
             if (isOwner && !isLargeScreen) {
+              onNavigate?.();
               router.push("/profile/edit");
               return;
             }
@@ -921,7 +944,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     ) : (
                       <>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setOpen(false);
                             setShowShareFriendsModal(true);
                           }}
@@ -936,7 +960,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         <div className="border-t border-slate-100 my-1" />
 
                         <button
-                          onClick={handleCopyLink}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyLink();
+                          }}
                           className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
                         >
                           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
@@ -945,7 +972,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           Copy Link
                         </button>
                         <button
-                          onClick={reportUser}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            reportUser();
+                          }}
                           className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700 font-medium"
                         >
                           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
@@ -954,7 +984,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           Report
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (!token) {
                               setShowLoginModal(true);
                               setOpen(false);
@@ -1008,7 +1039,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
                       <div className="p-4 space-y-1">
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setOpen(false);
                             setShowShareFriendsModal(true);
                           }}
@@ -1021,7 +1053,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         </button>
 
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             handleCopyLink();
                             setOpen(false);
                           }}
@@ -1034,7 +1067,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         </button>
 
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             reportUser();
                             setOpen(false);
                           }}
@@ -1047,7 +1081,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         </button>
 
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (!token) {
                               setShowLoginModal(true);
                               setOpen(false);
@@ -1091,13 +1126,17 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         return (
           <div
             onClick={() => finalSrc && setShowBgMediaViewer(true)}
-            className={`absolute inset-x-0 top-0 bottom-[-32px] z-0 overflow-hidden cursor-pointer lg:hidden ${!finalSrc ? 'bg-slate-100' : ''}`}
+            className={`absolute inset-x-0 top-0 bottom-[-32px] z-0 overflow-hidden cursor-pointer lg:hidden ${!finalSrc ? 'bg-gray-100 animate-pulse' : ''}`}
           >
             {finalSrc && (
-              <img
+              <Image
                 src={finalSrc}
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
                 alt=""
+                priority
+                unoptimized={finalSrc.startsWith('blob:')}
+                sizes="100vw"
               />
             )}
             {/* Overall dark overlay on the whole bg_photo for better contrast */}
@@ -1160,10 +1199,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 transition={{ type: "spring", damping: 20, stiffness: 200 }}
                 className="flex items-center justify-center"
               >
-                <img
+                <Image
                   src={profilePic}
-                  className="w-8 h-8 rounded-full object-cover border border-white/20"
+                  width={32}
+                  height={32}
+                  className="rounded-full object-cover border border-white/20"
                   alt=""
+                  unoptimized={profilePic.startsWith('blob:')}
                 />
               </motion.div>
             )}
@@ -1224,6 +1266,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setShowFlyer(true);
                     }}
                     className={`p-2 active:scale-95 transition-transform ${(showMiniHeader || hasBg) ? 'text-white drop-shadow-sm' : 'text-slate-800'}`}
                   >
@@ -1254,7 +1297,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
             setShowBgMediaViewer(true);
           }
         }}
-        className={`relative z-[60] overflow-visible mb-6 transition-colors duration-300 cursor-default ${hasBg ? 'bg-transparent lg:bg-white' : 'bg-white'}`}>
+        className={`relative z-[60] overflow-visible mb-6 transition-colors duration-300 cursor-default ${!profileApi ? 'bg-gray-100 animate-pulse' : (hasBg ? 'bg-transparent lg:bg-white' : 'bg-white')}`}>
 
         <div className="max-w-4xl mx-auto pt-15 px-3">
           {/* Mobile */}
@@ -1274,7 +1317,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   )
                 }}
               >
-                <img
+                <Image
                   src={
                     localProfilePic ??
                     profileApi?.business?.business_logo ??
@@ -1284,7 +1327,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     DEFAULT_AVATAR
                   }
                   alt={displayName ?? "Profile"}
-                  className={`h-20 w-20 rounded-full object-cover ring-1 border ring-white shadow bg-white border-slate-200 ${uploadingProfile ? "opacity-50" : ""}`}
+                  width={80}
+                  height={80}
+                  className={`rounded-full object-cover ring-1 border ring-white shadow border-slate-200 ${!profileApi ? 'bg-gray-100' : 'bg-white'} ${uploadingProfile ? "opacity-50" : ""}`}
+                  unoptimized={profilePic.startsWith('blob:')}
                 />
 
                 {isOwner && (
@@ -1302,13 +1348,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
               <div className="flex-1 min-w-0">
                 <h2 className={`lg:-mt-10 sm:-mt-5 font-semibold leading-tight truncate flex items-center gap-1.5 ${hasBg ? 'text-white lg:text-slate-900 drop-shadow-sm' : 'text-slate-900'}`} style={{ fontSize: "clamp(1rem, 2.2vw, 1.25rem)" }}>
-                  {displayName}
+                  {profileApi ? displayName : <div className="h-5 w-32 bg-gray-100 animate-pulse rounded" />}
                   {profileApi?.is_verified_partner && (
                     <CheckBadgeIcon className="w-4 h-4 text-blue-500 fill-current" />
                   )}
                 </h2>
                 <AnimatePresence mode="wait">
-                  {profileApi && (
+                  {profileApi ? (
                     <motion.div
                       key="stoqle-id"
                       initial={{ opacity: 0, y: 5 }}
@@ -1347,6 +1393,8 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         </div>
                       )}
                     </motion.div>
+                  ) : (
+                    <div className="h-3 w-24 bg-gray-100 animate-pulse rounded mt-2" />
                   )}
                 </AnimatePresence>
               </div>
@@ -1355,7 +1403,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
             <div className="flex items-start justify-between mt-3 gap-4">
               <div className="flex-1">
                 <AnimatePresence mode="wait">
-                  {profileApi && (
+                  {profileApi ? (
                     <motion.div
                       key="bio"
                       initial={{ opacity: 0 }}
@@ -1375,12 +1423,14 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                         ) : null)}
                       </p>
                     </motion.div>
+                  ) : (
+                    <div className="h-4 w-full max-w-[200px] bg-gray-100 animate-pulse rounded mt-2" />
                   )}
                 </AnimatePresence>
 
                 <div className="flex items-center justify-between mt-4">
                   <AnimatePresence mode="wait">
-                    {profileApi && (
+                    {profileApi ? (
                       <motion.div
                         key="stats"
                         initial={{ opacity: 0 }}
@@ -1425,6 +1475,21 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                           <div className={`text-xs ${hasBg ? 'text-white/80 lg:text-slate-500' : 'text-slate-500'}`}>Likes</div>
                         </div>
                       </motion.div>
+                    ) : (
+                      <div className="flex gap-6">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="h-4 w-8 bg-gray-100 animate-pulse rounded" />
+                          <div className="h-3 w-12 bg-gray-100 animate-pulse rounded" />
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="h-4 w-8 bg-gray-100 animate-pulse rounded" />
+                          <div className="h-3 w-12 bg-gray-100 animate-pulse rounded" />
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="h-4 w-8 bg-gray-100 animate-pulse rounded" />
+                          <div className="h-3 w-12 bg-gray-100 animate-pulse rounded" />
+                        </div>
+                      </div>
                     )}
                   </AnimatePresence>
 
@@ -1441,6 +1506,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                               setShowLoginModal(true);
                               return;
                             }
+                            onNavigate?.();
                             router.push("/profile/edit");
                           }}
                           aria-label="Edit Profile"
@@ -1490,7 +1556,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                                 aria-label="Message"
                               >
                                 {messageLoading ? (
-                                  <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                                  <StoqleLoader size={18} />
                                 ) : (
                                   <MessageCircleMore className="w-5 h-5" />
                                 )}
@@ -1541,7 +1607,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                               aria-label="Message"
                             >
                               {messageLoading ? (
-                                <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                                <StoqleLoader size={16} />
                               ) : (
                                 <MessageCircleMore className="w-4 h-4" />
                               )}
@@ -1684,7 +1750,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                                     className="flex flex-col items-center cursor-pointer w-full"
                                   >
                                     <div className="relative mb-1.5">
-                                      <img src={avatarSrc} alt={name} className="w-10 h-10 rounded-full object-cover" />
+                                      <Image src={avatarSrc} alt={name} width={40} height={40} className="rounded-full object-cover" unoptimized={avatarSrc.startsWith('blob:')} />
                                       {isTrusted && (
                                         <div title="Trusted Partner" className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center border-[1.5px] border-white shadow-sm">
                                           <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -1781,10 +1847,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 <div className="flex items-center gap-1.5 shrink-0">
                   {(products || []).slice(0, 3).map((p: any, i: number) => (
                     <div key={p.product_id || i} className={`relative w-12 h-12 rounded overflow-hidden bg-white ${hasBg ? '' : 'border-slate-200'}`}>
-                      <img
+                      <Image
                         src={p.first_image?.startsWith('http') ? p.first_image : (p.first_image ? `${API_BASE_URL}/public/${p.first_image}` : NO_IMAGE_PLACEHOLDER)}
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
                         alt=""
+                        sizes="48px"
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-center py-2">
                         <span className="text-[7px] font-black text-white px-1 leading-none drop-shadow-sm">
@@ -1819,7 +1887,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                 )
               }}
             >
-              <img
+              <Image
                 src={
                   localProfilePic ??
                   profileApi?.business?.business_logo ??
@@ -1829,7 +1897,10 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                   DEFAULT_AVATAR
                 }
                 alt={displayName ?? "Profile"}
-                className={`h-44 w-44 rounded-full object-cover ring-4 border ring-white shadow bg-white border-slate-200 ${uploadingProfile ? "opacity-50" : ""}`}
+                width={176}
+                height={176}
+                className={`rounded-full object-cover ring-4 border ring-white shadow border-slate-200 ${!profileApi ? 'bg-gray-100' : 'bg-white'} ${uploadingProfile ? "opacity-50" : ""}`}
+                unoptimized={profilePic.startsWith('blob:')}
               />
 
               {isOwner && (
@@ -1847,13 +1918,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
 
             <div className="flex-1 min-w-0">
               <h2 className="font-semibold lg:mt-5 text-slate-900 truncate leading-tight flex items-center gap-1.5" style={{ fontSize: "clamp(1rem, 1.80vw, 1.10rem)" }}>
-                {displayName}
+                {profileApi ? displayName : <div className="h-6 w-48 bg-gray-100 animate-pulse rounded" />}
                 {profileApi?.is_verified_partner && (
                   <CheckBadgeIcon className="w-4 h-4 text-blue-500" />
                 )}
               </h2>
               <AnimatePresence mode="wait">
-                {profileApi && (
+                {profileApi ? (
                   <motion.div
                     key="desktop-stoqle-id"
                     initial={{ opacity: 0, y: 5 }}
@@ -1892,10 +1963,12 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       </div>
                     )}
                   </motion.div>
+                ) : (
+                  <div className="h-3 w-32 bg-gray-100 animate-pulse rounded mt-2" />
                 )}
               </AnimatePresence>
               <AnimatePresence mode="wait">
-                {profileApi && (
+                {profileApi ? (
                   <motion.div
                     key="desktop-bio"
                     initial={{ opacity: 0 }}
@@ -1915,11 +1988,13 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       ) : null)}
                     </p>
                   </motion.div>
+                ) : (
+                  <div className="h-4 w-64 bg-gray-100 animate-pulse rounded mt-2" />
                 )}
               </AnimatePresence>
 
               <AnimatePresence mode="wait">
-                {profileApi && (
+                {profileApi ? (
                   <motion.div
                     key="desktop-stats"
                     initial={{ opacity: 0 }}
@@ -1964,6 +2039,21 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                       <div className="text-sm text-slate-500">Likes</div>
                     </div>
                   </motion.div>
+                ) : (
+                  <div className="flex gap-10 mt-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-8 bg-gray-100 animate-pulse rounded" />
+                      <div className="h-4 w-16 bg-gray-100 animate-pulse rounded" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-8 bg-gray-100 animate-pulse rounded" />
+                      <div className="h-4 w-16 bg-gray-100 animate-pulse rounded" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-8 bg-gray-100 animate-pulse rounded" />
+                      <div className="h-4 w-16 bg-gray-100 animate-pulse rounded" />
+                    </div>
+                  </div>
                 )}
               </AnimatePresence>
             </div>
@@ -1977,6 +2067,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                     className="bg-rose-500 text-white rounded-full px-5 py-1 text-sm shadow active:scale-95 transition-transform"
                     onClick={(e) => {
                       e.stopPropagation();
+                      onNavigate?.();
                       router.push("/profile/edit");
                     }}
                   >
@@ -2018,7 +2109,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                             aria-label="Message"
                           >
                             {messageLoading ? (
-                              <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                              <StoqleLoader size={18} />
                             ) : (
                               <MessageCircleMore className="w-5 h-5" />
                             )}
@@ -2047,7 +2138,7 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
                             aria-label="Message"
                           >
                             {messageLoading ? (
-                              <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+                              <StoqleLoader size={18} />
                             ) : (
                               <MessageCircleMore className="w-5 h-5" />
                             )}
@@ -2173,11 +2264,15 @@ export default function Header({ profileApi, displayName, onLogout, onSocialClic
         cropShape={croppingType === "profile" ? "round" : "rect"}
       />
 
-      <ImageViewer
-        src={fullImageUrl}
+      <ProfileImageViewer
+        open={!!fullImageUrl}
+        images={fullImageUrl ? [fullImageUrl] : []}
         onClose={() => setFullImageUrl(null)}
         profileUserId={profileApi?.user?.user_id ?? profileApi?.business?.user_id}
-        onUpdateProfile={() => fileInputRef.current?.click()}
+        onUpdateProfile={() => {
+          setFullImageUrl(null);
+          fileInputRef.current?.click();
+        }}
       />
 
       {showBgMediaViewer && (() => {
@@ -2321,6 +2416,7 @@ function BlockConfirmModal({ isOpen, onClose, onConfirm, name }: any) {
 }
 
 function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onClose: () => void, user: any, business: any }) {
+  const router = useRouter();
   const [isFlipped, setIsFlipped] = useState(false);
   const flyerRef = useRef<HTMLDivElement>(null);
   const backFlyerRef = useRef<HTMLDivElement>(null);
@@ -2426,7 +2522,7 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                 <div ref={flyerRef} className="w-full h-full bg-white overflow-hidden border-[6px] border-white rounded-t-[2rem] relative shadow-xl">
                   {/* Banner Header */}
                   <div className="absolute top-0 left-0 right-0 h-[40%] z-0">
-                    <img src={bgImage} crossOrigin="anonymous" className="w-full h-full object-cover" alt="Banner" />
+                    <Image src={bgImage} fill className="object-cover" alt="Banner" unoptimized />
                     <div className="absolute inset-0 bg-black/10"></div>
                   </div>
 
@@ -2437,7 +2533,7 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                       <div className="flex flex-col items-start mt-4">
                         <div className="w-16 h-16 rounded-full border-2 border-white/80 mb-4 overflow-hidden shadow-xl">
                           {logo ? (
-                            <img src={logo} crossOrigin="anonymous" className="w-full h-full object-cover" alt="Logo" />
+                            <Image src={logo} fill className="object-cover" alt="Logo" unoptimized />
                           ) : (
                             <div className="w-full h-full bg-white flex items-center justify-center text-rose-500">
                               <UserGroupIcon className="w-8 h-8" />
@@ -2464,11 +2560,12 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                         </div>
 
                         <div className="relative w-24 h-24 bg-white rounded-2xl p-1 shadow-2xl flex items-center justify-center transform border-2 border-white overflow-hidden">
-                          <img
-                            src={`https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=150&ecLevel=M`}
-                            crossOrigin="anonymous"
+                          <Image
+                            src={`https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=150&ecLevel=M&dotStyle=dots&finderStyle=circle&finderDotStyle=dots`}
+                            fill
+                            className="object-contain"
                             alt="QR Code"
-                            className="w-full h-full object-contain"
+                            unoptimized
                           />
                         </div>
                       </div>
@@ -2493,11 +2590,12 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
                 <div ref={backFlyerRef} className="w-full h-full bg-white  border-white rounded-t-[2rem] flex flex-col items-center justify-center p-8 text-center relative ">
                   {/* Big QR Code with Integrated Center Logo */}
                   <div className="w-56 h-56 bg-white rounded-[2.5rem] p-6  mb-10 mt-6 relative flex items-center justify-center">
-                    <img
-                      src={`https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=300&ecLevel=H&centerImageUrl=${encodeURIComponent(roundedLogo)}&centerImageWidth=40&centerImageHeight=40`}
-                      crossOrigin="anonymous"
+                    <Image
+                      src={`https://quickchart.io/qr?text=${encodeURIComponent(qrData)}&size=300&ecLevel=H&centerImageUrl=${encodeURIComponent(roundedLogo)}&centerImageWidth=40&centerImageHeight=40&dotStyle=dots&finderStyle=circle&finderDotStyle=dots&dark=f43f5e`}
+                      fill
+                      className="object-contain"
                       alt="Large QR Code"
-                      className="w-full h-full object-contain"
+                      unoptimized
                     />
                     <div className="absolute inset-0 -rose-500/10 rounded-[2.5rem] animate-pulse pointer-events-none"></div>
                   </div>
@@ -2522,7 +2620,7 @@ function FlyerModal({ isOpen, onClose, user, business }: { isOpen: boolean, onCl
 
         {/* Action Buttons */}
         <div className="px-8 py-6 bg-white flex justify-around items-center border-t border-slate-50">
-          <button onClick={() => toast.info("Hold your phone camera over the QR code")} className="flex flex-col items-center gap-1.5 group">
+          <button onClick={() => router.push('/scan')} className="flex flex-col items-center gap-1.5 group">
             <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors">
               <Scan className="w-5 h-5 text-slate-600" />
             </div>

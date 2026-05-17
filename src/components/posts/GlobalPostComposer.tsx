@@ -510,7 +510,7 @@ function VideoPreviewModal({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       ref={videoRef}
-                      className={`w-full h-full ${videoAspectRatio && videoAspectRatio < 0.8 ? "object-cover" : "object-contain"}`}
+                      className="w-full h-full object-contain"
                       autoPlay={isPlaying}
                       muted={isMuted}
                       playsInline
@@ -737,13 +737,13 @@ function VideoPreviewModal({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setIsPrivacyModalOpen(false)}
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[50] rounded-[inherit]"
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[150] rounded-[inherit]"
               />
               <motion.div
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[60] p-6 space-y-4"
+                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[160] p-6 space-y-4"
               >
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold   text-slate-400">Visibility</h3>
@@ -847,7 +847,7 @@ function VideoPreviewModal({
                 exit={{ y: "100%" }}
                 className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[130] p-6 space-y-4"
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-slate-400">Add Music / Voice</h3>
                   <button onClick={() => setShowAudioMenu(false)}>
                     <XMarkIcon className="w-4 h-4 text-slate-400" />
@@ -1256,7 +1256,7 @@ function ImagePreviewModal({
               )}
             </div>
             <h2 className="text-sm font-bold text-slate-900 absolute left-1/2 -translate-x-1/2">
-              {step === 0 ? "Post Preview" : "Create Post"}
+              {step === 0 ? "Post Previews" : "Create Post"}
             </h2>
             <div className="w-10 flex justify-end">
               <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
@@ -1288,7 +1288,7 @@ function ImagePreviewModal({
                         }
                       }}
                       src={imagePreviews[index]}
-                      className="w-full h-full object-cover cursor-pointer"
+                      className="w-full h-full object-contain cursor-pointer"
                     />
                   </AnimatePresence>
 
@@ -1353,7 +1353,7 @@ function ImagePreviewModal({
                     ) : (
                       <button
                         onClick={() => setShowAudioList(true)}
-                        className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 hover:border-rose-200 hover:bg-slate-50 transition-all group"
+                        className="w-full flex items-center gap-4 p-2 border-2 border-dashed border-slate-100 rounded-2xl text-slate-400 hover:border-rose-200 hover:bg-slate-50 transition-all group"
                       >
                         <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-rose-50 group-hover:text-rose-500 transition-colors">
                           <PlusIcon className="w-5 h-5" />
@@ -1683,6 +1683,24 @@ function ImagePreviewModal({
               <p className="mt-1 text-[10px] text-slate-400 font-medium text-center px-10">Please wait while we process your media...</p>
             </div>
           )}
+
+          {/* Privacy Select Modal (Nested) */}
+          <AnimatePresence>
+            {isPrivacyModalOpen && (
+              <div className="absolute inset-0 z-[100] flex items-end justify-center overflow-hidden rounded-none sm:rounded-2xl">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPrivacyModalOpen(false)} className="absolute inset-0 bg-black/40" />
+                <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 380, damping: 38 }} className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-3 shadow-2xl">
+                  <p className="text-xs font-black text-slate-400  tracking-widest mb-2">Audience</p>
+                  {['public', 'private', 'friends'].map((p) => (
+                    <button key={p} onClick={() => { setPrivacy(p as any); setIsPrivacyModalOpen(false); }} className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${privacy === p ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-600'}`}>
+                      <span className="font-bold capitalize">{p === 'friends' ? 'Friends only' : p}</span>
+                      {privacy === p && <CheckIcon className="w-5 h-5" />}
+                    </button>
+                  ))}
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
 
@@ -1695,22 +1713,7 @@ function ImagePreviewModal({
         onChange={handleAddMore}
       />
 
-      <AnimatePresence>
-        {isPrivacyModalOpen && (
-          <div className="absolute inset-0 z-[100] flex items-end justify-center overflow-hidden rounded-none sm:rounded-2xl">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPrivacyModalOpen(false)} className="absolute inset-0 bg-black/40" />
-            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 380, damping: 38 }} className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-3 shadow-2xl">
-              <p className="text-xs font-black text-slate-400  tracking-widest mb-2">Audience</p>
-              {['public', 'private', 'friends'].map((p) => (
-                <button key={p} onClick={() => { setPrivacy(p as any); setIsPrivacyModalOpen(false); }} className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${privacy === p ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-600'}`}>
-                  <span className="font-bold capitalize">{p === 'friends' ? 'Friends only' : p}</span>
-                  {privacy === p && <CheckIcon className="w-5 h-5" />}
-                </button>
-              ))}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
 
       {previewPost && (
         <PostModal

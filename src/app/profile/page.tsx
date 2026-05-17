@@ -26,6 +26,7 @@ import { io } from "socket.io-client";
 import { copyToClipboard } from "@/src/lib/utils/utils";
 import Link from "next/link";
 import { isOffline, safeFetch, ApiError } from "@/src/lib/api/handler";
+import CachedImage from "@/src/components/common/CachedImage";
 
 
 type ApiPost = any;
@@ -117,6 +118,7 @@ const mapApiPost = (p: any): Post => {
     original_audio_url: p?.original_audio_url,
     original_video_url: p?.original_video_url,
     post_public_id: p?.post_public_id,
+    comment_count: p?.comment_count ?? p?.comments_count ?? p?.commentCount ?? 0,
   };
 };
 
@@ -263,14 +265,11 @@ const PostCard = React.memo(({
             </div>
           </div>
         ) : (
-          <div className="relative w-full overflow-hidden bg-slate-100">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-            </div>
-            <img
-              src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
+          <div className="w-full">
+            <CachedImage
+              src={post.thumbnail || (!post.isVideo ? post.src : "") || NO_IMAGE_PLACEHOLDER}
               alt={post.caption}
-              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110 relative z-[1]"
+              className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
             />
           </div>
         )}
@@ -510,7 +509,7 @@ const ProductCard = React.memo(({
               muted
               loop
               playsInline
-              className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[220px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
+              className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
             />
           ) : (
             <div className="relative w-full h-full bg-slate-50 overflow-hidden">
@@ -529,14 +528,10 @@ const ProductCard = React.memo(({
                                 to { opacity: 1; }
                             }
                         `}</style>
-              <img
+              <CachedImage
                 src={formatUrl(p.first_image)}
                 alt={p.title}
-                className="w-full h-auto min-h-[180px] sm:min-h-[200px] max-h-[250px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-110 relative z-[1]"
-                onLoad={(e) => {
-                  (e.target as HTMLImageElement).style.animation = "fadeIn 0.6s ease-in-out forwards";
-                }}
-                style={{ opacity: 0 }}
+                className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
               />
             </div>
           )}
@@ -2256,6 +2251,8 @@ export default function ProfileHeader({ postCount = 12 }: Props) {
             post={selectedPost}
             onClose={closeModal}
             onToggleLike={toggleLike}
+            targetUserId={auth?.user?.user_id}
+            reelsList={mediaPosts.filter(p => p.isVideo)}
           />
         )}
       </AnimatePresence>

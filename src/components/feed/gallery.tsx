@@ -314,7 +314,7 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
 
                 {post.coverType === "note" && !post.src ? (
                   <div
-                    className="w-full min-h-[200px] max-h-[400px] lg:h-[350px] h-[300px] flex items-center justify-center p-6 rounded-2xl border"
+                    className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] flex items-center justify-center p-6 rounded-2xl border"
                     style={{
                       background:
                         post.noteConfig && post.noteConfig.startColor && post.noteConfig.endColor
@@ -327,9 +327,9 @@ export default function RandomPostsGallery({ postCount = 12 }: Props) {
                     </div>
                   </div>
                 ) : post.isVideo ? (
-                  <video src={post.src} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover rounded-2xl border" muted loop playsInline />
+                   <video src={post.src} className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover rounded-2xl border" muted loop playsInline />
                 ) : (
-                  <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[200px] max-h-[350px] object-cover border rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
+                   <img src={post.src} alt={post.caption} className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover border rounded-2xl transition-transform duration-500 group-hover:scale-105 hover:border" />
                 )}
               </div>
 

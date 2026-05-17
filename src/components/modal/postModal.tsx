@@ -18,10 +18,12 @@ import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from "
 import { useAuth } from "@/src/context/authContext";
 import { formatUrl } from "@/src/lib/utils/media";
 import StoqleLoader from "@/src/components/common/StoqleLoader";
-import ImageViewer from "./imageViewer";
+import PostImageViewer from "./PostImageViewer";
+import ProfileImageViewer from "./ProfileImageViewer";
 import MobileReelsView from "./PostModal/components/MobileReelsView";
 import StandardPostView from "./PostModal/components/StandardPostView";
 import { PostModalContext } from "./PostModal/types";
+import CommentContextMenu from "./PostModal/components/CommentContextMenu";
 
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -67,9 +69,12 @@ type Props = {
   isProductLinkedOnly?: boolean;
   zIndex?: number;
   onActivePostChange?: (post: any) => void;
+  isFollowing?: boolean;
+  onToggleFollow?: (val: boolean) => void;
+  reelsList?: Post[];
 };
 
-const NO_IMAGE_PLACEHOLDER = "https://via.placeholder.com/1600x1200?text=No+Image";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 // layout tuning
 const RIGHT_PANEL_WIDTH = 400;
@@ -93,7 +98,7 @@ function formatDate(dateStr?: string) {
 }
 
 
-export default function PostModal({ post, onClose: onCloseProp, open, onToggleLike, userToken, isPreview = false, origin, targetUserId, isProductLinkedOnly = false, zIndex, onActivePostChange }: Props) {
+export default function PostModal({ post, onClose: onCloseProp, open, onToggleLike, userToken, isPreview = false, origin, targetUserId, isProductLinkedOnly = false, zIndex, onActivePostChange, isFollowing: initialIsFollowing, onToggleFollow, reelsList: initialReels }: Props) {
   const auth = useAuth();
   const router = useRouter();
 
@@ -104,7 +109,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
   const [isCommenting, setIsCommenting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false);
-  const [activeAttachmentModal, setActiveAttachmentModal] = useState<'posts' | 'products' | 'location' | 'media' | null>(null);
+  const [activeAttachmentModal, setActiveAttachmentModal] = useState<'posts' | 'products' | 'location' | 'media' | 'voice' | null>(null);
+  const [contextMenuComment, setContextMenuComment] = useState<any | null>(null);
+  const [showCommentContextMenu, setShowCommentContextMenu] = useState(false);
+  const [isModalFullyVisible, setIsModalFullyVisible] = useState(false);
+  
   // 1. UI & Layout Hook
   const {
     isClosing,
@@ -141,7 +150,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     lastScrollTimeRef,
     userManualPauseRef,
     pendingTransitionRef
-  } = usePostReels({ post, isMobileReels, userToken, targetUserId, onActivePostChange });
+  } = usePostReels({ post, isMobileReels, userToken, targetUserId, onActivePostChange, initialReels, isModalFullyVisible });
 
   // 3. Media & Audio Hook
   const allMedia = useMemo(() => {
@@ -165,10 +174,12 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     setSwipeDirection,
     fullImageUrl,
     setFullImageUrl,
+    viewerImages,
+    setViewerImages,
     backgroundAudioRef,
     backgroundAudioUrl,
     isDraggingRef
-  } = usePostMedia({ post, allMedia, isMobileReels, reelsList, currentReelIndex, open, isPaused });
+  } = usePostMedia({ post, allMedia, isMobileReels, reelsList, currentReelIndex, open, isPaused, isModalFullyVisible });
 
   // 4. Interactions Hook
   const {
@@ -199,7 +210,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     setReelsList,
     isPreview,
     onToggleLikeProp: onToggleLike,
-    setIsPaused
+    setIsPaused,
+    initialIsFollowing,
+    onToggleFollow,
+    targetUserId,
+    isModalFullyVisible
   });
 
   // 5. Comments Hook
@@ -227,7 +242,12 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     handleCommentsScroll,
     toggleLikeComment,
     handleAddComment,
-    fetchComments
+    deleteComment,
+    fetchComments,
+    replyState,
+    fetchMoreReplies,
+    externalPendingFiles,
+    setExternalPendingFiles
   } = usePostComments({
     postId: activePostId,
     userToken,
@@ -236,7 +256,8 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     isMobileReels,
     currentReelIndex,
     setReelsList,
-    isPreview
+    isPreview,
+    isModalFullyVisible
   });
 
   // 6. Mentions Hook
@@ -263,7 +284,17 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     hydratedLinkedProducts,
     setHydratedLinkedProducts,
     handleProductClick
-  } = usePostProducts({ auth, isMobileReels, setIsPaused, activeVideoRef });
+  } = usePostProducts({
+    auth,
+    isMobileReels,
+    setIsPaused,
+    activeVideoRef,
+    activePostId,
+    post,
+    reelsList,
+    currentReelIndex,
+    isModalFullyVisible
+  });
 
   const {
     showLongTapMenu,
@@ -304,7 +335,11 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     if (hasVariants && inventory.length > 0) {
       return inventory.reduce((acc: number, item: any) => acc + (Number(item.quantity ?? item.stock ?? item.initial_quantity ?? 0)), 0);
     }
-    return Number(lp.total_quantity ?? lp.quantity ?? lp.stock ?? lp.total_stock ?? 0);
+    // Fallback to total fields. If all are missing, we don't know the stock yet.
+    // Return a special large number so we don't say 'Sold Out' prematurely.
+    const rawStock = lp.total_quantity ?? lp.quantity ?? lp.stock ?? lp.total_stock;
+    if (rawStock === undefined || rawStock === null) return 999;
+    return Number(rawStock);
   }, []);
 
   const getDiscountInfo = useCallback((lp: any) => {
@@ -424,12 +459,14 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
     setShowEmojiPicker, leftMediaRef, isLargeScreen, post, getNoteStyles, mediaList, currentMediaIndex,
     handleDoubleTap, activeHeartPops, swipeDirection, NO_IMAGE_PLACEHOLDER, isDraggingRef,
     setSwipeDirection, setCurrentMediaIndex, firstImageAspectRatio, setFirstImageAspectRatio,
-    setViewerProfileUserId, setFullImageUrl, hydratedLinkedProducts, activePostId, getDiscountedPrice,
+    setViewerProfileUserId, setFullImageUrl, viewerImages, setViewerImages, hydratedLinkedProducts, activePostId, getDiscountedPrice,
     getDiscountInfo, getPolicyText, getStockCount, auth, sheetTextareaRef, handleShareClick,
     commentSheetEntryType, isPostOwner, isFollowing, toggleFollowAuthor, followLoading,
     onClose, isPaused, setMenuPosition, setLongTappedPost, setShowLongTapMenu, handleTimeUpdate, showSwipeGuide,
     commentsError, isPreview, userManualPauseRef,
-    computedWidth, computeAndSetModalWidth, isNavigating, setIsNavigating, pendingTransitionRef
+    computedWidth, computeAndSetModalWidth, isNavigating, setIsNavigating, pendingTransitionRef,
+    replyState, fetchMoreReplies, externalPendingFiles, setExternalPendingFiles,
+    deleteComment, contextMenuComment, showCommentContextMenu, setContextMenuComment, setShowCommentContextMenu
   };
 
 
@@ -440,7 +477,7 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
       role="dialog"
       aria-modal="true"
       ref={wrapperRef}
-      className="fixed inset-0 flex items-center justify-center px-0 py-0"
+      className="fixed inset-0 flex items-center justify-center"
       style={{ zIndex: zIndex || modalZIndex }}
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -476,14 +513,17 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                 transformOrigin: origin ? `${origin.x}px ${origin.y}px` : "center",
                 height: !isLargeScreen ? lockHeight : undefined
               }}
-              initial={isLargeScreen ? { opacity: 0, scale: 0.3 } : { y: "100%", opacity: 1 }}
-              animate={isLargeScreen ? { opacity: 1, scale: 1 } : { y: 0, opacity: 1 }}
-              exit={isLargeScreen ? { opacity: 0, scale: 0.3 } : { y: "100%", opacity: 1 }}
+              initial={isLargeScreen ? { opacity: 0, scale: 0.3 } : { x: "100%", opacity: 1 }}
+              animate={isLargeScreen ? { opacity: 1, scale: 1 } : { x: 0, opacity: 1 }}
+              exit={isLargeScreen ? { opacity: 0, scale: 0.3 } : { x: "100%", opacity: 1 }}
+              onAnimationComplete={() => {
+                setIsModalFullyVisible(true);
+              }}
               transition={isLargeScreen
                 ? { type: "spring", damping: 30, stiffness: 300 }
                 : { type: "spring", damping: 25, stiffness: 450, mass: 0.5 }
               }
-              className="relative z-10 w-full h-screen md:h-[94vh] bg-white flex flex-col overflow-hidden md:flex md:flex-row md:w-[96vw] md:max-w-[1100px] md:rounded-2xl min-h-[500px] sm:min-h-[600px] md:min-h-0"
+              className="relative z-10 w-full h-screen md:h-[95vh] bg-white flex flex-col overflow-hidden md:flex md:flex-row md:w-[92vw] md:max-w-[1100px] md:rounded-2xl min-h-[500px] sm:min-h-[600px] md:min-h-0"
             >
               {backgroundAudioUrl && (
                 <audio
@@ -513,10 +553,12 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                         onClick={(e) => e.stopPropagation()}
                         className="flex-shrink-0 active:scale-95 mr-2 transition-transform"
                       >
-                        <img
+                        <Image
                           src={currentItem.user?.avatar || ""}
                           alt={currentItem.user?.name || "Author"}
-                          className="h-8 w-8 rounded-full object-cover"
+                          width={32}
+                          height={32}
+                          className="rounded-full object-cover"
                         />
                       </Link>
                       <div className="min-w-0">
@@ -550,18 +592,33 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
                 <StandardPostView ctx={modalContext} />
               )}
             </motion.div>
-            <ImageViewer
-              src={fullImageUrl ? (viewerProfileUserId ? fullImageUrl : mediaList[currentMediaIndex]) : null}
-              onClose={() => setFullImageUrl(null)}
-              profileUserId={viewerProfileUserId}
-              mediaList={viewerProfileUserId ? [] : mediaList}
-              currentIndex={currentMediaIndex}
-              onIndexChange={(idx) => {
-                setSwipeDirection(idx > currentMediaIndex ? 1 : -1);
-                setCurrentMediaIndex(idx);
-              }}
-              direction={swipeDirection}
-            />
+            {viewerProfileUserId ? (
+              <ProfileImageViewer
+                open={!!fullImageUrl}
+                onClose={() => {
+                  setFullImageUrl(null);
+                  setViewerProfileUserId(undefined);
+                }}
+                images={fullImageUrl ? [fullImageUrl] : []}
+                profileUserId={viewerProfileUserId}
+              />
+            ) : (
+              <PostImageViewer
+                open={!!fullImageUrl || !!viewerImages}
+                onClose={() => {
+                  setFullImageUrl(null);
+                  setViewerImages?.(null);
+                }}
+                images={viewerImages || mediaList}
+                startIndex={viewerImages ? (fullImageUrl ? viewerImages.indexOf(fullImageUrl) : 0) : currentMediaIndex}
+                onIndexChange={(idx) => {
+                  if (!viewerImages) {
+                    setSwipeDirection(idx > currentMediaIndex ? 1 : -1);
+                    setCurrentMediaIndex(idx);
+                  }
+                }}
+              />
+            )}
             {productPreviewOpen && selectedProductData && (
               <ProductPreviewModal
                 open={productPreviewOpen}
@@ -709,6 +766,27 @@ export default function PostModal({ post, onClose: onCloseProp, open, onToggleLi
           }}
         />
       )}
+      {/* Comment Context Menu */}
+      <CommentContextMenu
+        comment={contextMenuComment}
+        isOpen={showCommentContextMenu}
+        onClose={() => { setShowCommentContextMenu(false); setContextMenuComment(null); }}
+        isOwnComment={contextMenuComment ? Number(contextMenuComment.user_id) === Number(auth?.user?.user_id || auth?.user?.id) : false}
+        onReply={(c) => {
+          setReplyingTo(c);
+          setIsCommenting(true);
+          setCommentText('');
+          if (isMobileReels) {
+            setShowCommentsSheet(true);
+          }
+          setTimeout(() => {
+            const input = document.getElementById('desktop-comment-input-active') || document.getElementById('sheet-comment-input-active');
+            if (input) input.focus();
+          }, 150);
+        }}
+        onDelete={(id) => deleteComment(id)}
+        isMobile={!isLargeScreen}
+      />
       {/* Global Navigation Loader Overlay */}
       {isNavigating && (
         <div className="fixed inset-0 z-[9999999999] flex items-center justify-center bg-transparent pointer-events-none">

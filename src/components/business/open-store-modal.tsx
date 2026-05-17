@@ -12,8 +12,10 @@ import AddressSelectionModal from "./addressSelectionModal";
 import { countries } from "@/src/lib/api/country";
 import { fetchBusinessCategories } from "@/src/lib/api/categoryApi";
 import CategorySelectionModal from "../input/default-select";
+import BusinessCategoryModal from "./BusinessCategoryModal";
 import Swal from "sweetalert2";
 import { useAuth } from "@/src/context/authContext";
+import { ChevronRight, Check } from "lucide-react";
 
 type StoreType = "individual" | "enterprise" | null;
 
@@ -41,6 +43,7 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
   const [pendingCoords, setPendingCoords] = useState<{ latitude: number, longitude: number } | null>(null);
   const [businessCategories, setBusinessCategories] = useState<string[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   const firstFocusRef = useRef<HTMLButtonElement | null>(null);
 
@@ -51,8 +54,13 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
     async function load() {
       try {
         setLoadingCategories(true);
-        const data = await fetchBusinessCategories();
-        setBusinessCategories(data.map(c => c.name));
+        const res = await fetchBusinessCategories();
+        if (res?.data && Array.isArray(res.data)) {
+          setBusinessCategories(res.data.map((c: any) => c.name));
+        } else if (Array.isArray(res)) {
+          // Fallback if the API ever changes to return a raw array
+          setBusinessCategories(res.map((c: any) => c.name));
+        }
       } catch (err) {
         console.error("Failed to load business categories", err);
       } finally {
@@ -332,7 +340,7 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             role="dialog"
             aria-modal="true"
-            className="relative z-10 w-full h-full lg:h-[90vh] lg:max-h-[90vh] sm:w-full lg:max-w-3xl rounded-none lg:rounded-2xl bg-slate-100 shadow-2xl overflow-hidden flex flex-col"
+            className="relative z-10 w-full h-full lg:h-[90vh] lg:max-h-[90vh] sm:w-full lg:max-w-3xl rounded-none lg:rounded-2xl bg-slate-100 overflow-hidden flex flex-col"
           >
             {/* Header */}
             <header className="sticky top-0 z-30 bg-slate-100 px-4 py-3 flex items-center justify-between">
@@ -352,19 +360,22 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  ref={firstFocusRef}
-                  onClick={() => {
-                    reset();
-                    onClose();
-                  }}
-                  aria-label="Close modal"
-                  className="rounded-full p-2 hover:bg-slate-100 focus:outline-none"
-                >
-                  <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
-                    <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
+                {step !== "form" && (
+                  <button
+                    type="button"
+                    ref={firstFocusRef}
+                    onClick={() => {
+                      reset();
+                      onClose();
+                    }}
+                    aria-label="Close modal"
+                    className="rounded-full p-2 hover:bg-slate-100 focus:outline-none"
+                  >
+                    <svg className="w-5 h-5 text-slate-600" viewBox="0 0 24 24" fill="none">
+                      <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </header>
 
@@ -412,85 +423,108 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
                 {step === "form" && (
                   <>
                     {/* NIN Upload */}
-                    <div className="rounded-xl bg-white p-4 border-slate-100">
-                      <div className="font-bold mb-2">Identity Verification</div>
-                      <div className="text-sm text-slate-700 font-medium mb-2">
+                    <div className="rounded-[0.5rem] bg-white p-5 border border-slate-100 ">
+                      <div className="font-bold text-slate-900 mb-1">Identity Verification</div>
+                      <div className="text-xs text-slate-500 mb-4">
                         Upload your National Identification Number (NIN) card for verification
                       </div>
-                      <div className="text-center bg-gray-200 rounded-xl">
-                        <div className="relative w-40 h-40 justify-center mt-2 mx-auto">
-                          {/* Render image or PDF preview */}
-                          <div className="w-50 h-40 flex items-center justify-center rounded-xl border-gray-300 overflow-hidden bg-white">
-                            {previewNinUrl ? (
-                              previewNinIsPdf ? (
-                                <embed src={previewNinUrl} type="application/pdf" className="w-full h-full" />
-                              ) : (
-                                <img src={previewNinUrl} alt="NIN Preview" className="w-full h-full object-contain" />
-                              )
-                            ) : (
-                              <img src="/assets/images/nin.png" alt="NIN Placeholder" className="w-full h-full object-contain" />
-                            )}
-                          </div>
 
-                          <div
-                            role="button"
-                            aria-label="Upload NIN"
-                            className="absolute top-2 right-2 bg-rose-500 text-white rounded-full p-2 cursor-pointer hover:opacity-95"
-                            onClick={() => document.getElementById("ninInput")?.click()}
-                          >
-                            <FaPlus />
+                      <div
+                        onClick={() => document.getElementById("ninInput")?.click()}
+                        className="relative w-full max-w-[280px] aspect-[16/10] mx-auto group cursor-pointer overflow-hidden rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 hover:border-rose-400 transition-all duration-300"
+                      >
+                        <div className="w-full h-full flex items-center justify-center bg-white">
+                          {previewNinUrl ? (
+                            previewNinIsPdf ? (
+                              <embed src={previewNinUrl} type="application/pdf" className="w-full h-full" />
+                            ) : (
+                              <img src={previewNinUrl} alt="NIN Preview" className="w-full h-full object-contain" />
+                            )
+                          ) : (
+                            <img src="/assets/images/nin.png" alt="NIN Placeholder" className="w-full h-full object-contain opacity-40" />
+                          )}
+                        </div>
+
+                        {/* Centered Overlay with Plus Icon */}
+                        <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                            <FaPlus className="text-rose-500 text-lg" />
                           </div>
                         </div>
-                        <span className="text-xs text-slate-600">Upload NIN ID Card (image or PDF)</span>
 
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          id="ninInput"
-                          className="hidden"
-                          onChange={handleFileChange}
-                        />
+                        {!previewNinUrl && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                            <div className="w-12 h-12 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md">
+                              <FaPlus className="text-rose-500 text-lg" />
+                            </div>
+                          </div>
+                        )}
                       </div>
+
+                      <div className="text-center mt-3">
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Upload NIN ID Card (image or PDF)</span>
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        id="ninInput"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
                     </div>
 
                     {/* CAC Upload for Enterprise */}
                     {storeType === "enterprise" && (
-                      <div className="rounded-xl bg-white p-4 border-slate-100 mt-4">
-                        <div className="font-bold mb-2">Business License</div>
-                        <span className="text-xs text-slate-600">Upload CAC (business certificate) — image or PDF</span>
-                        <div className="text-center bg-gray-200 rounded-xl">
-                          <div className="relative w-40 h-40 justify-center mt-2 mx-auto">
-                            <div className="w-50 h-40 flex items-center justify-center rounded-xl border-gray-300 overflow-hidden bg-white">
-                              {previewCacUrl ? (
-                                previewCacIsPdf ? (
-                                  <embed src={previewCacUrl} type="application/pdf" className="w-full h-full" />
-                                ) : (
-                                  <img src={previewCacUrl} alt="CAC Preview" className="w-full h-full object-contain" />
-                                )
-                              ) : (
-                                <img src="/assets/images/cac.png" alt="CAC Placeholder" className="w-full h-full object-contain" />
-                              )}
-                            </div>
+                      <div className="rounded-2xl bg-white p-5 border border-slate-100 mt-4">
+                        <div className="font-bold text-slate-900 mb-1">Business License</div>
+                        <div className="text-xs text-slate-500 mb-4">
+                          Upload CAC (business certificate) — image or PDF
+                        </div>
 
-                            <div
-                              role="button"
-                              aria-label="Upload CAC"
-                              className="absolute top-2 right-2 bg-rose-500 text-white rounded-full p-2 cursor-pointer hover:opacity-95"
-                              onClick={() => document.getElementById("cacInput")?.click()}
-                            >
-                              <FaPlus />
+                        <div
+                          onClick={() => document.getElementById("cacInput")?.click()}
+                          className="relative w-full max-w-[280px] aspect-[16/10] mx-auto group cursor-pointer overflow-hidden rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 hover:border-rose-400 transition-all duration-300"
+                        >
+                          <div className="w-full h-full flex items-center justify-center bg-white">
+                            {previewCacUrl ? (
+                              previewCacIsPdf ? (
+                                <embed src={previewCacUrl} type="application/pdf" className="w-full h-full" />
+                              ) : (
+                                <img src={previewCacUrl} alt="CAC Preview" className="w-full h-full object-contain" />
+                              )
+                            ) : (
+                              <img src="/assets/images/cac.png" alt="CAC Placeholder" className="w-full h-full object-contain opacity-40" />
+                            )}
+                          </div>
+
+                          {/* Centered Overlay with Plus Icon */}
+                          <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                              <FaPlus className="text-rose-500 text-lg" />
                             </div>
                           </div>
-                          <span className="text-xs text-slate-600">Upload CAC</span>
 
-                          <input
-                            type="file"
-                            accept="image/*,application/pdf"
-                            id="cacInput"
-                            className="hidden"
-                            onChange={handleCacChange}
-                          />
+                          {!previewCacUrl || previewCacUrl === "/assets/images/cac.png" ? (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                              <div className="w-12 h-12 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md">
+                                <FaPlus className="text-rose-500 text-lg" />
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
+
+                        <div className="text-center mt-3">
+                          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Upload CAC</span>
+                        </div>
+
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          id="cacInput"
+                          className="hidden"
+                          onChange={handleCacChange}
+                        />
                       </div>
                     )}
 
@@ -505,14 +539,28 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
                           required
                           maxLength={50}
                         />
-                        <CategorySelectionModal
-                          title="Select category"
-                          options={businessCategories.length > 0 ? businessCategories : ["Electronics", "Fashion", "Groceries", "Home", "Beauty", "Toys"]}
+                        <button
+                          type="button"
+                          onClick={() => setIsCategoryModalOpen(true)}
+                          className="flex items-center gap-6 bg-white p-2 pb-4 w-full border-b border-slate-100"
+                        >
+                          <span className="text-sm text-slate-600 flex items-center gap-1 lg:min-w-[120px]">
+                            Category <span className="text-rose-500">*</span>
+                          </span>
+
+                          <div className="flex-1 flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-900">
+                              {category || <span className="text-slate-400">Choose a category</span>}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-slate-400" />
+                          </div>
+                        </button>
+
+                        <BusinessCategoryModal
+                          isOpen={isCategoryModalOpen}
+                          onClose={() => setIsCategoryModalOpen(false)}
                           value={category}
                           onSelected={(v) => setCategory(v)}
-                          hintText={loadingCategories ? "Loading categories..." : "Choose a category"}
-                          isRequired
-                          triggerLabel="Category"
                         />
 
                         <AddressSelectionModal
@@ -528,16 +576,19 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
 
                     {/* Terms */}
                     {ninFile && (storeType !== "enterprise" || cacFile) && (
-                      <div className="mt-3 grid grid-cols-1 gap-3 rounded-xl bg-white p-4 border-slate-100">
-                        <label className="flex items-start gap-3 mt-2">
-                          <input
-                            checked={agreed}
-                            onChange={(e) => setAgreed(e.target.checked)}
-                            type="checkbox"
-                            className="mt-1"
-                          />
-                          <span className="text-sm text-slate-600">
-                            I agree to the Stoqle Merchant Service Agreement and Information Use Authorization.
+                      <div className="mt-4 rounded-2xl bg-white p-5 border border-slate-100 ">
+                        <label className="flex items-start gap-4 cursor-pointer group">
+                          <div className="relative flex items-center justify-center mt-0.5">
+                            <input
+                              type="checkbox"
+                              checked={agreed}
+                              onChange={(e) => setAgreed(e.target.checked)}
+                              className="peer appearance-none w-5 h-5 border-2 border-slate-200 rounded-lg checked:bg-rose-500 checked:border-rose-500 transition-all duration-300"
+                            />
+                            <Check className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none stroke-[3]" />
+                          </div>
+                          <span className="text-sm text-slate-500 leading-relaxed">
+                            I agree to the <a href="/terms/merchant-agreement" target="_blank" className="text-rose-500 hover:underline ">Merchant Service Agreement</a> and <a href="/terms/information-authorization" target="_blank" className="text-rose-500 hover:underline ">Information Use Authorization</a>.
                           </span>
                         </label>
                       </div>
@@ -549,7 +600,7 @@ export default function OpenStoreModal({ isOpen, onClose }: { isOpen: boolean, o
 
             {/* Footer */}
             {step === "form" && (
-              <div className="absolute left-0 right-0 bottom-10 lg:bottom-0 z-40 bg-slate-100 p-4 flex items-center gap-3 justify-end">
+              <div className="absolute left-0 right-0 bottom-0 z-40 bg-slate-100 p-4 flex items-center gap-3 justify-end border-t border-slate-200">
                 <button
                   form="openStoreForm"
                   type="submit"
@@ -634,16 +685,30 @@ function OptionCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="flex items-start gap-4 flex-1">
-        <div className="flex-shrink-0 flex items-center justify-center text-3xl">{icon}</div>
+        <div className="flex-shrink-0 flex items-center justify-center text-3xl text-slate-400 mt-1">{icon}</div>
         <div className="flex-1">
           <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-          <p className="text-[12px] text-slate-500 mt-1">{subtitle}</p>
+          <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">{subtitle}</p>
+          
+          {/* Mobile Button: Below subtitle, aligned right */}
+          <div className="flex justify-end sm:hidden mt-4">
+            <button 
+              onClick={onSelect} 
+              className="rounded-full px-6 py-2 text-rose-500 border border-rose-100 font-bold text-sm hover:bg-rose-50 transition-all"
+            >
+              Open store
+            </button>
+          </div>
         </div>
       </div>
 
-      <button onClick={onSelect} className="ml-4 flex-shrink-0 rounded-full px-3 py-2 text-rose-500 border border-rose-100 whitespace-nowrap">
+      {/* Desktop Button: At the right */}
+      <button 
+        onClick={onSelect} 
+        className="hidden sm:block flex-shrink-0 rounded-full px-6 py-2 text-rose-500 border border-rose-100 font-bold text-sm hover:bg-rose-50 transition-all"
+      >
         Open store
       </button>
     </div>

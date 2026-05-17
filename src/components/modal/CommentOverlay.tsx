@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { io } from "socket.io-client";
+import { API_BASE_URL } from "@/src/lib/config";
 import { safeFetch } from "@/src/lib/api/handler";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,7 +39,7 @@ interface LaneInfo {
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const NUM_LANES = 3;
-const START_DELAY_MS = 4000;
+const START_DELAY_MS = 800;
 
 // Lane top positions (%) — upper region of video
 const LANE_Y = [4, 12, 20];
@@ -138,6 +140,38 @@ export function CommentOverlay({ postId, isPlaying, containerWidth }: Props) {
     })();
     return () => { cancelled = true; };
   }, [postId]);
+
+  // ── Real-time Overlay Sync ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!postId || !isPlaying) return;
+
+    const socket = io(API_BASE_URL);
+    const room = `user:post:${postId}`;
+    socket.emit("join_room", room);
+
+    socket.on("comment_created", (newComment: any) => {
+      const overlayComment: OverlayComment = {
+        id: newComment.comment_id,
+        text: newComment.comment_content,
+        is_funny: false, // Default for real-time injections
+        is_positive: true,
+      };
+      
+      setPool(prev => {
+        if (prev.some(c => c.id === overlayComment.id)) return prev;
+        return [overlayComment, ...prev];
+      });
+      
+      // Also push to active queue if it exists
+      if (queueRef.current) {
+        queueRef.current.push(overlayComment);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [postId, isPlaying]);
 
   // ── Warm-up ───────────────────────────────────────────────────────────────
   useEffect(() => {

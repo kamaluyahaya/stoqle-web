@@ -22,6 +22,7 @@ import { FaHeart, FaRegHeart, FaComment } from "react-icons/fa";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { fetchUnifiedSearch } from "@/src/lib/api/searchApi";
+import CachedImage from "@/src/components/common/CachedImage";
 import { useAuth } from "@/src/context/authContext";
 import PostModal from "./postModal";
 import LoginModal from "./auth/loginModal";
@@ -73,7 +74,8 @@ const PostCard = React.memo(({
   setShowLoginModal,
   router,
   getNoteStyles,
-  isRestorose = false
+  isRestorose = false,
+  fetchingPostId = null
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
 
@@ -98,11 +100,11 @@ const PostCard = React.memo(({
         containIntrinsicSize: "auto 400px"
       }}
     >
-      <div className="relative w-full aspect-[4/5] bg-slate-100 overflow-hidden post-media">
+      <div className="relative w-full bg-slate-100 overflow-hidden post-media">
         <motion.div
           initial={entryVariants.initial}
           animate={entryVariants.animate}
-          className="absolute inset-0 w-full h-full"
+          className="w-full"
         >
           {post.isVideo && (
             <div className="absolute top-3 right-3 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
@@ -114,7 +116,7 @@ const PostCard = React.memo(({
 
           {post.coverType === "note" && !post.src ? (
             <div
-              className="w-full h-full flex items-center justify-center p-6 relative overflow-hidden"
+              className="w-full h-[300px] sm:h-[330px] flex items-center justify-center p-6 relative overflow-hidden"
               style={getNoteStyles(post.noteConfig)}
             >
               {(() => {
@@ -139,30 +141,20 @@ const PostCard = React.memo(({
               </div>
             </div>
           ) : post.isVideo ? (
-            <img
-              src={post.thumbnail || post.src}
-              alt={post.caption || "Video thumbnail"}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-              onError={(e) => { (e.target as any).src = 'https://via.placeholder.com/800x1200?text=Video+Thumbnail' }}
-            />
+            <div className="w-full">
+              <CachedImage
+                // src={post.src ? encodeURI(post.src) : "/assets/images/favio.png"}
+                src={post.thumbnail || post.src}
+                alt={post.caption || "Video thumbnail"}
+                className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
+              />
+            </div>
           ) : (
-            <div className="absolute inset-0 w-full h-full">
-              <style jsx global>{`
-              @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-              }
-            `}</style>
-              <Image
-                src={post.src ? encodeURI(post.src) : "https://via.placeholder.com/800x600?text=No+Image"}
+            <div className="w-full">
+              <CachedImage
+                src={post.src ? encodeURI(post.src) : "/assets/images/favio.png"}
                 alt={post.caption || "Post image"}
-                fill
-                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                className="object-cover transition-all duration-700 group-hover:scale-110"
-                onLoadingComplete={(img) => {
-                  img.style.animation = "fadeIn 0.6s ease-in-out forwards";
-                }}
-                style={{ opacity: 0 }}
+                className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
               />
             </div>
           )}
@@ -173,6 +165,12 @@ const PostCard = React.memo(({
             <StoqleLoader size={28} />
           </div>
         </div>
+
+        {fetchingPostId === post.id && (
+          <div className="absolute inset-0 z-[40] flex items-center justify-center bg-white/40 backdrop-blur-[2px]">
+            <StoqleLoader size={24} />
+          </div>
+        )}
       </div>
 
       <div className="p-3">
@@ -245,7 +243,7 @@ const PostCard = React.memo(({
 });
 PostCard.displayName = "PostCard";
 
-const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles, isRestorose }: any) => {
+const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles, isRestorose, fetchingPostId }: any) => {
   const [columns, setColumns] = useState(2);
 
   useEffect(() => {
@@ -289,6 +287,7 @@ const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginMod
                 router={router}
                 getNoteStyles={getNoteStyles}
                 isRestorose={isRestorose}
+                fetchingPostId={fetchingPostId}
               />
             ))}
           </div>
@@ -398,19 +397,14 @@ const ProductCard = React.memo(({
               loop
               playsInline
               preload="auto"
-              className="w-full min-h-[180px] sm:min-h-[200px] max-h-[300px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
             />
           ) : (
-            <div className="relative w-full h-auto">
-              <img
+            <div className="w-full">
+              <CachedImage
                 src={formatUrl(p.first_image)}
                 alt={p.title || "Product"}
-                className="w-full min-h-[180px] sm:min-h-[200px] max-h-[300px] sm:max-h-[350px] object-cover transition-opacity duration-700 opacity-0 group-hover:scale-110 transform transition-transform"
-                loading="lazy"
-                onLoad={(e) => {
-                  (e.target as any).classList.remove('opacity-0');
-                  (e.target as any).classList.add('opacity-100');
-                }}
+                className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
               />
             </div>
           )}
@@ -666,6 +660,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
 
   const [productLikeData, setProductLikeData] = useState<Record<number, { liked: boolean, count: number }>>({});
   const [fetchingProductId, setFetchingProductId] = useState<number | string | null>(null);
+  const [fetchingPostId, setFetchingPostId] = useState<number | string | null>(null);
   const [reelsModalOpen, setReelsModalOpen] = useState(false);
   const [productPreviewOpen, setProductPreviewOpen] = useState(false);
   const [cartCount, setCartCount] = useState<number>(0);
@@ -721,12 +716,12 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   const formatFullUrl = (url: string | undefined): string => formatUrl(url);
 
   const formatProductUrl = useCallback((url: string) => {
-    if (!url) return "https://via.placeholder.com/800x600?text=No+Image";
+    if (!url) return "/assets/images/favio.png";
     let final = url;
     if (!url.startsWith('http')) {
       final = url.startsWith('/public') ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/public/${url}`;
-    } else if (final.includes('10.233.107.181:4000')) {
-      final = final.replace('http://10.233.107.181:4000', API_BASE_URL);
+    } else if (final.includes('10.14.140.181:4000')) {
+      final = final.replace('http://10.14.140.181:4000', API_BASE_URL);
     }
     return encodeURI(final);
   }, []);
@@ -876,22 +871,16 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
   const router = useRouter();
   const pushedRef = useRef(false);
 
-  // Log User Activity (Search)
-  useEffect(() => {
-    // If we want to log search, we might need a different API or update logUserActivity
-    // For now, logging search as a generic view or just skipping if unsupported
-    if (isOpen && query.trim().length > 2 && token && (activeTab === 'products' || activeTab === 'all')) {
-      // logUserActivity({ action_type: 'view', category: activeTab }, token);
-    }
-  }, [isOpen, query, activeTab, token]);
-
-  const mapUnifiedSearchPostToPost = (p: any): any => {
+  const mapUnifiedSearchPostToPost = (p: any) => {
     const isVideo = p.cover_type === 'video' || p.type === 'video' || (p.image && VIDEO_EXT_RE.test(p.image)) || !!p.final_video_url || !!p.original_video_url;
     const isNote = p.cover_type === 'note' || p.type === 'note' || (!p.image && !isVideo);
-    const finalVideoUrl = formatFullUrl(p.final_video_url || p.original_video_url);
+
+    // Video URL mapping - don't fallback to placeholder for videos
+    const rawVideoUrl = p.final_video_url || p.original_video_url;
+    const finalVideoUrl = rawVideoUrl ? formatFullUrl(rawVideoUrl) : "";
 
     // Media URL mapping - Notes should NOT have a placeholder src, otherwise modal won't show the text
-    const finalSrc = isNote ? "" : (isVideo ? (finalVideoUrl || formatFullUrl(p.image)) : formatFullUrl(p.image));
+    const finalSrc = isNote ? "" : (isVideo ? finalVideoUrl : formatFullUrl(p.image));
 
     // Author image URL mapping
     const avatarUrl = formatFullUrl(p.logo || p.business_logo || p.vendor_logo || p.shop_logo || p.author_image || p.profile_pic || p.avatar || p.author_pic);
@@ -927,35 +916,47 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
 
   const openPostWithUrl = async (post: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setSelectedPost(post);
+    if (fetchingPostId) return;
+
+    setFetchingPostId(post.id);
     try {
-      const urlData = await fetchSecurePostUrl(post.id, "search_feed", token);
-      
+      // Parallel fetch for secure tokens and full post data (crucial for videos missing URLs in search results)
+      const [urlData, fullPost] = await Promise.all([
+        fetchSecurePostUrl(post.id, "search_feed", token),
+        post.isVideo && !post.final_video_url
+          ? fetchSocialPostById(post.id, { token }).catch(() => null)
+          : Promise.resolve(null)
+      ]);
+
+      const finalPost = {
+        ...post,
+        ...(fullPost || {}),
+        xsec_token: urlData?.xsec_token,
+        xsecToken: urlData?.xsec_token,
+        xsecSource: urlData?.xsec_source
+      };
+
+      setSelectedPost(finalPost);
+
       const username = post.author_handle || post.user?.username || "user";
       const publicId = post.post_public_id || post.id;
       const newPath = `/${username}/${publicId}`;
 
       const currentUrl = new URL(window.location.href);
       currentUrl.pathname = newPath;
-      
-      if (urlData) {
-        if (urlData.xsec_token) currentUrl.searchParams.set("xsec_token", urlData.xsec_token);
-        if (urlData.xsec_source) currentUrl.searchParams.set("xsec_source", urlData.xsec_source);
 
-        setSelectedPost((prev: any) => prev ? {
-          ...prev,
-          xsecToken: urlData.xsec_token,
-          xsecSource: urlData.xsec_source
-        } : null);
-      } else {
-        currentUrl.searchParams.set("xsec_source", "search_feed");
-      }
+      if (urlData?.xsec_token) currentUrl.searchParams.set("xsec_token", urlData.xsec_token);
+      if (urlData?.xsec_source) currentUrl.searchParams.set("xsec_source", urlData.xsec_source);
 
       window.history.pushState({ postId: post.id, modal: true }, "", currentUrl.toString());
       pushedRef.current = true;
     } catch (err) {
       console.warn("fetchSecurePostUrl failed", err);
+      // Fallback: open with what we have
+      setSelectedPost(post);
       pushedRef.current = false;
+    } finally {
+      setFetchingPostId(null);
     }
   };
 
@@ -1304,6 +1305,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                     router={router}
                     getNoteStyles={getNoteStyles}
                     isRestorose={false}
+                    fetchingPostId={fetchingPostId}
                   />
                 </div>
               </section>
@@ -1314,7 +1316,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                   <img
                     src="/assets/images/search-icon.png"
                     alt="No matches"
-                    className="w-full h-full object-contain opacity-50 grayscale-[0.3]"
+                    className="w-full h-full object-cover opacity-50 grayscale-[0.3]"
                   />
                 </div>
                 <img src="/assets/images/search-icon.png" alt="" className="w-16 h-16 mb-4 opacity-20 grayscale" />
@@ -1381,6 +1383,7 @@ export default function SearchResultsModal({ isOpen, onClose, onSearchClick, ini
                 router={router}
                 getNoteStyles={getNoteStyles}
                 isRestorose={false}
+                fetchingPostId={fetchingPostId}
               />
             ) : (
               <div className="col-span-full py-20 text-center text-slate-400">

@@ -172,7 +172,7 @@ export default function AttachmentPostsModal({ ctx, onClose, onInsertToken }: At
           <div className="flex-1 p-4 overflow-y-auto min-h-[250px]" onScroll={handleScroll}>
             {loading && page === 1 ? (
               <div className="h-full flex items-center justify-center">
-                <StoqleLoader size={32} />
+                <StoqleLoader size={25} />
               </div>
             ) : data.length === 0 ? (
               <div className="text-center py-10 text-slate-400 text-sm font-medium">No posts found</div>
@@ -185,7 +185,7 @@ export default function AttachmentPostsModal({ ctx, onClose, onInsertToken }: At
                 />
                 {loading && page > 1 && (
                   <div className="py-4 flex justify-center w-full">
-                    <StoqleLoader size={24} />
+                    <StoqleLoader size={20} />
                   </div>
                 )}
               </div>

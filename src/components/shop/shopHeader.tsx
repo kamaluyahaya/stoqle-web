@@ -8,7 +8,7 @@ import { formatUrl } from "@/src/lib/utils/media";
 import LoginModal from "../../components/modal/auth/loginModal";
 import { StarIcon } from "@heroicons/react/24/solid";
 
-import ImageViewer from "../../components/modal/imageViewer";
+import ProfileImageViewer from "../../components/modal/ProfileImageViewer";
 import {
     ChevronLeftIcon,
     MagnifyingGlassIcon,
@@ -27,10 +27,11 @@ type ShopHeaderProps = {
     searchTerm?: string;
     onSearchChange?: (val: string) => void;
     onShare?: () => void;
+    onNavigate?: () => void;
 };
 
 
-export default function ShopHeader({ profileApi, displayName, searchTerm, onSearchChange, onShare }: ShopHeaderProps) {
+export default function ShopHeader({ profileApi, displayName, searchTerm, onSearchChange, onShare, onNavigate }: ShopHeaderProps) {
     const router = useRouter();
     const auth = useAuth();
     const { user: currentUser, token } = auth;
@@ -240,6 +241,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={() => {
+                            onNavigate?.();
                             if (typeof window !== "undefined" && document.referrer.includes(window.location.host)) {
                                 router.back();
                             } else {
@@ -384,6 +386,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                                 className="flex-none cursor-pointer hover:opacity-90 transition-opacity active:scale-95"
                                 onClick={() => {
                                     const handle = business?.business_slug || profileApi?.user?.username || profileApi?.username;
+                                    onNavigate?.();
                                     if (handle) router.push(`/${handle}`);
                                     else if (profileUserId) router.push(`/user/profile/${profileUserId}`);
                                 }}
@@ -406,6 +409,7 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                                         className="text-[clamp(9px,3.8vw,36px)] font-extrabold text-white drop-shadow-lg tracking-tight whitespace-nowrap leading-tight max-w-full flex items-center gap-2 cursor-pointer hover:text-white/90"
                                         onClick={() => {
                                             const handle = business?.business_slug || profileApi?.user?.username || profileApi?.username;
+                                            onNavigate?.();
                                             if (handle) router.push(`/${handle}`);
                                             else if (profileUserId) router.push(`/user/profile/${profileUserId}`);
                                         }}
@@ -462,8 +466,9 @@ export default function ShopHeader({ profileApi, displayName, searchTerm, onSear
                 </div>
             </div>
             <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
-            <ImageViewer
-                src={fullImageUrl}
+            <ProfileImageViewer
+                open={!!fullImageUrl}
+                images={fullImageUrl ? [fullImageUrl] : []}
                 onClose={() => setFullImageUrl(null)}
                 profileUserId={business?.user_id}
             />

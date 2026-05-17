@@ -53,13 +53,13 @@ function LikeBurst() {
 }
 
 // ── Product card (supports both products and social posts) ──────────────────
-const OrderProductCard = React.memo(({ 
-    p, 
+const OrderProductCard = React.memo(({
+    p,
     onProductClick,
     postLikeData,
-    handlePostLikeClick 
-}: { 
-    p: any; 
+    handlePostLikeClick
+}: {
+    p: any;
     onProductClick: any;
     postLikeData?: Record<string, { liked: boolean, count: number }>;
     handlePostLikeClick?: (e: React.MouseEvent, postId: string, initialLiked: boolean, initialCount: number) => void;
@@ -146,7 +146,7 @@ const OrderProductCard = React.memo(({
 
                     {/* Author + Like row */}
                     <div className="flex items-center justify-between mt-auto gap-2">
-                        <div 
+                        <div
                             className="flex items-center gap-2 min-w-0 cursor-pointer"
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -238,11 +238,7 @@ const OrderProductCard = React.memo(({
                     />
                 )}
 
-                {p.product_video && (
-                    <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white text-[9px] font-black px-1.5 py-1.5 rounded-full z-10 flex items-center">
-                        <FaPlay size={7} className="text-white fill-current" />
-                    </div>
-                )}
+
             </div>
 
             <div className="p-3">
@@ -266,10 +262,10 @@ const OrderProductCard = React.memo(({
                 {(isPromoActive || isSaleActive || (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) || p.return_shipping_subsidy === 1 || Number(p.followers_count) > 1) && (
                     <div className="flex items-center min-h-[16px] mb-1">
                         {isPromoActive ? <span className="text-[10px] font-medium text-rose-500 border-rose-500 border-[0.5px] px-1 truncate">{p.promo_title} {p.promo_discount}% Off</span> :
-                         isSaleActive ? <span className="text-[10px] text-rose-500 border-rose-500 border-[0.5px] px-1 truncate">{p.sale_type || "SALE"} {p.sale_discount}% Off</span> :
-                         (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? <span className="text-[10px] font-bold text-rose-500 truncate">{Number(p.total_quantity) <= 0 ? "Out of stock" : `Only ${Number(p.total_quantity)} left`}</span> :
-                         p.return_shipping_subsidy === 1 ? <span className="text-[10px] font-bold text-green-700 truncate">Return Shipping Subsidy</span> :
-                         Number(p.followers_count) > 1 ? <span className="text-[10px] text-slate-500 px-1 rounded-sm truncate">{p.followers_count}+ store followers</span> : null}
+                            isSaleActive ? <span className="text-[10px] text-rose-500 border-rose-500 border-[0.5px] px-1 truncate">{p.sale_type || "SALE"} {p.sale_discount}% Off</span> :
+                                (p.total_quantity !== undefined && p.total_quantity !== null && Number(p.total_quantity) <= 4) ? <span className="text-[10px] font-bold text-rose-500 truncate">{Number(p.total_quantity) <= 0 ? "Out of stock" : `Only ${Number(p.total_quantity)} left`}</span> :
+                                    p.return_shipping_subsidy === 1 ? <span className="text-[10px] font-bold text-green-700 truncate">Return Shipping Subsidy</span> :
+                                        Number(p.followers_count) > 1 ? <span className="text-[10px] text-slate-500 px-1 rounded-sm truncate">{p.followers_count}+ store followers</span> : null}
                     </div>
                 )}
 
@@ -284,13 +280,13 @@ const OrderProductCard = React.memo(({
 OrderProductCard.displayName = "OrderProductCard";
 
 // ── Masonry grid ────────────────────────────────────────────────────────────
-const MasonryGrid = ({ 
-    items, 
+const MasonryGrid = ({
+    items,
     onProductClick,
     postLikeData,
-    handlePostLikeClick 
-}: { 
-    items: any[]; 
+    handlePostLikeClick
+}: {
+    items: any[];
     onProductClick: any;
     postLikeData?: Record<string, { liked: boolean, count: number }>;
     handlePostLikeClick?: (e: React.MouseEvent, postId: string, initialLiked: boolean, initialCount: number) => void;
@@ -326,9 +322,9 @@ const MasonryGrid = ({
                 return (
                     <div key={colIdx} className={cls}>
                         {colItems.map((p: any, i: number) => (
-                            <OrderProductCard 
-                                key={`${p.is_social_post ? 'post-' : ''}${p.product_id}-${i}`} 
-                                p={p} 
+                            <OrderProductCard
+                                key={`${p.is_social_post ? 'post-' : ''}${p.product_id}-${i}`}
+                                p={p}
                                 onProductClick={onProductClick}
                                 postLikeData={postLikeData}
                                 handlePostLikeClick={handlePostLikeClick}
@@ -512,7 +508,7 @@ export default function OrdersProductRecommendations({ activeTab, onProductClick
                     <div className="h-3 w-40 bg-slate-200 rounded-full animate-pulse" />
                     <div className="h-px flex-1 bg-slate-100" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3">
                     {[1, 2, 3, 4].map(i => (
                         <div key={i} className="bg-white rounded-[0.5rem] border border-slate-100 overflow-hidden">
                             <div className="w-full h-44 bg-slate-100 animate-pulse" />
@@ -533,9 +529,9 @@ export default function OrdersProductRecommendations({ activeTab, onProductClick
 
     return (
         <div className="mt-4">
-            <MasonryGrid 
-                items={products} 
-                onProductClick={onProductClick} 
+            <MasonryGrid
+                items={products}
+                onProductClick={onProductClick}
                 postLikeData={postLikeData}
                 handlePostLikeClick={handlePostLikeClick}
             />

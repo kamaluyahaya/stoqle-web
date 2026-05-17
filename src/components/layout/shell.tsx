@@ -89,23 +89,23 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
 
   // ── Route-based layout flags ───────────────────────────────────────────────
-  const isUsernamePage      = !!params.username;
-  const isOtherUserProfile  = pathname?.startsWith("/user/profile/");
-  const isMyProfile         = pathname === "/profile";
-  const isShopPage          = pathname?.startsWith("/shop/");
-  const isEditProfile       = pathname === "/profile/edit";
-  const isMessages          = pathname === "/messages";
-  const isSettings          = pathname === "/settings";
-  const isAccountSecurity   = pathname === "/settings/account-security";
-  const isPrivacy           = pathname === "/settings/privacy";
-  const isBusinessStatus    = pathname === "/profile/business/business-status";
-  const isInventory         = pathname?.startsWith("/profile/business/inventory");
-  const isCustomerOrder     = pathname?.startsWith("/profile/business/customer-order");
-  const isOrders            = pathname === "/profile/orders";
+  const isUsernamePage = !!params.username;
+  const isOtherUserProfile = pathname?.startsWith("/user/profile/");
+  const isMyProfile = pathname === "/profile";
+  const isShopPage = pathname?.startsWith("/shop/");
+  const isEditProfile = pathname === "/profile/edit";
+  const isMessages = pathname === "/messages";
+  const isSettings = pathname === "/settings";
+  const isAccountSecurity = pathname === "/settings/account-security";
+  const isPrivacy = pathname === "/settings/privacy";
+  const isBusinessStatus = pathname === "/profile/business/business-status";
+  const isInventory = pathname?.startsWith("/profile/business/inventory");
+  const isCustomerOrder = pathname?.startsWith("/profile/business/customer-order");
+  const isOrders = pathname === "/profile/orders";
   const isCommunityGuidelines = pathname === "/community-guidelines";
-  const isVendorOnboarding  = pathname === "/profile/business/onboarding";
-  const isCartPage           = pathname === "/cart";
-  const isOrdersPage         = pathname === "/order" || pathname?.startsWith("/order/");
+  const isVendorOnboarding = pathname === "/profile/business/onboarding";
+  const isCartPage = pathname === "/cart";
+  const isOrdersPage = pathname === "/order" || pathname?.startsWith("/order/");
 
   const isProtectedRoute =
     isMyProfile || isMessages || isSettings || isBusinessStatus ||
@@ -119,7 +119,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     if (!auth.isHydrated) return;
 
     const authRequired = searchParams?.get("auth") === "required";
-    
+
     // Debugging logs to pinpoint why the modal might not be triggering
     if (authRequired) {
       console.log("[AuthGuard] URL check: auth=required found. isLoggedIn:", !!auth.user);
@@ -127,14 +127,14 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 
     const authUser = auth.user && Object.keys(auth.user).length > 0 ? auth.user : null;
     const isBusiness = Boolean(authUser?.is_business_owner || authUser?.business_name || authUser?.business_id || authUser?.isBusiness || (auth as any).isBusiness);
-    
+
     // If user is logged in but tries to access a business route without being a business owner
     const requiresBusinessAuth = isBusinessRoute && authUser && !isBusiness;
 
     if ((authRequired || isProtectedRoute) && (!authUser || requiresBusinessAuth)) {
       console.log("[AuthGuard] Conditions met. Opening Login Modal. Path:", pathname);
       auth.openLogin();
-      
+
       if (authRequired) {
         // Clean up the URL using Next.js router to stay in state
         const params = new URLSearchParams(searchParams.toString());
@@ -149,6 +149,134 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     }
   }, [auth.isHydrated, auth.user, auth, isProtectedRoute, isBusinessRoute, searchParams, pathname, router]);
 
+  // ── Auto-Reload on Resumption after Inactivity ─────────────────────────────
+  const lastActiveRef = React.useRef<number>(Date.now());
+  const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 minutes
+
+  React.useEffect(() => {
+    const updateLastActive = () => {
+      lastActiveRef.current = Date.now();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const now = Date.now();
+        const elapsed = now - lastActiveRef.current;
+
+        if (elapsed > INACTIVITY_LIMIT) {
+          const isDiscover = pathname === "/discover" || pathname === "/";
+          const isMarket = pathname?.startsWith("/market") || pathname?.startsWith("/shop");
+          const isProfileTab = pathname === "/profile" || pathname?.startsWith("/user/profile/") || isUsernamePage;
+
+          if (isDiscover || isMarket || isProfileTab) {
+            console.log("[Inactivity] Resumed after > 5 mins. Reloading to discover...");
+            window.location.href = "/discover";
+          }
+        }
+        // Always update on resume so we don't double-trigger if they just toggle quickly
+        lastActiveRef.current = now;
+      }
+    };
+
+    window.addEventListener("mousedown", updateLastActive, { passive: true });
+    window.addEventListener("touchstart", updateLastActive, { passive: true });
+    window.addEventListener("scroll", updateLastActive, { passive: true });
+    window.addEventListener("keydown", updateLastActive, { passive: true });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("mousedown", updateLastActive);
+      window.removeEventListener("touchstart", updateLastActive);
+      window.removeEventListener("scroll", updateLastActive);
+      window.removeEventListener("keydown", updateLastActive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [pathname, isUsernamePage]);
+
+  // ── Scroll Event Proxy / Mobile URL Bar Lock Polyfill ──────────────────────
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let currentScrollTop = 0;
+
+    // Define properties on window and document to seamlessly patch any scroll query
+    try {
+      Object.defineProperty(window, "scrollY", {
+        get: () => currentScrollTop,
+        configurable: true,
+      });
+      Object.defineProperty(window, "pageYOffset", {
+        get: () => currentScrollTop,
+        configurable: true,
+      });
+      Object.defineProperty(document.documentElement, "scrollTop", {
+        get: () => currentScrollTop,
+        set: (val: number) => {
+          const container = scrollContainerRef.current;
+          if (container) container.scrollTop = val;
+        },
+        configurable: true,
+      });
+      Object.defineProperty(document.body, "scrollTop", {
+        get: () => currentScrollTop,
+        set: (val: number) => {
+          const container = scrollContainerRef.current;
+          if (container) container.scrollTop = val;
+        },
+        configurable: true,
+      });
+      Object.defineProperty(document.documentElement, "scrollHeight", {
+        get: () => scrollContainerRef.current ? scrollContainerRef.current.scrollHeight : 0,
+        configurable: true,
+      });
+      Object.defineProperty(document.body, "scrollHeight", {
+        get: () => scrollContainerRef.current ? scrollContainerRef.current.scrollHeight : 0,
+        configurable: true,
+      });
+      Object.defineProperty(document.documentElement, "clientHeight", {
+        get: () => scrollContainerRef.current ? scrollContainerRef.current.clientHeight : 0,
+        configurable: true,
+      });
+      Object.defineProperty(document.body, "clientHeight", {
+        get: () => scrollContainerRef.current ? scrollContainerRef.current.clientHeight : 0,
+        configurable: true,
+      });
+
+      // Patch window.scrollTo and window.scroll to scroll the container instead
+      (window as any).scrollTo = (optionsOrX: any, y?: any) => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        if (typeof optionsOrX === "object") {
+          const { top, left, behavior } = optionsOrX;
+          container.scrollTo({ top, left, behavior });
+        } else if (optionsOrX !== undefined && y !== undefined) {
+          container.scrollTo(optionsOrX, y);
+        }
+      };
+
+      (window as any).scroll = (window as any).scrollTo;
+    } catch (e) {
+      console.warn("Failed to patch window scroll properties:", e);
+    }
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleContainerScroll = () => {
+      currentScrollTop = container.scrollTop;
+      // Dispatch synthetic scroll event so standard window listeners fire
+      window.dispatchEvent(new Event("scroll"));
+    };
+
+    container.addEventListener("scroll", handleContainerScroll, { passive: true });
+
+    return () => {
+      container.removeEventListener("scroll", handleContainerScroll);
+    };
+  }, []);
 
   const shouldHideTopNav =
     isMyProfile || isOtherUserProfile || isShopPage || isEditProfile ||
@@ -163,19 +291,21 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     isVendorOnboarding || isUsernamePage;
 
   return (
-    <div className="bg-white relative">
+    <div
+      ref={scrollContainerRef}
+      className="bg-white relative h-[100dvh] w-full overflow-y-auto no-scrollbar scroll-smooth -webkit-overflow-scrolling-touch"
+    >
       {/* ── Layout chrome ─────────────────────────────────────────────────── */}
       <Navbar height={NAV_HEIGHT} hideHeaderOnMobile={shouldHideTopNav} />
       <Sidebar navHeight={NAV_HEIGHT} width={SIDEBAR_WIDTH} />
 
       <main
-        className={`${
-          isShopPage || isMessages
-            ? "pt-0"
-            : shouldHideTopNav
+        className={`${isShopPage || isMessages
+          ? "pt-0"
+          : shouldHideTopNav
             ? "pt-0 lg:pt-16"
             : "pt-16"
-        } lg:ml-[300px] transition-[margin-left] duration-300`}
+          } lg:ml-[300px] transition-[margin-left] duration-300`}
       >
         {children}
       </main>

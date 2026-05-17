@@ -10,6 +10,7 @@ interface UsePostMediaProps {
   currentReelIndex: number;
   open: boolean;
   isPaused: boolean;
+  isModalFullyVisible: boolean;
 }
 
 export function usePostMedia({
@@ -19,7 +20,8 @@ export function usePostMedia({
   reelsList,
   currentReelIndex,
   open,
-  isPaused
+  isPaused,
+  isModalFullyVisible
 }: UsePostMediaProps) {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(() => {
     if (allMedia && allMedia.length > 0 && post.src) {
@@ -32,6 +34,7 @@ export function usePostMedia({
   const [firstImageAspectRatio, setFirstImageAspectRatio] = useState<number | null>(null);
   const [swipeDirection, setSwipeDirection] = useState(1);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const [viewerImages, setViewerImages] = useState<string[] | null>(null);
   
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const { isMuted: globalMute, volume: globalVolume } = useAudio();
@@ -45,7 +48,7 @@ export function usePostMedia({
   }, [currentReelIndex, reelsList, post, isMobileReels]);
 
   useEffect(() => {
-    if (open && backgroundAudioUrl && backgroundAudioRef.current) {
+    if (open && isModalFullyVisible && backgroundAudioUrl && backgroundAudioRef.current) {
       const audio = backgroundAudioRef.current;
       audio.volume = globalVolume;
       audio.muted = globalMute;
@@ -83,6 +86,8 @@ export function usePostMedia({
     setSwipeDirection,
     fullImageUrl,
     setFullImageUrl,
+    viewerImages,
+    setViewerImages,
     backgroundAudioRef,
     backgroundAudioUrl,
     isDraggingRef

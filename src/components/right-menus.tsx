@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/src/context/authContext";
 import { useCart } from "@/src/context/cartContext";
+import { useWallet } from "@/src/context/walletContext";
 import { API_BASE_URL } from "@/src/lib/config";
 
 type MenuProps = {
@@ -13,10 +14,13 @@ type MenuProps = {
   items?: { id: string; label: string; onClick?: () => void; href?: string; badge?: number | string }[];
   className?: string;
   avatar?: string | null;
+  setIsNavigating?: (val: boolean) => void;
 };
 
-function HoverMenu({ label, description, items = [], className = "", avatar }: MenuProps) {
+function HoverMenu({ label, description, items = [], className = "", avatar, setIsNavigating }: MenuProps) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
   // type-safe timeout ref
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -77,25 +81,59 @@ function HoverMenu({ label, description, items = [], className = "", avatar }: M
         {description && <div className="px-4 py-3 text-sm text-gray-600">{description}</div>}
         {items && items.length > 0 && (
           <ul className="py-1 text-sm text-gray-700">
-            {items.map((it: any) => (
-              <li
-                key={it.id}
-                role="menuitem"
-              >
-                <Link
-                  href={it.href || "#"}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 rounded-full cursor-pointer"
-                >
+            {items.map((it: any) => {
+              const content = (
+                <>
                   <span>{it.label}</span>
                   {it.badge !== undefined && (it.badge as number) > 0 && (
                     <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
                       {it.badge}
                     </span>
                   )}
-                </Link>
-              </li>
-            ))}
+                </>
+              );
+
+              const className = "w-full flex items-center justify-between px-4 py-2 hover:bg-gray-50 rounded-full cursor-pointer text-left focus:outline-none";
+
+              if (it.onClick) {
+                return (
+                  <li key={it.id} role="menuitem">
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        it.onClick();
+                      }}
+                      className={className}
+                    >
+                      {content}
+                    </button>
+                  </li>
+                );
+              }
+
+              const handleLinkClick = (e: React.MouseEvent) => {
+                e.preventDefault();
+                setOpen(false);
+                if (it.href) {
+                  if (setIsNavigating && pathname !== it.href.split('?')[0]) {
+                    setIsNavigating(true);
+                  }
+                  router.push(it.href);
+                }
+              };
+
+              return (
+                <li key={it.id} role="menuitem">
+                  <Link
+                    href={it.href || "#"}
+                    onClick={handleLinkClick}
+                    className={className}
+                  >
+                    {content}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -103,10 +141,11 @@ function HoverMenu({ label, description, items = [], className = "", avatar }: M
   );
 }
 
-export default function RightMenus() {
+export default function RightMenus({ setIsNavigating }: { setIsNavigating?: (val: boolean) => void }) {
   const router = useRouter();
   const { user, isLoggedIn, isHydrated } = useAuth() as any;
   const { cartCount } = useCart();
+  const { openWallet } = useWallet();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -134,8 +173,9 @@ export default function RightMenus() {
         <HoverMenu
           label={displayName}
           avatar={profileImage}
+          setIsNavigating={setIsNavigating}
           items={[
-            { id: "profile-1", label: "Wallet", href: "/profile/wallet" },
+            { id: "profile-1", label: "Wallet", onClick: openWallet },
             { id: "profile-2", label: "Order", href: "/profile/orders" },
             { id: "profile-3", label: "Cart", href: "/cart", badge: cartCount || 0 },
             { id: "profile-4", label: "My Account", href: "/profile" },
@@ -145,6 +185,7 @@ export default function RightMenus() {
 
       <HoverMenu
         label="Creative Center"
+        setIsNavigating={setIsNavigating}
         items={[
           { id: "creative-1", label: "Portfolio", href: "/creative/portfolio" },
           { id: "creative-2", label: "Contact creatives", href: "/creative/contact" },
@@ -153,13 +194,13 @@ export default function RightMenus() {
 
       <HoverMenu
         label="Business Cooperation"
+        setIsNavigating={setIsNavigating}
         items={[
           { id: "biz-1", label: "Merchant onboarding", href: "/profile/business/onboarding" },
           { id: "biz-2", label: Boolean(user?.is_business_owner || user?.business_name || user?.business_id || user?.isBusiness) ? "My shop" : "Become a vendor", href: "/profile/business/business-status" },
           { id: "biz-3", label: "Partner with Us", href: "/profile/business/business-status" },
           { id: "biz-4", label: "Delivery Partnership", href: "/profile/business/business-status" },
           { id: "biz-5", label: "Affiliate Program", href: "/profile/business/business-status" },
-
         ]}
       />
     </div>

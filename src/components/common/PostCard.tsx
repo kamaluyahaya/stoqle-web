@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaHeart, FaRegHeart, FaImages } from "react-icons/fa";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import CachedImage from "./CachedImage";
 
-const NO_IMAGE_PLACEHOLDER = "https://st4.depositphotos.com/14953852/22772/v/450/depositphotos_227725020-stock-illustration-image-available-icon-flat-vector.jpg";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png";
 
 export const getNoteStyles = (config: any) => {
   if (!config) return { background: "#f1f5f9" };
@@ -65,8 +67,8 @@ export function LikeBurst() {
 const PostCard = React.memo(({
   post,
   openPostWithUrl,
-  toggleLike = () => {},
-  setFullImageUrl = () => {}
+  toggleLike = () => { },
+  setFullImageUrl = () => { }
 }: any) => {
   const [showBurst, setShowBurst] = useState(false);
 
@@ -111,7 +113,7 @@ const PostCard = React.memo(({
 
         {post.coverType === "note" && !post.src ? (
           <div
-            className="w-full h-[250px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+            className="w-full h-[300px] sm:h-[330px] flex items-center justify-center p-6 relative overflow-hidden"
             style={getNoteStyles(post.noteConfig)}
           >
             {(() => {
@@ -136,12 +138,15 @@ const PostCard = React.memo(({
             </div>
           </div>
         ) : (
-          <img
-            src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
-            alt={post.caption}
-            className="w-full h-auto sm:min-h-[200px] min-h-[180px] max-h-[250px] sm:max-h-[350px] object-cover transition-transform duration-700 group-hover:scale-110"
-          />
+          <div className="w-full">
+            <CachedImage
+              src={post.thumbnail || (!post.isVideo ? post.src : "") || NO_IMAGE_PLACEHOLDER}
+              alt={post.caption || "Post thumbnail"}
+              className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-110 relative z-[1]"
+            />
+          </div>
         )}
+
       </div>
 
       <div className="p-3">
@@ -155,7 +160,13 @@ const PostCard = React.memo(({
               className="h-5 w-5 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 cursor-pointer active:scale-90 transition-transform"
               onClick={(e) => { e.stopPropagation(); setFullImageUrl(post.user.avatar); }}
             >
-              <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
+              <Image
+                src={post.user.avatar}
+                width={20}
+                height={20}
+                className="w-full h-full object-cover"
+                alt={post.user.name}
+              />
             </div>
             <div className="flex items-center gap-1 min-w-0 flex-1">
               <span className="truncate text-[11px] font-semibold text-slate-400 capitalize">

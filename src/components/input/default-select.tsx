@@ -81,7 +81,7 @@ export default function CategorySelectionModal({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full sm:w-[640px] max-h-[84vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              className="relative w-full sm:w-[640px] max-h-[84vh] bg-white rounded-t-[0.5rem] sm:rounded-[0.5rem] overflow-hidden flex flex-col"
             >
               {/* Header */}
               <div className="px-4 py-4 border-b border-slate-200">

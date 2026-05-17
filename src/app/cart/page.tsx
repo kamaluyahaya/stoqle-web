@@ -167,7 +167,10 @@ export default function CartPage() {
     useEffect(() => {
         if (!isHydrated) return;
 
-        window.scrollTo(0, 0);
+        if (typeof window !== 'undefined') {
+            window.history.scrollRestoration = 'manual';
+        }
+        window.scrollTo({ top: 0, behavior: "instant" });
         fetchRecommendations();
 
         if (token) {
@@ -566,6 +569,9 @@ export default function CartPage() {
                         initialCategory={relatedCategory}
                         softCategory={true}
                         relatedVendorIds={cartVendorIds}
+                        disableScrollPersistence={true}
+                        recommendationMode={true}
+                        hideSubCategories={true}
                     />
                 </div>
             </div>
@@ -766,6 +772,9 @@ export default function CartPage() {
                             initialCategory={relatedCategory}
                             softCategory={true}
                             relatedVendorIds={cartVendorIds}
+                            disableScrollPersistence={true}
+                            recommendationMode={true}
+                            hideSubCategories={true}
                         />
                     </div>
                 </div>

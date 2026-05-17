@@ -9,6 +9,8 @@ interface UsePostReelsProps {
   userToken?: string | null;
   targetUserId?: string | number | null;
   onActivePostChange?: (post: any) => void;
+  initialReels?: any[];
+  isModalFullyVisible: boolean;
 }
 
 export function usePostReels({
@@ -16,21 +18,42 @@ export function usePostReels({
   isMobileReels,
   userToken,
   targetUserId,
-  onActivePostChange
+  onActivePostChange,
+  initialReels,
+  isModalFullyVisible
 }: UsePostReelsProps) {
   const normalizedInitialPost = {
     ...post,
     social_post_id: post.social_post_id || post.id || post.apiId,
     liked_by_me: post.liked_by_me ?? post.liked_by_user ?? post.liked ?? false,
     likes_count: post.likes_count ?? post.likesCount ?? post.likeCount ?? 0,
-    total_comments: post.total_comments ?? post.comments_count ?? post.commentCount ?? 0
+    total_comments: post.comment_count ?? post.total_comments ?? post.comments_count ?? post.commentCount ?? 0
   };
 
-  const [reelsList, setReelsList] = useState<any[]>([normalizedInitialPost]);
-  const [currentReelIndex, setCurrentReelIndex] = useState(0);
+  // If initialReels is provided (e.g. from a profile), we use it as our baseline reservoir.
+  // We find the index of our 'post' within that list to start at the right spot.
+  const [reelsList, setReelsList] = useState<any[]>(() => {
+    if (initialReels && initialReels.length > 0) {
+      return initialReels.map(r => ({
+        ...r,
+        social_post_id: r.social_post_id || r.id || r.apiId
+      }));
+    }
+    return [normalizedInitialPost];
+  });
+
+  const [currentReelIndex, setCurrentReelIndex] = useState(() => {
+    if (initialReels && initialReels.length > 0) {
+      const idx = initialReels.findIndex(r =>
+        String(r.social_post_id || r.id || r.apiId) === String(normalizedInitialPost.social_post_id)
+      );
+      return idx !== -1 ? idx : 0;
+    }
+    return 0;
+  });
   const [showSwipeGuide, setShowSwipeGuide] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  
+
   const interactionTrackerRef = useRef<Record<string, { watch_time: number, max_progress: number, completed: boolean, skipped: boolean, start_time: number, replays: number }>>({});
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const fastScrollVelocityRef = useRef<boolean>(false);
@@ -70,7 +93,7 @@ export function usePostReels({
       next[0] = { ...next[0], ...normalizedInitialPost };
       return next;
     });
-  }, [normalizedInitialPost.social_post_id]);
+  }, [normalizedInitialPost.social_post_id, normalizedInitialPost.src, post.xsecToken, post.xsec_token, initialReels]);
 
   // Watch time and activity logging
   useEffect(() => {
@@ -120,10 +143,7 @@ export function usePostReels({
   // Handle active post change
   useEffect(() => {
     if (!isMobileReels) return;
-    
-    // Auto-unpause when switching reels
-    setIsPaused(false);
-    
+
     const currentPost = reelsList[currentReelIndex];
     if (currentPost && onActivePostChange) {
       onActivePostChange(currentPost);
@@ -135,8 +155,8 @@ export function usePostReels({
     if (!isMobileReels) return;
 
     const maintainReservoir = async () => {
-      if (isFetchingReservoirRef.current) return;
-      
+      if (!isModalFullyVisible || isFetchingReservoirRef.current) return;
+
       const remainingTotal = bgReservoirRef.current.length + (reelsList.length - 1 - currentReelIndex);
       if (remainingTotal < 15) {
         isFetchingReservoirRef.current = true;
@@ -177,16 +197,16 @@ export function usePostReels({
       clearInterval(interval);
       window.removeEventListener("trigger-reel-prefetch", triggerHandler);
     };
-  }, [isMobileReels, currentReelIndex, reelsList, targetUserId, userToken]);
+  }, [isMobileReels, currentReelIndex, reelsList, targetUserId, userToken, isModalFullyVisible]);
 
   // Eagerly kick off the first reservoir fetch on mount — this makes the first swipe instant
   useEffect(() => {
-    if (!isMobileReels) return;
+    if (!isMobileReels || !isModalFullyVisible) return;
     const timer = setTimeout(() => {
       window.dispatchEvent(new CustomEvent("trigger-reel-prefetch"));
     }, 300);
     return () => clearTimeout(timer);
-  }, [isMobileReels]);
+  }, [isMobileReels, isModalFullyVisible]);
 
   const handleVideoEnded = useCallback((postId: string | number) => {
     const data = interactionTrackerRef.current[String(postId)];

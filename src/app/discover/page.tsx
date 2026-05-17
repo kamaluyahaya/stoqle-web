@@ -20,8 +20,9 @@ import { ArrowUp, RotateCcw } from "lucide-react";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { VerifiedBadge } from "@/src/components/common/VerifiedBadge";
 import StoqleLoader from "@/src/components/common/StoqleLoader";
-const NO_IMAGE_PLACEHOLDER = "assets/images/post-icons.png"; // fallback post image
-const DEFAULT_AVATAR = "/assets/images/post-icons.png";
+import CachedImage from "@/src/components/common/CachedImage";
+const NO_IMAGE_PLACEHOLDER = "/assets/images/favio.png"; // fallback post image
+const DEFAULT_AVATAR = "/assets/images/favio.png";
 
 type Props = { postCount?: number };
 
@@ -61,7 +62,11 @@ const PostCard = React.memo(({
   const [showBurst, setShowBurst] = useState(false);
 
   // Animation variants
-  const entryVariants = {
+  const entryVariants = post.isRestored ? {
+    initial: { opacity: 1, scale: 1, y: 0 },
+    animate: { opacity: 1, scale: 1, y: 0 },
+    transition: { duration: 0 }
+  } : {
     initial: { opacity: 0, scale: 0.95, y: 15 },
     animate: { opacity: 1, scale: 1, y: 0 },
     transition: {
@@ -76,10 +81,10 @@ const PostCard = React.memo(({
       onClick={() => openPostWithUrl(post)}
       className="group flex flex-col rounded-[0.5rem] bg-white cursor-pointer transition-all border border-slate-100 overflow-hidden"
     >
-      <div className="relative w-full overflow-hidden post-media">
+      <div className="relative w-full overflow-hidden post-media min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px]">
         {post.isVideo && (
-          <div className="absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/50">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-white ml-0.5">
+          <div className="absolute top-3 right-3 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-black/50">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white ml-0.5">
               <path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
             </svg>
           </div>
@@ -93,7 +98,7 @@ const PostCard = React.memo(({
         >
           {post.coverType === "note" && !post.src ? (
             <div
-              className="w-full h-[280px] sm:h-[300px] flex items-center justify-center p-6 relative overflow-hidden"
+              className="w-full h-[300px] sm:h-[330px] flex items-center justify-center p-6 relative overflow-hidden"
 
               style={getNoteStyles(post.noteConfig)}
             >
@@ -125,31 +130,11 @@ const PostCard = React.memo(({
               </div>
             </div>
           ) : (
-            <div className="relative w-full overflow-hidden bg-slate-50">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-4xl font-black text-slate-300 opacity-40 select-none">stoqle</span>
-              </div>
-              {/* Placeholder frame indicator */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-6 h-6 rounded-full border-2 border-slate-300 border-t-transparent animate-spin opacity-20" />
-                </div>
-              </div>
-              <style jsx global>{`
-                @keyframes fadeIn {
-                  from { opacity: 0; }
-                  to { opacity: 1; }
-                }
-              `}</style>
-              <img
-                src={post.thumbnail || post.src || NO_IMAGE_PLACEHOLDER}
-                alt={post.caption}
-                className="w-full h-auto min-h-[200px] sm:min-h-[200px] max-h-[300px] sm:max-h-[320px] object-cover transition-transform duration-700 group-hover:scale-105 relative z-[1]"
-                loading="lazy"
-                onLoad={(e) => {
-                  (e.target as any).style.animation = "fadeIn 0.6s ease-in-out forwards";
-                }}
-                style={{ opacity: 0 }}
+            <div className="w-full">
+              <CachedImage
+                src={post.thumbnail || (!post.isVideo ? post.src : "") || NO_IMAGE_PLACEHOLDER}
+                alt={post.caption || "Post thumbnail"}
+                className="w-full h-auto min-h-[180px] max-h-[300px] sm:min-h-[200px] sm:max-h-[350px] object-cover block transition-transform duration-700 group-hover:scale-105 relative z-[1]"
               />
             </div>
           )}
@@ -158,7 +143,7 @@ const PostCard = React.memo(({
 
       </div>
 
-      <div className="p-3">
+      <div className="p-1">
         <p className="text-sm text-slate-800 line-clamp-2 leading-snug font-semibold mb-3">
           {post.coverType === "note" && !post.src ? post.note_caption : post.caption}
         </p>
@@ -172,7 +157,7 @@ const PostCard = React.memo(({
                 router.push(post.author_handle ? `/${post.author_handle}` : `/user/profile/${post.user.id}`);
               }}
             >
-              <img src={post.user.avatar} className="w-full h-full object-cover" alt={post.user.name} />
+              <Image src={post.user.avatar} width={20} height={20} className="object-cover" alt={post.user.name} />
             </div>
             <div className="flex items-center gap-1 min-w-0">
               <span
@@ -238,42 +223,6 @@ const PostCard = React.memo(({
   return prev.post.id === next.post.id && prev.post.liked === next.post.liked && prev.post.likeCount === next.post.likeCount;
 });
 
-const PostCarousel = ({ title, icon: Icon, posts, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles }: any) => {
-  if (!posts || posts.length === 0) return null;
-
-  return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between px-4 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-xl bg-slate-900 text-white">
-            <Icon size={14} />
-          </div>
-          <h2 className="text-base font-bold text-slate-900">{title}</h2>
-        </div>
-        <button className="text-xs font-bold text-slate-400 flex items-center gap-1 hover:text-slate-600 transition-colors">
-          See All <FaChevronRight size={8} />
-        </button>
-      </div>
-
-      <div className="flex gap-4 overflow-x-auto no-scrollbar px-4 pb-2">
-        {posts.map((post: any) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            isCarousel={true}
-            openPostWithUrl={openPostWithUrl}
-            toggleLike={toggleLike}
-            user={user}
-            setShowLoginModal={setShowLoginModal}
-            router={router}
-            getNoteStyles={getNoteStyles}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
 const MasonryGrid = ({ items, openPostWithUrl, toggleLike, user, setShowLoginModal, router, getNoteStyles, isRestored }: any) => {
   const [columns, setColumns] = useState(5);
 
@@ -337,7 +286,11 @@ export default function DiscoverPage() {
 function DiscoverFeed({ postCount = 100 }: Props) {
   const [activeCategory, setActiveCategory] = useState<string>(DISCOVERY_CACHE.category);
 
-  const [posts, setPosts] = useState<Post[]>(DISCOVERY_CACHE.posts);
+  const [posts, setPosts] = useState<Post[]>(() =>
+    DISCOVERY_CACHE.posts.length > 0
+      ? DISCOVERY_CACHE.posts.map(p => ({ ...p, isRestored: true }))
+      : []
+  );
   const [sections, setSections] = useState<{ trending: Post[], following: Post[], similar: Post[] }>({
     trending: [],
     following: [],
@@ -349,22 +302,56 @@ function DiscoverFeed({ postCount = 100 }: Props) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isOpeningPost, setIsOpeningPost] = useState<boolean>(false);
   const [modalOrigin, setModalOrigin] = useState<{ x: number; y: number } | null>(null);
-  const [offset, setOffset] = useState<number>(0);
-  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [offset, setOffset] = useState<number>(DISCOVERY_CACHE.posts.length > 0 ? DISCOVERY_CACHE.offset : 0);
+  const [hasMore, setHasMore] = useState<boolean>(DISCOVERY_CACHE.posts.length > 0 ? DISCOVERY_CACHE.hasMore : true);
   const router = useRouter();
   const { user, token, ensureLoggedIn, isHydrated } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isRestoring, setIsRestoring] = useState<boolean>(() => DISCOVERY_CACHE.posts.length > 0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const touchStartY = useRef(0);
+  const isPulling = useRef(false);
+
+  useEffect(() => {
+    // Handle restoration
+    if (isRestoring && posts.length > 0) {
+      const timer = setTimeout(() => {
+        window.scrollTo({ top: DISCOVERY_CACHE.scrollPos, behavior: "instant" });
+        setShowScrollTop(DISCOVERY_CACHE.scrollPos > 400);
+        setTimeout(() => setIsRestoring(false), 150);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isRestoring, posts.length]);
+
+  // Initial Mount: Reset to top ONLY if we are not restoring from a cache
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    if (!isRestoring) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, []); // Run once on mount
 
   useEffect(() => {
     const handleScroll = () => {
+      // Guard: Only update discovery cache if we are actually on the discovery/home route
+      if (window.location.pathname !== "/discover" && window.location.pathname !== "/") return;
+      if (posts.length === 0 || loading) return;
+
       setShowScrollTop(window.scrollY > 400);
+      DISCOVERY_CACHE.scrollPos = window.scrollY;
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [posts.length, loading]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -377,6 +364,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
       DISCOVERY_CACHE.posts = [];
       DISCOVERY_CACHE.offset = 0;
       DISCOVERY_CACHE.category = ""; // force fresh load
+      setIsRestoring(false);
       setRefreshKey(prev => prev + 1);
     }, 400);
     // toast.info("Refreshing feed...", { icon: <RotateCcw className="w-4 h-4 animate-spin" />, duration: 2000 });
@@ -396,6 +384,63 @@ function DiscoverFeed({ postCount = 100 }: Props) {
       window.removeEventListener("nav-refresh", handleRefresh);
     };
   }, []);
+
+  // --- Touch pull-to-refresh listener ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (selectedPost || showLoginModal) return;
+      const containerScrollTop = window.scrollY || document.documentElement.scrollTop;
+      if (containerScrollTop <= 2) {
+        touchStartY.current = e.touches[0].pageY;
+        isPulling.current = true;
+      } else {
+        isPulling.current = false;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isPulling.current) return;
+      const currentY = e.touches[0].pageY;
+      const diff = currentY - touchStartY.current;
+
+      if (diff > 0) {
+        const distance = Math.min(diff * 0.45, 90);
+        setPullDistance(distance);
+        if (distance > 10) {
+          if (e.cancelable) e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!isPulling.current) return;
+      isPulling.current = false;
+
+      if (pullDistance > 60) {
+        setIsRefreshing(true);
+        handleManualRefresh();
+        setTimeout(() => {
+          setIsRefreshing(false);
+          setPullDistance(0);
+        }, 1500);
+      } else {
+        setPullDistance(0);
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: false });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [pullDistance, activeCategory, selectedPost, showLoginModal]);
+
   const BATCH_SIZE = 20;
 
   const pushedRef = useRef(false);
@@ -428,7 +473,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
       const needsPersonalization = token && !DISCOVERY_CACHE.personalized && activeCategory === "Recommend";
       if (!needsPersonalization && isFresh) {
         setLoading(false);
-        setPosts(DISCOVERY_CACHE.posts);
+        setPosts(DISCOVERY_CACHE.posts.map(p => ({ ...p, isRestored: true })));
         setOffset(DISCOVERY_CACHE.offset);
         setHasMore(DISCOVERY_CACHE.hasMore);
         return;
@@ -440,6 +485,7 @@ function DiscoverFeed({ postCount = 100 }: Props) {
 
     async function loadInitial() {
       setLoading(true);
+      setIsRestoring(false);
       setError(null);
       setOffset(0);
       setHasMore(true);
@@ -612,12 +658,12 @@ function DiscoverFeed({ postCount = 100 }: Props) {
     if (observerTarget.current) observer.observe(observerTarget.current);
     return () => observer.disconnect();
   }, [hasMore, loading, batchLoading, offset, activeCategory]);
-useEffect(() => {
+  useEffect(() => {
     const tryOpenFromUrl = async () => {
       if (typeof window === "undefined") return;
       const url = new URL(window.location.href);
       const searchParam = url.searchParams.get("post");
-      
+
       // Also check path pattern: /username/postId
       const pathParts = url.pathname.split('/').filter(Boolean);
       let postIdFromPath = null;
@@ -839,6 +885,37 @@ useEffect(() => {
 
   return (
     <>
+      {/* Dynamic Pull-to-Refresh Indicator */}
+      {(pullDistance > 0 || isRefreshing) && (
+        <div 
+          style={{ 
+            top: showScrollTop ? "0px" : "64px",
+            height: `${isRefreshing ? 60 : pullDistance}px`,
+            opacity: isRefreshing ? 1 : Math.min(pullDistance / 40, 1),
+          }}
+          className="fixed left-0 right-0 z-[2600] flex items-center justify-center pointer-events-none transition-all duration-150"
+        >
+          <div 
+            style={{
+              transform: `translateY(${isRefreshing ? 12 : Math.max(0, pullDistance - 40)}px)`,
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 shadow-md border border-slate-100 backdrop-blur-sm transition-transform duration-75"
+          >
+            <div 
+              style={{ 
+                transform: isRefreshing ? undefined : `rotate(${pullDistance * 4.5}deg)`,
+                transition: isRefreshing ? "none" : "transform 75ms linear"
+              }}
+              className="flex items-center justify-center shrink-0"
+            >
+              <StoqleLoader size={14} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-600">
+              {isRefreshing ? "Refreshing..." : pullDistance > 60 ? "Release to refresh" : "Pull to refresh"}
+            </span>
+          </div>
+        </div>
+      )}
       <section className="min-h-screen transition-colors duration-500 bg-slate-50 pb-20">
         <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-100">
           <div className="flex px-4 py-4 gap-2 overflow-x-auto no-scrollbar">
@@ -846,7 +923,7 @@ useEffect(() => {
               <button
                 key={item}
                 onClick={() => setActiveCategory(item)}
-                className={`whitespace-nowrap rounded-2xl px-5 py-2 text-xs font-bold transition-all duration-300 ${activeCategory === item ? "bg-slate-900 text-white shadow-lg scale-105" : "text-slate-500 bg-slate-50 hover:bg-slate-100"}`}
+                className={`whitespace-nowrap rounded px-5 py-2 text-xs font-bold transition-all duration-300 ${activeCategory === item ? "bg-slate-900 text-white shadow-lg scale-105" : "text-slate-500 bg-slate-50 hover:bg-slate-100"}`}
               >
                 {item}
               </button>
@@ -869,11 +946,11 @@ useEffect(() => {
         </AnimatePresence>
 
         {loading ? (
-          <div className="p-2 sm:p-4"><ShimmerGrid count={10} /></div>
+          <div className="p-2"><ShimmerGrid count={10} /></div>
         ) : error ? (
           <div className="py-20 flex flex-col items-center justify-center text-center px-4">
             <div className="w-32 h-32 rounded-full flex items-center justify-center">
-              <img src="/assets/images/message-icon.png" alt="" />
+              <Image src="/assets/images/message-icon.png" width={128} height={128} alt="Error icon" />
             </div>
             <p className="text-slate-400 text-sm mb-6">{error}, Please pull down to refresh</p>
             <button onClick={() => window.location.reload()} className=" rounded-2xl  text-sm text-bold transition">
@@ -884,11 +961,10 @@ useEffect(() => {
           <div className="flex flex-col">
             {activeCategory === "Recommend" && (
               <>
-
               </>
             )}
 
-            <div className="p-2 sm:p-4 ">
+            <div className="p-1 ">
               <MasonryGrid
                 items={posts}
                 openPostWithUrl={openPostWithUrl}
@@ -897,6 +973,7 @@ useEffect(() => {
                 setShowLoginModal={setShowLoginModal}
                 router={router}
                 getNoteStyles={getNoteStyles}
+                isRestored={isRestoring}
               />
             </div>
           </div>
@@ -904,7 +981,7 @@ useEffect(() => {
 
         {posts.length > 0 && hasMore && (
           <div ref={observerTarget} className="flex justify-center p-12">
-            <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+            <StoqleLoader />
           </div>
         )}
 

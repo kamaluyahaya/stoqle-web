@@ -12,8 +12,10 @@ import {
   Bars3Icon,
   ShoppingBagIcon,
   ShoppingCartIcon,
+  UserCircleIcon,
+  QrCodeIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
-import { UserCircleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "@/src/context/authContext";
 import { useChat } from "@/src/context/chatContext";
 import { useCart } from "@/src/context/cartContext";
@@ -178,7 +180,7 @@ export default function Sidebar({ navHeight, width }: Props) {
           <Outline className="h-5 w-5 text-gray-500" />
           <span>{String(label)}</span>
         </div>
-        {Number(badgeCount) > 0 && (
+        {mounted && Number(badgeCount) > 0 && (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
             {Number(badgeCount) > 99 ? "99+" : Number(badgeCount)}
           </span>
@@ -199,7 +201,7 @@ export default function Sidebar({ navHeight, width }: Props) {
       >
         <span className="text-gray-500">{label}</span>
         <div className="flex items-center gap-2">
-          {badge !== undefined && (badge as number) > 0 && (
+          {mounted && badge !== undefined && (badge as number) > 0 && (
             <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold min-w-[18px] text-center">
               {badge}
             </span>
@@ -214,7 +216,7 @@ export default function Sidebar({ navHeight, width }: Props) {
 
   return (
     <aside
-      className="fixed top-0 left-0 z-10 h-screen bg-white flex flex-col hidden lg:flex"
+      className="fixed top-0 left-0 z-10 h-[100dvh] bg-white flex flex-col hidden lg:flex"
       style={{ width }}
     >
       {/* Top spacer for navbar */}
@@ -396,6 +398,31 @@ export default function Sidebar({ navHeight, width }: Props) {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
+                  </li>
+                  <div className="my-2 border-t border-gray-100" />
+                  <li>
+                    <Link
+                      href="/scan"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setShowMenu(false)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <QrCodeIcon className="h-5 w-5 text-gray-500" />
+                        <span>Scan</span>
+                      </div>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/settings"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-gray-50 font-medium text-gray-800"
+                      onClick={() => setShowMenu(false)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Cog6ToothIcon className="h-5 w-5 text-gray-500" />
+                        <span>Settings</span>
+                      </div>
+                    </Link>
                   </li>
                   <div className="my-2 border-t border-gray-100" />
                   <li>

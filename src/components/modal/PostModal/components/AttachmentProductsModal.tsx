@@ -17,7 +17,7 @@ interface AttachmentProductsModalProps {
 type SubTabType = "purchased" | "cart" | "my_products";
 
 export default function AttachmentProductsModal({ ctx, onClose, onInsertToken }: AttachmentProductsModalProps) {
-  const { auth, formatUrl } = ctx;
+  const { auth, formatUrl, commentText } = ctx;
   const [subTab, setSubTab] = useState<SubTabType>("cart");
 
   const [hasMore, setHasMore] = useState(true);
@@ -73,7 +73,14 @@ export default function AttachmentProductsModal({ ctx, onClose, onInsertToken }:
       }
 
       const validItems = items.filter(Boolean);
-      setData(prev => currentPage === 1 ? validItems : [...prev, ...validItems]);
+      setData(prev => {
+        const combined = currentPage === 1 ? validItems : [...prev, ...validItems];
+        // Deduplicate by product_id or id to ensure unique items in the list
+        const unique = Array.from(
+          new Map(combined.map((item: any) => [item.product_id || item.id || `temp-${Math.random()}`, item])).values()
+        );
+        return unique;
+      });
       setCache(prev => ({ ...prev, [cacheKey]: validItems }));
 
       // Infinite scroll logic: if fewer than LIMIT, no more. (Only my_products actually supports pagination right now, others are flat lists)
@@ -166,10 +173,10 @@ export default function AttachmentProductsModal({ ctx, onClose, onInsertToken }:
                   const imageUrl = product.product_image || product.media?.[0]?.url || product.images?.[0];
 
                   return (
-                    <button
-                      key={product.product_id || idx}
+                    <div
+                      key={`${product.product_id || product.id || 'item'}-${idx}`}
                       onClick={() => handleProductSelect(product)}
-                      className="flex items-center gap-3 p-2 bg-slate-50 rounded-[0.5rem] border border-slate-100 hover:border-rose-200 transition-colors"
+                      className="flex items-center gap-3 p-2 bg-slate-50 rounded-[0.5rem] border border-slate-100 hover:border-rose-200 transition-colors group/row cursor-pointer"
                     >
                       <div className="w-16 h-16 rounded-[0.5rem] bg-slate-200 overflow-hidden shrink-0">
                         {imageUrl ? (
@@ -182,9 +189,33 @@ export default function AttachmentProductsModal({ ctx, onClose, onInsertToken }:
                       </div>
                       <div className="flex flex-col text-left flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-800 truncate">{title}</p>
-                        <p className="text-xs font-semibold text-rose-500 mt-0.5">₦{parseFloat(product.price || product.unit_price || product.base_price || 0).toLocaleString()}</p>
+                        <div className="flex items-center justify-between mt-0.5 pr-1">
+                          <p className="text-xs font-semibold text-rose-500">₦{parseFloat(product.price || product.unit_price || product.base_price || 0).toLocaleString()}</p>
+
+                          {(() => {
+                            const shortTitle = title.length > 20 ? title.substring(0, 20) + "..." : title;
+                            const displayToken = `[Product: ${shortTitle}]`;
+                            const isAlreadyAdded = commentText.includes(displayToken);
+
+                            return (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isAlreadyAdded) handleProductSelect(product);
+                                }}
+                                disabled={isAlreadyAdded}
+                                className={`px-3 py-1 rounded-full text-[10px] transition-all ${isAlreadyAdded
+                                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                  : "border-rose-500 border text-rose-500 active:scale-95 "
+                                  }`}
+                              >
+                                {isAlreadyAdded ? "Added" : "Add"}
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
                 {loading && page > 1 && (

@@ -48,3 +48,12 @@ export async function clearCartApi(token: string) {
         },
     });
 }
+
+export async function fetchCartRecommendations(token: string, limit = 20, offset = 0) {
+    return safeFetch(`/api/cart/recommendations?limit=${limit}&offset=${offset}`, {
+        method: "GET",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}
